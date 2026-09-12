@@ -57,10 +57,11 @@ pub fn sanity_check() -> felt252 {
     let bm_rows: u32 = e1m1::BLOCKMAP_ROWS;
     let bm_off0: u32 = *e1m1::BLOCKMAP_OFFSETS.span()[0];
     let bm_words0: u32 = *e1m1::BLOCKMAP_WORDS.span()[0];
-    // accelerator (R2-A9): packed by default -> ACCEL_START/COUNT (u32), ACCEL_SUBSECTORS_PACKED (felt252).
-    let accel_start0: u32 = *e1m1::ACCEL_START.span()[0];
-    let accel_count0: u32 = *e1m1::ACCEL_COUNT.span()[0];
-    let accel_ss0: felt252 = *e1m1::ACCEL_SUBSECTORS_PACKED.span()[0];
+    // cellNode (R2-A9/D22): planar by default -> CELL_NODE (u32). The R2-A9
+    // candidate-list arrays (ACCEL_START/COUNT/SUBSECTORS[_PACKED]) are off
+    // by default (emitConfig.ts#emitAccelCandidates) and so are not emitted
+    // into this copy of e1m1.cairo at all.
+    let cell_node0: u32 = *e1m1::CELL_NODE.span()[0];
     // predicate bias constants the geom core's `hoist` function needs.
     let hk: felt252 = e1m1::PRED_HK;
     let bigc: felt252 = e1m1::PRED_BIGC;
@@ -71,8 +72,8 @@ pub fn sanity_check() -> felt252 {
         + l_diag0.into() + l_bbox_lr0 + l_bbox_bt0 + l_blocking0.into() + l_blockmonst0.into()
         + l_twosided0.into() + l_sides0.into() + l_special0.into() + sd_sector0 + ss_sector0
         + s_floor0.into() + s_ceil0.into() + s_meta0 + rej0 + t0 + bm_ox.into() + bm_oy.into()
-        + bm_cols.into() + bm_rows.into() + bm_off0.into() + bm_words0.into() + accel_start0.into()
-        + accel_count0.into() + accel_ss0 + hk + bigc + off + fracunit
+        + bm_cols.into() + bm_rows.into() + bm_off0.into() + bm_words0.into() + cell_node0.into()
+        + hk + bigc + off + fracunit
 }
 
 #[cfg(test)]
@@ -95,7 +96,6 @@ mod tests {
         assert!(super::e1m1::LINEDEF_AB.span().len() == super::e1m1::NUM_LINEDEFS);
         assert!(super::e1m1::NODE_AB.span().len() == super::e1m1::NUM_NODES);
         assert!(super::e1m1::SECTOR_FLOOR.span().len() == super::e1m1::NUM_SECTORS);
-        assert!(super::e1m1::ACCEL_START.span().len() == super::e1m1::BLOCKMAP_COLUMNS * super::e1m1::BLOCKMAP_ROWS);
-        assert!(super::e1m1::ACCEL_COUNT.span().len() == super::e1m1::BLOCKMAP_COLUMNS * super::e1m1::BLOCKMAP_ROWS);
+        assert!(super::e1m1::CELL_NODE.span().len() == super::e1m1::BLOCKMAP_COLUMNS * super::e1m1::BLOCKMAP_ROWS);
     }
 }

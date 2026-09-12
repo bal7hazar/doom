@@ -45,6 +45,7 @@ export const EMIT_GROUPS = [
   "sectorHeights",
   "blockmap",
   "accelerator",
+  "cellNode",
   // --- cold: read a handful of times per tic, or only on trigger (S1 §5.9) -
   "reject",
   "things",
@@ -56,7 +57,18 @@ export const EMIT_GROUPS = [
 
 export type EmitGroup = (typeof EMIT_GROUPS)[number];
 
-export type EmitConfig = Record<EmitGroup, Layout>;
+/**
+ * Per-group layout, plus one on/off switch: `emitAccelCandidates` gates the
+ * R2-A9 candidate-list arrays (`ACCEL_START`/`ACCEL_COUNT`/
+ * `ACCEL_SUBSECTORS[_PACKED]`) independently of any group's layout, because
+ * "not emitted at all" isn't a `Layout`. docs/DECISIONS.md D22 removed
+ * these arrays from `doom_map`'s own compiled level once `CELL_NODE` alone
+ * was shown to reproduce a full descent exactly; `tools/wad`'s emitter
+ * keeps the option (useful to tooling that wants O(1) candidates without a
+ * BSP descent) but defaults it off for the same reason. `cellNode` (the
+ * `CELL_NODE` array, always emitted) is an ordinary layout group.
+ */
+export type EmitConfig = Record<EmitGroup, Layout> & { emitAccelCandidates: boolean };
 
 /**
  * S1's default recommendation (docs/spikes/S1.md §7 "Règles transverses" and
@@ -86,6 +98,17 @@ export type EmitConfig = Record<EmitGroup, Layout>;
  *     extra steps per lookup, which wins at any realistic K.
  *   - `subsectorSector`, `sectorMeta` (packed): read a handful of times per
  *     tic at most, like `sidedefSector`.
+ *   - `cellNode` (planar): read once per BSP location query, the same
+ *     frequency class as `nodePredicates`/`nodeChildren` (`doom_map`'s own
+ *     `CELL_NODE`, generated independently by `gen_level.py`, is planar for
+ *     the same reason - see cairo/doom/doom_map/README.md).
+ *
+ * `emitAccelCandidates` defaults to **false** (docs/DECISIONS.md D22): once
+ * `CELL_NODE` lets a descent start below the root and reach the exact same
+ * leaf a root descent would, the candidate-list arrays add bytecode without
+ * adding accuracy for the Cairo core's own point-location query. They stay
+ * available (`accelerator`'s layout still applies when turned on) for
+ * tooling that wants O(1) candidates without performing a descent at all.
  */
 export const DEFAULT_EMIT_CONFIG: EmitConfig = {
   vertices: "planar",
@@ -98,6 +121,7 @@ export const DEFAULT_EMIT_CONFIG: EmitConfig = {
   sectorHeights: "planar",
   blockmap: "planar",
   accelerator: "packed",
+  cellNode: "planar",
 
   reject: "packed",
   things: "packed",
@@ -105,15 +129,19 @@ export const DEFAULT_EMIT_CONFIG: EmitConfig = {
   sidedefSector: "packed",
   subsectorSector: "packed",
   sectorMeta: "packed",
+
+  emitAccelCandidates: false,
 };
 
-export const ALL_PLANAR_CONFIG: EmitConfig = Object.fromEntries(
-  EMIT_GROUPS.map((g) => [g, "planar" as Layout]),
-) as EmitConfig;
+export const ALL_PLANAR_CONFIG: EmitConfig = {
+  ...(Object.fromEntries(EMIT_GROUPS.map((g) => [g, "planar" as Layout])) as Record<EmitGroup, Layout>),
+  emitAccelCandidates: false,
+};
 
-export const ALL_PACKED_CONFIG: EmitConfig = Object.fromEntries(
-  EMIT_GROUPS.map((g) => [g, "packed" as Layout]),
-) as EmitConfig;
+export const ALL_PACKED_CONFIG: EmitConfig = {
+  ...(Object.fromEntries(EMIT_GROUPS.map((g) => [g, "packed" as Layout])) as Record<EmitGroup, Layout>),
+  emitAccelCandidates: false,
+};
 
 function isLayout(v: unknown): v is Layout {
   return v === "planar" || v === "packed";
@@ -131,9 +159,16 @@ export function resolveEmitConfig(overrides: Record<string, unknown> | undefined
   if (!overrides) return config;
   for (const [key, value] of Object.entries(overrides)) {
     if (key.startsWith("$") || key.startsWith("_")) continue;
+    if (key === "emitAccelCandidates") {
+      if (typeof value !== "boolean") {
+        throw new Error(`emit-config: "emitAccelCandidates" must be a boolean, got ${JSON.stringify(value)}`);
+      }
+      config.emitAccelCandidates = value;
+      continue;
+    }
     if (!(EMIT_GROUPS as readonly string[]).includes(key)) {
       throw new Error(
-        `emit-config: unknown group "${key}". Valid groups: ${EMIT_GROUPS.join(", ")}`,
+        `emit-config: unknown group "${key}". Valid groups: ${EMIT_GROUPS.join(", ")}, emitAccelCandidates`,
       );
     }
     if (!isLayout(value)) {

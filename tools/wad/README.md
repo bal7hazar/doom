@@ -109,31 +109,53 @@ and bias constants (ported from the validated prototype in
 the generated file for the constants a Cairo consumer's `hoist()` function
 needs. Linedefs also get a `diag` bit (`P_BoxOnLineSide`'s corner selector).
 
-### Cell -> subsector accelerator (R2-A9)
+### Cell -> subsector accelerator (R2-A9, docs/DECISIONS.md D22)
 
-For every blockmap cell, `src/accelerator.ts` lists the subsectors whose
-geometry can overlap that cell (`ACCEL_START`/`ACCEL_COUNT`/
-`ACCEL_SUBSECTORS[_PACKED]`), so the Cairo core can answer "which subsector
-is this point in" without a full BSP descent (or SEGS) in the common case.
+For every blockmap cell, `src/accelerator.ts#computeCellAccelerator` builds:
 
-**Method**: a subsector's bounding box is the union of the vertex
-coordinates of its SEGS (the node builder always closes a subsector's
-polygon with SEGS, wall and internal-partition segs alike). A subsector is
-listed for a cell whenever the two boxes intersect.
+- **`CELL_NODE`** - the deepest BSP node id whose *region* contains the
+  whole cell. A point-location descent may start there instead of at the
+  root and always reaches exactly the same leaf a root descent would. This
+  is the accelerator the Cairo emitter turns on by default.
+- **The R2-A9 candidate list** (`ACCEL_START`/`ACCEL_COUNT`/
+  `ACCEL_SUBSECTORS[_PACKED]`) - every subsector whose region can overlap
+  that cell. Kept for tooling that wants O(1) candidates without a descent,
+  but **off by default** in the Cairo output (see "Layout config" below):
+  once `CELL_NODE` reproduces a full descent exactly, the list adds
+  bytecode without adding accuracy.
 
-**Why it's conservative** (never omits the true subsector of a point in the
-cell): every point inside any polygon has x/y coordinates between the
-min/max of that polygon's own vertices (a point inside a polygon is a
-convex combination of its vertices), so a polygon is always a subset of its
-own bounding box. If point `p` is in subsector `S` and cell `C`, then `p` is
-in `bbox(S)` and in `bbox(C)`, so the two boxes intersect and `S` is listed
-for `C`. It can list extra subsectors whose bbox reaches a cell without
-their polygon doing so, but never omit the true one.
-`test/accelerator.test.ts` checks this by sampling points across every cell
-of a synthetic map and of real E1M1, and comparing against a ground-truth
-BSP descent (`accelerator.ts#locateSubsector`). REPORT-e1m1.md reports the
-average/max candidate-list length and how many cells resolve to a single
-subsector.
+**Method**: both are built from the map's BSP **regions**, mirroring
+`cairo/doom/doom_map/scripts/gen_level.py` exactly (see that script and
+`cairo/doom/doom_map/README.md`'s "R2-A9, and a correction to the WAD
+tool's accelerator"): descend from the root, recursing into *both* children
+of a node whenever the query box's four corners fall on both sides of its
+partition (a partition is linear, so its sign over an axis-aligned box is
+decided entirely by the corners - no polygon clipping needed).
+`CELL_NODE` stops the descent the instant the box no longer straddles; the
+candidate list keeps recursing to every reachable leaf. Both are exact (a
+subsector's region either meets the cell or it doesn't), hence
+conservative, and need no SEGS at all.
+
+**This replaces an earlier method that was *not* conservative.** The
+original accelerator derived a subsector's extent from the bounding box of
+its SEGS' vertices, reasoning that a vanilla node builder always closes a
+subsector's polygon with SEGS. That premise is false: a vanilla builder
+emits **no minisegs** at all (every one of E1M1's 2 057 segs references a
+real linedef), so a subsector's true BSP region routinely reaches far
+outside the box of its own segs - e.g. E1M1 subsector 630's segs span
+y in [-36, 4] while its region reaches y = -214. On a 200-point lattice over
+E1M1, the seg-bbox method omitted the true subsector for 81 of 200 points.
+The property test that should have caught this didn't, because its
+real-E1M1 "is this real geometry" filter used the very seg bbox under test
+as its own oracle for what to skip - see `src/accelerator.ts`'s module
+header and `test/accelerator.test.ts` for the full history and the fixed
+test: a dense lattice sampled across *every* blockmap cell, checked against
+an independent BSP descent (`accelerator.ts#locateSubsector`), with **no**
+skip logic at all - a region-based accelerator has no "void" case, since
+the BSP's partitions tile the entire plane. REPORT-e1m1.md reports the
+candidate-list average/max length, how many cells resolve to a single
+subsector, and the mean BSP descent depth from the root vs. from
+`CELL_NODE`.
 
 ### Layout config (`emit-config.json`)
 
@@ -157,7 +179,8 @@ left out of the file falls back to the built-in default in
 | `linedefSides` | packed | Linedef front/back sidedef index |
 | `sectorHeights` | planar | Sector floor/ceiling height |
 | `blockmap` | planar | Blockmap header/offsets/words |
-| `accelerator` | packed | R2-A9 cell -> subsector candidate lists |
+| `accelerator` | packed | R2-A9 cell -> subsector candidate lists (only emitted when `emitAccelCandidates` is true) |
+| `cellNode` | planar | R2-A9/D22 `CELL_NODE` (deepest BSP node whose region contains each cell) - always emitted |
 | `reject` | packed | REJECT visibility bit matrix |
 | `things` | packed | THINGS (spawn position/angle/type/flags) |
 | `linedefSpecial` | packed | Linedef special type + sector tag |
@@ -165,9 +188,16 @@ left out of the file falls back to the built-in default in
 | `subsectorSector` | packed | Subsector -> sector index (task item 1) |
 | `sectorMeta` | packed | Sector light level/special type/tag |
 
+`emitAccelCandidates` (default **false**, docs/DECISIONS.md D22) is a
+separate on/off switch, not a layout: it gates whether the R2-A9 candidate
+lists (`ACCEL_START`/`ACCEL_COUNT`/`ACCEL_SUBSECTORS[_PACKED]`, still laid
+out per the `accelerator` group above when turned on) are emitted at all.
+`CELL_NODE` (the `cellNode` group) is always emitted regardless.
+
 Edit `emit-config.json` (or pass `--config <path>`) to try a different mix;
 `ALL_PLANAR_CONFIG`/`ALL_PACKED_CONFIG` in `src/emitConfig.ts` are the two
-extremes used for the size-comparison table in the report.
+extremes used for the size-comparison table in the report (both leave
+`emitAccelCandidates` off).
 
 ### Bytecode budget (R2-A12)
 
@@ -198,9 +228,14 @@ output location). Notable v2 test files:
   re-implementation of `P_PointOnLineSide`, random-sampled, plus the S1 §7
   documented vanilla-vs-general-formula divergence at a vertical line
   through `v1.x`.
-- `test/accelerator.test.ts` - R2-A9 conservativeness: every sampled point's
-  true (BSP ground-truth) subsector is listed in its cell's candidates, on
-  both a synthetic map and real E1M1.
+- `test/accelerator.test.ts` - R2-A9/D22 conservativeness: a **dense
+  lattice over every blockmap cell** (not a random sample), checked against
+  an independent BSP descent (`accelerator.ts#locateSubsector`), on both a
+  synthetic map and real E1M1, plus `CELL_NODE`-vs-root-descent agreement
+  and the exact D22 statistics (3 565 candidate entries, 4.13/cell average,
+  21 max, 11.36 -> 4.15 mean descent depth). Also reproduces the original
+  (pre-fix) seg-bbox method verbatim and proves it fails this same
+  dense-lattice check on real E1M1 - the regression this test now catches.
 - `test/subsectorSector.test.ts` - subsector -> sector correctness against
   an independent SEGS -> LINEDEF -> SIDEDEF walk.
 - `test/bytecodeBudget.test.ts` - word counting, the budget-exceeded error,

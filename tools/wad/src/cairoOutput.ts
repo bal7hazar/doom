@@ -17,13 +17,16 @@
  *   - emits the half-plane predicate coefficients for linedefs and BSP
  *     node partitions (`predicates.ts`) so the Cairo core never
  *     recomputes `cross = A*y + B*x + C` from raw vertices;
- *   - emits the R2-A9 cell -> subsector accelerator (`accelerator.ts`) so
- *     the Cairo core does not need a full BSP descent (or SEGS) to find
- *     "which subsector is this point in" in the common case;
+ *   - emits `CELL_NODE` (R2-A9/D22, `accelerator.ts`), the deepest BSP node
+ *     whose region contains each blockmap cell, so the Cairo core can start
+ *     a point-location descent below the root and still reach exactly the
+ *     leaf a full descent would - no SEGS needed. The R2-A9 candidate-list
+ *     arrays are still available but off by default (D22: CELL_NODE alone
+ *     already answers the same query exactly);
  *   - tracks the element count of every array it writes and hands it back
  *     to the caller for the bytecode budget report (`bytecodeBudget.ts`).
  */
-import { computeCellSubsectors } from "./accelerator.js";
+import { computeCellAccelerator } from "./accelerator.js";
 import { ArrayEntry } from "./bytecodeBudget.js";
 import { DEFAULT_EMIT_CONFIG, EmitConfig } from "./emitConfig.js";
 import { MapData } from "./mapExtract.js";
@@ -134,19 +137,26 @@ ${Object.entries(config)
 // {GROUP}_PREDICATE felt252 per record, see v2Packing.ts#packPredicate).
 //
 // ============================================================================
-// Cell -> subsector accelerator (R2-A9, docs/spikes/S1.md §7 "bsp")
+// Cell -> subsector accelerator (R2-A9, docs/spikes/S1.md §7 "bsp",
+// docs/DECISIONS.md D22)
 // ============================================================================
-// ACCEL_START[cell] / ACCEL_COUNT[cell]: span into ACCEL_SUBSECTORS of the
-// subsector indices whose bounding box can overlap blockmap cell "cell"
-// (row*BLOCKMAP_COLUMNS + col). Conservative by construction: a
-// subsector's bbox always contains the whole subsector polygon (any
-// interior point's coordinates lie between the min/max of the polygon's
-// own vertices), so if a point lies in both a subsector and a cell, that
-// subsector's bbox intersects the cell and is listed for it. See
-// accelerator.ts for the full argument and test/accelerator.test.ts for
-// the property test. Method: subsector bboxes are the union of their
-// SEGS' vertex coordinates (computed here, at extraction time - SEGS
-// themselves are not emitted, see above).
+// CELL_NODE[cell]: the deepest BSP node id (native WAD form: a node index,
+// or a leaf subsector id with bit 0x8000 set) whose region contains the
+// *whole* cell. A point-location descent may start there instead of at the
+// root and always reaches exactly the leaf a root descent would (D22:
+// 11.36 -> 4.15 mean levels on E1M1). Built from the map's BSP regions
+// (accelerator.ts#computeCellAccelerator), not from SEGS - exact, and
+// conservative by construction (a subsector is only ever reachable through
+// its actual region). Always emitted (see emitConfig.ts#cellNode).
+//
+// ACCEL_START[cell] / ACCEL_COUNT[cell] / ACCEL_SUBSECTORS[_PACKED]: the
+// same regions' candidate-subsector spans, i.e. every subsector whose BSP
+// region meets blockmap cell "cell" (row*BLOCKMAP_COLUMNS + col). Off by
+// default (emitConfig.ts#emitAccelCandidates, D22): CELL_NODE alone answers
+// the same query exactly, so these arrays only cost bytecode without adding
+// accuracy for the Cairo core - kept for tooling that wants O(1) candidates
+// without a descent. See accelerator.ts and test/accelerator.test.ts for
+// the full conservativeness argument and its property test.
 //
 // ============================================================================
 // Packed layouts (fields packed into one felt/u32 per record or per
@@ -377,14 +387,26 @@ export function buildMapCairo(map: MapData, config: EmitConfig = DEFAULT_EMIT_CO
   e.array("BLOCKMAP_WORDS", "u32", packBlockmapWords(map.blockmapLumpBuffer), "blockmap", config.blockmap);
 
   // --- R2-A9 cell -> subsector accelerator ----------------------------------------------------
-  const { spans } = computeCellSubsectors(map);
-  e.array("ACCEL_START", "u32", spans.start.map(BigInt), "accelerator", config.accelerator);
-  e.array("ACCEL_COUNT", "u32", spans.count.map(BigInt), "accelerator", config.accelerator);
-  if (config.accelerator === "planar") {
-    e.array("ACCEL_SUBSECTORS", "u32", spans.subsectors.map(BigInt), "accelerator", "planar");
+  const { spans, cellNode } = computeCellAccelerator(map);
+
+  // CELL_NODE (D22): always emitted, the deepest node whose region contains the whole cell.
+  if (config.cellNode === "planar") {
+    e.array("CELL_NODE", "u32", cellNode.map((v) => raw16(v)), "cellNode", "planar");
   } else {
-    e.array("ACCEL_SUBSECTORS_PACKED", "felt252", packIndices(spans.subsectors, INDICES_PER_FELT), "accelerator", "packed");
-    e.scalar("ACCEL_SUBSECTORS_PACK_STRIDE", "u32", BigInt(INDICES_PER_FELT));
+    e.array("CELL_NODE_PACKED", "felt252", packIndices(cellNode, INDICES_PER_FELT), "cellNode", "packed");
+    e.scalar("CELL_NODE_PACK_STRIDE", "u32", BigInt(INDICES_PER_FELT));
+  }
+
+  // Candidate lists: off by default (emitConfig.ts#emitAccelCandidates, D22).
+  if (config.emitAccelCandidates) {
+    e.array("ACCEL_START", "u32", spans.start.map(BigInt), "accelerator", config.accelerator);
+    e.array("ACCEL_COUNT", "u32", spans.count.map(BigInt), "accelerator", config.accelerator);
+    if (config.accelerator === "planar") {
+      e.array("ACCEL_SUBSECTORS", "u32", spans.subsectors.map(BigInt), "accelerator", "planar");
+    } else {
+      e.array("ACCEL_SUBSECTORS_PACKED", "felt252", packIndices(spans.subsectors, INDICES_PER_FELT), "accelerator", "packed");
+      e.scalar("ACCEL_SUBSECTORS_PACK_STRIDE", "u32", BigInt(INDICES_PER_FELT));
+    }
   }
 
   return { source: e.source(), arrays: e.arrays };

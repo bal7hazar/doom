@@ -55,7 +55,7 @@ export function buildMapJson(map: MapData, assets: AssetIndex, cellSubsectors?: 
       // derive.ts#computeSubsectorSectors); this is the same data
       // cairoOutput.ts emits as SS_SECTOR/SS_SECTOR_PACKED.
       subsectorSectors: map.subsectorSectors,
-      // R2-A9 accelerator (accelerator.ts#computeCellSubsectors), omitted
+      // R2-A9 accelerator (accelerator.ts#computeCellAccelerator), omitted
       // when the caller doesn't need it (e.g. a lightweight JSON build).
       ...(cellSubsectors ? { cellSubsectors } : {}),
     },
