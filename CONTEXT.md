@@ -440,6 +440,25 @@ cellule → sous-secteurs, itération blockmap sans tableau, cellule mémorisée
 est projeté à ~11 900 steps ; **K ≈ 81–162 tics par segment** (et non 250) ; atteindre 4 000 exige R2-A6
 (moins de monstres éveillés) et R2-A7 (17,5 Hz).
 
+**Outil WAD v2 (2026-09-12, `tools/wad`)** : taille des constantes de niveau en mots de bytecode (1 mot/felt),
+sans SEGS ni noms de textures, avec sous-secteur → secteur précalculé, prédicats de demi-plan (linedefs et
+nœuds) et accélérateur cellule → sous-secteurs (R2-A9 : 2,63 sous-secteurs/cellule en moyenne, max 20) :
+
+| Map Freedoom | Mots (mix recommandé) | | Map | Mots |
+|---|---:|---|---|---:|
+| **E1M1** | **26 903** (tout packé 17 604, tout planaire 70 075) | | E1M5 | 28 841 |
+| E1M2 | 46 956 | | E1M6 | 59 524 |
+| E1M3 | 42 533 | | E1M7 | 91 302 |
+| E1M4 | 51 011 | | E1M8 | 22 945 |
+| E1M9 | 41 244 | | | |
+
+E1M1 est déjà l'une des plus petites maps de Freedoom Phase 1. Les données seules dépassent le budget
+D4 de 16 k mots : le coût de hachage bootloader d'un programme de ~30 k mots est ≈ 440 k steps (blake,
+42 % d'un segment 2^20) ou ≈ 165 k steps (poseidon, 16 %) ; avec un lifting de registre 2^21 (S4b) ces
+parts sont divisées par deux. Stratégie retenue : hachage poseidon + segments 2^21 si S4b les valide,
+données froides packées, budget global 32 k mots ; repli : données de niveau fournies en entrée et
+engagées par Merkle avec vérification des accès.
+
 ## 10. Inconnues à lever (référencées par le PLAN)
 
 1. **U1** Steps/tic réels du cœur Cairo sur la map Freedoom E1M1 (S1).
