@@ -1,0 +1,39 @@
+{
+ "router": "0x059358b558dcc6c0fb1ea4b75b8ea1a767230e9b852976429d72b02065902ae9",
+ "router_class": "0x070b32f24f37f434cdf914da385e3e20a10274ff960788f35a178d83ea9097e6",
+ "prices": {
+  "l1_gas_price_fri": 92599658875965,
+  "l1_data_gas_price_fri": 37485578886,
+  "l2_gas_price_fri": 30475398907,
+  "starknet_version": "0.14.4",
+  "block_number": 21
+ },
+ "rows": [
+  {
+   "fn": "probe_noop",
+   "tx_hash": "0x00c0902183882b9938de6cfe2977e3195457de1c581846069ab26d84b163aa45",
+   "calldata_felts": 2987,
+   "slots": 2986,
+   "n_values": 20901,
+   "l2_gas_receipt": 20164160,
+   "l2_gas_router_call": 40000,
+   "retdata": [
+    "0xbaa"
+   ]
+  },
+  {
+   "fn": "probe_unpack",
+   "tx_hash": "0x058254891002e2d2e2e6cedbf68b679edc9869d1000a66e424b0348499cd3119",
+   "calldata_felts": 2988,
+   "slots": 2986,
+   "n_values": 20901,
+   "l2_gas_receipt": 120889280,
+   "l2_gas_router_call": 105160000,
+   "retdata": [
+    "0x51a5"
+   ]
+  }
+ ],
+ "unpack_gas_per_slot": 35204.28667113195,
+ "calldata_gas_per_felt": 6739.504353650368
+}
