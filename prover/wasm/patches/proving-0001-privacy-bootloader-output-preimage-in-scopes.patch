@@ -1,0 +1,37 @@
+Subject: cairo-program-runner-lib: keep the privacy bootloader output preimage in the execution scopes; make the file dump optional
+
+Why (Hellproof S2, wasm64): `dump_privacy_simple_bootloader_output_preimage` is the only hint of
+the leaf simple bootloader that touches the filesystem (`std::fs::write` of the output preimage).
+`wasm64-unknown-unknown` has no filesystem, so the leaf bootloader cannot run in the browser
+without this change. The preimage is now always inserted into the execution scopes under
+`output_preimage` (readable by the caller through `CairoRunner::exec_scopes`), and the file is
+written only when `output_preimage_dump_path` is non-empty. Existing callers (privacy_prove,
+stwo_run_and_prove_recursive_tree tests, leaf_prover) pass a real path and are unaffected.
+
+Upstream: to be submitted as a PR against starkware-libs/proving (base cd7bc5f).
+
+--- a/crates/cairo-program-runner-lib/src/hints/privacy_simple_bootloader_hints.rs
++++ b/crates/cairo-program-runner-lib/src/hints/privacy_simple_bootloader_hints.rs
+@@ -42,6 +42,13 @@
+         vm.get_integer_range(output_start, size)?.into_iter().map(|v| v.into_owned()).collect();
+ 
+     let dump_path: PathBuf = exec_scopes.get(vars::OUTPUT_PREIMAGE_DUMP_PATH)?;
++    // Always keep the preimage in the execution scopes so that callers without a filesystem
++    // (wasm) can read it back through `CairoRunner::exec_scopes`; dump it to a file only when a
++    // path was given.
++    exec_scopes.insert_value(vars::OUTPUT_PREIMAGE, elements.clone());
++    if dump_path.as_os_str().is_empty() {
++        return Ok(());
++    }
+     let json = serde_json::to_string_pretty(&elements).map_err(|e| {
+         HintError::CustomHint(format!("Failed to serialize output preimage: {e}").into())
+     })?;
+--- a/crates/cairo-program-runner-lib/src/hints/vars.rs
++++ b/crates/cairo-program-runner-lib/src/hints/vars.rs
+@@ -75,3 +75,6 @@
+ 
+ /// Path to dump the output preimage for privacy simple bootloader.
+ pub const OUTPUT_PREIMAGE_DUMP_PATH: &str = "output_preimage_dump_path";
++
++/// The privacy simple bootloader output preimage (`Vec<Felt>`), kept in the execution scopes.
++pub const OUTPUT_PREIMAGE: &str = "output_preimage";

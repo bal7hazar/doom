@@ -1,0 +1,77 @@
+Subject: stwo-cairo-prover: run the big-stack witness pools inline when threads cannot be spawned
+
+Why (Hellproof S2, wasm64): `partial_ec_mul_window_bits_{9,18}` and `cube_252` build a dedicated
+rayon pool with an 8 MiB thread stack (`ThreadPoolBuilder::new().stack_size(..).build().unwrap()`)
+around `write_trace_simd`. On wasm without threads `std::thread::spawn` is unsupported, so the
+`unwrap` panics (`ThreadPoolBuildError { kind: IOError(Unsupported) }`) — rayon's automatic
+single-thread fallback only covers the *global* pool. When the pool cannot be built, run the
+closure on the calling thread instead (the wasm shadow stack is sized by the embedder, 16 MiB in
+Hellproof). Native behaviour is unchanged.
+
+Upstream: to be submitted as a PR against starkware-libs/proving (base cd7bc5f).
+
+--- a/crates/prover/src/witness/components/partial_ec_mul_window_bits_9.rs
++++ b/crates/prover/src/witness/components/partial_ec_mul_window_bits_9.rs
+@@ -42,9 +42,9 @@
+         // NOTE: This is not autogened, when updating the code, re-add this.
+         // TODO(Ohad): remove.
+         const RAYON_THREAD_STACK_SIZE: usize = 1024 * 1024 * 8;
+-        let pool =
+-            rayon::ThreadPoolBuilder::new().stack_size(RAYON_THREAD_STACK_SIZE).build().unwrap();
+-        let (trace, lookup_data, sub_component_inputs) = pool.install(|| {
++        // Without threads (wasm) the pool cannot be built: run on the calling thread instead.
++        let pool = rayon::ThreadPoolBuilder::new().stack_size(RAYON_THREAD_STACK_SIZE).build().ok();
++        let (trace, lookup_data, sub_component_inputs) = crate::witness::utils::install_or_inline(pool.as_ref(), || {
+             write_trace_simd(
+                 packed_inputs,
+                 n_active_rows,
+--- a/crates/prover/src/witness/components/partial_ec_mul_window_bits_18.rs
++++ b/crates/prover/src/witness/components/partial_ec_mul_window_bits_18.rs
+@@ -42,9 +42,9 @@
+         // NOTE: This is not autogened, when updating the code, re-add this.
+         // TODO(Ohad): remove.
+         const RAYON_THREAD_STACK_SIZE: usize = 1024 * 1024 * 8;
+-        let pool =
+-            rayon::ThreadPoolBuilder::new().stack_size(RAYON_THREAD_STACK_SIZE).build().unwrap();
+-        let (trace, lookup_data, sub_component_inputs) = pool.install(|| {
++        // Without threads (wasm) the pool cannot be built: run on the calling thread instead.
++        let pool = rayon::ThreadPoolBuilder::new().stack_size(RAYON_THREAD_STACK_SIZE).build().ok();
++        let (trace, lookup_data, sub_component_inputs) = crate::witness::utils::install_or_inline(pool.as_ref(), || {
+             write_trace_simd(
+                 packed_inputs,
+                 n_active_rows,
+--- a/crates/prover/src/witness/components/cube_252.rs
++++ b/crates/prover/src/witness/components/cube_252.rs
+@@ -37,9 +37,9 @@
+         // NOTE: This is not autogened, when updating the code, re-add this.
+         // TODO(Ohad): remove.
+         const RAYON_THREAD_STACK_SIZE: usize = 1024 * 1024 * 8;
+-        let pool =
+-            rayon::ThreadPoolBuilder::new().stack_size(RAYON_THREAD_STACK_SIZE).build().unwrap();
+-        let (trace, lookup_data, sub_component_inputs) = pool.install(|| {
++        // Without threads (wasm) the pool cannot be built: run on the calling thread instead.
++        let pool = rayon::ThreadPoolBuilder::new().stack_size(RAYON_THREAD_STACK_SIZE).build().ok();
++        let (trace, lookup_data, sub_component_inputs) = crate::witness::utils::install_or_inline(pool.as_ref(), || {
+             write_trace_simd(
+                 packed_inputs,
+                 n_active_rows,
+--- a/crates/prover/src/witness/utils.rs
++++ b/crates/prover/src/witness/utils.rs
+@@ -364,5 +364,17 @@
+         let result = tree_trace_cells(tree_sizes);
+ 
+         assert_eq!(result, vec![6, 24, 32]);
++    }
++}
++
++/// Runs `f` inside `pool` when one could be built, on the calling thread otherwise (wasm without
++/// threads: `ThreadPoolBuilder::build` fails with `Unsupported`).
++pub fn install_or_inline<R: Send>(
++    pool: Option<&rayon::ThreadPool>,
++    f: impl FnOnce() -> R + Send,
++) -> R {
++    match pool {
++        Some(pool) => pool.install(f),
++        None => f(),
+     }
+ }

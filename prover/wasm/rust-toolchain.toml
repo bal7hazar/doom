@@ -1,0 +1,7 @@
+# Same nightly as starkware-libs/proving @ cd7bc5f (rust-toolchain.toml + CI NIGHTLY_VERSION).
+# wasm64-unknown-unknown is a tier-3 target with no prebuilt std: build.sh uses
+# `-Z build-std=std,panic_abort`, which needs the `rust-src` component.
+[toolchain]
+channel = "nightly-2026-01-15"
+profile = "minimal"
+components = ["rust-src", "clippy", "rustfmt"]

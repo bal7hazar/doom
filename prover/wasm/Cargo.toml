@@ -1,0 +1,78 @@
+[package]
+name = "hellproof-prover-wasm"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "WASM64 (Memory64) build of the Stwo Cairo prover (starkware-libs/proving @ cd7bc5f) for Hellproof: execute -> prove -> verify a Scarb executable in the browser"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "hellproof-prover-native"
+path = "src/bin/native.rs"
+
+# The monorepo crates are pinned by full commit hash. They are built from `vendor/proving`
+# (that commit + patches/proving-*.patch, see the [patch] section and build.sh).
+[dependencies]
+stwo-cairo-prover = { git = "https://github.com/starkware-libs/proving", rev = "cd7bc5f4697fb188a27e09f9242f1dd76df8afdc" }
+stwo-cairo-adapter = { git = "https://github.com/starkware-libs/proving", rev = "cd7bc5f4697fb188a27e09f9242f1dd76df8afdc" }
+stwo-cairo-common = { git = "https://github.com/starkware-libs/proving", rev = "cd7bc5f4697fb188a27e09f9242f1dd76df8afdc", features = ["prover"] }
+stwo-cairo-serialize = { git = "https://github.com/starkware-libs/proving", rev = "cd7bc5f4697fb188a27e09f9242f1dd76df8afdc" }
+cairo-air = { git = "https://github.com/starkware-libs/proving", rev = "cd7bc5f4697fb188a27e09f9242f1dd76df8afdc" }
+stwo = { git = "https://github.com/starkware-libs/proving", rev = "cd7bc5f4697fb188a27e09f9242f1dd76df8afdc", features = ["prover", "parallel"] }
+cairo-program-runner-lib = { git = "https://github.com/starkware-libs/proving", rev = "cd7bc5f4697fb188a27e09f9242f1dd76df8afdc" }
+
+# Same versions/features as the monorepo workspace (Cargo.lock @ cd7bc5f).
+cairo-vm = { version = "=3.2.0", default-features = false, features = ["extensive_hints", "mod_builtin"] }
+cairo-lang-executable = "=2.19.4"
+cairo-lang-runner = "=2.19.4"
+cairo-lang-execute-utils = "=2.19.4"
+cairo-lang-utils = "=2.19.4"
+
+anyhow = "1.0"
+bincode = "1.3"
+flate2 = { version = "1.0", default-features = false, features = ["rust_backend"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+starknet-ff = "0.3.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "fmt", "std"] }
+rayon = "1.10"
+
+# getrandom is pulled in transitively (rand / ahash / hashbrown ...). wasm64 is not a supported
+# target for any of its versions: 0.2 needs the `custom` feature (the `js` feature is wasm32-only),
+# 0.3/0.4 need `--cfg getrandom_backend="custom"` (set in .cargo/config.toml) and both resolve
+# the same `__getrandom_v03_custom` symbol, defined in src/lib.rs on wasm64.
+[target.'cfg(target_arch = "wasm64")'.dependencies]
+getrandom_v2 = { package = "getrandom", version = "0.2", features = ["custom"] }
+getrandom_v3 = { package = "getrandom", version = "0.3" }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+libc = "0.2"
+clap = { version = "4.5", features = ["derive"] }
+
+# Patched sources (see patches/README.md). `./build.sh vendor` populates vendor/ — the monorepo
+# at the pinned commit with patches/proving-*.patch applied, and the exact crates.io tarball of
+# xxhash-rust (checksum from Cargo.lock) with its patch — every cargo command in this directory
+# needs that step first.
+[patch."https://github.com/starkware-libs/proving"]
+stwo-cairo-prover = { path = "vendor/proving/crates/prover" }
+stwo-cairo-adapter = { path = "vendor/proving/crates/adapter" }
+stwo-cairo-common = { path = "vendor/proving/crates/common" }
+stwo-cairo-serialize = { path = "vendor/proving/crates/cairo-serialize" }
+cairo-air = { path = "vendor/proving/crates/cairo-air" }
+stwo = { path = "vendor/proving/crates/stwo" }
+cairo-program-runner-lib = { path = "vendor/proving/crates/cairo-program-runner-lib" }
+
+[patch.crates-io]
+xxhash-rust = { path = "vendor/xxhash-rust" }
+
+[profile.release]
+opt-level = 3
+debug = false
+strip = true
+panic = "abort"
+codegen-units = 16
+lto = false
