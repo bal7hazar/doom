@@ -9,8 +9,9 @@ in the representation a generic crate consumes: `geom2d::HalfPlane`
 coefficients (biases `2^17` / `2^50`) for linedefs and BSP partitions,
 `bsp::Nodes` children with the `0x8000_0000` leaf flag, `fixed`
 offset-encoded coordinates and sector heights, `blockmap::Grid` +
-`PackedLists` for the blockmap, a bit-packed REJECT, the R2-A9 cell →
-subsector accelerator, and the THINGS of skill 2.
+`PackedLists` for the blockmap, a bit-packed REJECT, the R2-A9 / D22
+`CELL_NODE` location accelerator, and the THINGS of skill 2. `hot` bundles
+the per-tic spans (D24) for `doom_physics`.
 
 **Does not**: parse a WAD (that is `tools/wad`, offline TypeScript), hold any
 mutable state (an opened door lives in `doom_game`, never in this crate's
@@ -31,8 +32,7 @@ client reads them from `client/public/levels/e1m1.json` instead.
   diagonal bit equals `geom2d::diagonal` — so the offline builder and the
   runtime predicate cannot drift apart;
 * `subsector_in_cell(cell, p)` returns exactly what `subsector_at(p)` returns
-  for every `p` in `cell`, and `subsector_candidates(cell)` always contains
-  that subsector;
+  for every `p` in `cell`;
 * REJECT is symmetric and no sector blocks itself;
 * the blockmap lists are sorted, deduplicated and in range, and
   `BM_START[cells]` is the total entry count.
@@ -61,12 +61,11 @@ at K = 100, not by taste.
 | `S_FLOOR` / `S_CEIL` | planar | 364 | `P_LineOpening`, every move |
 | `S_META` (light, special, tag) | **packed** | 182 | read only when a special fires |
 | `BM_START` / `BM_ITEMS` | planar | 2 929 | `blockmap::PackedLists`, the hottest list in `P_TryMove`; **note this is 1 699 words *less* than Doom's own offset/terminator blockmap** (4 628), because the terminators and the 16-bit offsets disappear |
-| `ACCEL_START` / `ACCEL_PACKED` | start planar, items **packed** (5 × 13 bits) | 1 578 | the candidate list is a bulk query, not a per-tic read |
 | `CELL_NODE` | planar | 864 | one read on every location, the whole point of it |
 | `REJECT_ROWS` + `POW2` | **packed** (64 bits/felt) | 610 | S1 §7's headline: flat REJECT is 33 124 felts = 4 870 steps/tic amortized, packed is 90 |
 | `THINGS` | **packed** (64 bits) | 221 | read once, at genesis |
 | scalars | — | 19 | counts, blockmap header, player start, bounds |
-| **Total** | | **17 904** | measured at **18 312 words** |
+| **Total** | | **16 326** | measured at **16 762 words** (D22 removed the 1 578-word candidate lists) |
 
 Two sizing decisions differ from S1 §7's suggestions, both deliberately:
 
@@ -112,20 +111,20 @@ while its region reaches y = −214. On a 200-point lattice over E1M1, **81 of
 the subsector `R_PointInSubsector` returns for them. The list is not
 conservative for the query physics actually makes.
 
-`scripts/gen_level.py` therefore builds both halves of R2-A9 from the
-**regions** instead:
+`scripts/gen_level.py` therefore builds the accelerator from the
+**regions** instead, and — decision D22 — keeps only the half that answers
+in one read:
 
-* `ACCEL_START`/`ACCEL_PACKED` — the subsectors whose region meets a cell,
-  computed by descending from the root and recursing into both children
-  whenever the cell's four corners straddle the partition (a partition is
-  linear, so its sign over an axis-aligned box is decided by the corners).
-  Exact, hence conservative: 3 565 entries, 4.13 per cell, 21 at most.
 * `CELL_NODE` — the deepest child id whose region **contains** the whole
-  cell. `subsector_in_cell` starts the descent there and answers exactly what
-  a descent from the root answers, **in every case, after one `Span` read** —
-  which is what S1 §7 demands of a location accelerator ("a partial
-  accelerator is worse than none": the uniform-cell shortcut cost 520
-  steps/tic *more* than it saved).
+  cell (a partition is linear, so its sign over an axis-aligned box is
+  decided by the four corners). `subsector_in_cell` starts the descent there
+  and answers exactly what a descent from the root answers, **in every case,
+  after one `Span` read** — which is what S1 §7 demands of a location
+  accelerator ("a partial accelerator is worse than none": the uniform-cell
+  shortcut cost 520 steps/tic *more* than it saved).
+* The cell → subsector *candidate lists* of the first version
+  (`ACCEL_START`/`ACCEL_PACKED`, 1 578 words) were removed by D22: nothing
+  in the simulation queries them once `CELL_NODE` exists.
 
 Measured on E1M1: mean descent depth **11.36 from the root, 4.15 from
 `CELL_NODE`**, i.e. **1 252 → 789 steps** per location including
@@ -153,13 +152,11 @@ python3 measure.py --update             # re-baseline after an intended change
 | `linedef_half_plane` | 76 | 3 | three reads |
 | `linedef_flags` | 76 | 7 | one read, one modulo |
 | `sector_floor` + `sector_ceiling` | 76 | 5 | two reads |
-| `subsector_candidates` (range) | 71 | 2 | two reads |
 | `blockmap` cell list (4 entries) | 101 | 5 | `list_range` + `list_item` ×4 |
 | `node_side` | 114 | 8 | `geom2d::point_side_at` |
 | `linedef_diagonal` | 150 | 11 | one read, one `u128` div/mod |
 | `linedef_box` (packed) | 172 | 32 | two reads, two splits |
 | `linedef_special` / `linedef_sectors` | 178 | 21 | one read, two fields |
-| `subsector_candidate` | 180 | 20 | two reads, one field |
 | `reject` | 198 | 24 | two reads, one bit |
 | `sector` (full record) | 222 | 33 | |
 | `thing` | 242 | 42 | four fields |
@@ -173,11 +170,13 @@ python3 measure.py --update             # re-baseline after an intended change
 `LevelMap` has 24 fields, and Cairo copies all of them at every `@LevelMap`
 call site: the same `SS_SECTOR` read costs **9 steps** with the span hoisted
 into a local and **60** through the accessor. Every field is `pub` for
-exactly that reason. **`doom_physics` should hoist the spans it needs once
-per tic** (`let ss = m.ss_sector;`) and index them directly in its inner
-loops, keeping the accessors for cold paths and for readability; the
-`linedef_*` accessors are worth the snapshot only outside `PIT_CheckLine`'s
-per-line loop.
+exactly that reason. **`doom_physics` hoists the spans it needs once per
+operation** (D24) and indexes them directly in its inner loops, keeping the
+accessors for cold paths and for readability; the `linedef_*` accessors are
+worth the snapshot only outside `PIT_CheckLine`'s per-line loop. `hot(@m)`
+returns the `HotMap` bundle of exactly those spans (sector heights excluded:
+they are dynamic once a door moves, so the physics takes them from the game
+state).
 
 ## Regenerating the level
 
@@ -217,8 +216,8 @@ the WAD JSON**, never from the emitted arrays:
   sentinel correct;
 * **accelerator**: on 400 sampled points — a lattice over the whole bounding
   box (which reaches the void) plus 200 subsector centroids — the Cairo
-  descent matches the Python one, the candidate list contains the answer, and
-  `subsector_in_cell` equals `subsector_at`; every `CELL_NODE` id is in range;
+  descent matches the Python one and `subsector_in_cell` equals
+  `subsector_at`; every `CELL_NODE` id is in range;
 * **things**: 221 of 292 survive the skill-2 filter, each either carries
   `MTF_NORMAL` without `MTF_NOTSINGLE` or is a start, 29 monsters, 12 starts,
   angles are multiples of 45°, positions inside the map bounds, and the
@@ -229,13 +228,13 @@ the WAD JSON**, never from the emitted arrays:
 ## Coverage
 
 `python3 bench/coverage.py` measures line coverage with `cairo-coverage`
-0.5.0: **1 test, 104/104 production lines = 100 %** of the accessor code in
-`src/lib.cairo` and `src/compat.cairo`.
+0.5.0: **1 test, 105/105 production lines = 100 %** of the accessor code in
+`src/lib.cairo`.
 
 It cannot run on the real E1M1 data. `cairo-coverage` refuses to run unless
 the manifest sets `inlining-strategy = "avoid"`, and with that flag
 `universal-sierra-compiler` fails on this crate with `Offset overflow` --
-17 904 felts of `const` arrays push a jump offset past the `i16` the CASM
+16 326 felts of `const` arrays push a jump offset past the `i16` the CASM
 encoding allows. (Verified: the failure is the *data*, not the tests; it
 reproduces with a single one-line test.) The script therefore swaps
 `src/levels/e1m1.cairo` for a **miniature level of the same shape** -- five
@@ -249,13 +248,4 @@ real E1M1 values, under `scarb test`.
 On top of the figure: the fixture reaches both arms of every `if` in
 `linedef_v1`/`linedef_v2`, both children of the BSP node, a cell whose
 descent starts at the root and two whose descent starts at a leaf, a blocked
-and an unblocked REJECT pair, and the transitional `compat` accessors.
-
-## Transitional
-
-`src/compat.cairo` still exports the Phase-0 skeleton's `Level`, `Sector`,
-`LineDef`, `sample_level`, `sector_at` and `is_line_blocking`, re-exported at
-the crate root, because `doom_physics`, `doom_player`, `doom_monsters`,
-`doom_specials`, `doom_game` and `doom_run` still import them. That is the
-`doom_map` half of the D17 clean-up; it disappears with P1.6, the PR that
-ports those crates onto `LevelMap`. Nothing in the real data path touches it.
+and an unblocked REJECT pair.

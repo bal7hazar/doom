@@ -11,15 +11,14 @@ use blockmap::{cell_index, cell_of, list_item, list_range};
 use bsp::{SUBSECTOR_FLAG, is_subsector, point_in_subsector, subsector_of};
 use fixed::Fixed;
 use geom2d::{Point, SIDE_BACK, SIDE_FRONT, half_plane, hoist, point_side};
-use vectors::{ACCEL_POINTS, LINE_VERTICES, PINNED_LINES};
+use vectors::{LINE_VERTICES, PINNED_LINES, SAMPLE_POINTS};
 use super::levels::e1m1;
 use super::{
     LevelId, ML_BLOCKING, ML_TWOSIDED, NO_SECTOR, REJECT_BITS, blockmap_lists, descent_start,
     genesis, grid, linedef, linedef_box, linedef_diagonal, linedef_flags, linedef_half_plane,
     linedef_sectors, linedef_special, linedef_v1, linedef_v2, load, node_side, nodes, num_linedefs,
     num_sectors, num_subsectors, num_things, reject, sector, sector_ceiling, sector_floor,
-    subsector_at, subsector_candidate, subsector_candidates, subsector_in_cell, subsector_sector,
-    thing, things,
+    subsector_at, subsector_in_cell, subsector_sector, thing, things,
 };
 
 /// A map-unit coordinate as a `Fixed`.
@@ -63,9 +62,6 @@ fn test_spans_are_consistently_sized() {
     // `PackedLists::start` has one entry per cell plus the end sentinel.
     let cells = e1m1::BM_COLUMNS * e1m1::BM_ROWS;
     assert(m.blockmap.start.len() == cells + 1, 'bm start');
-    assert(m.accel_start.len() == cells + 1, 'accel start');
-    assert(*m.accel_start.at(cells) == 3565, 'accel entries');
-    assert(m.accel_packed.len() == (3565 + 4) / 5, 'accel packed');
     assert(m.cell_node.len() == cells, 'cell_node');
 }
 
@@ -328,52 +324,30 @@ fn test_node_side_matches_a_direct_descent() {
 }
 
 // ---------------------------------------------------------------------------
-// R2-A9 accelerator
+// R2-A9 accelerator (D22: CELL_NODE)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_accelerator_is_conservative_on_sampled_points() {
-    // Every sampled point's true subsector (computed by a Python transcription
-    // of `R_PointInSubsector`) must appear in its cell's candidate list.
+fn test_descent_from_root_matches_the_python_transcription() {
+    // Every sampled point's subsector, computed by a Python transcription of
+    // `R_PointInSubsector` from the WAD JSON, must be what the Cairo descent
+    // reaches.
     let m = load(LevelId::E1M1);
-    let pts = ACCEL_POINTS.span();
-    let g = grid(@m);
+    let pts = SAMPLE_POINTS.span();
     let n = pts.len() / 3;
     let mut i: u32 = 0;
-    let mut checked: u32 = 0;
     while i != n {
         let p = at(*pts.at(i * 3), *pts.at(i * 3 + 1));
         let expected: u32 = (*pts.at(i * 3 + 2)).try_into().unwrap();
-        // The Cairo descent must agree with the Python one first.
         assert(subsector_at(@m, p) == expected, 'descent matches python');
-        match cell_of(g, p) {
-            Option::Some((
-                cx, cy,
-            )) => {
-                let cell = cell_index(g, cx, cy);
-                let (from, to) = subsector_candidates(@m, cell);
-                let mut k = from;
-                let mut found = false;
-                while k != to {
-                    if subsector_candidate(@m, k) == expected {
-                        found = true;
-                    }
-                    k += 1;
-                }
-                assert(found, 'candidate list is complete');
-                checked += 1;
-            },
-            Option::None => {},
-        }
         i += 1;
     }
-    assert(checked > 150, 'most points are on the grid');
 }
 
 #[test]
 fn test_descent_start_answers_exactly_like_the_root() {
     let m = load(LevelId::E1M1);
-    let pts = ACCEL_POINTS.span();
+    let pts = SAMPLE_POINTS.span();
     let g = grid(@m);
     let n = pts.len() / 3;
     let mut i: u32 = 0;

@@ -12,7 +12,7 @@ Two departures from `cairo/crates/*/bench/coverage.py`, both forced:
 2. **The real level data cannot be compiled under coverage.** `cairo-coverage`
    0.5.0 refuses to run unless the manifest sets `inlining-strategy =
    "avoid"`, and with that flag `universal-sierra-compiler` fails on this
-   crate with `Offset overflow` -- 17 904 felts of `const` arrays push a jump
+   crate with `Offset overflow` -- 16 326 felts of `const` arrays push a jump
    offset past the i16 the CASM encoding allows. (Verified: the failure is
    the *data*, not the tests; it reproduces with a single one-line test.)
    So the copy swaps `src/levels/e1m1.cairo` for a **miniature level of the
@@ -126,13 +126,9 @@ fn test_every_accessor_runs() {
     let (cx, cy) = cell_of(grid, p).unwrap();
     let cell = cell_index(grid, cx, cy);
     assert(subsector_in_cell(@m, cell, p) == ss, 'accelerated');
-    let (from, to) = subsector_candidates(@m, cell);
-    let mut k = from;
-    while k != to {
-        assert(subsector_candidate(@m, k) < 2, 'candidate');
-        k += 1;
-    }
     assert(descent_start(@m, cell) == descent_start(@m, cell), 'pure');
+    let h = hot(@m);
+    assert(h.ss_sector.len() == 2, 'hot bundle');
 
     let lists = blockmap_lists(@m);
     let (lo, hi) = list_range(@lists, cell);
@@ -152,11 +148,6 @@ fn test_every_accessor_runs() {
     assert(t1.doomednum == 3004, 'zombieman');
     assert(t0.angle != t1.angle, 'different angles');
     assert(t0.position != t1.position, 'different places');
-
-    // The transitional API, so the compat module is covered too.
-    let level = sample_level();
-    assert(sector_at(@level, 0).light_level == 200, 'compat sector');
-    assert(is_line_blocking(@level, 0), 'compat line');
 }
 """
 
@@ -208,15 +199,6 @@ def fixture_level() -> str:
     # A 2 x 2 grid of 128-unit cells at the origin; every cell holds one line.
     arr.add("BM_START", "u32", [0, 1, 2, 3, 4], "blockmap")
     arr.add("BM_ITEMS", "u32", [0, 1, 2, 3], "blockmap")
-    arr.add("ACCEL_START", "u32", [0, 2, 3, 4, 5], "accelerator")
-    packed = []
-    items = [0, 1, 0, 1, 0]
-    for i in range(0, len(items), G.ACCEL_PER_FELT):
-        word = 0
-        for k, v in enumerate(items[i : i + G.ACCEL_PER_FELT]):
-            word |= v << (G.ACCEL_BITS * k)
-        packed.append(word)
-    arr.add("ACCEL_PACKED", "felt252", packed, "accelerator")
     # Cell 0 straddles the partition (start at the root), the others do not.
     arr.add(
         "CELL_NODE",

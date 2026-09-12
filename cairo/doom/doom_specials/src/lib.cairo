@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
+//! **Skeleton** (rewritten in P1.9 on top of `doom_map`'s sectors): a door is
+//! a moving ceiling on a sector's dynamic heights.
 
-use doom_map::Sector;
+/// The dynamic heights of one sector, raw 16.16 fixed values (what a door or
+/// a lift moves). The static per-sector data is `doom_map::MapSector`.
+#[derive(Copy, Drop, Serde, PartialEq, Debug)]
+pub struct SectorHeights {
+    pub floor_height: i64,
+    pub ceiling_height: i64,
+}
 
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub enum DoorState {
@@ -12,7 +20,7 @@ pub enum DoorState {
 
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub struct Door {
-    pub sector: Sector,
+    pub sector: SectorHeights,
     pub state: DoorState,
     /// Raw 16.16 fixed ceiling height the door is moving toward.
     pub target_ceiling: i64,
@@ -20,7 +28,7 @@ pub struct Door {
     pub speed: i64,
 }
 
-pub fn start_opening(sector: Sector, target_ceiling: i64, speed: i64) -> Door {
+pub fn start_opening(sector: SectorHeights, target_ceiling: i64, speed: i64) -> Door {
     Door { sector, state: DoorState::Opening, target_ceiling, speed }
 }
 
@@ -29,58 +37,34 @@ pub fn think_door(door: Door) -> Door {
     match door.state {
         DoorState::Opening => {
             let candidate = door.sector.ceiling_height + door.speed;
-            if candidate >= door.target_ceiling {
-                let sector = Sector {
-                    floor_height: door.sector.floor_height,
-                    ceiling_height: door.target_ceiling,
-                    light_level: door.sector.light_level,
-                };
-                Door {
-                    sector,
-                    state: DoorState::Open,
-                    target_ceiling: door.target_ceiling,
-                    speed: door.speed,
-                }
+            let (ceiling, state) = if candidate >= door.target_ceiling {
+                (door.target_ceiling, DoorState::Open)
             } else {
-                let sector = Sector {
-                    floor_height: door.sector.floor_height,
-                    ceiling_height: candidate,
-                    light_level: door.sector.light_level,
-                };
-                Door {
-                    sector,
-                    state: DoorState::Opening,
-                    target_ceiling: door.target_ceiling,
-                    speed: door.speed,
-                }
+                (candidate, DoorState::Opening)
+            };
+            Door {
+                sector: SectorHeights {
+                    floor_height: door.sector.floor_height, ceiling_height: ceiling,
+                },
+                state,
+                target_ceiling: door.target_ceiling,
+                speed: door.speed,
             }
         },
         DoorState::Closing => {
             let candidate = door.sector.ceiling_height - door.speed;
-            if candidate <= door.target_ceiling {
-                let sector = Sector {
-                    floor_height: door.sector.floor_height,
-                    ceiling_height: door.target_ceiling,
-                    light_level: door.sector.light_level,
-                };
-                Door {
-                    sector,
-                    state: DoorState::Closed,
-                    target_ceiling: door.target_ceiling,
-                    speed: door.speed,
-                }
+            let (ceiling, state) = if candidate <= door.target_ceiling {
+                (door.target_ceiling, DoorState::Closed)
             } else {
-                let sector = Sector {
-                    floor_height: door.sector.floor_height,
-                    ceiling_height: candidate,
-                    light_level: door.sector.light_level,
-                };
-                Door {
-                    sector,
-                    state: DoorState::Closing,
-                    target_ceiling: door.target_ceiling,
-                    speed: door.speed,
-                }
+                (candidate, DoorState::Closing)
+            };
+            Door {
+                sector: SectorHeights {
+                    floor_height: door.sector.floor_height, ceiling_height: ceiling,
+                },
+                state,
+                target_ceiling: door.target_ceiling,
+                speed: door.speed,
             }
         },
         DoorState::Open => door,
@@ -90,11 +74,10 @@ pub fn think_door(door: Door) -> Door {
 
 #[cfg(test)]
 mod tests {
-    use doom_map::Sector;
-    use super::{DoorState, start_opening, think_door};
+    use super::{DoorState, SectorHeights, start_opening, think_door};
 
-    fn sector_at(ceiling: i64) -> Sector {
-        Sector { floor_height: 0, ceiling_height: ceiling, light_level: 200 }
+    fn sector_at(ceiling: i64) -> SectorHeights {
+        SectorHeights { floor_height: 0, ceiling_height: ceiling }
     }
 
     #[test]
@@ -112,11 +95,9 @@ mod tests {
 
     #[test]
     fn test_open_door_is_stable() {
-        // Ceiling already at target: the very first tic reaches Open.
         let mut door = start_opening(sector_at(100), 100, 30);
         door = think_door(door);
         assert(door.state == DoorState::Open, 'reaches open immediately');
-        // Further ticks on an open door are no-ops.
         assert(door == think_door(door), 'stable once open');
     }
 

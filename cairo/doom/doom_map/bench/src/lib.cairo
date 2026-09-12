@@ -19,7 +19,7 @@ use doom_map::{
     LevelId, blockmap_lists, descent_start, genesis, linedef, linedef_box, linedef_diagonal,
     linedef_flags, linedef_half_plane, linedef_sectors, linedef_special, linedef_v1, load,
     node_side, num_linedefs, reject, sector, sector_ceiling, sector_floor, subsector_at,
-    subsector_candidate, subsector_candidates, subsector_in_cell, subsector_sector, thing,
+    subsector_in_cell, subsector_sector, thing,
 };
 use fixed::Fixed;
 use geom2d::{Point, hoist};
@@ -140,17 +140,6 @@ fn main(op: u32, n: u32) -> felt252 {
             acc += descent_start(@m, i % 512).into();
             i += 1;
         }
-    } else if op == 17 {
-        while i != n {
-            acc += subsector_candidate(@m, i % 1024).into();
-            i += 1;
-        }
-    } else if op == 18 {
-        while i != n {
-            let (from, to) = subsector_candidates(@m, i % 512);
-            acc += from.into() + to.into();
-            i += 1;
-        }
     } else if op == 19 {
         // full BSP descent from the root (the ground truth)
         while i != n {
@@ -209,7 +198,6 @@ fn main(op: u32, n: u32) -> felt252 {
         acc += (*m.ss_sector.at(0)).into();
         acc += *m.s_floor.at(0) + *m.s_ceil.at(0) + *m.s_meta.at(0);
         acc += (*m.blockmap.start.at(0)).into() + (*m.blockmap.items.at(0)).into();
-        acc += (*m.accel_start.at(0)).into() + *m.accel_packed.at(0);
         acc += (*m.cell_node.at(0)).into();
         acc += *m.reject.at(0) + *m.pow2.at(1) + *m.things.at(0);
         let g = doom_map::grid(@m);
