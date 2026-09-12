@@ -1,0 +1,14 @@
+[package]
+name = "poseidon_hash"
+version = "0.1.0"
+edition = "2024_07"
+
+[[target.executable]]
+name = "poseidon_hash"
+function = "poseidon_hash::main"
+
+[dependencies]
+cairo_execute = "2.19.4"
+
+[cairo]
+enable-gas = false
