@@ -150,22 +150,25 @@ Monsters that Phase 1 (`doom_monsters`) must implement for this map:
 Linedef special categories present: door, exit, floor, lift.
 
 
-## Cell -> subsector accelerator (R2-A9)
+## Cell -> subsector accelerator (R2-A9, docs/DECISIONS.md D22)
 
-For each blockmap cell, the list of subsectors whose geometry can overlap that cell (RISKS.md R2-A9), replacing a full BSP descent (docs/spikes/S1.md §7 `bsp`: ~1 014 steps, 35% of an optimized tic) with a span lookup.
+For each blockmap cell, `CELL_NODE` (the deepest BSP node whose region contains the whole cell) and, optionally, the list of subsectors whose region can overlap that cell (RISKS.md R2-A9), both replacing a full BSP descent from the root (docs/spikes/S1.md §7 `bsp`: ~1 014 steps, 35% of an optimized tic) with a shorter one, or a span lookup.
 
-**Method**: a subsector's bounding box is the union of the vertex coordinates of its SEGS (the vanilla node builder always closes a subsector's polygon with SEGS, wall segs and internal partition segs alike). A subsector is listed for a cell whenever the two boxes intersect.
+**Method**: both are built from the map's BSP **regions**, exactly as `cairo/doom/doom_map/scripts/gen_level.py` builds `doom_map`'s own compiled accelerator - descend from the root, recursing into both children whenever the four corners of the query box straddle a node's partition (a partition is linear, so its sign over an axis-aligned box is decided entirely by the corners). `CELL_NODE` stops the descent the moment the box no longer straddles; the candidate list keeps going to every reachable leaf. Both are exact (a subsector's region either meets the cell or it doesn't), hence conservative, and need no SEGS at all.
 
-**Why it is conservative**: for any polygon, every interior point's x and y coordinates lie between the min and max of the polygon's own vertex coordinates (a point inside a polygon is a convex combination of its vertices), so the polygon is always a subset of its own vertex bounding box. If a point lies in both subsector S and blockmap cell C, then the point lies in `bbox(S)` (by the fact above) and in `bbox(C)` (by construction), so the two boxes intersect and S is listed for C. The accelerator can list extra subsectors whose bbox reaches a cell without their polygon actually doing so, but it can never omit the true one. `test/accelerator.test.ts` checks this by sampling points in every cell and comparing against a ground-truth BSP descent (`accelerator.ts#locateSubsector`).
+**This replaces an earlier seg-bbox method that was not conservative**: it derived a subsector's extent from the bounding box of its SEGS' vertices, on the assumption that a vanilla node builder always closes a subsector's polygon with SEGS. That premise is false - a vanilla builder emits no minisegs at all - so a subsector's actual BSP region routinely reached far outside the box of its own segs (e.g. E1M1 subsector 630's segs span y in [-36, 4] while its region reaches y = -214), and the seg-bbox candidate list omitted the true subsector for 81 of 200 lattice-sampled points on E1M1. See `accelerator.ts`'s module header for the full history, and `test/accelerator.test.ts` for the fixed conservativeness test: a dense lattice over every cell, checked against an independent BSP descent, with no "is this real geometry" skip logic (a region-based accelerator has no void - the BSP tiles the whole plane).
 
 | Metric | Value |
 |---|---:|
 | Blockmap cells | 864 |
-| Total (cell, subsector) entries | 2272 |
-| Average subsectors per cell | 2.63 |
-| Max subsectors in one cell | 20 |
-| Cells resolved by a single subsector | 71 (8.2%) |
-| Cells with no candidate subsector (outside all subsector bboxes) | 314 |
+| Mean BSP descent depth from the root | 11.36 |
+| Mean BSP descent depth from `CELL_NODE` | 4.15 |
+| Candidate-list total (cell, subsector) entries | 3565 |
+| Average subsectors per cell (candidate list) | 4.13 |
+| Max subsectors in one cell (candidate list) | 21 |
+| Cells resolved by a single subsector (candidate list) | 181 (20.9%) |
+
+The candidate-list arrays are informational here (`test/accelerator.test.ts` exercises them either way); the Cairo emitter leaves them out by default (`emitConfig.ts#emitAccelCandidates`, D22) since `CELL_NODE` alone answers the same query exactly.
 
 ## Bytecode budget (R2-A12)
 
@@ -188,8 +191,7 @@ docs/spikes/S1.md §5.9 measured that a `const [felt252; N]` array costs exactly
 | LINEDEF_SIDES | linedefSides | packed | 1175 | 1175 |
 | LINEDEF_SPECIAL | linedefSpecial | packed | 1175 | 1175 |
 | BLOCKMAP_OFFSETS | blockmap | planar | 864 | 864 |
-| ACCEL_START | accelerator | packed | 864 | 864 |
-| ACCEL_COUNT | accelerator | packed | 864 | 864 |
+| CELL_NODE | cellNode | planar | 864 | 864 |
 | NODE_AB | nodePredicates | planar | 681 | 681 |
 | NODE_BB | nodePredicates | planar | 681 | 681 |
 | NODE_CB | nodePredicates | planar | 681 | 681 |
@@ -197,17 +199,16 @@ docs/spikes/S1.md §5.9 measured that a `const [felt252; N]` array costs exactly
 | NODE_CHILD1 | nodeChildren | planar | 681 | 681 |
 | REJECT_ROWS | reject | packed | 364 | 364 |
 | THINGS | things | packed | 292 | 292 |
-| ACCEL_SUBSECTORS_PACKED | accelerator | packed | 284 | 284 |
 | SIDEDEF_SECTOR_PACKED | sidedefSector | packed | 229 | 229 |
 | SECTOR_FLOOR | sectorHeights | planar | 182 | 182 |
 | SECTOR_CEILING | sectorHeights | planar | 182 | 182 |
 | SECTOR_META | sectorMeta | packed | 182 | 182 |
 | SS_SECTOR_PACKED | subsectorSector | packed | 86 | 86 |
-| *(24 scalar consts)* | scalar | - | - | 24 |
+| *(23 scalar consts)* | scalar | - | - | 23 |
 
-**Total: 26903 words** (budget: 12000, EXCEEDED).
+**Total: 25754 words** (budget: 12000, EXCEEDED).
 
-At `2 340 + 14.7 * words`, this is ~397,814 steps of bootloader program-hashing cost per proof segment for the level-data constants alone (docs/G0.md D4 budgets 16 000 words for the whole `doom_run` program; this tool's default `--max-words` is a 12 000-word slice of that for level data).
+At `2 340 + 14.7 * words`, this is ~380,924 steps of bootloader program-hashing cost per proof segment for the level-data constants alone (docs/G0.md D4 budgets 16 000 words for the whole `doom_run` program; this tool's default `--max-words` is a 12 000-word slice of that for level data).
 
 ### Size vs. layout choice
 
@@ -215,7 +216,7 @@ The same map, re-emitted with every group forced to `planar`, forced to `packed`
 
 | Layout | Total words | Bootloader hash / segment |
 |---|---:|---:|
-| all planar | 70075 | 1,032,443 |
-| all packed | 17604 | 261,119 |
-| recommended mix (emit-config.json) | 26903 | 397,814 |
+| all planar | 66939 | 986,343 |
+| all packed | 15700 | 233,130 |
+| recommended mix (emit-config.json) | 25754 | 380,924 |
 
