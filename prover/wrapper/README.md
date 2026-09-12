@@ -294,14 +294,42 @@ cargo test --test load           # 20 concurrent runs on the stub backend
   metrics, and two restart tests.
 * `tests/pipeline_e2e.rs` — the **real** pipeline (ignored by default), see its module docs.
 
+## Measured end to end
+
+M2 Max, 12 cores, 64 GB, `doom` registry, `max_circuit_proofs = 1`, one game submitted `solo`.
+Segment proofs produced by `scripts/e2e_fixtures.sh` (2.4–4.7 s and 2.7 GB each, 2.95 MB on the
+wire) stand in for the browser.
+
+| | N = 2 | N = 4 |
+|---|---|---|
+| verify all segments (Rust verifier) | **0.34 s** | **0.31 s** |
+| leaf (each) | 24.1 s / 32.0–32.1 GB | 21.1–25.0 s / 31.7–32.1 GB |
+| fold (whole batch) | 27.7 s / 31.3 GB | 69.4 s / 32.3 GB |
+| **end to end** (submit → root proof) | **76.5 s** | **160.6 s** |
+| root proof | 93 797 felts | 96 033 felts |
+| circuit verifier on that root | 5 260 345 steps, 506 312 range_check | 519 203 range_check |
+| tampered proof rejected in | 0.29 s | 0.31 s |
+
+Both roots reproduce the corresponding S4 golden run exactly — same leaf circuit hash
+(`2ad52ed0…9edac7e2`), same multiverifier hash (`a5989715…973f680f`, production's), same felt
+count, and the same `VerificationOutput.output_hash` the on-chain verifier prints. R8-A1's "reject
+an invalid leaf in < 5 s" is met by an order of magnitude, and no expensive job is ever scheduled
+for a rejected run.
+
 ## Known gaps
 
 * **The wrapper re-proves the segment.** `leaf-prover` takes a *program and its input*, runs it and
   proves it, then proves the verifier circuit around that proof. It has no entry point that accepts
   an already-made Cairo proof, so the browser's proof is used as the admission gate and the server
-  redoes the Cairo proof (~2 s of the ~60 s leaf) before the circuit proof. A genuinely "proof-only"
+  redoes the Cairo proof (~2 s of the ~24 s leaf) before the circuit proof. A genuinely "proof-only"
   API (A4) needs a small upstream addition — everything in `prove_leaf` after `prove_cairo` only
   needs `(proof, program_felts, output_hash, registry)` — tracked as an open question for P3.5.
+  Until then the submission carries the segment's `args` as well as its proof, and the wrapper
+  rejects the run if the bootloader's own dumped preimage differs from the submitted one.
+* **No CI job yet.** `cargo test`, `cargo clippy`, `cargo fmt --check` and the client's `tsc` all
+  pass locally but nothing runs them on push; a `wrapper` job in `.github/workflows/ci.yml` is a
+  one-screen addition the orchestrator should make (the e2e test stays `--ignored` there: it needs
+  64 GB).
 * **Fold parallelism.** Reductions in the same tree layer are independent (R8-A3), but the pinned
   binary folds a whole batch in one process, so the only knob is `max_circuit_proofs` across
   batches. Splitting a layer needs the `Proof<QM31>` intermediate the binary does not expose
