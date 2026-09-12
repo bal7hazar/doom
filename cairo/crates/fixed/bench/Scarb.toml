@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# Standalone package (NOT a member of the cairo/ workspace, like
+# cairo/doom_contracts): it owns an executable target so that
+# `scarb execute --print-resource-usage` can measure the step cost of the
+# `fixed` crate's primitives. See ../README.md ("Measured step costs").
+[package]
+name = "fixed_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+fixed = { path = ".." }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "fixed_bench"
+function = "fixed_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false

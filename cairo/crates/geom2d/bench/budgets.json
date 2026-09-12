@@ -1,0 +1,91 @@
+{
+  "crate": "geom2d",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 bare loop, 1 point, 2 point+box, 3 point+hoisted term). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4).",
+  "bytecode_words": 4837,
+  "operations": [
+    {
+      "name": "hoist",
+      "op": 3,
+      "base": 1,
+      "budget": 3
+    },
+    {
+      "name": "point_side (hoisted)",
+      "op": 4,
+      "base": 3,
+      "budget": 18
+    },
+    {
+      "name": "point_side_alone",
+      "op": 5,
+      "base": 1,
+      "budget": 21
+    },
+    {
+      "name": "divline_side (3 states)",
+      "op": 6,
+      "base": 3,
+      "budget": 20
+    },
+    {
+      "name": "point_side_at (3 array reads)",
+      "op": 7,
+      "base": 16,
+      "budget": 60
+    },
+    {
+      "name": "box_on_line_side",
+      "op": 8,
+      "base": 2,
+      "budget": 66
+    },
+    {
+      "name": "bbox_reject (overlapping)",
+      "op": 9,
+      "base": 2,
+      "budget": 57
+    },
+    {
+      "name": "bbox_reject (far line)",
+      "op": 10,
+      "base": 2,
+      "budget": 26
+    },
+    {
+      "name": "PIT_CheckLine order: bbox first",
+      "op": 11,
+      "base": 2,
+      "budget": 29
+    },
+    {
+      "name": "PIT_CheckLine order: inverted",
+      "op": 12,
+      "base": 2,
+      "budget": 71
+    },
+    {
+      "name": "approx_distance",
+      "op": 13,
+      "base": 1,
+      "budget": 65
+    },
+    {
+      "name": "intercept_fraction",
+      "op": 14,
+      "base": 1,
+      "budget": 228
+    },
+    {
+      "name": "point_on_side (two vertices)",
+      "op": 17,
+      "base": 1,
+      "budget": 73
+    },
+    {
+      "name": "point_on_side_truncated",
+      "op": 15,
+      "base": 1,
+      "budget": 96
+    }
+  ]
+}

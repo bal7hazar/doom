@@ -1,0 +1,43 @@
+{
+  "crate": "bsp",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 bare loop, 1 a point, 2 a pair of points). Measured by measure.py on Scarb 2.16.0 over the 63-node tree of tree.cairo; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4).",
+  "bytecode_words": 7466,
+  "operations": [
+    {
+      "name": "trace (two hoists)",
+      "op": 3,
+      "base": 2,
+      "budget": 12
+    },
+    {
+      "name": "point_in_subsector (6 levels)",
+      "op": 4,
+      "base": 1,
+      "budget": 631
+    },
+    {
+      "name": "cross_bsp (full crossing)",
+      "op": 5,
+      "base": 2,
+      "budget": 2016
+    },
+    {
+      "name": "cross_bsp (stopped at the first)",
+      "op": 6,
+      "base": 2,
+      "budget": 642
+    },
+    {
+      "name": "child_box",
+      "op": 7,
+      "base": 0,
+      "budget": 96
+    },
+    {
+      "name": "is_subsector + subsector_of",
+      "op": 8,
+      "base": 0,
+      "budget": 18
+    }
+  ]
+}
