@@ -1,0 +1,23 @@
+# WAD files must never be committed (copyrighted/large binary game data).
+*.wad
+*.WAD
+freedoom/
+
+# Downloaded archive.
+*.zip
+
+# Node / TypeScript build artifacts.
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Generated extraction output (regenerate with `npm run extract`).
+out/
+
+# Scarb / Cairo build artifacts for the throwaway compile-check package.
+cairo-check/target/
+cairo-check/.snfoundry_cache/
+cairo-check/Scarb.lock
+# Copied from out/<map>.cairo by scripts/verify-cairo.sh right before `scarb build`.
+cairo-check/src/e1m1.cairo
