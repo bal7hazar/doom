@@ -1,0 +1,611 @@
+{
+ "network": "starknet-devnet 0.10.0 (local)",
+ "url": "http://127.0.0.1:5081/rpc",
+ "timestamp_utc": "2026-09-12T16:56:16Z",
+ "what": "P4.2b: real ten-felt root proofs verified by the P4.0 router, then consumed by DoomRuns pointed at that router (no MockFactRegistry)",
+ "prices": {
+  "l1_gas_price_fri": 92599658875965,
+  "l1_data_gas_price_fri": 37485578886,
+  "l2_gas_price_fri": 30475398907,
+  "starknet_version": "0.14.4",
+  "block_number": 0
+ },
+ "mainnet_price_snapshot": {
+  "label": "mainnet 2026-09-12 (S5 \u00a75 snapshot)",
+  "l2_gas_price_fri": 30528000000,
+  "l1_data_gas_price_fri": 38328000000,
+  "l1_gas_price_fri": 93024150000000,
+  "strk_usd": 0.02876053,
+  "strk_eur": 0.02478928
+ },
+ "router": "0x004e979bc1010653e28a5abbd055c53e61d2ff52cf50dc2c94c1b406aaeba44b",
+ "doom_runs": "0x0489a90c3ca1e57a703ae690c25e16fe30de080bde029c3cbace04afde41cc95",
+ "owner": "0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+ "classes": {
+  "StwoPhasesBegin": {
+   "class_hash": "0x0668ac803c6e6d14abf1e518f5fbdb7b5a0a0d8789411a6372c87f716b08d84c",
+   "tx_hash": "0x019badd0436226643c25d5b25780b969a9e5e833c82166d33af609c03ec6a834",
+   "l2_gas": 4130361280,
+   "fee_fri": 125874414835258267072
+  },
+  "StwoPhasesMerkle": {
+   "class_hash": "0x062cf7fb1eef8ee4866316816175dff935d33272d61658a4a5068bf7c5de95f5",
+   "tx_hash": "0x07c974a0ec1d97ac66bc7ca46f5d4994458ddae9d6637551c79a69a99d929171",
+   "l2_gas": 1777928640,
+   "fee_fri": 54183091729411142592
+  },
+  "StwoPhasesFri": {
+   "class_hash": "0x048c03350c8a3bb12029c1d72e85ce7acfa0c15bcac94a343ce28122880bb580",
+   "tx_hash": "0x027b000464b369ce2c8d88debcaced4793628db22a5a057952beb47ca8e4678d",
+   "l2_gas": 1392674240,
+   "fee_fri": 42442310208734201792
+  },
+  "StwoCircuitRouter": {
+   "class_hash": "0x070b32f24f37f434cdf914da385e3e20a10274ff960788f35a178d83ea9097e6",
+   "tx_hash": "0x00f1c816f6b510496ccd92e66aebbdb9d6d4b0c007f22d5c3d9206318527120e",
+   "l2_gas": 573231040,
+   "fee_fri": 17469451807105619392
+  },
+  "DoomRuns": {
+   "class_hash": "0x020e40513c142b130b57504d5b93fd8b7991f5600f915baf5489904b0bef60a6",
+   "tx_hash": "0x040c368b7ee2d3f6a5a912515897924382f2f5dfd8fd65eb53b57ce465da6a00",
+   "l2_gas": 1181359040,
+   "fee_fri": 36002395193621715392
+  }
+ },
+ "deploys": {
+  "StwoCircuitRouter": {
+   "tx_hash": "0x02ef06fdba4a6c7a6c5e3afa272849d6efcbb6e39fedafe72bf6dc32383aa6df",
+   "l2_gas": 2728880,
+   "fee_fri": 83182899185723792
+  },
+  "DoomRuns": {
+   "tx_hash": "0x01dc1248cfa2c74e853f1815111f6f00eab3d918935fcbe26dd10fcf2ad42da9",
+   "l2_gas": 1744400,
+   "fee_fri": 53173281238614320
+  }
+ },
+ "batches": [
+  {
+   "name": "B2-1_doom",
+   "shape": [
+    2,
+    1
+   ],
+   "n_leaves": 3,
+   "program_hash": "0x6715c525e90af7cf1df88ebcae1d7556ebbbbf1da79a2a322408b3593a9786a",
+   "genesis": "0x3efa44a65e6e86c14a36b6f10ade97754d79a7864944ce52cf3159784d58b7",
+   "leaf_circuit_hash": [
+    718614224,
+    1263822076,
+    56819575,
+    3833232560,
+    2918774728,
+    3404701363,
+    2340910266,
+    2665138146
+   ],
+   "multiverifier_hash": [
+    2778240789,
+    595050618,
+    3335645252,
+    1425055821,
+    2347129469,
+    4252222049,
+    2423842600,
+    2537515023
+   ],
+   "output_hash": [
+    1672632833,
+    2042954996,
+    2890085614,
+    3347342551,
+    3941042659,
+    2239140051,
+    379882776,
+    3249511199
+   ],
+   "verifier_output": [
+    1672632833,
+    2042954996,
+    2890085614,
+    3347342551,
+    3941042659,
+    2239140051,
+    379882776,
+    3249511199
+   ],
+   "fact": "0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40",
+   "router_fact": "0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40",
+   "verifier_l2_gas": 3814618160,
+   "runs_submitted": 2,
+   "members_rejected": [],
+   "members": [
+    {
+     "game": 0,
+     "level_id": 1,
+     "leaf_start": 0,
+     "leaf_len": 2,
+     "run_id": "0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1"
+    },
+    {
+     "game": 1,
+     "level_id": 1,
+     "leaf_start": 2,
+     "leaf_len": 1,
+     "run_id": "0x91c7a486a23270518eaf7b723cd2dd1043df9c639e924caae9a2062d243ff7"
+    }
+   ]
+  },
+  {
+   "name": "B2_doom",
+   "shape": [
+    2
+   ],
+   "n_leaves": 2,
+   "program_hash": "0x6715c525e90af7cf1df88ebcae1d7556ebbbbf1da79a2a322408b3593a9786a",
+   "genesis": "0x3efa44a65e6e86c14a36b6f10ade97754d79a7864944ce52cf3159784d58b7",
+   "leaf_circuit_hash": [
+    718614224,
+    1263822076,
+    56819575,
+    3833232560,
+    2918774728,
+    3404701363,
+    2340910266,
+    2665138146
+   ],
+   "multiverifier_hash": [
+    2778240789,
+    595050618,
+    3335645252,
+    1425055821,
+    2347129469,
+    4252222049,
+    2423842600,
+    2537515023
+   ],
+   "output_hash": [
+    2217688292,
+    1296469167,
+    648244655,
+    3512905594,
+    2328469262,
+    3623408698,
+    4249123664,
+    1269122478
+   ],
+   "verifier_output": [
+    2217688292,
+    1296469167,
+    648244655,
+    3512905594,
+    2328469262,
+    3623408698,
+    4249123664,
+    1269122478
+   ],
+   "fact": "0x805cc03b1db1f17f152b3740251ed2cdea27195a3c1b67767a2f534ccc307e",
+   "router_fact": "0x805cc03b1db1f17f152b3740251ed2cdea27195a3c1b67767a2f534ccc307e",
+   "verifier_l2_gas": 3798238640,
+   "runs_submitted": 0,
+   "members_rejected": [
+    {
+     "member_index": 0,
+     "reason": "already registered"
+    }
+   ],
+   "members": [
+    {
+     "game": 0,
+     "level_id": 1,
+     "leaf_start": 0,
+     "leaf_len": 2,
+     "run_id": "0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1"
+    }
+   ]
+  }
+ ],
+ "verifier_txs": [
+  {
+   "batch": "B2-1_doom",
+   "phase": "verifier",
+   "label": "begin",
+   "entrypoint": "begin",
+   "tx_hash": "0x01aa028c4ad7d817083391a252554f9967e00e75633064ce989736e9e33bd801",
+   "calldata_felts": 4625,
+   "payload_slots": 4613,
+   "l2_gas": 459195680,
+   "l1_gas": 0,
+   "l1_data_gas": 320,
+   "fee_fri": 13994185918833413984,
+   "storage_writes": 4,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 37.95
+  },
+  {
+   "batch": "B2-1_doom",
+   "phase": "verifier",
+   "label": "merkle",
+   "entrypoint": "merkle",
+   "tx_hash": "0x02328b9b735423495e8e5cf296dcaed0ff70427100a481d8da9b9db577ab6552",
+   "calldata_felts": 4583,
+   "payload_slots": 4344,
+   "l2_gas": 390816640,
+   "l1_gas": 0,
+   "l1_data_gas": 256,
+   "fee_fri": 11910302599801607296,
+   "storage_writes": 3,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 32.3
+  },
+  {
+   "batch": "B2-1_doom",
+   "phase": "verifier",
+   "label": "answers",
+   "entrypoint": "answers",
+   "tx_hash": "0x06f3c7741b14b23ac6bc96e1dbe547974b0603998e56cabbe4ad2a4cb672d754",
+   "calldata_felts": 3685,
+   "payload_slots": 3448,
+   "l2_gas": 861338880,
+   "l1_gas": 0,
+   "l1_data_gas": 320,
+   "fee_fri": 26249657957493847680,
+   "storage_writes": 4,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 71.19
+  },
+  {
+   "batch": "B2-1_doom",
+   "phase": "verifier",
+   "label": "fri1",
+   "entrypoint": "fri",
+   "tx_hash": "0x01d301ba8efc3933f0497d9cb1f18a2990d6816c35113411c809b17d04e7188d",
+   "calldata_felts": 3564,
+   "payload_slots": 2984,
+   "l2_gas": 1093159360,
+   "l1_gas": 0,
+   "l1_data_gas": 256,
+   "fee_fri": 33314477161229014336,
+   "storage_writes": 3,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 90.34
+  },
+  {
+   "batch": "B2-1_doom",
+   "phase": "verifier",
+   "label": "fri2",
+   "entrypoint": "fri",
+   "tx_hash": "0x01d4f2d2d93f8fdf95dad4f9ec685173802e847b9fe1094c7e8319b5f289d5f7",
+   "calldata_felts": 2360,
+   "payload_slots": 1780,
+   "l2_gas": 1010107600,
+   "l1_gas": 0,
+   "l1_data_gas": 384,
+   "fee_fri": 30783447642993209776,
+   "storage_writes": 5,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 83.48
+  },
+  {
+   "batch": "B2_doom",
+   "phase": "verifier",
+   "label": "begin",
+   "entrypoint": "begin",
+   "tx_hash": "0x0435e76c2b5abb1bde2d36501076235d10235f192f79e9f5ebbbc64afe0cd3a9",
+   "calldata_felts": 4631,
+   "payload_slots": 4619,
+   "l2_gas": 459746400,
+   "l1_gas": 0,
+   "l1_data_gas": 320,
+   "fee_fri": 14010969330519477024,
+   "storage_writes": 4,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 38.0
+  },
+  {
+   "batch": "B2_doom",
+   "phase": "verifier",
+   "label": "merkle",
+   "entrypoint": "merkle",
+   "tx_hash": "0x07f9c624c39cc4c4f4a5dfb8325e24627a8bc540901099014971780943ee4fbe",
+   "calldata_felts": 4589,
+   "payload_slots": 4350,
+   "l2_gas": 391327360,
+   "l1_gas": 0,
+   "l1_data_gas": 256,
+   "fee_fri": 11925866995531390336,
+   "storage_writes": 3,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 32.34
+  },
+  {
+   "batch": "B2_doom",
+   "phase": "verifier",
+   "label": "answers",
+   "entrypoint": "answers",
+   "tx_hash": "0x04a088456a625efdd3920bb9d2c0610fc86f0957f163b3cd324ed090b13cf0c3",
+   "calldata_felts": 3685,
+   "payload_slots": 3448,
+   "l2_gas": 861298880,
+   "l1_gas": 0,
+   "l1_data_gas": 320,
+   "fee_fri": 26248438941537567680,
+   "storage_writes": 4,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 71.18
+  },
+  {
+   "batch": "B2_doom",
+   "phase": "verifier",
+   "label": "fri1",
+   "entrypoint": "fri",
+   "tx_hash": "0x059ba5dc777a6aa7e387b1b96e76e29f43e7b899ad977a9022b9404fbe26f75b",
+   "calldata_felts": 3571,
+   "payload_slots": 2991,
+   "l2_gas": 1093715200,
+   "l1_gas": 0,
+   "l1_data_gas": 256,
+   "fee_fri": 33331416606957481216,
+   "storage_writes": 3,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 90.39
+  },
+  {
+   "batch": "B2_doom",
+   "phase": "verifier",
+   "label": "fri2",
+   "entrypoint": "fri",
+   "tx_hash": "0x03c066101c1ef3b788e5e09f920824b19b1f82aad21697b9fff4b12b6ce69a4c",
+   "calldata_felts": 2345,
+   "payload_slots": 1765,
+   "l2_gas": 992150800,
+   "l1_gas": 0,
+   "l1_data_gas": 384,
+   "fee_fri": 30236206999899992176,
+   "storage_writes": 5,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 82.0
+  }
+ ],
+ "version_setup": [
+  {
+   "tx_hash": "0x0431e2c1ab274826e88cdffb233027a8b0235bb013f96e85ce97f3cb37f2185e",
+   "function": "add_version",
+   "calldata_felts": 9,
+   "l2_gas": 5288640,
+   "l1_gas": 0,
+   "l1_data_gas": 704,
+   "fee_fri": 161209399831247040,
+   "storage_writes": 10,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 0.44,
+   "pct_of_fact": 0.139,
+   "label": "add_version"
+  },
+  {
+   "tx_hash": "0x04dcb72bf62922688adbde74a5b167a39b7aeb3ae20400959ce74f05bab57c68",
+   "function": "set_genesis",
+   "calldata_felts": 3,
+   "l2_gas": 1843920,
+   "l1_gas": 0,
+   "l1_data_gas": 256,
+   "fee_fri": 56204993399314608,
+   "storage_writes": 3,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 0.15,
+   "pct_of_fact": 0.048,
+   "label": "set_genesis"
+  }
+ ],
+ "consumer_txs": [
+  {
+   "tx_hash": "0x05b1bf0c992651b7af00906536243df28b4700c4e97b08a2cc1af42e50a0956e",
+   "function": "submit_batch",
+   "calldata_felts": 111,
+   "l2_gas": 16736320,
+   "l1_gas": 0,
+   "l1_data_gas": 1728,
+   "fee_fri": 510139592240101696,
+   "storage_writes": 26,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 1.38,
+   "pct_of_fact": 0.439,
+   "batch": "B2-1_doom",
+   "phase": "consumer",
+   "label": "submit_batch",
+   "n_segments": 3,
+   "n_members": 2,
+   "replay": true,
+   "fact": "0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40",
+   "verifier_l2_gas": 3814618160,
+   "runs_submitted": 2,
+   "members_rejected": [],
+   "replay_events": 3
+  },
+  {
+   "tx_hash": "0x00e1777dd1614592b6fadb3886c975c2616b28ce6b70ae8cfe60cc4856fb7df6",
+   "execution_status": "REVERTED",
+   "revert_reason": "Transaction execution has failed:\n0: Error in the called contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nExecution failed. Failure reason:\nError in contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nError in contract (contract address: 0x0489a90c3ca1e57a703ae690c25e16fe30de080bde029c3cbace04afde41cc95, class hash: 0x020e40513c142b130b57504d5b93fd8b7991f5600f915baf5489904b0bef60a6, selector: 0x012f8c275fb23ab58f0409eee496544156477717c0e5b1f8d3f81980f1ba6d34):\n0x646f6f6d72756e733a2066616374206e6f742072656769737465726564 ('doomruns: fact not registered').\n",
+   "l2_gas": 2005760,
+   "fee_fri": 61131134265801728,
+   "batch": "B2-1_doom",
+   "phase": "consumer",
+   "label": "submit_batch(tampered kills)"
+  },
+  {
+   "tx_hash": "0x07ebd82b4a983ce58d083704a54845a285f0bb1a27022b2a23ed5841c3437d6b",
+   "function": "submit_batch",
+   "calldata_felts": 75,
+   "l2_gas": 2700800,
+   "l1_gas": 0,
+   "l1_data_gas": 128,
+   "fee_fri": 82312755522123008,
+   "storage_writes": 2,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 0.22,
+   "pct_of_fact": 0.071,
+   "batch": "B2_doom",
+   "phase": "consumer",
+   "label": "submit_batch",
+   "n_segments": 2,
+   "n_members": 1,
+   "replay": true,
+   "fact": "0x805cc03b1db1f17f152b3740251ed2cdea27195a3c1b67767a2f534ccc307e",
+   "verifier_l2_gas": 3798238640,
+   "runs_submitted": 0,
+   "members_rejected": [
+    {
+     "member_index": 0,
+     "reason": "already registered"
+    }
+   ],
+   "replay_events": 0
+  },
+  {
+   "tx_hash": "0x07d8921d6d3f527b33729a208769ee218937534a02e561069635f76cdef9415a",
+   "execution_status": "REVERTED",
+   "revert_reason": "Transaction execution has failed:\n0: Error in the called contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nExecution failed. Failure reason:\nError in contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nError in contract (contract address: 0x0489a90c3ca1e57a703ae690c25e16fe30de080bde029c3cbace04afde41cc95, class hash: 0x020e40513c142b130b57504d5b93fd8b7991f5600f915baf5489904b0bef60a6, selector: 0x012f8c275fb23ab58f0409eee496544156477717c0e5b1f8d3f81980f1ba6d34):\n0x646f6f6d72756e733a2066616374206e6f742072656769737465726564 ('doomruns: fact not registered').\n",
+   "l2_gas": 1654080,
+   "fee_fri": 50413545978187968,
+   "batch": "B2_doom",
+   "phase": "consumer",
+   "label": "submit_batch(tampered kills)"
+  }
+ ],
+ "run_checks": [
+  {
+   "batch": "B2-1_doom",
+   "game": 0,
+   "run_id": "0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1",
+   "player": "0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+   "is_run_registered": true,
+   "get_run": "Run { player: ContractAddress(0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba), version_id: 1_u32, level_id: 1_u32, tics: 297_u32, kills: 6_u32, items: 1_u32, secrets: 0_u32, score: 625_u64, status: 2_u8, n_segments: 2_u32, block: 20_u64, fact: 0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40 }",
+   "get_run_felts": [
+    "0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+    "0x1",
+    "0x1",
+    "0x129",
+    "0x6",
+    "0x1",
+    "0x0",
+    "0x271",
+    "0x2",
+    "0x2",
+    "0x14",
+    "0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40"
+   ],
+   "player_runs": "array![0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1]",
+   "expected": {
+    "tics": 297,
+    "kills": 6,
+    "items": 1,
+    "secrets": 0,
+    "n_segments": 2
+   }
+  },
+  {
+   "batch": "B2-1_doom",
+   "game": 1,
+   "run_id": "0x91c7a486a23270518eaf7b723cd2dd1043df9c639e924caae9a2062d243ff7",
+   "player": "0x2939f2dc3f80cc7d620e8a86f2e69c1e187b7ff44b74056647368b5c49dc370",
+   "is_run_registered": true,
+   "get_run": "Run { player: ContractAddress(0x2939f2dc3f80cc7d620e8a86f2e69c1e187b7ff44b74056647368b5c49dc370), version_id: 1_u32, level_id: 1_u32, tics: 137_u32, kills: 4_u32, items: 1_u32, secrets: 0_u32, score: 425_u64, status: 2_u8, n_segments: 1_u32, block: 20_u64, fact: 0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40 }",
+   "get_run_felts": [
+    "0x2939f2dc3f80cc7d620e8a86f2e69c1e187b7ff44b74056647368b5c49dc370",
+    "0x1",
+    "0x1",
+    "0x89",
+    "0x4",
+    "0x1",
+    "0x0",
+    "0x1a9",
+    "0x2",
+    "0x1",
+    "0x14",
+    "0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40"
+   ],
+   "player_runs": "array![0x91c7a486a23270518eaf7b723cd2dd1043df9c639e924caae9a2062d243ff7]",
+   "expected": {
+    "tics": 137,
+    "kills": 4,
+    "items": 1,
+    "secrets": 0,
+    "n_segments": 1
+   }
+  },
+  {
+   "batch": "B2_doom",
+   "game": 0,
+   "run_id": "0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1",
+   "player": "0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+   "is_run_registered": true,
+   "get_run": "Run { player: ContractAddress(0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba), version_id: 1_u32, level_id: 1_u32, tics: 297_u32, kills: 6_u32, items: 1_u32, secrets: 0_u32, score: 625_u64, status: 2_u8, n_segments: 2_u32, block: 20_u64, fact: 0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40 }",
+   "get_run_felts": [
+    "0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+    "0x1",
+    "0x1",
+    "0x129",
+    "0x6",
+    "0x1",
+    "0x0",
+    "0x271",
+    "0x2",
+    "0x2",
+    "0x14",
+    "0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40"
+   ],
+   "player_runs": "array![0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1]",
+   "expected": {
+    "tics": 297,
+    "kills": 6,
+    "items": 1,
+    "secrets": 0,
+    "n_segments": 2
+   }
+  }
+ ],
+ "leaderboard_score": {
+  "raw": [
+   "0x2",
+   "0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1",
+   "0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+   "0x271",
+   "0x91c7a486a23270518eaf7b723cd2dd1043df9c639e924caae9a2062d243ff7",
+   "0x2939f2dc3f80cc7d620e8a86f2e69c1e187b7ff44b74056647368b5c49dc370",
+   "0x1a9"
+  ],
+  "value": "array![BoardRow { run_id: 0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1, player: ContractAddress(0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba), value: 625_u64 }, BoardRow { run_id: 0x91c7a486a23270518eaf7b723cd2dd1043df9c639e924caae9a2062d243ff7, player: ContractAddress(0x2939f2dc3f80cc7d620e8a86f2e69c1e187b7ff44b74056647368b5c49dc370), value: 425_u64 }]"
+ },
+ "leaderboard_time": {
+  "raw": [
+   "0x2",
+   "0x91c7a486a23270518eaf7b723cd2dd1043df9c639e924caae9a2062d243ff7",
+   "0x2939f2dc3f80cc7d620e8a86f2e69c1e187b7ff44b74056647368b5c49dc370",
+   "0x89",
+   "0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1",
+   "0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+   "0x129"
+  ],
+  "value": "array![BoardRow { run_id: 0x91c7a486a23270518eaf7b723cd2dd1043df9c639e924caae9a2062d243ff7, player: ContractAddress(0x2939f2dc3f80cc7d620e8a86f2e69c1e187b7ff44b74056647368b5c49dc370), value: 137_u64 }, BoardRow { run_id: 0x7d059083d184a5ae1f6e1bf50e61bf28d2dd4866d8e29ccfe22c6eafe431ec1, player: ContractAddress(0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba), value: 297_u64 }]"
+ },
+ "leaderboard_len": 2,
+ "totals": {
+  "verifier_l2_gas": 7612856800,
+  "version_setup_l2_gas": 7132560,
+  "consumer_l2_gas": 19437120,
+  "full_path_l2_gas": 7639426480,
+  "consumer_pct_of_verifier": 0.255,
+  "declare_l2_gas": 9055554240,
+  "fee_fri": 232926381576033777552
+ },
+ "priced_full_path": [
+  {
+   "label": "mainnet 2026-09-12 (S5 \u00a75 snapshot)",
+   "l2_gas": 7639426480,
+   "l1_data_gas": 5888,
+   "fee_strk": 233.216637256704,
+   "fee_usd": 6.707434092320553
+  }
+ ]
+}

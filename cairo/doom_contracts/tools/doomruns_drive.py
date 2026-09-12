@@ -73,9 +73,14 @@ def digest_felts(words: list[int]) -> list[int]:
 
 
 def submit_calldata(batch: dict, *, with_replay: bool, members: list[dict] | None = None,
-                    single: bool = False, version_id: int = VERSION_ID) -> list[str]:
+                    single: bool = False, version_id: int = VERSION_ID,
+                    players: dict[int, int] | None = None) -> list[str]:
     """`submit_batch(version_id, leaves, members, replay)` — or `register_member` when
-    `single`."""
+    `single`.
+
+    `players` maps a member's `game` index to the address recorded as its player; by default
+    each game gets the synthetic address `PLAYER_BASE + game + 1` (the P4.2 drive's shape).
+    The end-to-end drive passes the devnet's own predeployed accounts instead."""
     members = members if members is not None else batch["members"]
     words: list[int] = [version_id, len(batch["leaves"])]
     for leaf in batch["leaves"]:
@@ -83,7 +88,8 @@ def submit_calldata(batch: dict, *, with_replay: bool, members: list[dict] | Non
     if not single:
         words.append(len(members))
     for m in members:
-        words += [PLAYER_BASE + m["game"] + 1, m["level_id"], m["leaf_start"], m["leaf_len"]]
+        player = (players or {}).get(m["game"], PLAYER_BASE + m["game"] + 1)
+        words += [player, m["level_id"], m["leaf_start"], m["leaf_len"]]
     if with_replay:
         covered = [i for m in members
                    for i in range(m["leaf_start"], m["leaf_start"] + m["leaf_len"])]

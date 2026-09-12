@@ -11,18 +11,25 @@ the ten public felts of each segment, requires the fact to be registered, and re
 per member — validation rules, gas and open points in
 [`docs/design/doomruns.md`](../../docs/design/doomruns.md).
 
+The two halves have been driven **together** on devnet (P4.2b, `doomruns.md` §10): two batches
+proved over `spikes/s4/programs/segment_stub10` (ten-felt leaves) verified by the router in 5
+transactions each, then consumed by a `DoomRuns` whose `verifier_router` is that router — no
+`MockFactRegistry` anywhere in the path. `tools/e2e_10felt_drive.py`,
+`results/e2e_10felt_receipts.json`: **3.83e9** L2 gas for one batch's verification plus its
+`submit_batch`, of which the consumer is **0.44 %**.
+
 ## Layout
 
 | Path | What |
 |---|---|
 | `vendor/stwo_cairo_verifier/` | the verifier crates of `starkware-libs/proving` pinned at **`cd7bc5f`** (`VENDOR.md`, visibility-only patch); `circuit_air/src/{multiverifier_consts,preprocessed_columns}.cairo` are **generated** from a registry (`tools/gen_multiverifier_consts.py`) |
 | `crates/stwo_circuit_phases/` | library: the phase machine (`machine.cairo`: `begin` / `merkle` / `answers` / `fri_layers`), the packed transport (`pack.cairo`), the section splitter used by tests (`sections.cairo`); tests = monolithic reference, end-to-end phases with checkpoint round-trips, tamper rejections, cost probe, packing benchmarks |
-| `crates/recursion_outputs/` | library: the recursive tree's output hashing recomputed from the leaves (blake2s leaf output, two-to-one fold with odd carry and single-leaf self-fold, `VerificationOutput.output_hash`); port of `spikes/s4/recursion_outputs`, tests = upstream goldens + the real S4 root proofs |
-| `crates/doom_runs/` | contracts: `DoomRuns` (version table, run records, leaderboards, replay publication) and `MockFactRegistry` (tests/drives only); tests = recomposition against the Python model, the fact gate, every member-level rejection, replay data, boards, governance |
+| `crates/recursion_outputs/` | library: the recursive tree's output hashing recomputed from the leaves (blake2s leaf output, two-to-one fold with odd carry and single-leaf self-fold, `VerificationOutput.output_hash`); port of `spikes/s4/recursion_outputs`, tests = upstream goldens + the real S4 root proofs + the real **ten-felt** roots of P4.2b; `fixtures/B2_doom`, `fixtures/B2-1_doom` = those two proved batches (preimages, packed/program/verifier output, the root proof itself gzipped) |
+| `crates/doom_runs/` | contracts: `DoomRuns` (version table, run records, leaderboards, replay publication) and `MockFactRegistry` (tests/drives only); tests = recomposition against the Python model, the fact gate, every member-level rejection, replay data, boards, governance, and `test_real_root.cairo` on the proved ten-felt batches; `fixtures/*.json` = those batches as a client receives them (leaves, members, logs, fact, run ids) |
 | `crates/doom_contracts/` | contracts: `StwoPhasesBegin` / `StwoPhasesMerkle` / `StwoPhasesFri` (stateless library classes), `StwoCircuitRouter` (checkpoints, sequencing, facts), `StwoCircuitMonolithic` (measurement only); tests = the router driven over a real proof + rejections |
 | `fixtures/` | real root proofs as one-felt-per-line text (gzipped; `sh fixtures/unpack.sh`): `n4_root_proof` (S4, registry `doom`), `n2_fold4min_root_proof` (S4b, registry `doom_fold4_min`); `selected.txt` picks the one the tests use (1 / 2) |
-| `tools/` | `emit_calldata.py` (proof → per-transaction packed calldata), `devnet_drive.py` (declare, deploy, drive, receipts, pricing), `trace_tx.py` (per-call gas of a tx), `devnet_probe.py` (transport calibration), `gen_multiverifier_consts.py`, `check_registry.sh`, `doomruns_model.py` (independent Python model + fixture generator), `doomruns_drive.py` (consumer drive) |
-| `results/` | devnet receipts of the 5-tx and 6-tx drives, deployment (class hashes, declare gas), transport probe, `doomruns_receipts.json` (consumer drive, N = 1…480) |
+| `tools/` | `emit_calldata.py` (proof → per-transaction packed calldata), `devnet_drive.py` (declare, deploy, drive, receipts, pricing), `trace_tx.py` (per-call gas of a tx), `devnet_probe.py` (transport calibration), `gen_multiverifier_consts.py`, `check_registry.sh`, `doomruns_model.py` (independent Python model + fixture generator), `doomruns_drive.py` (consumer drive), `real_batch.py` (loads and checks a proved ten-felt batch, emits its fixtures), `e2e_10felt_drive.py` (the whole path: router verifies the root proof, `DoomRuns` consumes the fact it registered) |
+| `results/` | devnet receipts of the 5-tx and 6-tx drives, deployment (class hashes, declare gas), transport probe, `doomruns_receipts.json` (consumer drive, N = 1…480), `e2e_10felt_receipts.json` (P4.2b: verification + consumption of two real ten-felt batches, 7.64e9 L2 gas) |
 
 ## Toolchain
 
@@ -38,7 +45,10 @@ sh fixtures/unpack.sh
 scarb build                                   # audited libfuncs; class sizes in the design doc §7
 (cd crates/stwo_circuit_phases && snforge test)
 (cd crates/doom_contracts && snforge test)
+(cd crates/recursion_outputs && snforge test) # 20
+(cd crates/doom_runs && snforge test)         # 53
 tools/check_registry.sh doom_fold4_min        # conformance of regenerated constants (R3-A5)
+python3 tools/real_batch.py crates/recursion_outputs/fixtures/B2-1_doom   # check a proved batch
 ```
 
 ## Transaction flow (client side)
