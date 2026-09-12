@@ -1,0 +1,36 @@
+version = 1
+SPDX-PackageName = "Hellproof"
+SPDX-PackageSupplier = "Bal7hazar <bal7hazar@proton.me>"
+SPDX-PackageDownloadLocation = "https://github.com/bal7hazar/doom"
+
+# Default: the whole repository is Apache-2.0 (infra, generic Cairo crates,
+# client, prover, contracts) unless overridden below. See PLAN.md A9 and
+# RISKS.md R9 for the rationale.
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Bal7hazar"
+SPDX-License-Identifier = "Apache-2.0"
+
+# cairo/doom/** contains the Doom-specific gameplay crates, which reimplement
+# rules and data derived from linuxdoom-1.10 / doomgeneric. They are licensed
+# GPL-2.0-or-later (RISKS.md R9-A1/A9). This does not cover cairo/crates/**
+# (generic, reusable primitives with zero Doom dependency) nor
+# cairo/doom_contracts/** (Starknet contracts, Apache-2.0).
+[[annotations]]
+path = "cairo/doom/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Bal7hazar"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+# NOTE: Freedoom assets (BSD-3-Clause, https://freedoom.github.io/) are never
+# committed to this repository. They are downloaded at build/runtime by
+# tooling (tools/wad) from the player's own legally obtained copy, or fetched
+# from the Freedoom project directly. No .wad file is tracked in git. The
+# entry below only covers the verbatim Freedoom license text kept for
+# attribution purposes (see docs/third-party/README.md), not any asset.
+[[annotations]]
+path = "docs/third-party/FREEDOOM-COPYING.txt"
+precedence = "override"
+SPDX-FileCopyrightText = "2001-2024 Contributors to the Freedoom project"
+SPDX-License-Identifier = "BSD-3-Clause"
