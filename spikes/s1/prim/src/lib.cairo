@@ -26,11 +26,50 @@ const LCN: felt252 = 0;
 /// Bias large enough to keep any difference of two half-plane sums positive.
 const CMP_BIAS: felt252 = 0x100000000000000000000000000; // 2^104
 
+/// Same, but chosen so that every value written to memory stays below 2^72
+/// (S0: values >= 2^72 add 33% to the range_check_9_9 component).
+const CMP_BIAS_72: felt252 = 0x10000000000000000; // 2^64
+
+/// (P - 1) / 2: a felt above this is the encoding of a negative number.
+const HALF_PRIME: u256 = 0x400000000000008800000000000000000000000000000000000000000000000;
+
 /// `a >= b` for two non-negative felts known to be < 2^104.
 #[inline(always)]
 pub fn felt_ge(a: felt252, b: felt252) -> bool {
     let d: u128 = (a - b + CMP_BIAS).try_into().unwrap();
     d >= 0x100000000000000000000000000_u128
+}
+
+/// Same predicate with every intermediate below 2^72.
+#[inline(always)]
+pub fn felt_ge_72(a: felt252, b: felt252) -> bool {
+    let d: u128 = (a - b + CMP_BIAS_72).try_into().unwrap();
+    d >= 0x10000000000000000_u128
+}
+
+/// Sign test on a raw felt252 that may legitimately be negative.
+#[inline(always)]
+pub fn felt_is_neg(x: felt252) -> bool {
+    let u: u256 = x.into();
+    u > HALF_PRIME
+}
+
+/// point_on_side with RAW SIGNED coefficients and a raw (possibly negative)
+/// cross product: no offsets anywhere.  Two multiplications and two additions,
+/// then one sign test on a felt that may be negative.
+#[inline(always)]
+pub fn point_on_side_raw(x: felt252, y: felt252) -> bool {
+    // A = 128, B = -64, C = -274877906944, all stored as raw felts
+    let cross = 128 * y + (-64) * x + (-274877906944);
+    !felt_is_neg(cross)
+}
+
+/// point_on_side in the offset encoding, kept below 2^72.
+#[inline(always)]
+pub fn point_on_side_72(x: felt252, y: felt252) -> bool {
+    let pos = LAP * y + LBP * x + LCP;
+    let neg = LAN * y + LBN * x + LCN;
+    felt_ge_72(pos, neg)
 }
 
 /// point_on_side with precomputed, sign-split line coefficients: no division.
@@ -311,6 +350,45 @@ fn main(op: u32, n: u32) -> felt252 {
                 k += 1;
             }
             acc = acc + v.len().into();
+            i += 1;
+        }
+    } else if op == 30 {
+        // sign test on a raw felt252 that may be negative (u256 round trip)
+        while i != n {
+            if felt_is_neg(x - i.into()) {
+                acc = acc + 1;
+            }
+            i += 1;
+        }
+    } else if op == 31 {
+        // point_on_side, raw signed coefficients, raw negative cross product
+        while i != n {
+            if point_on_side_raw(x + i.into(), y) {
+                acc = acc + 1;
+            }
+            i += 1;
+        }
+    } else if op == 32 {
+        // point_on_side, offset encoding, everything below 2^72
+        while i != n {
+            if point_on_side_72(x + i.into(), y) {
+                acc = acc + 1;
+            }
+            i += 1;
+        }
+    } else if op == 33 {
+        // felt252 -> u256 conversion alone
+        while i != n {
+            let u: u256 = (x + i.into()).into();
+            acc = acc + u.low.into();
+            i += 1;
+        }
+    } else if op == 34 {
+        // felt_ge with the 2^64 bias (vs op 16 with the 2^104 bias)
+        while i != n {
+            if felt_ge_72(x + i.into(), y) {
+                acc = acc + 1;
+            }
             i += 1;
         }
     }

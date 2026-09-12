@@ -1,0 +1,125 @@
+{
+  "loop_overhead": 8.0,
+  "ops": {
+    "bare loop iteration": {
+      "op": 0,
+      "steps_per_iter": 8.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        8092,
+        24092
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 0.0
+    },
+    "felt_ge, bias 2^104": {
+      "op": 16,
+      "steps_per_iter": 25.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        25148,
+        75148
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 17.0
+    },
+    "felt_ge, bias 2^64 (all values < 2^72)": {
+      "op": 34,
+      "steps_per_iter": 25.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        25209,
+        75209
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 17.0
+    },
+    "point_on_side, offset bias 2^104": {
+      "op": 10,
+      "steps_per_iter": 26.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        26117,
+        78117
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 18.0
+    },
+    "point_on_side, offset < 2^72": {
+      "op": 32,
+      "steps_per_iter": 26.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        26190,
+        78190
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 18.0
+    },
+    "point_on_side, raw negative felts": {
+      "op": 31,
+      "steps_per_iter": 36.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        36200,
+        108200
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 28.0
+    },
+    "sign test on a raw felt (u256)": {
+      "op": 30,
+      "steps_per_iter": 29.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        29196,
+        87196
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 21.0
+    },
+    "felt252 -> u256": {
+      "op": 33,
+      "steps_per_iter": 17.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        17198,
+        51198
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 9.0
+    }
+  }
+}

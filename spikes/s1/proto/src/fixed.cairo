@@ -9,9 +9,14 @@
 pub const FRACUNIT: felt252 = 65536;
 pub const FRACUNIT_U128: u128 = 65536;
 
-/// Bias used by `felt_ge`.  All operands must be non-negative and < 2^104.
-pub const CMP_BIAS: felt252 = 0x100000000000000000000000000; // 2^104
-pub const CMP_BIAS_U128: u128 = 0x100000000000000000000000000;
+/// Bias used by `felt_ge`.  Chosen so that every value this crate writes to
+/// memory stays **below 2^72**: S0 found that memory values >= 2^72 add 33% to
+/// the range_check_9_9 component of the proof, and the measurement in S1 5.1
+/// shows that shrinking the bias from 2^104 to 2^64 costs exactly zero steps.
+/// Operands must be non-negative and their difference must fit in +/- 2^63;
+/// the largest product the prototype forms is ~2^60 (`physics::ray_side`).
+pub const CMP_BIAS: felt252 = 0x10000000000000000; // 2^64
+pub const CMP_BIAS_U128: u128 = 0x10000000000000000;
 
 /// A signed 16.16 value as magnitude + sign.  `neg == 1` means negative.
 /// `m` is always a non-negative felt252.
