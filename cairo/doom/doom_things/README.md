@@ -172,6 +172,23 @@ against the compiled size, and runs `scarb fmt`.
   match the generated entry for the same Doom type;
 * **provability**: every `Fixed` stays below 2^33.
 
+## Coverage
+
+`python3 bench/coverage.py` measures line coverage with `cairo-coverage`
+0.5.0: **19 tests, 53/53 production lines = 100 %**. Unlike `doom_map`, this
+crate's 2 566 felts of tables compile under the `inlining-strategy = "avoid"`
+that coverage requires, so the real tests run against the real data. Lines at
+or below an inline `#[cfg(test)]` marker are excluded, as are the generated
+`src/tables.cairo` (data, not code) and `src/tests.cairo`.
+
+`cairo-coverage` 0.5.0 emits no `BRF`/`BRH` records, so **branch** coverage
+cannot be reported by the tool; line coverage is the proxy, and since
+`scarb fmt` puts every branch arm on its own line, a missed arm shows up as a
+missed line. On top of the figure: the tests reach both outcomes of
+`kind_of_doomednum` (found and not found, and both sides of the binary
+search), all five `weapon_states` arms, all three `compat` variants, and both
+the terminating and looping verdicts of the chain walk.
+
 ## Transitional
 
 `src/compat.cairo` still exports the Phase-0 skeleton's three-variant

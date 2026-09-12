@@ -226,6 +226,31 @@ the WAD JSON**, never from the emitted arrays:
 * **provability**: every element of every array converts to a `u128` and
   stays below 2^72.
 
+## Coverage
+
+`python3 bench/coverage.py` measures line coverage with `cairo-coverage`
+0.5.0: **1 test, 104/104 production lines = 100 %** of the accessor code in
+`src/lib.cairo` and `src/compat.cairo`.
+
+It cannot run on the real E1M1 data. `cairo-coverage` refuses to run unless
+the manifest sets `inlining-strategy = "avoid"`, and with that flag
+`universal-sierra-compiler` fails on this crate with `Offset overflow` --
+17 904 felts of `const` arrays push a jump offset past the `i16` the CASM
+encoding allows. (Verified: the failure is the *data*, not the tests; it
+reproduces with a single one-line test.) The script therefore swaps
+`src/levels/e1m1.cairo` for a **miniature level of the same shape** -- five
+linedefs chosen to reach all four sign combinations of `linedef_v1`, one BSP
+node, two subsectors, two sectors, a 2 x 2 blockmap, a two-row REJECT and two
+things -- built by importing `scripts/gen_level.py`, so fixture and shipped
+data come out of the same code. What is measured is the accessor code, on
+data whose *values* do not matter; the 25 committed tests are what check the
+real E1M1 values, under `scarb test`.
+
+On top of the figure: the fixture reaches both arms of every `if` in
+`linedef_v1`/`linedef_v2`, both children of the BSP node, a cell whose
+descent starts at the root and two whose descent starts at a leaf, a blocked
+and an unblocked REJECT pair, and the transitional `compat` accessors.
+
 ## Transitional
 
 `src/compat.cairo` still exports the Phase-0 skeleton's `Level`, `Sector`,
