@@ -10,13 +10,14 @@ use sha2::{Digest, Sha256};
 
 use crate::config::{Config, ProgramEntry};
 use crate::felt::{Felt, leaf_output_words, output_cells_from_words};
-use crate::model::{ProofFormat, RunSubmission, SegmentSubmission};
+use crate::model::{HashFunction, ProofFormat, RunSubmission, SegmentSubmission};
 
 /// A submission that passed validation: felts parsed, proof bytes decoded, leaf keys computed.
 #[derive(Debug)]
 pub struct ValidSubmission {
     pub run_id: String,
     pub program: ProgramEntry,
+    pub hash_function: HashFunction,
     pub segments: Vec<ValidSegment>,
     /// sha256 over the canonical submission (program, segments, args, preimages, proofs).
     pub submission_hash: String,
@@ -38,7 +39,13 @@ pub struct ValidSegment {
 
 /// Identity of a leaf: the same registry, program and arguments always yield the same leaf proof,
 /// so this is the cache key (R8-A3, idempotence by content hash).
-pub fn leaf_key(registry_hash: &str, program_id: &str, program_hash: Option<&str>, args: &[Felt]) -> String {
+pub fn leaf_key(
+    registry_hash: &str,
+    program_id: &str,
+    program_hash: Option<&str>,
+    hash_function: HashFunction,
+    args: &[Felt],
+) -> String {
     let mut h = Sha256::new();
     h.update(b"hellproof-leaf-v1\0");
     h.update(registry_hash.as_bytes());
@@ -46,6 +53,8 @@ pub fn leaf_key(registry_hash: &str, program_id: &str, program_hash: Option<&str
     h.update(program_id.as_bytes());
     h.update(b"\0");
     h.update(program_hash.unwrap_or("").as_bytes());
+    h.update(b"\0");
+    h.update(hash_function.as_str().as_bytes());
     h.update(b"\0");
     for a in args {
         h.update(a.to_hex().as_bytes());
@@ -63,6 +72,18 @@ pub fn validate(
         .program(&sub.program)
         .ok_or_else(|| anyhow::anyhow!("unknown program `{}`", sub.program))?
         .clone();
+
+    // The hash function decides `output_preimage[0]`, so the client and the server must agree on
+    // it before anything is proven.
+    let hash_function = sub.program_hash_function.unwrap_or(program.hash_function);
+    if hash_function != program.hash_function {
+        bail!(
+            "program `{}` is configured for program_hash_function `{}`, not `{}`",
+            program.id,
+            program.hash_function.as_str(),
+            hash_function.as_str()
+        );
+    }
 
     if sub.segments.is_empty() {
         bail!("a run needs at least one segment");
@@ -89,7 +110,7 @@ pub fn validate(
         if seg.index as usize != i {
             bail!("segment {i} has index {} (indices must be 0..n contiguous and ordered)", seg.index);
         }
-        let valid = validate_segment(seg, cfg, &program, registry_hash)?;
+        let valid = validate_segment(seg, cfg, &program, hash_function, registry_hash)?;
 
         // Chain check: `h_in[i+1] == h_out[i]` (PLAN Phase 3 task 3). The preimage is
         // `[program_hash, h_in, h_out, …]` for our segment programs; only enforced when the
@@ -112,6 +133,7 @@ pub fn validate(
     let mut h = Sha256::new();
     h.update(b"hellproof-run-v1\0");
     h.update(sub.program.as_bytes());
+    h.update(hash_function.as_str().as_bytes());
     for s in &segments {
         h.update(s.leaf_key.as_bytes());
         for f in &s.preimage {
@@ -124,6 +146,7 @@ pub fn validate(
     Ok(ValidSubmission {
         run_id: sub.run_id.clone().unwrap_or_else(crate::new_id),
         program,
+        hash_function,
         segments,
         submission_hash,
     })
@@ -133,6 +156,7 @@ fn validate_segment(
     seg: &SegmentSubmission,
     cfg: &Config,
     program: &ProgramEntry,
+    hash_function: HashFunction,
     registry_hash: &str,
 ) -> Result<ValidSegment> {
     if seg.args.is_empty() {
@@ -242,7 +266,8 @@ fn validate_segment(
         );
     }
 
-    let leaf_key = leaf_key(registry_hash, &program.id, program.program_hash.as_deref(), &args);
+    let leaf_key =
+        leaf_key(registry_hash, &program.id, program.program_hash.as_deref(), hash_function, &args);
 
     Ok(ValidSegment {
         index: seg.index,
@@ -266,6 +291,7 @@ mod tests {
             id: "segment_stub".into(),
             executable: "/dev/null".into(),
             program_hash: None,
+            hash_function: HashFunction::Blake,
         });
         c
     }
@@ -289,6 +315,7 @@ mod tests {
             run_id: None,
             player: None,
             program: "segment_stub".into(),
+            program_hash_function: None,
             solo: false,
             segments,
         }
@@ -379,10 +406,26 @@ mod tests {
 
     #[test]
     fn leaf_key_is_content_addressed() {
-        let a = leaf_key("reg", "p", None, &[Felt::parse("0x1").unwrap()]);
-        let b = leaf_key("reg", "p", None, &[Felt::parse("1").unwrap()]);
-        let c = leaf_key("reg2", "p", None, &[Felt::parse("0x1").unwrap()]);
+        let one = [Felt::parse("0x1").unwrap()];
+        let a = leaf_key("reg", "p", None, HashFunction::Blake, &one);
+        let b = leaf_key("reg", "p", None, HashFunction::Blake, &[Felt::parse("1").unwrap()]);
+        let c = leaf_key("reg2", "p", None, HashFunction::Blake, &one);
+        let d = leaf_key("reg", "p", None, HashFunction::Poseidon, &one);
         assert_eq!(a, b, "the same args in any notation are the same leaf");
         assert_ne!(a, c, "a different registry is a different circuit");
+        assert_ne!(a, d, "a different program hash function is a different leaf output");
+    }
+
+    #[test]
+    fn rejects_a_hash_function_the_program_is_not_configured_for() {
+        let mut sub = run(vec![seg(0, "0x1", "0x2")]);
+        sub.program_hash_function = Some(HashFunction::Poseidon);
+        let err = validate(&sub, &cfg(), "reg").unwrap_err().to_string();
+        assert!(err.contains("program_hash_function"), "{err}");
+
+        // Configure the program for poseidon and the same submission is accepted.
+        let mut c = cfg();
+        c.programs[0].hash_function = HashFunction::Poseidon;
+        assert!(validate(&sub, &c, "reg").is_ok());
     }
 }

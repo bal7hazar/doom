@@ -36,11 +36,12 @@ pub fn config(dir: &std::path::Path, batch_max_runs: usize, batch_max_wait_secs:
     cfg.batch_max_runs = batch_max_runs;
     cfg.batch_max_wait_secs = batch_max_wait_secs;
     cfg.scheduler_tick_ms = 20;
-    cfg.max_circuit_proofs = 2;
+    cfg.max_circuit_proofs = Some(2);
     cfg.programs.push(ProgramEntry {
         id: "segment_stub".into(),
         executable: dir.join("segment_stub.executable.json"),
         program_hash: None,
+        hash_function: Default::default(),
     });
     cfg.api_keys.push(ApiKey {
         key: KEY.into(),

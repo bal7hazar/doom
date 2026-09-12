@@ -5,6 +5,37 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Which hash the leaf simple bootloader uses to compute the task's program hash
+/// (`output_preimage[0]`).
+///
+/// `blake` is what S4 measured; **`poseidon` is the production choice** (G0 D4, S4b measurement 2:
+/// the bootloader overhead drops from `2340 + 14.75 x words` to `1969 + 5.50 x words` steps, i.e.
+/// -294 k steps on a 31.8 k-word program, with the `doom` registry unchanged). The two produce
+/// different program hashes, so this is part of a leaf's identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum HashFunction {
+    #[default]
+    Blake,
+    Poseidon,
+}
+
+impl HashFunction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HashFunction::Blake => "blake",
+            HashFunction::Poseidon => "poseidon",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "blake" => Some(HashFunction::Blake),
+            "poseidon" => Some(HashFunction::Poseidon),
+            _ => None,
+        }
+    }
+}
+
 /// How a segment proof was encoded by the client.
 ///
 /// `Bincode` is the only form the Rust verifier can read: `CairoProof` derives `CairoSerialize`
@@ -74,6 +105,10 @@ pub struct RunSubmission {
     pub player: Option<String>,
     /// Program id from the wrapper's pinned program list (clients never upload code).
     pub program: String,
+    /// Which hash the browser ran the bootloader task with. Omitted = the program's configured
+    /// default. It has to match, because it decides `output_preimage[0]`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_hash_function: Option<HashFunction>,
     /// Wrap this run on its own, immediately, instead of waiting for the batch (D6: the
     /// "submit alone now" option, at the displayed cost).
     #[serde(default)]

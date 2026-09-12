@@ -18,6 +18,7 @@ pub mod felt;
 pub mod metrics;
 pub mod model;
 pub mod pipeline;
+pub mod recompose;
 pub mod scheduler;
 pub mod validate;
 

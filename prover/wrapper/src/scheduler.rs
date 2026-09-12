@@ -7,9 +7,10 @@
 //! restarted: `Db::recover()` re-queues whatever was running, and the loop below re-derives which
 //! batches must close, which leaves are missing and which folds are ready.
 //!
-//! Resource rule (S4): a circuit proof — leaf **or** fold — peaks at 32.5 GB RSS, so
-//! `max_circuit_proofs` (default 1 on a 64 GB machine) gates both kinds through one semaphore.
-//! Verification is cheap and has its own, wider, gate.
+//! Resource rule: a circuit proof — leaf **or** fold — peaks at the configured registry's
+//! `circuit_proof_rss_bytes` (32.1–32.5 GB on `doom`, 21.9 GB on `doom_fold4_min`), so
+//! `max_circuit_proofs` — derived from that and the machine's memory unless set — gates both kinds
+//! through one semaphore. Verification is cheap and has its own, wider, gate.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,7 +30,7 @@ pub struct Scheduler {
 
 impl Scheduler {
     pub fn new(state: Shared) -> Self {
-        let circuit = state.cfg.max_circuit_proofs.max(1);
+        let circuit = state.cfg.effective_max_circuit_proofs();
         let verify = state.cfg.max_verify_jobs.max(1);
         Self {
             state,
@@ -332,6 +333,7 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
     let out = pipeline::prove_leaf(
         &state.cfg,
         &program.executable,
+        program.hash_function,
         &args,
         &state.leaf_work_dir(&leaf_key),
         &state.leaf_path(&leaf_key),
@@ -391,6 +393,30 @@ fn fold_job(state: &Shared, job: &Job) -> Result<()> {
     }
     state.db.set_batch_status(&batch_id, BatchStatus::Folding, None)?;
     let out = pipeline::fold_batch(&state.cfg, &paths, &state.batch_dir(&batch_id))?;
+
+    // Self-check: recompute the root's output words from the leaves' preimages the way the
+    // on-chain consumer will (`recursion_outputs::fold_tree`). If they disagree, the batch is
+    // not what it says it is and must not be handed to a client.
+    if state.cfg.backend != crate::config::Backend::Stub {
+        let packed: serde_json::Value = serde_json::from_slice(&std::fs::read(&out.packed_path)?)?;
+        let (preimages, leaf_hash, mv_hash) = crate::recompose::parse_packed_output(&packed)?;
+        let root = crate::recompose::root_from_preimages(&preimages, leaf_hash, mv_hash)
+            .ok_or_else(|| anyhow::anyhow!("empty packed output"))?;
+        let claimed: Vec<u32> = serde_json::from_value(out.program_output.clone())?;
+        if claimed != root.output {
+            anyhow::bail!(
+                "the tree's program_output {:?} is not the recomposition of the leaves {:?}",
+                claimed,
+                root.output
+            );
+        }
+        tracing::info!(
+            batch = %batch_id,
+            output_hash = ?crate::recompose::verification_output_hash(&root),
+            "root recomposition checks out"
+        );
+    }
+
     state.db.finish_batch(
         &batch_id,
         &out.root_path.to_string_lossy(),

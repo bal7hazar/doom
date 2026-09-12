@@ -47,6 +47,9 @@ pub fn router(state: Shared) -> Router {
         .route("/v1/runs/{id}", get(run_status))
         .route("/v1/batches/{id}", get(batch_status))
         .route("/v1/batches/close", post(close_batches))
+        // A game's worth of segment proofs is megabytes (3 MB each at 2^20 steps), well over
+        // axum's 2 MB default: replace it with our own configured limit.
+        .layer(axum::extract::DefaultBodyLimit::disable())
         .layer(tower_http::limit::RequestBodyLimitLayer::new(body_limit))
         .with_state(state)
 }
@@ -66,7 +69,7 @@ async fn healthz(State(state): State<Shared>) -> impl IntoResponse {
         "backend": state.cfg.backend,
         "registry_sha256": state.registry_hash,
         "batch_policy": { "max_runs": state.policy.max_runs, "max_wait_ms": state.policy.max_wait_ms },
-        "max_circuit_proofs": state.cfg.max_circuit_proofs,
+        "max_circuit_proofs": state.cfg.effective_max_circuit_proofs(),
     }))
 }
 

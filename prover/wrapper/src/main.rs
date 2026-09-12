@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     tracing::info!(
         addr = %listener.local_addr()?,
         registry = %state.registry_hash,
-        max_circuit_proofs = state.cfg.max_circuit_proofs,
+        max_circuit_proofs = state.cfg.effective_max_circuit_proofs(),
         batch_max_runs = state.policy.max_runs,
         batch_max_wait_ms = state.policy.max_wait_ms,
         "wrapper listening"

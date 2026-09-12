@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Reference configuration for the Hellproof wrapper service.
+# Copy to `wrapper.toml` (gitignored) and adjust the paths, or use the container image in
+# `infra/wrapper/`, which fills them in for you.
+
+bind = "127.0.0.1:8787"
+data_dir = "./data"                  # queue.sqlite3, submissions, leaf and root proofs
+
+# ---- the pinned pipeline (starkware-libs/proving @ cd7bc5f, R3-A1) --------------------------
+
+leaf_prover_bin = "/opt/proving/bin/leaf-prover"
+tree_bin = "/opt/proving/bin/stwo_run_and_prove_recursive_tree"
+leaf_verify_bin = "/opt/hellproof/bin/hellproof-leaf-verify"
+leaf_bootloader = "/opt/proving/data/leaf_simple_bootloader_compiled.json"
+# The parameters the browser proves segments with, so verification uses the same channel.
+leaf_params_json = "/opt/hellproof/params/leaf.json"
+
+backend = "subprocess"               # "stub" disables proving entirely (tests, load runs)
+
+# ---- the circuit registry (R3-A2) ------------------------------------------------------------
+# Everything downstream follows from it: the leaf circuit hash the contract pins, the
+# multiverifier hash the on-chain verifier constants are generated from, and the memory and time
+# per circuit proof. Its sha256 is part of every leaf's cache key, so swapping it invalidates the
+# cache instead of mixing circuits; the hashes below are checked at startup.
+#
+#   doom            production padding, fold_step 1 -> 32.1-32.5 GB, ~24 s per proof (S4)
+#   doom_fold4_min  fold_step 4 + minimal padding   -> 21.9 GB, 13.3 s per leaf (S4b)
+#                   ... but a DIFFERENT multiverifier: the on-chain constants must be regenerated.
+
+[registry]
+name = "doom"
+path = "/opt/hellproof/registry/doom/registry.json"
+multiverifier_hash = "a59897152377c07ac6d1e84454f0a04d8be65a7dfd73c2619078e728973f680f"
+leaf_circuit_hash = "2ad52ed04b5464fc0362ff77e47a7cb0adf8f7c8caef9eb38b8774ba9edac7e2"
+circuit_proof_rss_bytes = 32500000000
+
+# The production target once P4.0 regenerates the verifier constants:
+# [registry]
+# name = "doom_fold4_min"
+# path = "/opt/hellproof/registry/doom_fold4_min/registry.json"
+# multiverifier_hash = "02b34360cf03feac315fdae9bc006aeb398199e857cb95916ab22e559f7fac34"
+# leaf_circuit_hash = "f3fa16cc30529eb95958f1a1b4918105c85d590e2b583d01c9594634a4b1cf26"
+# circuit_proof_rss_bytes = 21900000000
+
+# ---- resources ------------------------------------------------------------------------------
+
+# Circuit proofs (leaf or fold) in parallel. Omitted = machine memory / the registry's
+# circuit_proof_rss_bytes (1 with `doom` on 64 GB, 2 with `doom_fold4_min`).
+# max_circuit_proofs = 1
+# machine_memory_bytes = 68719476736
+max_verify_jobs = 4
+# Optional `mkdir` mutex shared with anything else proving on this machine.
+# proof_lock_dir = "/var/lock/hellproof-proof"
+
+# ---- batching policy (G0 D6, risk R7-A3) ----------------------------------------------------
+
+batch_max_runs = 8                   # M: close as soon as the batch holds this many games
+batch_max_wait_secs = 600            # T: ... or this long after the batch opened
+
+# ---- limits ---------------------------------------------------------------------------------
+
+max_segments_per_run = 64            # ~25 leaves per 3-minute game (S4b: a segment may reach
+                                     # ~5.38 M steps and still use the log-20 leaf circuit)
+max_proof_bytes = 8388608            # one 2^20-step segment proof is ~3 MB (bincode)
+max_body_bytes = 536870912
+job_max_attempts = 3
+scheduler_tick_ms = 250
+require_verifiable_proof = true      # refuse felt-only proofs: they cannot be verified (cd7bc5f)
+check_preimage_binding = true
+
+# ---- programs the wrapper will prove leaves for ----------------------------------------------
+# Clients never upload code: they name one of these ids.
+
+[[programs]]
+id = "segment_stub"
+executable = "/opt/hellproof/programs/segment_stub.executable.json"
+hash_function = "blake"              # "poseidon" in production (G0 D4, S4b measurement 2)
+# Optional: pin the task's program hash (`output_preimage[0]`) under that hash function.
+# program_hash = "0x6281af8c9e914c7c1c7dac0de78a4e799473aa5478093be9d099bbdf1ad7f3c"
+
+# [[programs]]
+# id = "doom_run"
+# executable = "/opt/hellproof/programs/doom_run.executable.json"
+# hash_function = "poseidon"
+# program_hash = "0x..."
+
+# ---- authentication (R8-A2) ------------------------------------------------------------------
+# API keys today; the intended Controller session-signature scheme is documented in README.md.
+
+[[api_keys]]
+key = "change-me"
+account = "0x04a3…"
+admin = false
+daily_run_quota = 50
+
+[[api_keys]]
+key = "change-me-too"
+account = "0x0"
+admin = true                          # may call POST /v1/batches/close
+daily_run_quota = 0                   # unlimited

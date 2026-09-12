@@ -80,7 +80,7 @@ where
     MC::H: MerkleHasherLifted + DeserializeOwned,
 {
     let proof: CairoProof<MC::H> =
-        bincode::deserialize(bytes).context("not a bincode extended CairoProof")?;
+        bincode::deserialize(&decompress_if_needed(bytes)?).context("not a bincode extended CairoProof")?;
 
     let cfg = proof.extended_stark_proof.proof.0.config;
     let trace_log_size = cfg.trace_lifting_log_size - cfg.fri_config.log_blowup_factor;
@@ -108,6 +108,21 @@ where
         trace_log_size: Some(trace_log_size),
         proof_bytes: Some(bytes.len()),
     })
+}
+
+/// Accepts both encodings of the same bytes: the browser returns raw bincode, while the
+/// monorepo's `--proof-format extended-binary` writes bzip2(bincode).
+fn decompress_if_needed(bytes: &[u8]) -> Result<std::borrow::Cow<'_, [u8]>> {
+    if bytes.starts_with(b"BZh") {
+        use std::io::Read;
+        let mut out = Vec::new();
+        bzip2::read::BzDecoder::new(bytes)
+            .read_to_end(&mut out)
+            .context("bzip2 decompression failed")?;
+        Ok(std::borrow::Cow::Owned(out))
+    } else {
+        Ok(std::borrow::Cow::Borrowed(bytes))
+    }
 }
 
 fn parse_felt(s: &str) -> Result<starknet_ff::FieldElement> {

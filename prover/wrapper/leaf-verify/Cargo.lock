@@ -536,7 +536,6 @@ dependencies = [
 [[package]]
 name = "cairo-air"
 version = "2.4.0"
-source = "git+https://github.com/starkware-libs/proving?rev=cd7bc5f4697fb188a27e09f9242f1dd76df8afdc#cd7bc5f4697fb188a27e09f9242f1dd76df8afdc"
 dependencies = [
  "bincode",
  "bzip2",
@@ -1066,6 +1065,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "bzip2",
  "cairo-air",
  "clap",
  "serde",
@@ -2201,7 +2201,6 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 [[package]]
 name = "stwo"
 version = "2.4.0"
-source = "git+https://github.com/starkware-libs/proving?rev=cd7bc5f4697fb188a27e09f9242f1dd76df8afdc#cd7bc5f4697fb188a27e09f9242f1dd76df8afdc"
 dependencies = [
  "blake2",
  "blake3",
@@ -2229,7 +2228,6 @@ dependencies = [
 [[package]]
 name = "stwo-cairo-common"
 version = "2.4.0"
-source = "git+https://github.com/starkware-libs/proving?rev=cd7bc5f4697fb188a27e09f9242f1dd76df8afdc#cd7bc5f4697fb188a27e09f9242f1dd76df8afdc"
 dependencies = [
  "bytemuck",
  "itertools 0.12.1",
@@ -2248,7 +2246,6 @@ dependencies = [
 [[package]]
 name = "stwo-cairo-serialize"
 version = "2.4.0"
-source = "git+https://github.com/starkware-libs/proving?rev=cd7bc5f4697fb188a27e09f9242f1dd76df8afdc#cd7bc5f4697fb188a27e09f9242f1dd76df8afdc"
 dependencies = [
  "starknet-ff",
  "stwo",
@@ -2258,7 +2255,6 @@ dependencies = [
 [[package]]
 name = "stwo-cairo-serialize-derive"
 version = "2.4.0"
-source = "git+https://github.com/starkware-libs/proving?rev=cd7bc5f4697fb188a27e09f9242f1dd76df8afdc#cd7bc5f4697fb188a27e09f9242f1dd76df8afdc"
 dependencies = [
  "quote",
  "syn 2.0.119",
@@ -2267,7 +2263,6 @@ dependencies = [
 [[package]]
 name = "stwo-constraint-framework"
 version = "2.4.0"
-source = "git+https://github.com/starkware-libs/proving?rev=cd7bc5f4697fb188a27e09f9242f1dd76df8afdc#cd7bc5f4697fb188a27e09f9242f1dd76df8afdc"
 dependencies = [
  "hashbrown 0.17.1",
  "itertools 0.12.1",
@@ -2719,3 +2714,15 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[patch.unused]]
+name = "std-shims"
+version = "2.4.0"
+
+[[patch.unused]]
+name = "stwo-air-utils"
+version = "2.4.0"
+
+[[patch.unused]]
+name = "stwo-air-utils-derive"
+version = "2.4.0"

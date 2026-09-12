@@ -147,8 +147,14 @@ pub fn verify_segment_proof(
         .leaf_verify_bin
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("leaf_verify_bin is not configured"))?;
+    let (channel_hash, include_all) = cfg.verify_params();
     let mut cmd = Command::new(bin);
-    cmd.arg("--proof").arg(proof_path);
+    cmd.arg("--proof")
+        .arg(proof_path)
+        .arg("--channel-hash")
+        .arg(channel_hash)
+        .arg("--include-all-preprocessed-columns")
+        .arg(include_all.to_string());
     // Verification is cheap but not free; it does not take the circuit-proof lock.
     let report: VerifyReport = match run_child(cmd, None) {
         Ok((stdout, _, _)) => serde_json::from_str(stdout.trim())
@@ -221,6 +227,7 @@ pub struct LeafOutcome {
 pub fn prove_leaf(
     cfg: &Config,
     program_executable: &Path,
+    hash_function: crate::model::HashFunction,
     args: &[Felt],
     work_dir: &Path,
     out_path: &Path,
@@ -258,9 +265,9 @@ pub fn prove_leaf(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("leaf_bootloader is not configured"))?;
     let registry = cfg
-        .registry_json
+        .registry.path
         .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("registry_json is not configured"))?;
+        .ok_or_else(|| anyhow::anyhow!("registry.path is not configured"))?;
     let leaf_prover = cfg
         .leaf_prover_bin
         .as_ref()
@@ -272,7 +279,7 @@ pub fn prove_leaf(
             "type": "Cairo1Executable",
             "path": program_executable,
             "user_args_file": args_path,
-            "program_hash_function": "blake",
+            "program_hash_function": hash_function.as_str(),
         }],
         "fact_topologies_path": serde_json::Value::Null,
         "single_page": true,
@@ -386,9 +393,9 @@ pub fn fold_batch(cfg: &Config, leaf_paths: &[PathBuf], out_dir: &Path) -> Resul
     }
 
     let registry = cfg
-        .registry_json
+        .registry.path
         .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("registry_json is not configured"))?;
+        .ok_or_else(|| anyhow::anyhow!("registry.path is not configured"))?;
     let tree_bin = cfg
         .tree_bin
         .as_ref()
@@ -423,7 +430,7 @@ pub fn fold_batch(cfg: &Config, leaf_paths: &[PathBuf], out_dir: &Path) -> Resul
 /// leaf cache instead of silently mixing circuits.
 pub fn registry_hash(cfg: &Config) -> String {
     use sha2::{Digest, Sha256};
-    match cfg.registry_json.as_ref().and_then(|p| fs::read(p).ok()) {
+    match cfg.registry.path.as_ref().and_then(|p| fs::read(p).ok()) {
         Some(bytes) => hex::encode(Sha256::digest(bytes)),
         None => "no-registry".to_string(),
     }
