@@ -377,6 +377,18 @@ Points d'attention :
 | Contrat consommateur (stub `DoomRuns`, N×8 felts, 2N Poseidon + N blake2s) | 5,58 M + 86,7 k·N L2 gas → 9,9 M à N = 50 (0,6 % du coût d'un fait) |
 | **Extrapolation aux preuves S4** (94–96 k felts, 5,3 M steps) | staging ≈ 4,3e9 L2 gas sur 5 tx ; chaque phase de vérification à 115–204 % du plafond → **≥ 4 invokes**, ≈ **250 STRK ≈ 7,2 $ par fait** au prix courant ; transport **calldata seulement** du flux packé ≈ 6,8e7 gas contre 4,2e9 stocké (**61× moins cher**) → décision de conception avant la Phase 4 |
 
+**Résultats de P4.0 (2026-09-12, `docs/design/onchain-verifier.md`, `cairo/doom_contracts/`) :** vérifieur de
+circuit résumable à **sections en calldata** (aucun felt de preuve stocké), vendoring `proving@cd7bc5f`,
+3 classes de bibliothèque + routeur (obligatoire : le monolithe dépasse le plafond CASM). Sur devnet 0.10 avec
+la racine S4 (96 k felts) : **5 transactions, 3,81e9 L2 gas** (begin 459 M, merkle 391 M, answers 861 M,
+fri 1 093 M à 90,4 % du plafond, fri 1 005 M) ; variante 6 tx à 3,82e9 avec pire tx à 84 %. Coût :
+**116 STRK ≈ 3,35 $** au prix mainnet du 2026-09-12 (11,4 STRK au plancher), declares ≈ 238 STRK une fois ;
+2,15× moins cher que l'extrapolation stockage de S5. 78 % du gas est le calcul du vérifieur (FRI en QM31
+émulé : 1,84e9) ; leviers : inversion par lots des twiddles dans le FRI vendu, opcode qm31 si audité.
+Constantes du multiverifier **générées depuis le registre** (`tools/gen_multiverifier_consts.py`, vérifié
+avec `doom_fold4_min`). Calibrage : blockifier 0.14.4 facture steps VM + builtins ; snforge en mode
+sierra-gas sous-estime de 1,4–3,5× → `tracked_resource = "cairo-steps"`. Outils : Foundry 0.61.0.
+
 Les classes déployées par modeofO sont inutilisables pour nous (vérifieur vendu plus ancien, hashes de
 phases figés dans le constructeur) : le registry sera redéployé depuis nos sources épinglées.
 
