@@ -1,0 +1,17 @@
+{
+  "name": "s5-costs",
+  "private": true,
+  "type": "module",
+  "description": "Spike S5 — Starknet fee estimation for the 3-transaction Stwo fact",
+  "scripts": {
+    "estimate": "tsx estimate.ts"
+  },
+  "dependencies": {
+    "starknet": "10.8.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "@types/node": "^22.15.3"
+  }
+}

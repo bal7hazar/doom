@@ -1,0 +1,26 @@
+{
+ "StwoPhase1": {
+  "class_hash": "0x0554bf4794532c2646162e65d3724be72350e36dc5ae3d6bc3ce9663d177f8fe",
+  "tx_hash": "0x05106cd087ac0f59c9d5aeb2a70066f83d29a13f48346d5f78ffa06f569ad062",
+  "l2_gas": 4931016640,
+  "l1_gas": 0,
+  "l1_data_gas": 192,
+  "fee_fri": 150274706318285958592
+ },
+ "StwoPhase2": {
+  "class_hash": "0x0346a34f4f43abf374cb7e0333ac9fd5aac45321f38b686c122b80cc23ec847b",
+  "tx_hash": "0x06c683a994eda26041d7912b3228cae3964007c8ae0a5e68e040f8fa46c1196d",
+  "l2_gas": 1401407680,
+  "l1_gas": 0,
+  "l1_data_gas": 192,
+  "fee_fri": 42708465276564551872
+ },
+ "StwoFactRegistry": {
+  "class_hash": "0x07308e2210332bab2c98aa58600dd7fae574084edce2d0098bad6d7e13e77a38",
+  "tx_hash": "0x05014f5ee0be652db442cd88aa273626862a9f14820770e1a0d10bceeff74e7c",
+  "l2_gas": 243034560,
+  "l1_gas": 0,
+  "l1_data_gas": 192,
+  "fee_fri": 7406582361418372032
+ }
+}

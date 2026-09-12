@@ -1,0 +1,27 @@
+[package]
+name = "doomruns_stub"
+version = "0.1.0"
+edition = "2024_07"
+license = "Apache-2.0"
+
+# S5 cost probe only: a stand-in for the consumer-side `DoomRuns.submit_run`
+# work described in RISKS.md R3-A4 (recomposition of the leaf-output chain)
+# and PLAN.md Phase 4. Not the production contract.
+
+[dependencies]
+starknet = "2.18.0"
+
+[[target.starknet-contract]]
+sierra = true
+# Same allowlist the deployed lane-1 classes are held to.
+allowed-libfuncs-list.name = "audited"
+
+[dev-dependencies]
+snforge_std = "0.61.0"
+assert_macros = "2.18.0"
+
+[scripts]
+test = "snforge test"
+
+[tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]

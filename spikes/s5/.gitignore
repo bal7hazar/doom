@@ -1,0 +1,7 @@
+node_modules/
+target/
+package-lock.json
+# 452 KB of calldata, regenerated in one second by prepare_calls.py from the
+# modeofO fixture (see docs/spikes/S5.md, "Reproducing").
+results/calls.json
+__pycache__/

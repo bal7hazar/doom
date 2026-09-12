@@ -1,0 +1,121 @@
+{
+ "network": "starknet-devnet (local)",
+ "url": "http://127.0.0.1:5055/rpc",
+ "timestamp_utc": "2026-09-12T13:19:53Z",
+ "prices": {
+  "l1_gas_price_fri": 92599658875965,
+  "l1_data_gas_price_fri": 37485578886,
+  "l2_gas_price_fri": 30475398907,
+  "starknet_version": "0.14.4",
+  "l1_da_mode": "BLOB"
+ },
+ "registry": "0x072d8b8e905f54c2cb905a789e2839ba9054feda05a8c499b11c3e3e2341e5e2",
+ "classes": {
+  "StwoPhase1": {
+   "class_hash": "0x0554bf4794532c2646162e65d3724be72350e36dc5ae3d6bc3ce9663d177f8fe",
+   "tx_hash": "0x05106cd087ac0f59c9d5aeb2a70066f83d29a13f48346d5f78ffa06f569ad062",
+   "l2_gas": 4931016640,
+   "l1_gas": 0,
+   "l1_data_gas": 192,
+   "fee_fri": 150274706318285958592
+  },
+  "StwoPhase2": {
+   "class_hash": "0x0346a34f4f43abf374cb7e0333ac9fd5aac45321f38b686c122b80cc23ec847b",
+   "tx_hash": "0x06c683a994eda26041d7912b3228cae3964007c8ae0a5e68e040f8fa46c1196d",
+   "l2_gas": 1401407680,
+   "l1_gas": 0,
+   "l1_data_gas": 192,
+   "fee_fri": 42708465276564551872
+  },
+  "StwoFactRegistry": {
+   "class_hash": "0x07308e2210332bab2c98aa58600dd7fae574084edce2d0098bad6d7e13e77a38",
+   "tx_hash": "0x05014f5ee0be652db442cd88aa273626862a9f14820770e1a0d10bceeff74e7c",
+   "l2_gas": 243034560,
+   "l1_gas": 0,
+   "l1_data_gas": 192,
+   "fee_fri": 7406582361418372032
+  }
+ },
+ "deploy_fee_fri": 68178090212169056,
+ "fact": "0x640299e88691d8a8eaf2c71bcde2c72334ad177e64c4485be069c5f6dcd615c",
+ "txs": [
+  {
+   "label": "stage_proof",
+   "entrypoint": "stage_proof",
+   "tx_hash": "0x06c5b9a5410ce3092cf08356bed9cf00b7871606999956f391ed21337b31c1a3",
+   "calldata_felts": 159,
+   "l2_gas": 78556800,
+   "l1_gas": 0,
+   "l1_data_gas": 10176,
+   "fee_fri": 2394618398117960448,
+   "bounds": {
+    "l2_gas": 150000000,
+    "l1_gas": 100000,
+    "l1_data_gas": 40000
+   },
+   "meta": {
+    "staged_slots": 156
+   },
+   "storage_writes": 158,
+   "nonce_updates": 1,
+   "state_diff_felts": 318,
+   "retdata": [],
+   "pct_of_invoke_cap": 6.49
+  },
+  {
+   "label": "verify_phase1",
+   "entrypoint": "verify_phase1",
+   "tx_hash": "0x03eea93c115a77ac1f45ccc0fb5bdaeb18f675beae1a595f88f62201b4b73aad",
+   "calldata_felts": 4995,
+   "l2_gas": 873757120,
+   "l1_gas": 0,
+   "l1_data_gas": 8896,
+   "fee_fri": 26628593388780549568,
+   "bounds": {
+    "l2_gas": 1150000000,
+    "l1_gas": 100000,
+    "l1_data_gas": 40000
+   },
+   "meta": {
+    "head_slots": 4991,
+    "tail_slots": 156
+   },
+   "storage_writes": 138,
+   "nonce_updates": 1,
+   "state_diff_felts": 278,
+   "retdata": [
+    "0x5a5a"
+   ],
+   "pct_of_invoke_cap": 72.21
+  },
+  {
+   "label": "verify_phase2",
+   "entrypoint": "verify_phase2",
+   "tx_hash": "0x0340837b8ec0f398fbab05e5214969cbd2dd5884f0e4919431b9021562d71729",
+   "calldata_felts": 1845,
+   "l2_gas": 815709840,
+   "l1_gas": 0,
+   "l1_data_gas": 320,
+   "fee_fri": 24859095961288912752,
+   "bounds": {
+    "l2_gas": 1150000000,
+    "l1_gas": 100000,
+    "l1_data_gas": 40000
+   },
+   "meta": {
+    "fri_slots": 1842,
+    "fri_values": 12891
+   },
+   "storage_writes": 4,
+   "nonce_updates": 1,
+   "state_diff_felts": 10,
+   "retdata": [
+    "0x640299e88691d8a8eaf2c71bcde2c72334ad177e64c4485be069c5f6dcd615c"
+   ],
+   "pct_of_invoke_cap": 67.41
+  }
+ ],
+ "total_l2_gas": 1768023760,
+ "total_fee_fri": 53882307748187422768,
+ "total_fee_strk": 53.88230774818742
+}
