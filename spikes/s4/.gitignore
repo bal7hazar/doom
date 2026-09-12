@@ -2,3 +2,6 @@
 target/
 # Registry generation scratch (times are kept; the copy into the monorepo lives in the scratchpad).
 registry/*/registry.first.json
+# bigcode's generated source and Scarb build outputs.
+programs/bigcode/src/lib.cairo
+programs/*/target/

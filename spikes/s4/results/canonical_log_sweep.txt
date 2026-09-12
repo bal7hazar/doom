@@ -1,0 +1,8 @@
+# circuit-params report, preprocessed_trace = canonical, one trace log size per line
+# (spikes/s4/scripts/canonical_sweep.sh; proving @ cd7bc5f)
+log 20: PANIC index out of bounds: the len is 21 but the index is 23
+log 21: PANIC index out of bounds: the len is 22 but the index is 23
+log 22: PANIC index out of bounds: the len is 23 but the index is 23
+log 23: OK    23: eq:(log: 20, usage = 61%) qm31_ops:(log: 23, usage = 79%) m31_to_u32:(log: 21, usage = 51%) triple_xor:(log: 20, usage = 54%) blake_g_gate:(log: 23, usage = 67%)
+log 24: OK    24: eq:(log: 20, usage = 61%) qm31_ops:(log: 23, usage = 81%) m31_to_u32:(log: 21, usage = 52%) triple_xor:(log: 20, usage = 56%) blake_g_gate:(log: 23, usage = 70%)
+log 25: OK    25: eq:(log: 20, usage = 61%) qm31_ops:(log: 23, usage = 82%) m31_to_u32:(log: 21, usage = 54%) triple_xor:(log: 20, usage = 57%) blake_g_gate:(log: 23, usage = 72%)

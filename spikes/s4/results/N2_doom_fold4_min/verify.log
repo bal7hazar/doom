@@ -1,0 +1,9 @@
+   Executing stwo_circuit_verifier
+error: Cairo program run failed: Error at pc=0:2635:
+An ASSERT_EQ instruction failed: 0:613 != 0:614.
+Cairo traceback (most recent call last):
+Unknown location (pc=0:2)
+Unknown location (pc=0:22)
+Unknown location (pc=0:109)
+Unknown location (pc=0:611)
+

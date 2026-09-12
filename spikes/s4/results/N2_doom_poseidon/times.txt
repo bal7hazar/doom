@@ -1,0 +1,7 @@
+stub: segment_stub (524 bytecode words), program_hash_function: poseidon
+leaf_0                  21.48 real 196.31 user 9.42 sys  32823181312 maximum resident set size 
+leaf_1                  21.20 real 190.20 user 9.27 sys  32557481984 maximum resident set size 
+leaf proof bytes: 545896
+tree                    22.92 real 214.54 user 8.39 sys  32169787392 maximum resident set size 
+root.proof felts: 94705
+verify                  1.63 real 0.78 user 0.81 sys  810614784 maximum resident set size 

@@ -1,0 +1,5 @@
+leaf:
+20: eq:(log: 20, usage = 61%) qm31_ops:(log: 23, usage = 71%) m31_to_u32:(log: 20, usage = 77%) triple_xor:(log: 19, usage = 79%) blake_g_gate:(log: 22, usage = 98%)
+
+multiverifier:
+eq:(log: 16, usage = 87%) qm31_ops:(log: 21, usage = 82%) m31_to_u32:(log: 19, usage = 86%) triple_xor:(log: 18, usage = 94%) blake_g_gate:(log: 22, usage = 58%)

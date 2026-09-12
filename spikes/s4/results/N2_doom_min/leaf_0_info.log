@@ -1,0 +1,16 @@
+leaf_prover::prove_leaf: Program execution done
+leaf_prover::prove_leaf: Adapter done. Program created 2 outputs.
+prove_cairo:Compute preprocessed trace commitment: stwo_cairo_prover::prover: enter
+prove_cairo:Compute preprocessed trace commitment:Extension: stwo::prover::pcs: enter
+prove_cairo:Compute preprocessed trace commitment:Extension: stwo::prover::pcs: close time.busy=14.8ms time.idle=1.46µs
+prove_cairo:Compute preprocessed trace commitment:Merkle: stwo::prover::pcs: enter
+prove_cairo:Compute preprocessed trace commitment:Merkle: stwo::prover::pcs: close time.busy=44.3ms time.idle=959ns
+prove_cairo:Compute preprocessed trace commitment: stwo_cairo_prover::prover: close time.busy=74.6ms time.idle=583ns
+leaf_prover::prove_leaf: Cairo proving done
+leaf_prover::prove_leaf: Verifier config:
+    program: (2910 felts)
+    n_outputs: 2
+    Cairo preprocessed trace: CanonicalSmall
+    Cairo preprocessed trace root: HashValue([U32((36102 + 26129i) + (0 + 0i)u), U32((63945 + 60656i) + (0 + 0i)u), U32((30244 + 51777i) + (0 + 0i)u), U32((7737 + 14824i) + (0 + 0i)u), U32((28769 + 37862i) + (0 + 0i)u), U32((57155 + 52426i) + (0 + 0i)u), U32((12131 + 14486i) + (0 + 0i)u), U32((3431 + 60459i) + (0 + 0i)u)])
+    Proof pow bits: 26
+    Proof FRI config: FriConfig { pow_bits: 26, log_blowup_factor: 1, log_last_layer_degree_bound: 0, n_queries: 70, fold_step: 1 }
