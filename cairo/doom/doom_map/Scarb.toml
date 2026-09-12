@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bam = { path = "../../crates/bam" }
 fixed = { path = "../../crates/fixed" }
 geom2d = { path = "../../crates/geom2d" }
 blockmap = { path = "../../crates/blockmap" }
