@@ -6,8 +6,9 @@ set -euo pipefail
 source "$(dirname "$0")/env.sh"
 N="${1:?usage: verifier_output.sh <N> [registry_name]}"
 REG_NAME="${2:-doom}"
-WORK="$S4_WORK/pipeline_${N}_${REG_NAME}"
-RES="$S4_DIR/results/N${N}_${REG_NAME}"
+TAG="${TAG:-}"   # same suffix as run_pipeline.sh, when the run used one
+WORK="$S4_WORK/pipeline_${N}_${REG_NAME}${TAG}"
+RES="$S4_DIR/results/N${N}_${REG_NAME}${TAG}"
 cd "$PROVING/stwo_cairo_verifier"
 scarb --profile proving execute -p stwo_circuit_verifier --features qm31_opcode --no-build \
   --output none --print-program-output --arguments-file "$WORK/root.proof" > "$WORK/verifier_output.log" 2>&1
