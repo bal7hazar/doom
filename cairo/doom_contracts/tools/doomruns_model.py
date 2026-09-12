@@ -13,7 +13,8 @@ Nothing here shares code with the Cairo side:
   `docs/design/onchain-verifier.md` §6.
 
 `python3 doomruns_model.py --emit-fixtures` regenerates
-`crates/doom_runs/tests/fixtures.cairo`; `--check` only prints the vectors.
+`crates/doom_runs/tests/fixtures.cairo` (follow it with `scarb fmt` in
+`crates/doom_runs`); with no flag it only prints the vectors.
 """
 
 from __future__ import annotations
@@ -188,14 +189,16 @@ def make_run(seed: int, n_segments: int, *, version_id: int = 1, level_id: int =
 
 
 def build_batch(shape: list[int], *, level_id: int = 1, version_id: int = 1,
-                final_status: int = EXIT, tics_per_segment: int = 35) -> dict:
-    """A batch of `len(shape)` games with `shape[i]` segments each, in fold order."""
+                final_status: int = EXIT, tics_per_segment: int = 35, salt: int = 0) -> dict:
+    """A batch of `len(shape)` games with `shape[i]` segments each, in fold order. `salt`
+    makes two batches of the same shape distinct (distinct input logs, so distinct
+    commitments, run ids and fact)."""
     leaves: list[Leaf] = []
     logs: list[list[int]] = []
     members = []
     for game, n in enumerate(shape):
         start = len(leaves)
-        run_leaves, run_logs = make_run(1000 * (game + 1), n, version_id=version_id,
+        run_leaves, run_logs = make_run(1000 * (game + 1) + salt, n, version_id=version_id,
                                         level_id=level_id, final_status=final_status,
                                         tics_per_segment=tics_per_segment)
         leaves += run_leaves
