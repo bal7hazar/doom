@@ -292,6 +292,10 @@ async function main(): Promise<void> {
         `${resume.nextPhase} phase(s) already paid for, echo from ${resume.echoSource}`,
     );
   }
+  if (resume.factRegistered && flag("verifier-only")) {
+    console.log("the fact is already registered and --verifier-only leaves nothing to do.");
+    return;
+  }
 
   // --- estimate ----------------------------------------------------------
   // A bound over the invoke cap is refused by the sequencer before execution, so an over-cap

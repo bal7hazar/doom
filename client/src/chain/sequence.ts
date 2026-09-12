@@ -211,6 +211,11 @@ export async function resumePoint(
   seq: SubmissionSequence,
   caller: string,
   store?: EchoStore,
+  /**
+   * Block to scan `Step` events from. Zero is right on a devnet and wasteful on a long chain:
+   * a client that knows when it started the sequence should say so.
+   */
+  fromBlock = 0,
 ): Promise<ResumePoint> {
   const checkpoint = await readCheckpoint(rpc, seq.router, caller, seq.proofId);
   if (checkpoint.tag === TAG.FREE) {
@@ -226,7 +231,7 @@ export async function resumePoint(
     };
   }
 
-  const steps = await stepEvents(rpc, seq.router, caller, seq.proofId);
+  const steps = await stepEvents(rpc, seq.router, caller, seq.proofId, fromBlock);
   const nextPhase = steps.length;
   if (nextPhase >= seq.phases.length) {
     throw new Error(
