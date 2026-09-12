@@ -43,11 +43,14 @@ echo "Extracting $MAP with tools/wad ..."
 if [ ! -d "$WAD_TOOL_DIR/node_modules" ]; then
   (cd "$WAD_TOOL_DIR" && npm install --no-audit --no-fund)
 fi
-# tools/wad writes <out>/<map>.json, <out>/<map>.cairo and ../REPORT-<map>.md;
-# extracting into tools/wad/out keeps the committed report untouched, and we
-# copy only the JSON the client needs.
-(cd "$WAD_TOOL_DIR" && npm run --silent extract -- --wad "$WAD_PATH" --map "$MAP" --out "$WAD_TOOL_DIR/out")
-cp "$WAD_TOOL_DIR/out/$MAP_LOWER.json" "$CLIENT_DIR/public/levels/$MAP_LOWER.json"
+# tools/wad writes <out>/<map>.json, <out>/<map>.cairo *and* ../REPORT-<map>.md.
+# That last one would land on the committed tools/wad/REPORT-e1m1.md if we
+# extracted into tools/wad/out, so extract into a throwaway directory and copy
+# out only the JSON the client needs.
+STAGING="$(mktemp -d)"
+trap 'rm -rf "$STAGING"' EXIT
+(cd "$WAD_TOOL_DIR" && npm run --silent extract -- --wad "$WAD_PATH" --map "$MAP" --out "$STAGING/out")
+cp "$STAGING/out/$MAP_LOWER.json" "$CLIENT_DIR/public/levels/$MAP_LOWER.json"
 
 echo "Done:"
 ls -lh "$CLIENT_DIR/public/freedoom1.wad" "$CLIENT_DIR/public/levels/$MAP_LOWER.json"
