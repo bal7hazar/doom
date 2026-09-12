@@ -1,4 +1,5 @@
 import { CellSubsectorSpans } from "./accelerator.js";
+import { bytesToHex } from "./binary.js";
 import { AssetIndex, MapData } from "./mapExtract.js";
 import { BLOCKMAP_UNIT } from "./types.js";
 
@@ -37,7 +38,7 @@ export function buildMapJson(map: MapData, assets: AssetIndex, cellSubsectors?: 
     reject: {
       numSectors: map.reject.numSectors,
       // Hex-encoded raw bit matrix; decode with mapLumps.ts#rejectBit.
-      dataHex: map.reject.data.toString("hex"),
+      dataHex: bytesToHex(map.reject.data),
     },
     blockmap: {
       unit: BLOCKMAP_UNIT,

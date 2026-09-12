@@ -5,14 +5,14 @@ import { extractAssetIndex, extractMap } from "../src/mapExtract.js";
 import { buildReport } from "../src/report.js";
 import { rejectChunksPerRow } from "../src/recordPacking.js";
 import { Wad } from "../src/wad.js";
-import { hasRealWad, REAL_WAD_PATH } from "./realWad.js";
+import { hasRealWad, readRealWad } from "./realWad.js";
 
 // This test exercises the full pipeline against the real freedoom1.wad
 // (fetched by scripts/fetch-freedoom.sh). It is skipped when the WAD isn't
 // present so `npm test` stays hermetic by default; run
 // `./scripts/fetch-freedoom.sh` first to enable it.
 describe.skipIf(!hasRealWad)("end-to-end extraction of E1M1 from the real freedoom1.wad", () => {
-  const wad = Wad.fromFile(REAL_WAD_PATH);
+  const wad = Wad.fromBytes(readRealWad());
   const map = extractMap(wad, "E1M1");
   const assets = extractAssetIndex(wad, map);
 

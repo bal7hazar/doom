@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeSubsectorSectors, SUBSECTOR_SECTOR_UNRESOLVED } from "../src/derive.js";
 import { extractMap } from "../src/mapExtract.js";
 import { Wad } from "../src/wad.js";
-import { hasRealWad, REAL_WAD_PATH } from "./realWad.js";
+import { hasRealWad, readRealWad } from "./realWad.js";
 import {
   blockmapLump,
   buildWad,
@@ -126,7 +126,7 @@ describe("computeSubsectorSectors", () => {
 
 describe.skipIf(!hasRealWad)("computeSubsectorSectors: correctness against SEGS (real E1M1)", () => {
   it("every subsector's SS_SECTOR matches a direct SEGS -> LINEDEF -> SIDEDEF walk, independently reimplemented", () => {
-    const wad = Wad.fromFile(REAL_WAD_PATH);
+    const wad = Wad.fromBytes(readRealWad());
     const map = extractMap(wad, "E1M1");
 
     // Independent re-implementation (not calling derive.ts#computeSubsectorSectors)
@@ -151,7 +151,7 @@ describe.skipIf(!hasRealWad)("computeSubsectorSectors: correctness against SEGS 
   });
 
   it("agrees with computeSubsectorSectors called directly with the parsed lumps", () => {
-    const wad = Wad.fromFile(REAL_WAD_PATH);
+    const wad = Wad.fromBytes(readRealWad());
     const map = extractMap(wad, "E1M1");
     const recomputed = computeSubsectorSectors(map.subsectors, map.segs, map.linedefs, map.sidedefs);
     expect(recomputed).toEqual(map.subsectorSectors);

@@ -159,7 +159,7 @@ export interface Sector {
  */
 export interface Reject {
   numSectors: number;
-  data: Buffer;
+  data: Uint8Array;
 }
 
 /**

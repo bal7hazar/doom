@@ -55,7 +55,7 @@ export interface MapData {
   sectors: Sector[];
   reject: Reject;
   blockmap: Blockmap;
-  blockmapLumpBuffer: Buffer;
+  blockmapLumpBuffer: Uint8Array;
   boundingBox: MapBoundingBox;
   /** sectorLines[s] = indices into `linedefs` bordering sector `s`. */
   sectorLines: number[][];
@@ -82,7 +82,7 @@ export function extractMap(wad: Wad, mapName: string): MapData {
   });
   const data = Object.fromEntries(
     entries.map((e) => [e.name, wad.lumpData(e)]),
-  ) as Record<(typeof MAP_LUMP_ORDER)[number], Buffer>;
+  ) as Record<(typeof MAP_LUMP_ORDER)[number], Uint8Array>;
 
   const things = parseThings(data.THINGS);
   const linedefs = parseLinedefs(data.LINEDEFS);

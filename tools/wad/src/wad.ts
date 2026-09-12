@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { BinaryReader } from "./binary.js";
 
 /**
@@ -31,25 +30,27 @@ const HEADER_SIZE = 12;
 const DIRECTORY_ENTRY_SIZE = 16;
 
 export class Wad {
-  readonly buffer: Buffer;
+  readonly bytes: Uint8Array;
   readonly header: WadHeader;
   readonly lumps: LumpEntry[];
 
-  private constructor(buffer: Buffer, header: WadHeader, lumps: LumpEntry[]) {
-    this.buffer = buffer;
+  private constructor(bytes: Uint8Array, header: WadHeader, lumps: LumpEntry[]) {
+    this.bytes = bytes;
     this.header = header;
     this.lumps = lumps;
   }
 
-  static fromFile(path: string): Wad {
-    return Wad.fromBuffer(readFileSync(path));
-  }
-
-  static fromBuffer(buffer: Buffer): Wad {
-    if (buffer.length < HEADER_SIZE) {
-      throw new Error(`Not a WAD file: too short (${buffer.length} bytes)`);
+  /**
+   * Parses a WAD already loaded into memory. This is the library's only
+   * entry point - reading the file itself (`node:fs`) is the CLI's job (see
+   * `src/cli.ts`), not the library's, so this class works unchanged in a
+   * browser given bytes from `fetch()`.
+   */
+  static fromBytes(bytes: Uint8Array): Wad {
+    if (bytes.length < HEADER_SIZE) {
+      throw new Error(`Not a WAD file: too short (${bytes.length} bytes)`);
     }
-    const r = new BinaryReader(buffer);
+    const r = new BinaryReader(bytes);
     const identification = r.name(4);
     if (identification !== "IWAD" && identification !== "PWAD") {
       throw new Error(`Not a WAD file: bad identification "${identification}"`);
@@ -60,14 +61,14 @@ export class Wad {
       throw new Error(`Invalid WAD: negative numlumps ${numLumps}`);
     }
     const directoryEnd = infoTableOfs + numLumps * DIRECTORY_ENTRY_SIZE;
-    if (infoTableOfs < 0 || directoryEnd > buffer.length) {
+    if (infoTableOfs < 0 || directoryEnd > bytes.length) {
       throw new Error(
-        `Invalid WAD: directory [${infoTableOfs}, ${directoryEnd}) exceeds file length ${buffer.length}`,
+        `Invalid WAD: directory [${infoTableOfs}, ${directoryEnd}) exceeds file length ${bytes.length}`,
       );
     }
 
     const lumps: LumpEntry[] = [];
-    const dirReader = new BinaryReader(buffer, infoTableOfs);
+    const dirReader = new BinaryReader(bytes, infoTableOfs);
     for (let i = 0; i < numLumps; i++) {
       const filePos = dirReader.int32();
       const size = dirReader.int32();
@@ -77,21 +78,30 @@ export class Wad {
       }
       // Marker lumps (size 0) may legitimately point past EOF-ish offsets in some
       // tools; only validate bounds for lumps that actually carry data.
-      if (size > 0 && (filePos < 0 || filePos + size > buffer.length)) {
+      if (size > 0 && (filePos < 0 || filePos + size > bytes.length)) {
         throw new Error(
           `Invalid lump directory entry ${i} ("${name}"): data [${filePos}, ${filePos + size}) ` +
-            `exceeds file length ${buffer.length}`,
+            `exceeds file length ${bytes.length}`,
         );
       }
       lumps.push({ index: i, name, filePos, size });
     }
 
-    return new Wad(buffer, { identification, numLumps, infoTableOfs }, lumps);
+    return new Wad(bytes, { identification, numLumps, infoTableOfs }, lumps);
+  }
+
+  /**
+   * Alias of `fromBytes` for existing Node callers: a `Buffer` *is* a
+   * `Uint8Array`, so `Wad.fromBuffer(readFileSync(path))` keeps working
+   * unchanged.
+   */
+  static fromBuffer(buffer: Uint8Array): Wad {
+    return Wad.fromBytes(buffer);
   }
 
   /** Raw bytes of a lump, by directory index. */
-  lumpData(entry: LumpEntry): Buffer {
-    return this.buffer.subarray(entry.filePos, entry.filePos + entry.size);
+  lumpData(entry: LumpEntry): Uint8Array {
+    return this.bytes.subarray(entry.filePos, entry.filePos + entry.size);
   }
 
   /** First lump with this name (vanilla WADs may repeat names; last-wins for PWAD overrides is a
@@ -105,7 +115,7 @@ export class Wad {
     return this.lumps.filter((l) => l.name === name);
   }
 
-  lumpDataByName(name: string): Buffer {
+  lumpDataByName(name: string): Uint8Array {
     const entry = this.findLump(name);
     if (!entry) throw new Error(`Lump not found: ${name}`);
     return this.lumpData(entry);

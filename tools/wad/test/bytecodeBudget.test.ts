@@ -4,7 +4,7 @@ import { buildMapCairo } from "../src/cairoOutput.js";
 import { ALL_PACKED_CONFIG, ALL_PLANAR_CONFIG, DEFAULT_EMIT_CONFIG } from "../src/emitConfig.js";
 import { extractMap } from "../src/mapExtract.js";
 import { Wad } from "../src/wad.js";
-import { hasRealWad, REAL_WAD_PATH } from "./realWad.js";
+import { hasRealWad, readRealWad } from "./realWad.js";
 import { blockmapLump, buildWad, linedefLump, nodeLump, rejectLump, sectorLump, segLump, sidedefLump, subsectorLump, thingLump, vertexLump } from "./testWad.js";
 import { NODE_LEAF_FLAG } from "../src/types.js";
 
@@ -117,7 +117,7 @@ describe("buildMapCairo x computeBytecodeBudget integration", () => {
 });
 
 describe.skipIf(!hasRealWad)("bytecode budget on real E1M1 (size vs. layout table, task item 3)", () => {
-  const wad = Wad.fromFile(REAL_WAD_PATH);
+  const wad = Wad.fromBytes(readRealWad());
   const map = extractMap(wad, "E1M1");
 
   it("all-planar >= recommended mix >= all-packed in total words", () => {

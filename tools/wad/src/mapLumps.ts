@@ -33,7 +33,7 @@ function assertExactMultiple(lumpName: string, bufferLength: number, recordSize:
   return bufferLength / recordSize;
 }
 
-export function parseVertexes(buffer: Buffer): Vertex[] {
+export function parseVertexes(buffer: Uint8Array): Vertex[] {
   const count = assertExactMultiple("VERTEXES", buffer.length, RECORD_SIZE.VERTEXES);
   const r = new BinaryReader(buffer);
   const out: Vertex[] = [];
@@ -43,7 +43,7 @@ export function parseVertexes(buffer: Buffer): Vertex[] {
   return out;
 }
 
-export function parseThings(buffer: Buffer): Thing[] {
+export function parseThings(buffer: Uint8Array): Thing[] {
   const count = assertExactMultiple("THINGS", buffer.length, RECORD_SIZE.THINGS);
   const r = new BinaryReader(buffer);
   const out: Thing[] = [];
@@ -59,7 +59,7 @@ export function parseThings(buffer: Buffer): Thing[] {
   return out;
 }
 
-export function parseLinedefs(buffer: Buffer): Linedef[] {
+export function parseLinedefs(buffer: Uint8Array): Linedef[] {
   const count = assertExactMultiple("LINEDEFS", buffer.length, RECORD_SIZE.LINEDEFS);
   const r = new BinaryReader(buffer);
   const out: Linedef[] = [];
@@ -77,7 +77,7 @@ export function parseLinedefs(buffer: Buffer): Linedef[] {
   return out;
 }
 
-export function parseSidedefs(buffer: Buffer): Sidedef[] {
+export function parseSidedefs(buffer: Uint8Array): Sidedef[] {
   const count = assertExactMultiple("SIDEDEFS", buffer.length, RECORD_SIZE.SIDEDEFS);
   const r = new BinaryReader(buffer);
   const out: Sidedef[] = [];
@@ -94,7 +94,7 @@ export function parseSidedefs(buffer: Buffer): Sidedef[] {
   return out;
 }
 
-export function parseSegs(buffer: Buffer): Seg[] {
+export function parseSegs(buffer: Uint8Array): Seg[] {
   const count = assertExactMultiple("SEGS", buffer.length, RECORD_SIZE.SEGS);
   const r = new BinaryReader(buffer);
   const out: Seg[] = [];
@@ -113,7 +113,7 @@ export function parseSegs(buffer: Buffer): Seg[] {
   return out;
 }
 
-export function parseSubsectors(buffer: Buffer): Subsector[] {
+export function parseSubsectors(buffer: Uint8Array): Subsector[] {
   const count = assertExactMultiple("SSECTORS", buffer.length, RECORD_SIZE.SSECTORS);
   const r = new BinaryReader(buffer);
   const out: Subsector[] = [];
@@ -128,7 +128,7 @@ function readBBox(r: BinaryReader): BBox {
   return { top: r.int16(), bottom: r.int16(), left: r.int16(), right: r.int16() };
 }
 
-export function parseNodes(buffer: Buffer): Node[] {
+export function parseNodes(buffer: Uint8Array): Node[] {
   const count = assertExactMultiple("NODES", buffer.length, RECORD_SIZE.NODES);
   const r = new BinaryReader(buffer);
   const out: Node[] = [];
@@ -146,7 +146,7 @@ export function parseNodes(buffer: Buffer): Node[] {
   return out;
 }
 
-export function parseSectors(buffer: Buffer): Sector[] {
+export function parseSectors(buffer: Uint8Array): Sector[] {
   const count = assertExactMultiple("SECTORS", buffer.length, RECORD_SIZE.SECTORS);
   const r = new BinaryReader(buffer);
   const out: Sector[] = [];
@@ -165,7 +165,7 @@ export function parseSectors(buffer: Buffer): Sector[] {
 }
 
 /** `numSectors` must come from the parsed SECTORS lump, it cannot be derived from REJECT alone. */
-export function parseReject(buffer: Buffer, numSectors: number): Reject {
+export function parseReject(buffer: Uint8Array, numSectors: number): Reject {
   const expectedSize = Math.ceil((numSectors * numSectors) / 8);
   if (buffer.length < expectedSize) {
     throw new Error(
@@ -187,7 +187,7 @@ export function rejectBit(reject: Reject, i: number, j: number): boolean {
 
 const BLOCKMAP_HEADER_SIZE = 8;
 
-export function parseBlockmap(buffer: Buffer): Blockmap {
+export function parseBlockmap(buffer: Uint8Array): Blockmap {
   if (buffer.length < BLOCKMAP_HEADER_SIZE) {
     throw new Error(`BLOCKMAP lump too small: ${buffer.length} bytes`);
   }

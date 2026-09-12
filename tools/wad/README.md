@@ -19,18 +19,41 @@ This is the **v2** tool (RISKS.md R2-A9/R2-A12, docs/spikes/S1.md, docs/G0.md
 D4). See "What v2 changed" for what's different from the original packed-
 everything extractor.
 
+## Library
+
+`tools/wad` is also `@hellproof/wad`, a browser-safe library: `src/index.ts`
+re-exports the WAD directory reader and every lump/asset decoder (`Wad`,
+`BinaryReader`, `parsePlaypal`, `parseColormap`, `decodePatch`, `decodeFlat`,
+`composeTexture`, `buildSpriteDefs`, ...), all typed against `Uint8Array` and
+reading through a `DataView` - nothing under `src/` (`src/cli.ts` excepted)
+imports from `node:*`. `client/` depends on it directly (npm workspace) as
+`import { Wad, parsePlaypal, ... } from "@hellproof/wad"` instead of carrying
+its own copy of the parsers - see e.g. `client/src/assets/assetStore.ts` and
+`client/src/render/renderer.ts`. `package.json`'s `exports` map points
+straight at the TypeScript sources
+(`"./src/index.ts"`), which both Vite and `tsc`'s `moduleResolution: "bundler"`
+resolve directly - no build step is required to consume this package.
+
+The CLI (`src/cli.ts`, `npm run extract`) is the only Node-specific part: it
+owns `readFileSync`/`writeFileSync` and the map-extraction pipeline (JSON/
+Cairo/report outputs) that only the build step needs.
+
 ## Usage
 
 ```sh
 export ASDF_NODEJS_VERSION=22.22.2   # Node >= 22
 npm install
 ./scripts/fetch-freedoom.sh          # downloads freedoom1.wad to a scratch dir; never commit WADs
-npm run extract -- --wad <path/to/freedoom1.wad> --map E1M1 --out out/
+npm run extract -- --wad <path/to/freedoom1.wad> --map E1M1 --out out/ --report REPORT-e1m1.md
 ```
 
-`npm run extract` exits non-zero (after still writing `out/<map>.cairo` and
-the report, so you can inspect what was too big) when the emitted Cairo
-constants exceed the bytecode budget - see "Bytecode budget" below.
+`npm run extract` exits with **3** (after still writing `out/<map>.json` and
+`out/<map>.cairo`, and the report if `--report` was given, so you can inspect
+what was too big) when the emitted Cairo constants exceed the bytecode
+budget - see "Bytecode budget" below. Pass `--no-budget-gate` to keep the
+exit code 0 in that case (the overrun is still logged to stderr); this is
+what `client/scripts/prepare-assets.sh` relies on implicitly by not caring
+about the exit code, since it only needs the JSON output.
 
 Other scripts:
 
@@ -48,7 +71,9 @@ CLI flags:
 | `--map` | (required) | Map lump name, e.g. `E1M1`. |
 | `--out` | (required) | Output directory for `<map>.json`/`<map>.cairo`. |
 | `--config` | `tools/wad/emit-config.json` | Layout config file (see below). |
-| `--max-words` | `12000` | Bytecode-word budget for the emitted Cairo constants (R2-A12); extract fails (non-zero exit) above this. |
+| `--max-words` | `12000` | Bytecode-word budget for the emitted Cairo constants (R2-A12); extract exits 3 above this (unless `--no-budget-gate`). |
+| `--report` | (none - no report written) | Path to write `REPORT-<map>.md` (Output C) to. Decoupled from `--out` on purpose: `--out` alone never writes or overwrites a report, so pointing `--out` at a scratch directory (as `client/scripts/prepare-assets.sh` does) can never clobber the committed `tools/wad/REPORT-<map>.md`. Pass `--report REPORT-e1m1.md` (from `tools/wad/`) to regenerate the committed report. |
+| `--no-budget-gate` | off | Still computes and logs the bytecode budget, and still writes every file, but exits 0 even if the budget is exceeded. |
 
 ## What v2 changed
 

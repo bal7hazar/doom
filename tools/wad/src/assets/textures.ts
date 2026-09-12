@@ -5,7 +5,7 @@ export interface Pnames {
   names: string[]; // 8-char patch lump names, index = patch number referenced by TEXTUREn
 }
 
-export function parsePnames(buffer: Buffer): Pnames {
+export function parsePnames(buffer: Uint8Array): Pnames {
   const r = new BinaryReader(buffer);
   const numPatches = r.int32();
   if (numPatches < 0) throw new Error(`PNAMES: negative count ${numPatches}`);
@@ -36,7 +36,7 @@ export interface TextureLump {
 }
 
 /** Parses TEXTURE1 or TEXTURE2: an int32 count, then that many int32 offsets, then the definitions. */
-export function parseTextureLump(buffer: Buffer): TextureLump {
+export function parseTextureLump(buffer: Uint8Array): TextureLump {
   const header = new BinaryReader(buffer);
   const numTextures = header.int32();
   if (numTextures < 0) throw new Error(`TEXTUREx: negative count ${numTextures}`);
@@ -78,7 +78,7 @@ export interface PatchHeader {
   topOffset: number; // int16, pixels to shift up when drawing
 }
 
-export function parsePatchHeader(buffer: Buffer): PatchHeader {
+export function parsePatchHeader(buffer: Uint8Array): PatchHeader {
   const r = new BinaryReader(buffer);
   const width = r.uint16();
   const height = r.uint16();
