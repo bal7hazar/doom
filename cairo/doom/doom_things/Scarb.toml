@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 fixed = { path = "../../crates/fixed" }
 fsm = { path = "../../crates/fsm" }
+prng = { path = "../../crates/prng" }
 
 [dev-dependencies]
 cairo_test.workspace = true

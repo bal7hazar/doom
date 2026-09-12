@@ -1,0 +1,55 @@
+{
+  "crate": "doom_things",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 bare loop, 1 index arithmetic). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4). 'data_words' is the compiled size of the derived tables, measured against bench/baseline (budget 6 000).",
+  "data_words": 3410,
+  "operations": [
+    {
+      "name": "spawn_state",
+      "op": 2,
+      "base": 1,
+      "budget": 12
+    },
+    {
+      "name": "flags",
+      "op": 3,
+      "base": 1,
+      "budget": 12
+    },
+    {
+      "name": "thing_info (18 fields)",
+      "op": 4,
+      "base": 1,
+      "budget": 225
+    },
+    {
+      "name": "kind_of_doomednum (binary search)",
+      "op": 5,
+      "base": 1,
+      "budget": 214
+    },
+    {
+      "name": "fsm::advance over these tables",
+      "op": 6,
+      "base": 0,
+      "budget": 33
+    },
+    {
+      "name": "fsm::enter over these tables",
+      "op": 7,
+      "base": 1,
+      "budget": 32
+    },
+    {
+      "name": "prng::next over rndtable",
+      "op": 8,
+      "base": 0,
+      "budget": 18
+    },
+    {
+      "name": "weapon_states",
+      "op": 9,
+      "base": 1,
+      "budget": 36
+    }
+  ]
+}

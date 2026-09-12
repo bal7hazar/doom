@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-"""Step-cost and bytecode-budget test for `doom_map`.
+"""Step-cost and bytecode-budget test for `doom_things`.
 
 Two measurements, both required by PLAN.md §3.1 rule 7 ("every crate declares
 two budgets"):
@@ -10,15 +10,13 @@ two budgets"):
    operation's `net` cost subtracts its baseline op -- the one that builds the
    same operands and does nothing else. Fails at +10 % over `budgets.json`.
 
-2. **Bytecode words.** `bench/size/` loads the level and references every
-   generated `const` array and nothing else; `bench/baseline/` has the same
-   crate graph and touches none of them. The difference between the two
-   `.executable.json` bytecode lengths is what the compiled-in level data
-   costs, which by S1 §5.9 is `2 340 + 14.7 x words` steps of bootloader
-   program-hashing **per proof segment**. (The step benchmark itself is not
-   usable for this: its 23 measurement loops each carry a 24-field `LevelMap`
-   and add ~9 500 words of their own.) The budget is
-   docs/G0.md D4's revised **20 000 words for data**; the script also prints
+2. **Bytecode words.** `bench/size/` references every generated `const`
+   array and nothing else; `bench/baseline/` has the same crate graph and
+   touches none of them. The difference between the two `.executable.json`
+   bytecode lengths is what the compiled-in tables cost, which by S1 §5.9 is
+   `2 340 + 14.7 x words` steps of bootloader program-hashing **per proof
+   segment**. The budget is **6 000 words**, this crate's slice of
+   docs/G0.md D4's 20 000 for data; the script also prints
    the per-array table from `manifest.json` (written by
    `../scripts/gen_level.py`) and checks that the analytic total and the
    measured delta agree.
@@ -43,7 +41,7 @@ SIZE = HERE / "size"
 BASELINE = HERE / "baseline"
 RE_RESOURCE = re.compile(r"^\s*([a-z_0-9 ]+):\s*([0-9,]+)\s*$")
 TOLERANCE = 1.10
-DATA_WORD_BUDGET = 20000  # docs/G0.md D4 (revised): data <= 20 k, code <= 12 k
+DATA_WORD_BUDGET = 6000  # this crate's slice of docs/G0.md D4's 20 k of data
 BOOTLOADER_PER_WORD = 14.7  # S1 §5.9 / S0 §5.2
 BOOTLOADER_FIXED = 2340
 GLUE_PER_ARRAY = 40  # fixed `span()` cost of one `const` array, measured
@@ -102,11 +100,10 @@ def measure(op: int, n: int = 200) -> tuple[float, float]:
 
 
 def print_manifest(manifest: dict) -> None:
-    print("\nLevel data, one bytecode word per `const` element (S1 §5.9):\n")
+    print("\nTables, one bytecode word per `const` element (S1 §5.9):\n")
     print("%-16s %-18s %-7s %8s" % ("array", "group", "layout", "words"))
     for a in sorted(manifest["arrays"], key=lambda x: -x["words"]):
         print("%-16s %-18s %-7s %8d" % (a["name"], a["group"], a["layout"], a["words"]))
-    print("%-16s %-18s %-7s %8d" % ("(scalars)", "scalar", "-", manifest["scalars"]))
     print("%-16s %-18s %-7s %8d" % ("TOTAL", "", "", manifest["total_words"]))
 
 
@@ -158,7 +155,7 @@ def main() -> int:
     print_manifest(manifest)
     print(
         "\nbytecode: %d words (bench/size) - %d (bench/baseline, same crate"
-        "\n          graph, no generated array) = %d words of level data"
+        "\n          graph, no generated array) = %d words of table data"
         % (words, base_words, data_words)
     )
     print(
@@ -166,13 +163,12 @@ def main() -> int:
         % (manifest["total_words"], data_words - manifest["total_words"])
     )
     print(
-        "          bootloader program-hashing: %d steps/segment for the data alone"
+        "          bootloader program-hashing: %d steps/segment for these tables"
         % round(BOOTLOADER_FIXED + BOOTLOADER_PER_WORD * data_words)
     )
-    print("          (the step benchmark itself compiles to %d words)" % bench_words)
 
     if data_words > DATA_WORD_BUDGET:
-        print("  OVER BUDGET (%d words of data, docs/G0.md D4)" % DATA_WORD_BUDGET)
+        print("  OVER BUDGET (%d words of data)" % DATA_WORD_BUDGET)
         failures.append("data_words")
     # The measured delta must not drift from the analytic count: a gap means
     # an array was dead-code-eliminated (the probe no longer touches it) or
