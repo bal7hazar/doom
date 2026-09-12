@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "step_tic"
+version = "0.1.0"
+edition = "2024_07"
+
+[cairo]
+enable-gas = false
+
+[dependencies]
+cairo_execute = "2.19.4"
+
+# Step count is `35 * state.len() + 69`; the benchmark picks the state length
+# to hit 4 k / 10 k steps (112 / 284 felts) and also runs the full 1 500-felt
+# state (52 569 steps). See src/lib.cairo for the calibration table.
+[[target.executable]]
+name = "step_tic"
+function = "step_tic::step_tic"
+
+# Same program with a compute knob, to raise the step count without changing
+# the payload size.
+[[target.executable]]
+name = "step_tic_rounds"
+function = "step_tic::step_tic_rounds"
