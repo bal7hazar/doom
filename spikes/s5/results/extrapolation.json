@@ -1,0 +1,375 @@
+{
+ "model": "Extrapolate the measured fixture costs to the S4 root proof.\n\nS5 measured one fact end to end on devnet with modeofO's fixture: a\n36,022-felt root proof verified by a circuit verifier of ~3.8 M steps.\nS4 reports that the root proof our own pipeline produces\n(starkware-libs/proving @ cd7bc5f) is 93,500-96,000 felts and that the\non-chain circuit verifier costs 5.26-5.37 M steps, constant in N.\n\nThis script rescales the measured numbers with an explicit, stated model.\nEverything it prints is a projection, not a measurement: the modeofO\nclasses embed an older vendored verifier (stwo-cairo 92bfd1d3) and would\nnot accept our root proof, so the real figures can only come from a drive\nagainst our own re-vendored classes.\n\nModel:\n  gas(tx) = envelope + calldata + storage + compute\n  * envelope, per-slot write and per-slot read costs are the ones S5\n    measured (or CONTEXT.md \u00a77 where noted); they do not depend on the\n    proof size;\n  * the compute residual of each verification phase is split into a\n    felt-proportional part (unpack + deserialize, share `u`) scaled by the\n    felt ratio, and a step-proportional part (the verification itself)\n    scaled by the step ratio. `u` comes from docs/lane1-results.md, where\n    unpack was 1.8e8 of the 1.8e8 + 5.2e8 unpack+verify budget.",
+ "measured": {
+  "stage_proof": 78556800,
+  "verify_phase1": 873757120,
+  "verify_phase2": 815709840
+ },
+ "decomposition": {
+  "stage_proof": {
+   "total": 78556800,
+   "envelope": 835840,
+   "calldata": 814080,
+   "storage": 76892640,
+   "compute": 14240
+  },
+  "verify_phase1": {
+   "total": 873757120,
+   "envelope": 835840,
+   "calldata": 25574400,
+   "storage": 87460560,
+   "compute": 759886320
+  },
+  "verify_phase2": {
+   "total": 815709840,
+   "envelope": 835840,
+   "calldata": 9446400,
+   "storage": 17556240,
+   "compute": 787871360
+  }
+ },
+ "staging": [
+  {
+   "felts": 93500,
+   "slots": 13360,
+   "head_slots": 4991,
+   "staged_slots": 8369,
+   "staging_txs": 5,
+   "staging_l2_gas": 4172945480,
+   "worst_tx_l2_gas": 947263840,
+   "worst_pct_of_cap": 78.28626776859504
+  },
+  {
+   "felts": 96000,
+   "slots": 13717,
+   "head_slots": 4991,
+   "staged_slots": 8726,
+   "staging_txs": 5,
+   "staging_l2_gas": 4350774320,
+   "worst_tx_l2_gas": 947263840,
+   "worst_pct_of_cap": 78.28626776859504
+  }
+ ],
+ "verification": [
+  {
+   "scenario": "93,500 felts / 5.26 M steps",
+   "u": 0.15,
+   "u_name": "low",
+   "felt_ratio": 2.5956360002220866,
+   "step_ratio": 1.3842105263157896,
+   "blend": 1.5659243474017341,
+   "phase1_l2_gas": 2289355290,
+   "phase2_l2_gas": 1276633105,
+   "verification_l2_gas": 3565988395,
+   "phase1_pct_of_cap": 189.202916507893,
+   "phase2_pct_of_cap": 105.5068682020262,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4781,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "93,500 felts / 5.26 M steps",
+   "u": 0.26,
+   "u_name": "central",
+   "felt_ratio": 2.5956360002220866,
+   "step_ratio": 1.3842105263157896,
+   "blend": 1.6991811495314268,
+   "phase1_l2_gas": 2390615311,
+   "phase2_l2_gas": 1381622323,
+   "verification_l2_gas": 3772237634,
+   "phase1_pct_of_cap": 197.57151328353763,
+   "phase2_pct_of_cap": 114.1836630717098,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4781,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "93,500 felts / 5.26 M steps",
+   "u": 0.4,
+   "u_name": "high",
+   "felt_ratio": 2.5956360002220866,
+   "step_ratio": 1.3842105263157896,
+   "blend": 1.8687807158783083,
+   "phase1_l2_gas": 2519491701,
+   "phase2_l2_gas": 1515244964,
+   "verification_l2_gas": 4034736665,
+   "phase1_pct_of_cap": 208.22245463435812,
+   "phase2_pct_of_cap": 125.22685654221623,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4781,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "93,500 felts / 5.37 M steps",
+   "u": 0.15,
+   "u_name": "low",
+   "felt_ratio": 2.5956360002220866,
+   "step_ratio": 1.4131578947368422,
+   "blend": 1.5905296105596287,
+   "phase1_l2_gas": 2308052493,
+   "phase2_l2_gas": 1296018887,
+   "verification_l2_gas": 3604071380,
+   "phase1_pct_of_cap": 190.7481398858834,
+   "phase2_pct_of_cap": 107.10899895800704,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4781,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "93,500 felts / 5.37 M steps",
+   "u": 0.26,
+   "u_name": "central",
+   "felt_ratio": 2.5956360002220866,
+   "step_ratio": 1.4131578947368422,
+   "blend": 1.7206022021630059,
+   "phase1_l2_gas": 2406892876,
+   "phase2_l2_gas": 1398499357,
+   "verification_l2_gas": 3805392233,
+   "phase1_pct_of_cap": 198.91676657731756,
+   "phase2_pct_of_cap": 115.57845925926961,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4781,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "93,500 felts / 5.37 M steps",
+   "u": 0.4,
+   "u_name": "high",
+   "felt_ratio": 2.5956360002220866,
+   "step_ratio": 1.4131578947368422,
+   "blend": 1.88614913693094,
+   "phase1_l2_gas": 2532689727,
+   "phase2_l2_gas": 1528929046,
+   "verification_l2_gas": 4061618772,
+   "phase1_pct_of_cap": 209.3132005482337,
+   "phase2_pct_of_cap": 126.35777236996742,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4781,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "96,000 felts / 5.26 M steps",
+   "u": 0.15,
+   "u_name": "low",
+   "felt_ratio": 2.665038032313586,
+   "step_ratio": 1.3842105263157896,
+   "blend": 1.576334652215459,
+   "phase1_l2_gas": 2340105938,
+   "phase2_l2_gas": 1285490446,
+   "verification_l2_gas": 3625596384,
+   "phase1_pct_of_cap": 193.39718495541197,
+   "phase2_pct_of_cap": 106.23887985587774,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4909,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "96,000 felts / 5.26 M steps",
+   "u": 0.26,
+   "u_name": "central",
+   "felt_ratio": 2.665038032313586,
+   "step_ratio": 1.3842105263157896,
+   "blend": 1.7172256778752168,
+   "phase1_l2_gas": 2447167101,
+   "phase2_l2_gas": 1396494450,
+   "verification_l2_gas": 3843661551,
+   "phase1_pct_of_cap": 202.24521495620698,
+   "phase2_pct_of_cap": 115.41276448384042,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4909,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "96,000 felts / 5.26 M steps",
+   "u": 0.4,
+   "u_name": "high",
+   "felt_ratio": 2.665038032313586,
+   "step_ratio": 1.3842105263157896,
+   "blend": 1.8965415287149083,
+   "phase1_l2_gas": 2583426763,
+   "phase2_l2_gas": 1537772274,
+   "verification_l2_gas": 4121199037,
+   "phase1_pct_of_cap": 213.50634404812777,
+   "phase2_pct_of_cap": 127.08861764670196,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4909,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "96,000 felts / 5.37 M steps",
+   "u": 0.15,
+   "u_name": "low",
+   "felt_ratio": 2.665038032313586,
+   "step_ratio": 1.4131578947368422,
+   "blend": 1.6009399153733537,
+   "phase1_l2_gas": 2358803141,
+   "phase2_l2_gas": 1304876228,
+   "verification_l2_gas": 3663679369,
+   "phase1_pct_of_cap": 194.94240833340243,
+   "phase2_pct_of_cap": 107.84101061185861,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4909,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "96,000 felts / 5.37 M steps",
+   "u": 0.26,
+   "u_name": "central",
+   "felt_ratio": 2.665038032313586,
+   "step_ratio": 1.4131578947368422,
+   "blend": 1.7386467305067956,
+   "phase1_l2_gas": 2463444666,
+   "phase2_l2_gas": 1413371484,
+   "verification_l2_gas": 3876816150,
+   "phase1_pct_of_cap": 203.59046824998683,
+   "phase2_pct_of_cap": 116.80756067140021,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4909,
+   "fri_from_storage": 0
+  },
+  {
+   "scenario": "96,000 felts / 5.37 M steps",
+   "u": 0.4,
+   "u_name": "high",
+   "felt_ratio": 2.665038032313586,
+   "step_ratio": 1.4131578947368422,
+   "blend": 1.9139099497675398,
+   "phase1_l2_gas": 2596624789,
+   "phase2_l2_gas": 1551456355,
+   "verification_l2_gas": 4148081144,
+   "phase1_pct_of_cap": 214.59708996200337,
+   "phase2_pct_of_cap": 128.21953347445316,
+   "fits_in_2_phases": false,
+   "min_invokes_at_90pct": 4,
+   "fri_slots": 4909,
+   "fri_from_storage": 0
+  }
+ ],
+ "cost_per_fact": [
+  {
+   "shape": "fixture baseline (measured)",
+   "l2_gas": 1768023760,
+   "prices": {
+    "devnet / mainnet (30.475 gFri)": {
+     "strk": 53.881229363054025,
+     "usd": 1.549652713532996
+    },
+    "sepolia (30.522 gFri)": {
+     "strk": 53.96365546171639,
+     "usd": 1.552023331816358
+    },
+    "protocol floor (3 gFri)": {
+     "strk": 5.30407128,
+     "usd": 0.1525479011705784
+    }
+   }
+  },
+  {
+   "shape": "S4 93,500 felts, u=0.26, steps lo",
+   "l2_gas": 7945183114,
+   "prices": {
+    "devnet / mainnet (30.475 gFri)": {
+     "strk": 242.13262478831047,
+     "usd": 6.9638626192029465
+    },
+    "sepolia (30.522 gFri)": {
+     "strk": 242.50303295932122,
+     "usd": 6.9745157545175465
+    },
+    "protocol floor (3 gFri)": {
+     "strk": 23.835549342,
+     "usd": 0.6855230319170712
+    }
+   }
+  },
+  {
+   "shape": "S4 93,500 felts, u=0.26, steps hi",
+   "l2_gas": 7978337713,
+   "prices": {
+    "devnet / mainnet (30.475 gFri)": {
+     "strk": 243.14302441843708,
+     "usd": 6.992922248077192
+    },
+    "sepolia (30.522 gFri)": {
+     "strk": 243.51497827243585,
+     "usd": 7.00361983805374
+    },
+    "protocol floor (3 gFri)": {
+     "strk": 23.935013139000002,
+     "usd": 0.6883836634346038
+    }
+   }
+  },
+  {
+   "shape": "S4 96,000 felts, u=0.26, steps lo",
+   "l2_gas": 8194435871,
+   "prices": {
+    "devnet / mainnet (30.475 gFri)": {
+     "strk": 249.728701986555,
+     "usd": 7.1823298253453745
+    },
+    "sepolia (30.522 gFri)": {
+     "strk": 250.11073043824587,
+     "usd": 7.1933171660910835
+    },
+    "protocol floor (3 gFri)": {
+     "strk": 24.583307613,
+     "usd": 0.7070289561029148
+    }
+   }
+  },
+  {
+   "shape": "S4 96,000 felts, u=0.26, steps hi",
+   "l2_gas": 8227590470,
+   "prices": {
+    "devnet / mainnet (30.475 gFri)": {
+     "strk": 250.7391016166816,
+     "usd": 7.21138945421962
+    },
+    "sepolia (30.522 gFri)": {
+     "strk": 251.12267575136053,
+     "usd": 7.222421249627277
+    },
+    "protocol floor (3 gFri)": {
+     "strk": 24.682771409999997,
+     "usd": 0.7098895876204472
+    }
+   }
+  }
+ ],
+ "calldata_only": [
+  {
+   "felts": 93500,
+   "slots": 13360,
+   "packed_calldata_l2_gas": 68403200,
+   "packed_txs": 3,
+   "raw_calldata_l2_gas": 478720000,
+   "raw_txs": 19,
+   "staging_l2_gas": 4172945480,
+   "saving_vs_staging": 4104542280,
+   "ratio_vs_staging": 61.005120813061374
+  },
+  {
+   "felts": 96000,
+   "slots": 13717,
+   "packed_calldata_l2_gas": 70231040,
+   "packed_txs": 3,
+   "raw_calldata_l2_gas": 491520000,
+   "raw_txs": 20,
+   "staging_l2_gas": 4350774320,
+   "saving_vs_staging": 4280543280,
+   "ratio_vs_staging": 61.949450271560835
+  }
+ ]
+}
