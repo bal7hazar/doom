@@ -15,6 +15,8 @@ S0="$(dirname "$HERE")"
 source "$HERE/env.sh"
 
 build_programs() {
+  # bigcode's source is generated (4000 statements); keep it out of the repo.
+  python3 "$S0/programs/bigcode/generate.py"
   for pkg in "${PROGRAMS[@]}"; do
     echo "==> scarb build $pkg"
     ( cd "$S0/programs/$pkg" && ASDF_SCARB_VERSION="$SCARB_VERSION" scarb build )

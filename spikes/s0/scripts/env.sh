@@ -22,4 +22,4 @@
 # Proofs larger than 2^19 steps take the lock; smaller ones do not.
 : "${PROOF_LOCK_THRESHOLD_STEPS:=524288}"
 
-PROGRAMS=(felt_loop u32_loop bitwise_loop poseidon_hash steps_k)
+PROGRAMS=(felt_loop u32_loop bitwise_loop poseidon_hash steps_k bigcode)
