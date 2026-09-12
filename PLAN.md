@@ -24,6 +24,9 @@ Critères de succès (« definition of done » du MVP) :
   et l'écart entre estimation et coût réel constaté est < 20 % sur 10 soumissions Sepolia.
 - **C6 Hors-chaîne** : « garder hors-chaîne » conserve la partie (inputs + preuves) localement et
   permet une soumission ultérieure ; un reset l'efface, comme demandé.
+- **C7 Qualité des crates Cairo** : chaque crate générique a un périmètre documenté, un graphe de
+  dépendances acyclique vérifié en CI, une couverture de branches ≥ 90 %, des tests de valeurs de
+  référence, de propriétés et de budget de steps (décision A10, §3.1).
 
 ## 1. Décisions d'architecture
 
@@ -37,16 +40,35 @@ Critères de succès (« definition of done » du MVP) :
 | A6 | **Renderer WebGL en TypeScript** (murs/sols/plafonds depuis les secteurs, sprites billboard, textures Freedoom), découplé de la sim via l'état sérialisé. | Le renderer n'a pas besoin d'être prouvé ; approche « map viewer » bien maîtrisée. |
 | A7 | **Arithmétique felt-first** en Cairo : add/mul sur felt252, réductions et comparaisons explicites aux frontières ; pas de felts négatifs en mémoire ; pas de builtin bitwise (jusqu'à S0). | Mesures §4.3 (14 vs 57–61 steps/itération). |
 | A8 | **Wallet Cartridge Controller** (sessions) + `starknet.js` ; estimation par `starknet_simulateTransactions` ; paymaster possible mais le coût est toujours affiché. | Écosystème de l'équipe ; exigence produit. |
-| A9 | Licences : `cairo/doom_core` sous **GPL-2.0-or-later** (dérivé de linuxdoom), reste du dépôt Apache-2.0 ; assets Freedoom (BSD). | CONTEXT §8.2 — à confirmer (U7). |
+| A9 | Licences : les crates Cairo dérivées de linuxdoom sous **GPL-2.0-or-later**, reste du dépôt Apache-2.0 ; assets Freedoom (BSD). | CONTEXT §8.2 — à confirmer (U7). |
+| A10 | **Côté Cairo, tout est bibliothèque générique d'abord** : le workspace Scarb est découpé en **crates à périmètre étroit** (un domaine précis par crate, API publique minimale, zéro dépendance vers le jeu pour les crates génériques), chacune livrée avec une **suite de tests unitaires exhaustive** (valeurs de référence, propriétés, cas limites, tests de budget de steps) qui verrouille l'intégrité et la non-régression. Les crates spécifiques à Doom (règles, IA, niveau) ne font qu'assembler ces briques. Voir §2 et §3.1. | Réutilisabilité dans d'autres jeux prouvables ; changements localisés ; régressions détectées au niveau de la brique fautive. |
 
 ## 2. Organisation du dépôt (cible)
 
 ```
 doom/
 ├── CONTEXT.md  PLAN.md  LICENSE (Apache-2.0)  LICENSES/GPL-2.0.txt
-├── cairo/                    # workspace Scarb
-│   ├── doom_core/            # lib : fixed-point, angles, tables, map, physique, mobjs, IA, spécials, hash d'état
-│   ├── doom_run/             # executables : step_tic, run_segment, genesis
+├── cairo/                    # workspace Scarb (voir §3.1 pour le détail des crates et leurs règles)
+│   ├── crates/               # bibliothèques génériques, sans dépendance vers Doom (Apache-2.0)
+│   │   ├── fixed/            #   point fixe 16.16 felt-first (mul, div, abs, cmp, sqrt approx)
+│   │   ├── bam/              #   angles BAM 32 bits, tables sin/cos/tan, point_to_angle
+│   │   ├── prng/             #   générateur à table (256 entrées) indexé, rejouable
+│   │   ├── geom2d/           #   segments, boîtes, point_on_side, intersections, distances
+│   │   ├── bsp/              #   nœuds/sous-secteurs, point_in_subsector, traversée de rayon
+│   │   ├── blockmap/         #   grille spatiale, itération de cellules le long d'un segment
+│   │   ├── fsm/              #   machines à états « info.c » génériques (états, tics, actions)
+│   │   ├── ticcmd/           #   encodage/décodage des inputs (packing 7 tics / felt)
+│   │   ├── state_hash/       #   sérialisation canonique + hash Poseidon d'un état, chaînage
+│   │   └── segment/          #   moteur run_segment générique : boucle de tics, sorties publiques
+│   ├── doom/                 # crates spécifiques Doom (GPL-2.0-or-later)
+│   │   ├── doom_map/         #   données de niveau générées (E1M1 Freedoom) + accès typés
+│   │   ├── doom_things/      #   mobjinfo, états, sprites indexés (données `info.c` réduites)
+│   │   ├── doom_physics/     #   P_TryMove, P_SlideMove, hauteurs, P_PathTraverse, P_CheckSight
+│   │   ├── doom_player/      #   P_PlayerThink, armes, munitions, ramassage, clés
+│   │   ├── doom_monsters/    #   A_Look, A_Chase, attaques, dégâts, mort
+│   │   ├── doom_specials/    #   portes, plateformes, lumières, switches, sortie
+│   │   ├── doom_game/        #   GameState, genesis, step_tic (assemblage des crates ci-dessus)
+│   │   └── doom_run/         #   executables : step_tic, run_segment, genesis
 │   ├── doom_contracts/       # DoomRuns (+ StwoFactRegistry vendu/épinglé), tests snforge
 │   └── fixtures/             # replays dorés, états, preuves de référence
 ├── tools/
@@ -70,7 +92,7 @@ Chaque spike produit une note `docs/spikes/S<n>.md` avec mesures reproductibles 
 | Spike | Question (inconnue) | Travail | Critère GO | Repli si NO-GO |
 |---|---|---|---|---|
 | **S0** Pipeline de preuve de référence | U6 | Sur le monorepo `proving` épinglé : prouver un exécutable Scarb via le chemin bootloader (`cairo-program-runner` → prover input → preuve → `--verify`) ; tester felts ≥ 2^128 en mémoire et builtins (bitwise, poseidon) ; mesurer temps/RSS pour 2^18…2^22 steps ; documenter le `prover_params` (canal Blake2sM31, config privacy, `CanonicalSmall`). | Pipeline reproductible en une commande ; comportement documenté ; RSS(2^20) connu. | Fixer les règles A7 en conséquence ; sinon escalader upstream. |
-| **S1** Coût par tic | U1 | Prototype Cairo : map Freedoom E1M1 extraite (blockmap, secteurs, lignes, REJECT), joueur (mouvement, `P_TryMove`, hauteur), 5 monstres avec `A_Look`/`A_Chase` + vue via REJECT + traversée blockmap, 1 hitscan ; `scarb execute --print-resource-usage` sur 350 tics scriptés. | **≤ 4 000 steps/tic** en moyenne (≤ 8 000 acceptable). | Réduire : moins de monstres actifs (skill 1), vue par REJECT + distance, IA toutes les 2 tics, sim à 17,5 Hz avec interpolation. |
+| **S1** Coût par tic | U1 | Prototype Cairo (déjà découpé en crates `fixed`/`bam`/`geom2d`/`blockmap`, jetables mais testés) : map Freedoom E1M1 extraite (blockmap, secteurs, lignes, REJECT), joueur (mouvement, `P_TryMove`, hauteur), 5 monstres avec `A_Look`/`A_Chase` + vue via REJECT + traversée blockmap, 1 hitscan ; `scarb execute --print-resource-usage` sur 350 tics scriptés. | **≤ 4 000 steps/tic** en moyenne (≤ 8 000 acceptable). | Réduire : moins de monstres actifs (skill 1), vue par REJECT + distance, IA toutes les 2 tics, sim à 17,5 Hz avec interpolation. |
 | **S2** Preuve dans le navigateur | U2 | Build WASM64 (`wasm64-unknown-unknown`, `-Z build-std`, threads/SharedArrayBuffer) du prouveur épinglé, sur le modèle de `stwo-cairo-ts` ; page de test Chrome ; traces 2^18, 2^19, 2^20, 2^21 steps ; mesurer temps, mémoire (`performance.measureUserAgentSpecificMemory`), stabilité (issue #2). | 2^20 steps prouvés en **< 120 s** et **< 12 GB** sur laptop 16–32 GB ; vérification WASM < 5 s. | Segments 2^19 ; sinon fallback « prouveur distant » par défaut (A4) et client natif en phase 5. |
 | **S3** Exécution temps réel | U3 | Wrapper wasm cairo-vm avec **programme mis en cache** ; appel `step_tic(state, cmd)` en boucle ; mesurer latence/tic et coût de (dé)sérialisation de l'état (~1–2 k felts). | **≥ 100 tics/s** soutenus dans un Worker (marge 3× sur 35 Hz). | Miroir TS de la sim + tests de divergence (fixtures dorées) ; Cairo ne sert qu'à la preuve. |
 | **S4** Route récursive N feuilles | U4 | Reproduire `scripts/prove-and-verify.sh` de `stwo-starknet-verifier` sur le monorepo courant ; N = 1, 2, 4, 8 feuilles avec `recursive_tree` ; exécuter `stwo_circuit_verifier` sur la racine ; écrire la **recomposition Cairo des sorties de feuilles** depuis `packed_output` et la tester en snforge ; mesurer temps/RSS du wrapper. | Racine acceptée (~3,8 M steps) ; chaîne `h_in/h_out` des N feuilles recalculée on-chain à partir des préimages ; wrap N=8 < 5 min sur 32 GB. | Multiverifier 2 entrées + soumission de ⌈N/2⌉ faits (coût on-chain × N/2) ; ou arbre côté serveur en plusieurs passes. |
@@ -82,7 +104,38 @@ K (tics/segment), cible steps/tic, mode d'exécution temps réel, hébergement d
 
 ### Phase 1 — Cœur de jeu en Cairo (≈ 6–8 semaines)
 
-Livrables : `doom_core`, `doom_run` (`genesis`, `step_tic`, `run_segment`), `tools/wad`, `tools/replay`.
+Livrables : les crates génériques `cairo/crates/*`, les crates `cairo/doom/*`, `doom_run`
+(`genesis`, `step_tic`, `run_segment`), `tools/wad`, `tools/replay`.
+
+#### 3.1 Règles d'architecture des crates Cairo (décision A10)
+
+1. **Une crate = un domaine.** Le `README.md` de chaque crate tient en un paragraphe : ce qu'elle
+   fait, ce qu'elle ne fait pas, ses invariants. Si l'on hésite à y ajouter une fonction, c'est
+   qu'elle appartient à une autre crate (ou à une nouvelle).
+2. **Dépendances orientées et minimales.** `crates/*` ne dépendent que de `core` et d'autres
+   `crates/*` de niveau inférieur (`fixed` ← `bam` ← `geom2d` ← `bsp`/`blockmap` …) ; jamais de
+   `doom/*`. Les `doom/*` dépendent des génériques et entre elles selon un graphe acyclique documenté
+   (`doom_game` est la seule à tout agréger). Un test de CI vérifie le graphe (`scarb metadata`).
+3. **API publique minimale et typée.** Types nouveaux (`Fixed`, `Angle`, `SectorId`…) plutôt que
+   felts nus ; pas de `pub` par défaut ; pas de trait object inutile ; fonctions pures (état en
+   entrée, état en sortie) pour rester triviales à tester et à prouver.
+4. **Tests unitaires obligatoires et co-localisés** (`src/**/tests.cairo` + `tests/`) :
+   - **valeurs de référence** extraites du code C original ou d'un calcul indépendant (tables
+     trigonométriques, `FixedMul/Div`, table RNG, résultats de `P_PointOnLineSide`) ;
+   - **propriétés** (associativité, bornes, idempotence, symétries) avec générateurs déterministes ;
+   - **cas limites** (wrap BAM, zéro, valeurs maximales, lignes verticales/horizontales, cellules
+     hors blockmap) ;
+   - **budget de steps** : au moins un test par crate mesure le coût d'une opération représentative
+     et échoue au-delà du budget (`+10 %`), pour empêcher les régressions de performance de preuve ;
+   - **prouvabilité** : les valeurs produites restent < 2^128 (règle A7), vérifié par des asserts de
+     sérialisation.
+   Objectif : couverture de branches ≥ 90 % par crate générique (`cairo-coverage`), 100 % des
+   fonctions publiques testées ; une PR qui baisse la couverture d'une crate est refusée.
+5. **Non-régression.** Toute correction de bug ajoute d'abord le test qui la reproduit ; les
+   changements de sortie sur les replays dorés exigent une justification et la régénération explicite
+   des fixtures (jamais silencieuse).
+6. **Versionnage par crate** (`Scarb.toml`), CHANGELOG par crate, publication possible hors du dépôt
+   (Cartridge/Dojo) sans emporter le code GPL.
 
 Tâches (ordre suggéré) :
 
@@ -90,10 +143,11 @@ Tâches (ordre suggéré) :
    (vertices, linedefs, sidedefs, sectors, things, blockmap, nodes/segs/ssectors, REJECT) et
    `client/public/levels/e1m1.json` ; lister les **types de lignes spéciales et de things réellement
    présents** → périmètre exact du gameplay à implémenter.
-2. **Primitives** : fixed 16.16 (`fixed_mul`, `fixed_div`), angles BAM, tables `finesine`,
-   `tantoangle` (générées), `M_Random` (table de 256), `point_on_side`, `point_in_subsector` (BSP).
-3. **État et hash** : struct `GameState` (joueur, mobjs, secteurs dynamiques, thinkers, RNG, tic) ;
-   sérialisation canonique ; `state_hash = poseidon(serialize(state))` ; `genesis(seed)`.
+2. **Crates génériques** (une PR par crate, tests d'abord) : `fixed`, `bam` (tables `finesine`,
+   `tantoangle` générées par script avec test d'égalité au C), `prng` (table de 256), `geom2d`,
+   `bsp`, `blockmap`, `fsm`, `ticcmd`, `state_hash`, `segment`.
+3. **État et hash** : `doom_game::GameState` (joueur, mobjs, secteurs dynamiques, thinkers, RNG,
+   tic) construit sur `state_hash` ; sérialisation canonique ; `genesis(seed)`.
 4. **Joueur** : `P_PlayerThink` (ticcmd → momentum, friction), `P_TryMove`/`P_SlideMove`, hauteurs,
    `P_UseLines`, armes (poing, pistolet, fusil à pompe, mitrailleuse : hitscan via `P_PathTraverse`),
    munitions, santé/armure, ramassage d'objets, clés.
@@ -104,12 +158,14 @@ Tâches (ordre suggéré) :
    dommageables, switch de sortie → `status = EXIT`, téléporteurs si présents.
 7. **`run_segment(state_in, cmds[K]) -> [h_in, h_out, tic_start, tic_end, status, kills, items, secrets]`**
    avec `status ∈ {RUNNING, DEAD, EXIT}` ; `step_tic` partage exactement le même code.
-8. **Optimisation steps** : profilage `cairo-profiler`, budget par sous-système, revue felt-first.
+8. **Optimisation steps** : profilage `cairo-profiler`, budget par crate (tests de budget),
+   revue felt-first.
 
 Tests :
 
-- unitaires Cairo (`scarb test`) : fixed/angles/tables **contre des valeurs de référence extraites du
-  code C** ; RNG ; BSP `point_in_subsector` sur 1 000 points aléatoires vs implémentation TS ;
+- unitaires par crate selon §3.1 : fixed/angles/tables **contre des valeurs de référence extraites
+  du code C** ; RNG ; BSP `point_in_subsector` sur 1 000 points aléatoires vs implémentation TS ;
+  couverture ≥ 90 % sur `crates/*` ;
 - propriétés : le joueur ne traverse jamais une ligne bloquante ; la santé reste dans [0, 200] ;
   `run_segment(s, a ++ b) == run_segment(run_segment(s, a), b)` (associativité du chaînage) ;
 - **replays dorés** : 20 journaux d'inputs (scriptés + enregistrés) → hash final et stats figés en
@@ -119,7 +175,7 @@ Tests :
 - performance : test CI qui échoue si steps/tic moyen > budget fixé à G0 (+10 %).
 
 Critères de validation : **C2** en natif ; budget steps tenu ; partie complète scriptée (spawn → sortie)
-en fixture ; preuve S0 d'un segment de K tics réussie.
+en fixture ; preuve S0 d'un segment de K tics réussie ; **C7** respecté.
 
 ### Phase 2 — Client web (≈ 4–6 semaines, en parallèle de la phase 1 dès l'extraction WAD)
 
@@ -203,7 +259,7 @@ Critères : **C4**, **C5** ; toutes les tx sous 90 % du plafond invoke (1,21e9 L
 
 | Niveau | Outil | Ce qui est vérifié |
 |---|---|---|
-| Unitaire Cairo | `scarb test` / snforge | primitives vs valeurs C de référence, spécials, IA |
+| Unitaire Cairo (par crate) | `scarb test` / snforge, `cairo-coverage` | primitives vs valeurs C de référence, propriétés, cas limites, budget de steps, couverture ≥ 90 % |
 | Propriétés / fuzz | snforge + générateurs TS | invariants physiques, associativité des segments |
 | Replays dorés | `tools/replay` + fixtures | déterminisme (C2), stabilité des hashes, budget steps |
 | Différentiel (opt.) | `tools/fidelity` (doomgeneric) | fidélité mouvement/collision |
