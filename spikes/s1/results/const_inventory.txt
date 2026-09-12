@@ -1,0 +1,65 @@
+array                   felts
+REJECT_C0               31850  mapdata.cairo
+FINESINE                10240  tables.cairo
+BM_LINES                 2064  mapdata.cairo
+BM_LINES_RAW             2064  mapdata.cairo   (spike only)
+TANTOANGLE               2049  tables.cairo
+REJECT_C1                1274  mapdata.cairo
+P_VERTS                  1196  mapdata_packed.cairo   (spike only)
+L_AP                     1175  mapdata.cairo   (spike only)
+L_AN                     1175  mapdata.cairo   (spike only)
+L_BP                     1175  mapdata.cairo   (spike only)
+L_BN                     1175  mapdata.cairo   (spike only)
+L_CP                     1175  mapdata.cairo   (spike only)
+L_CN                     1175  mapdata.cairo   (spike only)
+L_AB                     1175  mapdata.cairo
+L_BB                     1175  mapdata.cairo
+L_CB                     1175  mapdata.cairo
+L_DIAG                   1175  mapdata.cairo
+L_BBL                    1175  mapdata.cairo
+L_BBR                    1175  mapdata.cairo
+L_BBB                    1175  mapdata.cairo
+L_BBT                    1175  mapdata.cairo
+L_FLAGS                  1175  mapdata.cairo   (spike only)
+L_BLOCKING               1175  mapdata.cairo
+L_BLOCKMONST             1175  mapdata.cairo
+L_TWOSIDED               1175  mapdata.cairo
+L_FRONT                  1175  mapdata.cairo
+L_BACK                   1175  mapdata.cairo
+L_V1X                    1175  mapdata.cairo   (spike only)
+L_V1Y                    1175  mapdata.cairo   (spike only)
+L_V2X                    1175  mapdata.cairo   (spike only)
+L_V2Y                    1175  mapdata.cairo   (spike only)
+P_LINES                  1175  mapdata_packed.cairo   (spike only)
+BM_START                  864  mapdata.cairo
+BM_COUNT                  864  mapdata.cairo
+BM_START_RAW              864  mapdata.cairo   (spike only)
+BM_COUNT_RAW              864  mapdata.cairo   (spike only)
+BM_CELL_SECTOR            864  mapdata.cairo
+SS_SECTOR                 682  mapdata.cairo
+N_AP                      681  mapdata.cairo   (spike only)
+N_AN                      681  mapdata.cairo   (spike only)
+N_BP                      681  mapdata.cairo   (spike only)
+N_BN                      681  mapdata.cairo   (spike only)
+N_CP                      681  mapdata.cairo   (spike only)
+N_CN                      681  mapdata.cairo   (spike only)
+N_AB                      681  mapdata.cairo
+N_BB                      681  mapdata.cairo
+N_CB                      681  mapdata.cairo
+N_C0                      681  mapdata.cairo
+N_C1                      681  mapdata.cairo
+RNDTABLE                  256  tables.cairo
+S_FLOOR                   182  mapdata.cairo
+S_CEIL                    182  mapdata.cairo
+REJECT_ROW                182  mapdata.cairo   (spike only)
+MON_X                       5  mapdata.cairo
+MON_Y                       5  mapdata.cairo
+MON_ANGLE                   5  mapdata.cairo
+MON_SECTOR                  5  mapdata.cairo
+
+const felts, all               93427
+const felts, lean subset       70071
+compiled bytecode words        98585
+code (words - const felts)      5158
+as built                      98585 words ->   1451540 steps of program hashing per segment
+lean subset + code            75229 words ->   1108206 steps of program hashing per segment
