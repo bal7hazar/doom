@@ -17,6 +17,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "doom_runs"
+version = "0.1.0"
+dependencies = [
+ "recursion_outputs",
+ "snforge_std",
+]
+
+[[package]]
+name = "recursion_outputs"
+version = "0.1.0"
+dependencies = [
+ "snforge_std",
+]
+
+[[package]]
 name = "snforge_scarb_plugin"
 version = "0.61.0"
 source = "registry+https://scarbs.xyz/"

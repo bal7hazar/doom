@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "doom_runs"
+version.workspace = true
+edition.workspace = true
+description = "DoomRuns: the consumer contract of the Stwo fact registry (docs/design/doomruns.md)."
+
+[dependencies]
+starknet.workspace = true
+recursion_outputs = { path = "../recursion_outputs" }
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+# Declare-time allowlist: the consumer is held to the same list as the verifier classes.
+# blake2s and poseidon are both audited libfuncs.
+allowed-libfuncs-list.name = "audited"
+
+[dev-dependencies]
+snforge_std.workspace = true
+assert_macros.workspace = true
+
+[scripts]
+test = "snforge test"
+
+[tool]
+scarb.workspace = true
+
+[tool.snforge]
+# Same gas oracle as the rest of the workspace: devnet/blockifier 0.14.4 bills by VM
+# steps + builtins (docs/design/onchain-verifier.md §7).
+tracked_resource = "cairo-steps"
