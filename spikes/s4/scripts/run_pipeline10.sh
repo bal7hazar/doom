@@ -19,7 +19,11 @@
 #   TAG=<suffix>             extra suffix on the results/work directory names
 #
 # Heavy artifacts stay in $S4_WORK/batch10_<shape>/; the small ones (batch plan, preimages,
-# program/packed output, verifier output, timings) land in spikes/s4/results/B<shape>_<reg>/.
+# program/packed output, verifier output, timings, and the gzipped root proof) land in
+# spikes/s4/results/B<shape>_<reg>/ — which is scratch. The *committed* copies of the P4.2b runs
+# live in cairo/doom_contracts/crates/recursion_outputs/fixtures/, put there by
+#   python3 cairo/doom_contracts/tools/real_batch.py <results dir> --install --emit-fixtures
+# and everything downstream (the snforge fixtures, the devnet drive) reads them from there.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 
