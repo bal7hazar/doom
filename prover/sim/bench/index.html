@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Hellproof contributors -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<meta charset="utf-8" />
+<title>hellproof-sim &mdash; S3 worker benchmark</title>
+<pre id="log">starting…</pre>
+<script type="module">
+  const log = document.getElementById('log');
+  window.__benchDone = null;
+
+  const response = await fetch('./step_tic/target/dev/step_tic.executable.json');
+  const executableJson = await response.text();
+  const { CASES } = await import('./config.mjs');
+
+  const worker = new Worker('./worker.mjs', { type: 'module' });
+  worker.onmessage = (event) => {
+    window.__benchDone = event.data;
+    log.textContent = JSON.stringify(event.data, null, 2);
+  };
+  worker.postMessage({
+    wasmUrl: new URL('../pkg/hellproof_sim_bg.wasm', import.meta.url).href,
+    executableJson,
+    cases: CASES,
+    iters: Number(new URLSearchParams(location.search).get('iters') ?? 2000),
+    leakIters: Number(new URLSearchParams(location.search).get('leakIters') ?? 10000),
+  });
+</script>
