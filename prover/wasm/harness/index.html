@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Hellproof prover — wasm64 harness (S2)</title>
+    <title>Hellproof prover — wasm64 harness</title>
     <link rel="icon" href="data:," />
     <style>
       body { font: 13px/1.4 ui-monospace, Menlo, monospace; margin: 1rem; color: #ddd; background: #111; }
@@ -18,13 +18,13 @@
     <h1>Hellproof prover — wasm64 harness</h1>
     <div id="env"></div>
     <p>
-      k: <select id="k"><option>14</option><option>16</option><option>18</option><option>19</option></select>
-      <label><input type="checkbox" id="fresh" checked /> fresh worker per run</label>
+      size: <select id="k"><option>k14</option><option>k16</option><option>k18</option><option>k19</option><option>k20</option><option>m2</option><option>m3</option><option>m4</option></select>
+      threads: <select id="threads"><option>1</option><option>2</option><option>4</option><option>8</option></select>
       <button id="run">execute → prove → verify</button>
     </p>
     <p>prover params JSON (empty = built-in leaf defaults):<br /><textarea id="params"></textarea></p>
     <table>
-      <thead><tr><th>k</th><th>steps</th><th>execute ms</th><th>prove ms</th><th>verify ms</th><th>proof felts</th><th>wasm mem GiB</th><th>UA mem peak GiB</th><th>verified</th></tr></thead>
+      <thead><tr><th>size</th><th>threads</th><th>steps</th><th>execute ms</th><th>prove ms</th><th>verify ms</th><th>proof felts</th><th>wasm mem GiB</th><th>UA mem peak GiB</th><th>verified</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
     <div id="log"></div>

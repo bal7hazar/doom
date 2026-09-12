@@ -1,0 +1,35 @@
+Subject: [PATCH] std: select the futex Once and Parker on wasm64, not only wasm32
+
+`library/std/src/sys/sync/{mutex,condvar,rwlock}/mod.rs` already select their futex
+implementation with `all(target_family = "wasm", target_feature = "atomics")`, and
+`sys/pal/wasm/atomics/futex.rs` has a `core::arch::wasm64` arm, but `once` and
+`thread_parking` still test `target_arch = "wasm32"`. On `wasm64-unknown-unknown` built with
+`-C target-feature=+atomics` they therefore fall through to the `no_threads` implementations:
+the first concurrent `Once::call_once` (every `OnceLock`/`LazyLock`, `crossbeam-epoch`'s
+default collector, ...) panics with "one-time initialization may not be performed
+recursively", and `thread::park` does nothing.
+
+Applies to the sources of nightly-2026-01-15 (rust-src component).
+
+--- a/std/src/sys/sync/once/mod.rs
++++ b/std/src/sys/sync/once/mod.rs
+@@ -12,7 +12,7 @@
+         all(target_os = "windows", not(target_vendor="win7")),
+         target_os = "linux",
+         target_os = "android",
+-        all(target_arch = "wasm32", target_feature = "atomics"),
++        all(target_family = "wasm", target_feature = "atomics"),
+         target_os = "freebsd",
+         target_os = "motor",
+         target_os = "openbsd",
+--- a/std/src/sys/sync/thread_parking/mod.rs
++++ b/std/src/sys/sync/thread_parking/mod.rs
+@@ -3,7 +3,7 @@
+         all(target_os = "windows", not(target_vendor = "win7")),
+         target_os = "linux",
+         target_os = "android",
+-        all(target_arch = "wasm32", target_feature = "atomics"),
++        all(target_family = "wasm", target_feature = "atomics"),
+         target_os = "freebsd",
+         target_os = "openbsd",
+         target_os = "dragonfly",

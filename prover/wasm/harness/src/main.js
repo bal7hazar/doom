@@ -1,46 +1,38 @@
-// Page controller. Exposes `window.hellproof.run({ k, params, fresh })` for the Playwright bench and
-// a small manual UI. Each run may use a fresh Worker (fresh wasm instance = memory released).
-import executableJson from "../programs/steps_k/target/dev/main.executable.json?raw";
-
-const ARGS = import.meta.glob("../programs/steps_k/args/k*.json", { query: "?raw", import: "default", eager: true });
-const WASM_URL = "/hellproof_prover_wasm.wasm";
+// Harness page: drives `@hellproof/prover-wasm` (the package under ../../pkg) from the main
+// thread and exposes `window.hellproof.run()` for the Playwright bench.
+//
+// Everything heavy happens inside the package's prover Worker; the page only collects timings,
+// the wasm memory high-water mark and `performance.measureUserAgentSpecificMemory()`.
+import { createProver } from "@hellproof/prover-wasm";
 
 const $ = (id) => document.getElementById(id);
-const log = (msg, level = "info") => {
+const log = (level, msg) => {
   const el = $("log");
+  if (!el) return;
   const line = document.createElement("div");
   line.className = `lvl-${level}`;
-  line.textContent = `[${new Date().toISOString().slice(11, 23)}] ${msg}`;
+  line.textContent = msg;
   el.appendChild(line);
   el.scrollTop = el.scrollHeight;
-  if (level === "error") console.error(msg);
 };
 
-let worker = null;
-let workerReady = null;
-let lastInit = null;
+const ARGS = import.meta.glob("../programs/steps_k/args/*.json", { query: "?raw", import: "default", eager: true });
+// `scarb build` output when present, else the committed copy (CI proves without Scarb installed).
+const EXECUTABLE = import.meta.glob(
+  ["../programs/steps_k/target/dev/main.executable.json", "../programs/steps_k/main.executable.json"],
+  { query: "?raw", import: "default", eager: true },
+);
 
-function newWorker() {
-  worker?.terminate();
-  worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
-  workerReady = new Promise((resolve, reject) => {
-    const onMsg = (ev) => {
-      if (ev.data.type === "ready") {
-        worker.removeEventListener("message", onMsg);
-        lastInit = ev.data;
-        resolve(ev.data);
-      } else if (ev.data.type === "error") {
-        worker.removeEventListener("message", onMsg);
-        reject(new Error(ev.data.message));
-      } else if (ev.data.type === "log") {
-        log(`[wasm] ${ev.data.msg}`, ev.data.level);
-      }
-    };
-    worker.addEventListener("message", onMsg);
-    worker.addEventListener("error", (e) => log(`worker error: ${e.message}`, "error"));
-    worker.postMessage({ type: "init", wasmUrl: WASM_URL });
-  });
-  return workerReady;
+function argsFor(size) {
+  const key = Object.keys(ARGS).find((k) => k.endsWith(`/${size}.json`));
+  if (!key) throw new Error(`no args file for size "${size}" (have: ${Object.keys(ARGS).join(", ")})`);
+  return JSON.parse(ARGS[key]);
+}
+
+function executable() {
+  const keys = Object.keys(EXECUTABLE).sort((a, b) => (b.includes("/target/") ? 1 : 0) - (a.includes("/target/") ? 1 : 0));
+  if (!keys.length) throw new Error("no steps_k executable (scarb build in programs/steps_k)");
+  return EXECUTABLE[keys[0]];
 }
 
 async function uaMemory() {
@@ -48,94 +40,122 @@ async function uaMemory() {
     if (!("measureUserAgentSpecificMemory" in performance)) return null;
     const m = await performance.measureUserAgentSpecificMemory();
     return m.bytes;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 
-let runId = 0;
-async function run({ k = 14, params = "", fresh = true } = {}) {
-  const argsKey = Object.keys(ARGS).find((p) => p.endsWith(`/k${k}.json`));
-  if (!argsKey) throw new Error(`no args for k=${k}`);
-  const args = ARGS[argsKey];
-  if (fresh || !worker) await newWorker();
-  else await workerReady;
-  const id = ++runId;
-  const memBefore = await uaMemory();
-  const stageMem = {};
-  const t0 = performance.now();
-  const result = await new Promise((resolve, reject) => {
-    const onMsg = async (ev) => {
-      const d = ev.data;
-      if (d.type === "log") {
-        log(`[wasm] ${d.msg}`, d.level);
-      } else if (d.type === "stage") {
-        const ua = await uaMemory();
-        stageMem[d.name] = { wasm_memory_bytes: d.memoryBytes, ua_memory_bytes: ua };
-        log(`stage ${d.name}: ${d.ms.toFixed(0)} ms, wasm memory ${(d.memoryBytes / 2 ** 30).toFixed(2)} GiB` +
-            (ua ? `, UA memory ${(ua / 2 ** 30).toFixed(2)} GiB` : ""));
-      } else if (d.type === "result" && d.id === id) {
-        worker.removeEventListener("message", onMsg);
-        resolve(d.result);
-      } else if (d.type === "error") {
-        worker.removeEventListener("message", onMsg);
-        reject(Object.assign(new Error(d.message), { memoryBytes: d.memoryBytes }));
-      }
-    };
-    worker.addEventListener("message", onMsg);
-    worker.postMessage({ type: "run", id, executable: executableJson, args, params });
+/**
+ * One measurement: a fresh prover Worker (so the whole linear memory is released between runs and
+ * every run pays V8's tier-up), then execute -> resources -> prove -> verify -> proof_to_felts.
+ */
+async function run({ size = "k14", params = "", threads = 1, felts = true, initialPages } = {}) {
+  const spans = { execute: [], prove: [], verify: [], proof_to_felts: [], resources: [] };
+  let peakMemory = 0;
+  const prover = createProver({
+    onEvent: (e) => {
+      if (e.type === "span") spans[e.stage]?.push({ name: e.name, ms: e.ms });
+      if (e.type === "log") log(e.level, e.message);
+      if (e.memoryBytes) peakMemory = Math.max(peakMemory, e.memoryBytes);
+    },
   });
-  const totalMs = performance.now() - t0;
-  const memAfter = await uaMemory();
-  const out = {
-    k,
-    label: `k${k}`,
-    target: "chrome-wasm64",
-    user_agent: navigator.userAgent,
-    hardware_concurrency: navigator.hardwareConcurrency,
-    device_memory_gib: navigator.deviceMemory ?? null,
-    cross_origin_isolated: crossOriginIsolated,
-    instantiate_ms: lastInit?.instantiateMs ?? null,
-    total_ms: totalMs,
-    ua_memory_before_bytes: memBefore,
-    ua_memory_after_bytes: memAfter,
-    ua_memory_peak_bytes: Math.max(...Object.values(stageMem).map((s) => s.ua_memory_bytes ?? 0), memAfter ?? 0) || null,
-    stage_memory: stageMem,
-    ...result,
+
+  const t0 = performance.now();
+  const info = await prover.init({ threads, ...(initialPages ? { initialPages } : {}) });
+  log("info", `init: ${info.threads} thread(s), ${info.threaded ? "threaded" : "single-threaded"} artifact`);
+
+  const exe = executable();
+  const args = argsFor(size);
+  const ex = await prover.execute(exe, args);
+  const res = await prover.resources(ex.input, params);
+  const pr = await prover.prove(ex.input, params);
+  const t1 = performance.now();
+  const verifyStart = performance.now();
+  const ok = await prover.verify(pr.proof, params);
+  const verifyMs = performance.now() - verifyStart;
+  let nFelts = pr.stats.proof_felts;
+  let feltsMs = null;
+  if (felts) {
+    const t = performance.now();
+    nFelts = (await prover.proofToFelts(pr.proof, params)).length;
+    feltsMs = performance.now() - t;
+  }
+  const uaBytes = await uaMemory();
+  await prover.terminate();
+
+  return {
+    size,
+    threads: info.threads,
+    threaded: info.threaded,
+    wasm_url: info.wasmUrl.split("/").pop(),
+    instantiate_ms: info.instantiateMs,
+    initial_pages: initialPages ?? null,
+    n_steps: ex.stats.n_steps,
+    builtins: ex.stats.builtins,
+    execute_ms: ex.ms,
+    prove_ms: pr.ms,
+    verify_ms: verifyMs,
+    proof_to_felts_ms: feltsMs,
+    total_ms: t1 - t0,
+    proof_bytes: pr.stats.proof_bytes,
+    proof_felts: nFelts,
+    trace_log_size: pr.stats.trace_log_size,
+    max_trace_component_log_size: pr.stats.max_trace_component_log_size,
+    max_log_size: pr.stats.max_log_size,
+    trace_lifting_log_size: pr.stats.trace_lifting_log_size,
+    preprocessed_lifting_log_size: pr.stats.preprocessed_lifting_log_size,
+    resources: {
+      n_steps: res.n_steps,
+      max_component: res.max_component,
+      max_component_rows: res.max_component_rows,
+      log_max_component_size: res.log_max_component_size,
+      fits_leaf_registry: res.fits_leaf_registry,
+      memory_address_to_id: res.memory_address_to_id,
+      memory_id_to_big: res.memory_id_to_big,
+      verify_instruction: res.verify_instruction,
+    },
+    verify_ok: ok,
+    wasm_memory_bytes: peakMemory,
+    ua_memory_peak_bytes: uaBytes,
+    spans,
   };
-  log(`k=${k}: steps=${out.n_steps} execute=${out.execute_ms.toFixed(0)}ms prove=${out.prove_ms.toFixed(0)}ms ` +
-      `verify=${out.verify_ms.toFixed(0)}ms proof=${out.proof_felts} felts (${(out.proof_bytes / 1e6).toFixed(2)} MB) ` +
-      `wasm mem=${(out.wasm_memory_bytes / 2 ** 30).toFixed(2)} GiB ok=${out.verify_ok}`);
-  renderRow(out);
-  return out;
 }
 
-function renderRow(r) {
-  const tb = $("rows");
-  const tr = document.createElement("tr");
-  const gib = (b) => (b == null ? "-" : (b / 2 ** 30).toFixed(2));
-  tr.innerHTML = `<td>${r.k}</td><td>${r.n_steps}</td><td>${r.execute_ms.toFixed(0)}</td><td>${r.prove_ms.toFixed(0)}</td>` +
-    `<td>${r.verify_ms.toFixed(0)}</td><td>${r.proof_felts}</td><td>${gib(r.wasm_memory_bytes)}</td><td>${gib(r.ua_memory_peak_bytes)}</td><td>${r.verify_ok}</td>`;
-  tb.appendChild(tr);
-}
+window.hellproof = { run };
 
-window.hellproof = { run, newWorker, uaMemory, terminate: () => worker?.terminate() };
-
-document.addEventListener("DOMContentLoaded", () => {
-  $("env").textContent = `crossOriginIsolated=${crossOriginIsolated} cores=${navigator.hardwareConcurrency} ` +
-    `deviceMemory=${navigator.deviceMemory ?? "?"} GiB  UA=${navigator.userAgent}`;
+// ---- interactive page ---------------------------------------------------------------------------
+if ($("run")) {
+  $("env").textContent =
+    `crossOriginIsolated=${crossOriginIsolated} · hardwareConcurrency=${navigator.hardwareConcurrency}` +
+    ` · deviceMemory=${navigator.deviceMemory ?? "?"}`;
   $("run").addEventListener("click", async () => {
-    const k = Number($("k").value);
-    const params = $("params").value.trim();
     $("run").disabled = true;
     try {
-      await run({ k, params, fresh: $("fresh").checked });
+      const r = await run({
+        size: $("k").value,
+        params: $("params").value.trim(),
+        threads: Number($("threads").value),
+      });
+      const row = document.createElement("tr");
+      row.innerHTML = [
+        r.size,
+        r.threads,
+        r.n_steps,
+        r.execute_ms.toFixed(0),
+        r.prove_ms.toFixed(0),
+        r.verify_ms.toFixed(0),
+        r.proof_felts,
+        (r.wasm_memory_bytes / 2 ** 30).toFixed(2),
+        r.ua_memory_peak_bytes ? (r.ua_memory_peak_bytes / 2 ** 30).toFixed(2) : "-",
+        r.verify_ok,
+      ]
+        .map((v) => `<td>${v}</td>`)
+        .join("");
+      $("rows").appendChild(row);
     } catch (e) {
-      log(String(e.message ?? e), "error");
+      log("error", String(e?.message ?? e));
     } finally {
       $("run").disabled = false;
     }
   });
-  const auto = new URLSearchParams(location.search).get("k");
-  if (auto) run({ k: Number(auto) }).catch((e) => log(String(e.message ?? e), "error"));
-});
+}

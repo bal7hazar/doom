@@ -1,0 +1,153 @@
+name: prover-wasm
+
+# R11-A1 (reproducible container build, hashed artifact) and R11-A3 (wasm64 execution test in
+# headless Chrome) for `prover/wasm`.
+#
+# 1. `docker-build` rebuilds both wasm64 artifacts in the pinned container and compares their
+#    hashes with the committed `prover/wasm/SHA256SUMS.linux` — i.e. checks that an independent
+#    container build lands on the same bytes. `SHA256SUMS` (macOS) is printed next to it for
+#    reference: the build is bit-reproducible on a given host, but rustc is not byte-identical
+#    across hosts (see prover/wasm/README.md).
+# 2. `browser-smoke` takes those artifacts, builds the npm package and proves a 2^14-step program
+#    in headless Chromium through Playwright (single-threaded *and* with 4 threads), verifying the
+#    proof in the browser, then checks the no-isolation fallback.
+#
+# The container build is ~6 min on an M2 (it compiles std twice with `-Z build-std`, once per
+# variant) and ~20 min on a GitHub runner; the smoke tests are ~3 min.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "prover/wasm/**"
+      - ".github/workflows/prover-wasm.yml"
+  pull_request:
+    paths:
+      - "prover/wasm/**"
+      - ".github/workflows/prover-wasm.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prover-wasm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-build:
+    name: reproducible build (Docker, Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build both wasm64 artifacts in the pinned container
+        working-directory: prover/wasm
+        run: |
+          docker build --progress=plain -o out -f Dockerfile .
+          ls -l out
+
+      - name: Compare with the committed SHA256SUMS.linux
+        working-directory: prover/wasm
+        run: |
+          (cd out && sha256sum hellproof_prover_wasm.wasm hellproof_prover_wasm.threads.wasm) \
+            | sed 's|  | |' | sort > /tmp/built.txt
+          sed 's|  | |' SHA256SUMS.linux | sort > /tmp/committed.txt
+          echo "--- built here"; cat /tmp/built.txt
+          echo "--- committed (Linux container)"; cat /tmp/committed.txt
+          echo "--- committed (macOS, for reference — rustc is not bit-reproducible across hosts)"
+          cat SHA256SUMS
+          # A mismatch means the container build stopped being reproducible, or that
+          # SHA256SUMS.linux was not refreshed with the artifacts: fail loudly, with the diff.
+          diff -u /tmp/committed.txt /tmp/built.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hellproof-prover-wasm
+          path: |
+            prover/wasm/out/hellproof_prover_wasm.wasm
+            prover/wasm/out/hellproof_prover_wasm.threads.wasm
+            prover/wasm/out/SHA256SUMS
+          retention-days: 14
+          compression-level: 9
+
+  browser-smoke:
+    name: prove 2^14 steps in headless Chromium (R11-A3)
+    runs-on: ubuntu-latest
+    needs: docker-build
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Memory64 modules with 64-bit table limits need V8 >= 13.3 (Node 24; Node 22 rejects
+          # them at compile time).
+          node-version: "24"
+
+      - name: The leaf parameters still match the recursion registry
+        # `prove_leaf` takes the registry's `cairo_prover_params` verbatim and hardcodes the
+        # Blake2sM31 channel, so every field but `channel_hash` must be identical to
+        # spikes/s4/registry/doom/cairo_prover_params.json (see prover/wasm/README.md §Parameters).
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          ours = json.load(open("prover/wasm/harness/params/leaf.json"))
+          reg = json.load(open("spikes/s4/registry/doom/cairo_prover_params.json"))
+          assert ours.pop("channel_hash") == "blake2s_m31", "the leaf proves with Blake2sM31"
+          reg.pop("channel_hash")
+          if ours != reg:
+              print("leaf params drifted from the registry:")
+              for k in sorted(set(ours) | set(reg)):
+                  if ours.get(k) != reg.get(k):
+                      print(f"  {k}: ours={ours.get(k)!r} registry={reg.get(k)!r}")
+              sys.exit(1)
+          print("leaf parameters match the doom registry (channel_hash aside)")
+          PY
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: hellproof-prover-wasm
+          path: prover/wasm/pkg/wasm
+
+      - name: Place the artifacts
+        working-directory: prover/wasm
+        run: |
+          rm -f pkg/wasm/SHA256SUMS
+          mkdir -p harness/public
+          cp pkg/wasm/*.wasm harness/public/
+          ls -l pkg/wasm harness/public
+
+      - name: Build the package
+        working-directory: prover/wasm/pkg
+        run: |
+          npm ci || npm install
+          npm run build
+
+      - name: Install the harness and Chromium
+        working-directory: prover/wasm/harness
+        run: |
+          npm ci || npm install
+          npx playwright install --with-deps chromium
+
+      - name: Node smoke test (1 thread and 4 threads)
+        working-directory: prover/wasm/pkg
+        run: |
+          node test/smoke.mjs --threads 1 --k 14
+          node test/smoke.mjs --threads 4 --k 14
+
+      - name: Browser smoke test (Playwright, cross-origin isolated page)
+        working-directory: prover/wasm/harness
+        run: node bench.mjs --channel chromium --sizes k14 --threads 1,4 --runs 1 --ci
+
+      - name: Single-threaded fallback without cross-origin isolation
+        working-directory: prover/wasm/harness
+        run: node test-fallback.mjs --channel chromium
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-results
+          path: prover/wasm/harness/results/
+          retention-days: 14

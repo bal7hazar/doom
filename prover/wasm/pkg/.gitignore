@@ -1,0 +1,5 @@
+# Build outputs and the wasm artifacts (> 1 MB; their hashes are tracked in ../SHA256SUMS).
+/dist/
+/node_modules/
+/wasm/
+*.tgz

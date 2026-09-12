@@ -13,5 +13,5 @@
 /harness/programs/*/.snfoundry_cache/
 /harness/test-results/
 /harness/playwright-report/
-# Native reference outputs
+# Native reference outputs and the Dockerfile's export directory
 /out/
