@@ -1,0 +1,12 @@
+# DECISIONS — journal des décisions d'intégration
+
+> Complète `docs/G0.md` §3 (D1–D11). Une ligne par décision, datée, avec le pourquoi et les conséquences.
+
+| # | Date | Décision | Pourquoi | Conséquences |
+|---|---|---|---|---|
+| D12 | 2026-09-12 | `TicCmd.turn` quantisé à 256 BAM **à la capture** (mot de 32 bits, 7 tics/felt) | C'est exactement ce que font les démos `.lmp` vanilla ; garde 4 octets/tic et 7 tics/felt | `doom_player` consomme `ticcmd::quantize` ; les valeurs 320/640/1280 de `G_BuildTiccmd` sont tronquées comme en démo |
+| D13 | 2026-09-12 | `inputs_commitment` **par segment** (graine + repli des mots de ce segment), pas chaîné entre segments | Une coupure de segment ne doit pas invalider les commitments en re-découpant une partie | `DoomRuns` vérifie chaque feuille contre le journal packé publié par segment |
+| D14 | 2026-09-12 | Sortie de segment = **10 felts** `[version, h_in, h_out, tic_start, tic_end, status, inputs_commitment, kills, items, secrets]`, `status ∈ {0 RUNNING, 1 DEAD, 2 EXIT, 3 ABORT}` | Version en tête pour dispatcher ; ABORT = exécution invalide prouvable (R4-A2) | Recomposition S4 et `DoomRuns` passent à 10 felts ; `ABORT` rejeté explicitement ; `MAX_TIC = 2^30` |
+| D15 | 2026-09-12 | `SegmentEngine` = un trait unique (`step`, `hash`, `stats`, `word`) ; `C` = mot ticcmd déjà encodé, `step` décode | Chaque monomorphisation coûte 60–77 mots de bytecode (D4) ; décoder coûte 64 steps, ré-encoder serait du gaspillage | `doom_game` implémente le trait ; `word` est l'identité |
+| D16 | 2026-09-12 | Hash d'état via `state_hash::open(tag, version, n)` + `seal` (14,5 steps/felt), jamais par copie | 58 k steps contre 142 k sur un état de 4 000 felts | `doom_game::serialize` connaît le nombre de felts à l'avance |
+| D17 | 2026-09-12 | Les couches de compatibilité `compat.cairo` des crates génériques (anciennes API des squelettes `doom/*`) sont **transitoires** et supprimées avec P1.5 | Éviter de bloquer les crates génériques sur les squelettes | Ticket de nettoyage à la première PR `doom_*` |
