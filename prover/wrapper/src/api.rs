@@ -5,17 +5,17 @@
 
 use std::collections::BTreeMap;
 
-use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
+use axum::Router;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::Identity;
 use crate::db::now_ms;
 use crate::model::*;
-use crate::{Shared, validate};
+use crate::{validate, Shared};
 
 #[derive(Debug, Serialize)]
 pub struct ApiError {
@@ -33,7 +33,13 @@ impl IntoResponse for Failure {
 }
 
 fn fail(code: StatusCode, msg: impl Into<String>) -> Failure {
-    Failure(code, ApiError { error: msg.into(), detail: None })
+    Failure(
+        code,
+        ApiError {
+            error: msg.into(),
+            detail: None,
+        },
+    )
 }
 
 type ApiResult<T> = Result<T, Failure>;
@@ -55,7 +61,9 @@ pub fn router(state: Shared) -> Router {
 }
 
 fn identify(state: &Shared, headers: &HeaderMap) -> ApiResult<Identity> {
-    let header = headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok());
+    let header = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok());
     state
         .auth
         .authenticate(header)
@@ -75,7 +83,10 @@ async fn healthz(State(state): State<Shared>) -> impl IntoResponse {
 
 async fn metrics(State(state): State<Shared>) -> impl IntoResponse {
     (
-        [(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4",
+        )],
         state.metrics.render(),
     )
 }
@@ -115,7 +126,9 @@ async fn submit_run(
         .map_err(|e| fail(StatusCode::BAD_REQUEST, format!("{e:#}")))?;
 
     // Idempotency: the same run id with the same content is the same run.
-    if let Some((existing_hash, status)) = state.db.find_run_by_id(&valid.run_id).map_err(internal)? {
+    if let Some((existing_hash, status)) =
+        state.db.find_run_by_id(&valid.run_id).map_err(internal)?
+    {
         if existing_hash == valid.submission_hash {
             let run = state.db.run(&valid.run_id).map_err(internal)?;
             return Ok((
@@ -183,7 +196,9 @@ async fn submit_run(
             )
             .map_err(internal)?;
     }
-    state.metrics.incr("wrapper_runs_total", "status=\"received\"");
+    state
+        .metrics
+        .incr("wrapper_runs_total", "status=\"received\"");
     state.wake.notify_one();
 
     let mut status = RunStatus::Verifying.as_str().to_string();
@@ -191,7 +206,10 @@ async fn submit_run(
         status = wait_for_verdict(&state, &valid.run_id, q.wait_verify_ms).await;
     }
     let run = state.db.run(&valid.run_id).map_err(internal)?;
-    let rejected = run.as_ref().map(|r| r.status == RunStatus::Rejected).unwrap_or(false);
+    let rejected = run
+        .as_ref()
+        .map(|r| r.status == RunStatus::Rejected)
+        .unwrap_or(false);
     let body = SubmitResponse {
         run_id: valid.run_id,
         status,
@@ -199,7 +217,11 @@ async fn submit_run(
         batch_id: run.as_ref().and_then(|r| r.batch_id.clone()),
         duplicate: false,
     };
-    let code = if rejected { StatusCode::UNPROCESSABLE_ENTITY } else { StatusCode::ACCEPTED };
+    let code = if rejected {
+        StatusCode::UNPROCESSABLE_ENTITY
+    } else {
+        StatusCode::ACCEPTED
+    };
     Ok((code, axum::Json(body)).into_response())
 }
 
@@ -233,7 +255,10 @@ async fn run_status(
     let segments = state.db.segments(&id).map_err(internal)?;
 
     let mut out = Vec::with_capacity(segments.len());
-    let mut progress = Progress { segments: segments.len(), ..Default::default() };
+    let mut progress = Progress {
+        segments: segments.len(),
+        ..Default::default()
+    };
     let mut timings = Timings::default();
     for seg in &segments {
         let leaf = state.db.leaf(&seg.leaf_key).map_err(internal)?;
@@ -340,7 +365,10 @@ async fn batch_status(
             }
         }
     }
-    let packed_output = match (&batch.packed_path, want.contains(&"packed") || want.contains(&"proof")) {
+    let packed_output = match (
+        &batch.packed_path,
+        want.contains(&"packed") || want.contains(&"proof"),
+    ) {
         (Some(path), true) => std::fs::read(path)
             .ok()
             .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok()),
@@ -396,16 +424,25 @@ async fn close_batches(
 fn internal<E: std::fmt::Display>(e: E) -> Failure {
     Failure(
         StatusCode::INTERNAL_SERVER_ERROR,
-        ApiError { error: "internal error".into(), detail: Some(e.to_string()) },
+        ApiError {
+            error: "internal error".into(),
+            detail: Some(e.to_string()),
+        },
     )
 }
 
 /// Used by the README generator and the tests to keep the documented schema honest.
 pub fn schema_summary() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
-        ("POST /v1/runs", "RunSubmission -> SubmitResponse (202, or 422 when already rejected)"),
+        (
+            "POST /v1/runs",
+            "RunSubmission -> SubmitResponse (202, or 422 when already rejected)",
+        ),
         ("GET /v1/runs/{id}", "-> RunStatusResponse"),
-        ("GET /v1/batches/{id}", "?include=proof,packed -> BatchResponse"),
+        (
+            "GET /v1/batches/{id}",
+            "?include=proof,packed -> BatchResponse",
+        ),
         ("POST /v1/batches/close", "admin -> CloseResponse"),
         ("GET /metrics", "Prometheus text"),
         ("GET /healthz", "liveness + effective policy"),

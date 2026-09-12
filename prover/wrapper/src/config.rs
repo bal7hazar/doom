@@ -277,18 +277,31 @@ impl Config {
     /// `(channel_hash, include_all_preprocessed_columns)` the submitted segment proofs use.
     pub fn verify_params(&self) -> (String, bool) {
         let default = ("blake2s_m31".to_string(), true);
-        let Some(path) = &self.leaf_params_json else { return default };
-        let Ok(bytes) = std::fs::read(path) else { return default };
-        let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else { return default };
+        let Some(path) = &self.leaf_params_json else {
+            return default;
+        };
+        let Ok(bytes) = std::fs::read(path) else {
+            return default;
+        };
+        let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            return default;
+        };
         (
-            v.get("channel_hash").and_then(|c| c.as_str()).unwrap_or("blake2s_m31").to_string(),
-            v.get("include_all_preprocessed_columns").and_then(|c| c.as_bool()).unwrap_or(true),
+            v.get("channel_hash")
+                .and_then(|c| c.as_str())
+                .unwrap_or("blake2s_m31")
+                .to_string(),
+            v.get("include_all_preprocessed_columns")
+                .and_then(|c| c.as_bool())
+                .unwrap_or(true),
         )
     }
 
     /// Reads the configured registry and fails if it is not the one the operator pinned.
     pub fn check_registry_hashes(&self) -> anyhow::Result<()> {
-        let Some(path) = &self.registry.path else { return Ok(()) };
+        let Some(path) = &self.registry.path else {
+            return Ok(());
+        };
         let (leaf_hashes, multiverifier) = read_registry_hashes(path)?;
         if let Some(expected) = &self.registry.multiverifier_hash {
             let expected = expected.trim().trim_start_matches("0x").to_lowercase();
@@ -348,9 +361,9 @@ impl Config {
             ("tree_bin", &self.tree_bin),
             ("leaf_bootloader", &self.leaf_bootloader),
         ] {
-            let p = p
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("config: `{name}` is required with backend=subprocess"))?;
+            let p = p.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("config: `{name}` is required with backend=subprocess")
+            })?;
             if !p.exists() {
                 anyhow::bail!("config: `{name}` points at a missing file: {}", p.display());
             }
@@ -398,13 +411,22 @@ pub fn read_registry_hashes(path: &Path) -> anyhow::Result<(Vec<String>, String)
         Some(
             v.as_array()?
                 .iter()
-                .map(|w| w.as_str().unwrap_or_default().trim_start_matches("0x").to_lowercase())
+                .map(|w| {
+                    w.as_str()
+                        .unwrap_or_default()
+                        .trim_start_matches("0x")
+                        .to_lowercase()
+                })
                 .collect::<String>(),
         )
     };
     let leaves = json["leaf_verifiers"]
         .as_array()
-        .map(|a| a.iter().filter_map(|l| words(&l["circuit_hash"])).collect::<Vec<_>>())
+        .map(|a| {
+            a.iter()
+                .filter_map(|l| words(&l["circuit_hash"]))
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     let multiverifier = json["multiverifiers"]
         .as_array()
@@ -418,7 +440,10 @@ pub fn read_registry_hashes(path: &Path) -> anyhow::Result<(Vec<String>, String)
 fn detect_memory_bytes() -> Option<u64> {
     #[cfg(target_os = "macos")]
     {
-        let out = std::process::Command::new("sysctl").args(["-n", "hw.memsize"]).output().ok()?;
+        let out = std::process::Command::new("sysctl")
+            .args(["-n", "hw.memsize"])
+            .output()
+            .ok()?;
         return String::from_utf8_lossy(&out.stdout).trim().parse().ok();
     }
     #[cfg(target_os = "linux")]
@@ -443,9 +468,10 @@ mod tests {
     /// The documented example must stay a valid configuration.
     #[test]
     fn the_example_config_parses() {
-        let text =
-            std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("wrapper.example.toml"))
-                .unwrap();
+        let text = std::fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("wrapper.example.toml"),
+        )
+        .unwrap();
         let cfg: Config = toml::from_str(&text).unwrap();
         assert_eq!(cfg.registry.name.as_deref(), Some("doom"));
         assert_eq!(cfg.batch_max_runs, 8);
@@ -464,7 +490,10 @@ mod tests {
     fn reads_the_pinned_registry_hashes() {
         let (leaves, mv) =
             read_registry_hashes(&repo().join("spikes/s4/registry/doom/registry.json")).unwrap();
-        assert_eq!(mv, "a59897152377c07ac6d1e84454f0a04d8be65a7dfd73c2619078e728973f680f");
+        assert_eq!(
+            mv,
+            "a59897152377c07ac6d1e84454f0a04d8be65a7dfd73c2619078e728973f680f"
+        );
         assert_eq!(
             leaves,
             vec!["2ad52ed04b5464fc0362ff77e47a7cb0adf8f7c8caef9eb38b8774ba9edac7e2".to_string()]

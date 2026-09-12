@@ -8,7 +8,7 @@ mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use common::{ADMIN_KEY, Harness, KEY, run_body};
+use common::{run_body, Harness, ADMIN_KEY, KEY};
 use hellproof_wrapper::db::Db;
 use hellproof_wrapper::model::{JobKind, JobState};
 use serde_json::json;
@@ -34,7 +34,9 @@ async fn a_batch_of_two_runs_folds_into_one_root() {
     assert!(done["timings"]["total_ms"].is_number());
 
     let batch_id = done["batch_id"].as_str().unwrap().to_string();
-    let (code, batch) = h.get(&format!("/v1/batches/{batch_id}?include=proof")).await;
+    let (code, batch) = h
+        .get(&format!("/v1/batches/{batch_id}?include=proof"))
+        .await;
     assert_eq!(code, StatusCode::OK);
     assert_eq!(batch["status"], "done");
     assert_eq!(batch["runs"].as_array().unwrap().len(), 2);
@@ -63,8 +65,17 @@ async fn a_solo_run_is_wrapped_without_waiting_for_the_batch() {
 
     let solo_id = solo["run_id"].as_str().unwrap().to_string();
     let done = h.wait_run(&solo_id, &["done"], 10_000).await;
-    let (_, batch) = h.get(&format!("/v1/batches/{}", done["batch_id"].as_str().unwrap())).await;
-    assert_eq!(batch["runs"].as_array().unwrap().len(), 1, "a solo batch holds one run");
+    let (_, batch) = h
+        .get(&format!(
+            "/v1/batches/{}",
+            done["batch_id"].as_str().unwrap()
+        ))
+        .await;
+    assert_eq!(
+        batch["runs"].as_array().unwrap().len(),
+        1,
+        "a solo batch holds one run"
+    );
 
     // The shared batch is still open with the other run in it.
     let other_id = other["run_id"].as_str().unwrap().to_string();
@@ -103,26 +114,48 @@ async fn identical_leaves_are_proven_once() {
     body["run_id"] = json!("second-run");
     let (_, b) = h.submit(body).await;
 
-    let a = h.wait_run(a["run_id"].as_str().unwrap(), &["done"], 10_000).await;
-    let b = h.wait_run(b["run_id"].as_str().unwrap(), &["done"], 10_000).await;
+    let a = h
+        .wait_run(a["run_id"].as_str().unwrap(), &["done"], 10_000)
+        .await;
+    let b = h
+        .wait_run(b["run_id"].as_str().unwrap(), &["done"], 10_000)
+        .await;
 
     // The two runs share both leaf keys: 4 segments, 2 leaf proofs.
     let keys = |v: &serde_json::Value| -> Vec<String> {
-        v["segments"].as_array().unwrap().iter().map(|s| s["leaf_key"].as_str().unwrap().to_string()).collect()
+        v["segments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["leaf_key"].as_str().unwrap().to_string())
+            .collect()
     };
     assert_eq!(keys(&a), keys(&b));
     let metrics = h.state.metrics.render();
-    assert!(metrics.contains("wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"} 2"), "{metrics}");
-    assert!(metrics.contains("wrapper_jobs_total{kind=\"verify\",outcome=\"done\"} 4"), "{metrics}");
+    assert!(
+        metrics.contains("wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"} 2"),
+        "{metrics}"
+    );
+    assert!(
+        metrics.contains("wrapper_jobs_total{kind=\"verify\",outcome=\"done\"} 4"),
+        "{metrics}"
+    );
 
     // A later run reuses the finished proofs outright (the content-hash cache).
     let mut third = run_body(7, 2, true);
     third["run_id"] = json!("third-run");
     let (_, c) = h.submit(third).await;
-    h.wait_run(c["run_id"].as_str().unwrap(), &["done"], 10_000).await;
+    h.wait_run(c["run_id"].as_str().unwrap(), &["done"], 10_000)
+        .await;
     let metrics = h.state.metrics.render();
-    assert!(metrics.contains("wrapper_leaf_cache_hits_total 2"), "{metrics}");
-    assert!(metrics.contains("wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"} 2"), "{metrics}");
+    assert!(
+        metrics.contains("wrapper_leaf_cache_hits_total 2"),
+        "{metrics}"
+    );
+    assert!(
+        metrics.contains("wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"} 2"),
+        "{metrics}"
+    );
 }
 
 #[tokio::test]
@@ -177,7 +210,10 @@ async fn invalid_submissions_are_rejected_before_any_work() {
     body["segments"][1]["output_preimage"][1] = json!("0xdead");
     let (code, err) = h.submit(body).await;
     assert_eq!(code, StatusCode::BAD_REQUEST);
-    assert!(err["error"].as_str().unwrap().contains("does not continue"), "{err}");
+    assert!(
+        err["error"].as_str().unwrap().contains("does not continue"),
+        "{err}"
+    );
 
     // Unknown program.
     let mut body = run_body(1, 1, false);
@@ -197,9 +233,13 @@ async fn invalid_submissions_are_rejected_before_any_work() {
 async fn metrics_and_health_are_exposed() {
     let h = Harness::start(2, 600);
     let (_, a) = h.submit(run_body(1, 1, true)).await;
-    h.wait_run(a["run_id"].as_str().unwrap(), &["done"], 10_000).await;
+    h.wait_run(a["run_id"].as_str().unwrap(), &["done"], 10_000)
+        .await;
 
-    let req = Request::builder().uri("/metrics").body(Body::empty()).unwrap();
+    let req = Request::builder()
+        .uri("/metrics")
+        .body(Body::empty())
+        .unwrap();
     let res = h.router.clone().oneshot_text(req).await;
     for expected in [
         "wrapper_jobs_total{kind=\"verify\",outcome=\"done\"}",
@@ -212,7 +252,10 @@ async fn metrics_and_health_are_exposed() {
         assert!(res.contains(expected), "missing {expected} in:\n{res}");
     }
 
-    let req = Request::builder().uri("/healthz").body(Body::empty()).unwrap();
+    let req = Request::builder()
+        .uri("/healthz")
+        .body(Body::empty())
+        .unwrap();
     let (code, health) = h.call(req).await;
     assert_eq!(code, StatusCode::OK);
     assert_eq!(health["batch_policy"]["max_runs"], 2);
@@ -227,13 +270,37 @@ fn the_queue_resumes_after_a_restart() {
 
     {
         let db = Db::open(&path).unwrap();
-        db.insert_run("run1", "0xabc", None, "segment_stub", false, "hash", 2).unwrap();
-        db.insert_segment("run1", 0, "leafA", "[]", "[]", "[]", Some("/tmp/p0"), "bincode_b64").unwrap();
-        db.insert_segment("run1", 1, "leafB", "[]", "[]", "[]", Some("/tmp/p1"), "bincode_b64").unwrap();
-        db.enqueue(JobKind::Verify, "run1:0", Some("run1"), Some(0), None).unwrap();
-        db.enqueue(JobKind::Verify, "run1:1", Some("run1"), Some(1), None).unwrap();
+        db.insert_run("run1", "0xabc", None, "segment_stub", false, "hash", 2)
+            .unwrap();
+        db.insert_segment(
+            "run1",
+            0,
+            "leafA",
+            "[]",
+            "[]",
+            "[]",
+            Some("/tmp/p0"),
+            "bincode_b64",
+        )
+        .unwrap();
+        db.insert_segment(
+            "run1",
+            1,
+            "leafB",
+            "[]",
+            "[]",
+            "[]",
+            Some("/tmp/p1"),
+            "bincode_b64",
+        )
+        .unwrap();
+        db.enqueue(JobKind::Verify, "run1:0", Some("run1"), Some(0), None)
+            .unwrap();
+        db.enqueue(JobKind::Verify, "run1:1", Some("run1"), Some(1), None)
+            .unwrap();
         db.ensure_leaf("leafA").unwrap();
-        db.set_leaf_status("leafA", "running", None, None, None, None).unwrap();
+        db.set_leaf_status("leafA", "running", None, None, None, None)
+            .unwrap();
 
         let claimed = db.claim(&[JobKind::Verify], 2).unwrap();
         assert_eq!(claimed.len(), 2);
@@ -264,15 +331,23 @@ fn a_fold_interrupted_by_a_restart_is_retried() {
     let path = dir.path().join("queue.sqlite3");
     {
         let db = Db::open(&path).unwrap();
-        db.insert_run("run1", "0xabc", None, "segment_stub", false, "hash", 1).unwrap();
-        db.insert_segment("run1", 0, "leafA", "[]", "[]", "[]", None, "bincode_b64").unwrap();
+        db.insert_run("run1", "0xabc", None, "segment_stub", false, "hash", 1)
+            .unwrap();
+        db.insert_segment("run1", 0, "leafA", "[]", "[]", "[]", None, "bincode_b64")
+            .unwrap();
         db.create_batch("batch1", false, None).unwrap();
         db.assign_run_to_batch("run1", "batch1").unwrap();
         db.close_batch("batch1").unwrap();
-        db.enqueue(JobKind::Fold, "batch1", None, None, Some("batch1")).unwrap();
+        db.enqueue(JobKind::Fold, "batch1", None, None, Some("batch1"))
+            .unwrap();
         let claimed = db.claim(&[JobKind::Fold], 1).unwrap();
         assert_eq!(claimed.len(), 1);
-        db.set_batch_status("batch1", hellproof_wrapper::model::BatchStatus::Folding, None).unwrap();
+        db.set_batch_status(
+            "batch1",
+            hellproof_wrapper::model::BatchStatus::Folding,
+            None,
+        )
+        .unwrap();
     }
     let db = Db::open(&path).unwrap();
     db.recover().unwrap();

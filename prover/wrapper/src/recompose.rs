@@ -9,7 +9,7 @@
 //! the tree wrote. A mismatch means the wrapper batched something other than what it says it
 //! batched, and the batch is failed instead of being handed to a client.
 
-use crate::felt::{Felt, hash_u32s, leaf_output_words};
+use crate::felt::{hash_u32s, leaf_output_words, Felt};
 
 /// One tree node: the circuit that produced it and its eight raw output words.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,7 +19,10 @@ pub struct Node {
 }
 
 pub fn leaf_node(leaf_circuit_hash: [u32; 8], preimage: &[Felt]) -> Node {
-    Node { circuit_hash: leaf_circuit_hash, output: leaf_output_words(preimage) }
+    Node {
+        circuit_hash: leaf_circuit_hash,
+        output: leaf_output_words(preimage),
+    }
 }
 
 /// The multiverifier over `(left, right)`:
@@ -30,7 +33,10 @@ pub fn fold_pair(left: &Node, right: &Node, multiverifier_hash: [u32; 8]) -> Nod
     words.extend_from_slice(&left.output);
     words.extend_from_slice(&right.circuit_hash);
     words.extend_from_slice(&right.output);
-    Node { circuit_hash: multiverifier_hash, output: hash_u32s(&words) }
+    Node {
+        circuit_hash: multiverifier_hash,
+        output: hash_u32s(&words),
+    }
 }
 
 /// Folds the leaves exactly as `stwo_run_and_prove_recursive_tree` does: adjacent pairs per
@@ -45,8 +51,7 @@ pub fn fold_tree(leaves: &[Node], multiverifier_hash: [u32; 8]) -> Option<Node> 
     let mut layer = leaves.to_vec();
     while layer.len() > 1 {
         let mut next = Vec::with_capacity(layer.len().div_ceil(2));
-        let mut it = layer.chunks(2);
-        while let Some(chunk) = it.next() {
+        for chunk in layer.chunks(2) {
             match chunk {
                 [l, r] => next.push(fold_pair(l, r, multiverifier_hash)),
                 [odd] => next.push(*odd),
@@ -72,15 +77,19 @@ pub fn root_from_preimages(
     leaf_circuit_hash: [u32; 8],
     multiverifier_hash: [u32; 8],
 ) -> Option<Node> {
-    let leaves: Vec<Node> =
-        preimages.iter().map(|p| leaf_node(leaf_circuit_hash, p)).collect();
+    let leaves: Vec<Node> = preimages
+        .iter()
+        .map(|p| leaf_node(leaf_circuit_hash, p))
+        .collect();
     fold_tree(&leaves, multiverifier_hash)
 }
 
+/// The leaf preimages (in fold order) and the two circuit identities a `packed_output.json`
+/// carries: `(preimages, leaf_circuit_hash, multiverifier_hash)`.
+pub type PackedOutput = (Vec<Vec<Felt>>, [u32; 8], [u32; 8]);
+
 /// Pulls the leaf preimages and the two circuit hashes out of a `packed_output.json`.
-pub fn parse_packed_output(
-    packed: &serde_json::Value,
-) -> anyhow::Result<(Vec<Vec<Felt>>, [u32; 8], [u32; 8])> {
+pub fn parse_packed_output(packed: &serde_json::Value) -> anyhow::Result<PackedOutput> {
     let mut preimages = vec![];
     let mut leaf_hash = None;
     let mut mv_hash = None;
@@ -126,7 +135,9 @@ fn walk(
 }
 
 fn words8(v: &serde_json::Value) -> anyhow::Result<[u32; 8]> {
-    let arr = v.as_array().ok_or_else(|| anyhow::anyhow!("not an array"))?;
+    let arr = v
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("not an array"))?;
     if arr.len() != 8 {
         anyhow::bail!("expected 8 words, got {}", arr.len());
     }
@@ -199,13 +210,17 @@ mod tests {
 
     #[test]
     fn the_fold_order_matters() {
-        let packed: serde_json::Value =
-            serde_json::from_str(include_str!("../../../spikes/s4/results/N2_doom/packed_output.json"))
-                .unwrap();
+        let packed: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../spikes/s4/results/N2_doom/packed_output.json"
+        ))
+        .unwrap();
         let (mut preimages, leaf_hash, mv_hash) = parse_packed_output(&packed).unwrap();
         let straight = root_from_preimages(&preimages, leaf_hash, mv_hash).unwrap();
         preimages.reverse();
         let reversed = root_from_preimages(&preimages, leaf_hash, mv_hash).unwrap();
-        assert_ne!(straight, reversed, "swapping two leaves must change the root");
+        assert_ne!(
+            straight, reversed,
+            "swapping two leaves must change the root"
+        );
     }
 }

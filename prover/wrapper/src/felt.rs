@@ -9,7 +9,7 @@
 //! leaf would fold into a different digest than the client claims, so the run is rejected before
 //! any 32.5 GB job is scheduled.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use blake2::{Blake2s256, Digest};
 
 /// A field element as eight little-endian u32 limbs (limb 0 = least significant).
@@ -94,7 +94,9 @@ fn parse_hex(hex: &str) -> Result<[u32; 8]> {
 fn parse_dec(dec: &str) -> Result<[u32; 8]> {
     let mut limbs = [0u32; 8];
     for ch in dec.chars() {
-        let d = ch.to_digit(10).with_context(|| format!("not a decimal felt: {dec}"))?;
+        let d = ch
+            .to_digit(10)
+            .with_context(|| format!("not a decimal felt: {dec}"))?;
         let mut carry = d as u64;
         for limb in limbs.iter_mut() {
             let v = (*limb as u64) * 10 + carry;
@@ -150,7 +152,10 @@ pub fn output_cells_from_words(words: &[u32; 8]) -> [Felt; 2] {
 /// Fails if a cell carries anything above 128 bits, which the leaf format forbids.
 pub fn words_from_output_cells(cells: &[Felt]) -> Result<[u32; 8]> {
     if cells.len() != 2 {
-        bail!("the leaf format requires exactly 2 output cells, got {}", cells.len());
+        bail!(
+            "the leaf format requires exactly 2 output cells, got {}",
+            cells.len()
+        );
     }
     let mut words = [0u32; 8];
     for (i, cell) in cells.iter().enumerate() {
@@ -170,7 +175,12 @@ mod tests {
     fn parses_hex_and_decimal_identically() {
         assert_eq!(Felt::parse("0x1f4").unwrap(), Felt::parse("500").unwrap());
         assert_eq!(Felt::parse("0x0").unwrap(), Felt::parse("0").unwrap());
-        for s in ["0x1", "0xff", "0x100000000", "0x5505b4a58e4ac7a1bbcfd4b1e44cb0f5"] {
+        for s in [
+            "0x1",
+            "0xff",
+            "0x100000000",
+            "0x5505b4a58e4ac7a1bbcfd4b1e44cb0f5",
+        ] {
             let f = Felt::parse(s).unwrap();
             assert_eq!(f.to_hex(), s, "hex round trip");
             assert_eq!(Felt::parse(&f.to_hex()).unwrap(), f);

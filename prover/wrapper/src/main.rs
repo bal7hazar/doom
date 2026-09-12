@@ -9,7 +9,7 @@ use clap::Parser;
 use hellproof_wrapper::config::Config;
 use hellproof_wrapper::db::Db;
 use hellproof_wrapper::scheduler::Scheduler;
-use hellproof_wrapper::{AppState, api};
+use hellproof_wrapper::{api, AppState};
 
 #[derive(Parser, Debug)]
 #[command(about = "Hellproof wrapper service: segment proofs in, one root proof out")]
@@ -45,7 +45,10 @@ async fn main() -> Result<()> {
     let db = Db::open(&cfg.data_dir.join("queue.sqlite3"))?;
     let requeued = db.recover()?;
     if requeued > 0 {
-        tracing::warn!(jobs = requeued, "re-queued jobs that were running before the restart");
+        tracing::warn!(
+            jobs = requeued,
+            "re-queued jobs that were running before the restart"
+        );
     }
 
     let bind = cfg.bind.clone();

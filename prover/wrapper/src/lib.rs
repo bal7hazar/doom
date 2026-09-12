@@ -70,7 +70,9 @@ impl AppState {
         self.cfg.data_dir.join("proofs")
     }
     pub fn leaf_path(&self, leaf_key: &str) -> PathBuf {
-        self.proofs_dir().join("leaves").join(format!("{leaf_key}.json"))
+        self.proofs_dir()
+            .join("leaves")
+            .join(format!("{leaf_key}.json"))
     }
     pub fn leaf_work_dir(&self, leaf_key: &str) -> PathBuf {
         self.cfg.data_dir.join("work").join("leaves").join(leaf_key)
@@ -79,7 +81,11 @@ impl AppState {
         self.proofs_dir().join("batches").join(batch_id)
     }
     pub fn segment_proof_path(&self, run_id: &str, index: u32) -> PathBuf {
-        self.cfg.data_dir.join("submissions").join(run_id).join(format!("segment_{index}.proof"))
+        self.cfg
+            .data_dir
+            .join("submissions")
+            .join(run_id)
+            .join(format!("segment_{index}.proof"))
     }
 }
 

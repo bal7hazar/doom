@@ -22,7 +22,7 @@ mod common;
 use std::collections::BTreeSet;
 
 use axum::http::StatusCode;
-use common::{Harness, run_body};
+use common::{run_body, Harness};
 
 const RUNS: usize = 20;
 const SEGMENTS: u32 = 3;
@@ -53,9 +53,18 @@ async fn twenty_concurrent_runs_all_complete() {
 
     // Every leaf was proven exactly once and every batch folded exactly once.
     let metrics = h.state.metrics.render();
-    let leaf_done = metric(&metrics, "wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"}");
-    let fold_done = metric(&metrics, "wrapper_jobs_total{kind=\"fold\",outcome=\"done\"}");
-    let verify_done = metric(&metrics, "wrapper_jobs_total{kind=\"verify\",outcome=\"done\"}");
+    let leaf_done = metric(
+        &metrics,
+        "wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"}",
+    );
+    let fold_done = metric(
+        &metrics,
+        "wrapper_jobs_total{kind=\"fold\",outcome=\"done\"}",
+    );
+    let verify_done = metric(
+        &metrics,
+        "wrapper_jobs_total{kind=\"verify\",outcome=\"done\"}",
+    );
     assert_eq!(leaf_done, (RUNS as u32 * SEGMENTS) as f64);
     assert_eq!(verify_done, (RUNS as u32 * SEGMENTS) as f64);
     assert_eq!(fold_done, (RUNS / 4) as f64);
@@ -100,7 +109,7 @@ async fn real_pipeline_load() {
     eprintln!(
         "Submit {runs} runs to {url} with key `{}…`. This stub does not ship an HTTP client on \
          purpose (the TypeScript client in client-ts/ is the supported one); drive it with \
-         `client-ts/examples/load.ts` or curl.",
-        &key.chars().take(4).collect::<String>()
+         `client-ts/examples/submit.ts` or curl.",
+        key.chars().take(4).collect::<String>()
     );
 }

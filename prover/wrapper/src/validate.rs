@@ -4,12 +4,12 @@
 //! Input validation — everything that can reject a submission before a single byte of proving
 //! work is scheduled (R8-A1, "reject immediately").
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use base64::Engine;
 use sha2::{Digest, Sha256};
 
 use crate::config::{Config, ProgramEntry};
-use crate::felt::{Felt, leaf_output_words, output_cells_from_words};
+use crate::felt::{leaf_output_words, output_cells_from_words, Felt};
 use crate::model::{HashFunction, ProofFormat, RunSubmission, SegmentSubmission};
 
 /// A submission that passed validation: felts parsed, proof bytes decoded, leaf keys computed.
@@ -63,11 +63,7 @@ pub fn leaf_key(
     hex::encode(h.finalize())
 }
 
-pub fn validate(
-    sub: &RunSubmission,
-    cfg: &Config,
-    registry_hash: &str,
-) -> Result<ValidSubmission> {
+pub fn validate(sub: &RunSubmission, cfg: &Config, registry_hash: &str) -> Result<ValidSubmission> {
     let program = cfg
         .program(&sub.program)
         .ok_or_else(|| anyhow::anyhow!("unknown program `{}`", sub.program))?
@@ -96,7 +92,12 @@ pub fn validate(
         );
     }
     if let Some(id) = &sub.run_id {
-        if id.is_empty() || id.len() > 64 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        if id.is_empty()
+            || id.len() > 64
+            || !id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
             bail!("run_id must be 1..64 chars of [A-Za-z0-9_-]");
         }
     }
@@ -108,7 +109,10 @@ pub fn validate(
     let mut prev_h_out: Option<Felt> = None;
     for (i, seg) in sub.segments.iter().enumerate() {
         if seg.index as usize != i {
-            bail!("segment {i} has index {} (indices must be 0..n contiguous and ordered)", seg.index);
+            bail!(
+                "segment {i} has index {} (indices must be 0..n contiguous and ordered)",
+                seg.index
+            );
         }
         let valid = validate_segment(seg, cfg, &program, hash_function, registry_hash)?;
 
@@ -170,7 +174,10 @@ fn validate_segment(
         .map_err(|e| anyhow::anyhow!("segment {}: bad arg: {e}", seg.index))?;
 
     if seg.output_preimage.is_empty() {
-        bail!("segment {}: output_preimage is required (it is what the tree hashes)", seg.index);
+        bail!(
+            "segment {}: output_preimage is required (it is what the tree hashes)",
+            seg.index
+        );
     }
     let preimage: Vec<Felt> = seg
         .output_preimage
@@ -227,36 +234,35 @@ fn validate_segment(
         );
     }
 
-    let proof_bytes = match seg.proof.format {
-        ProofFormat::BincodeB64 => {
-            let data = seg
-                .proof
-                .data
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("segment {}: proof.data is required", seg.index))?;
-            base64::engine::general_purpose::STANDARD
-                .decode(data)
-                .map_err(|e| anyhow::anyhow!("segment {}: proof.data is not base64: {e}", seg.index))?
-        }
-        ProofFormat::CairoSerdeFelts => {
-            let felts = seg
-                .proof
-                .felts
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("segment {}: proof.felts is required", seg.index))?;
-            if felts.is_empty() {
-                bail!("segment {}: proof.felts is empty", seg.index);
+    let proof_bytes =
+        match seg.proof.format {
+            ProofFormat::BincodeB64 => {
+                let data = seg.proof.data.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("segment {}: proof.data is required", seg.index)
+                })?;
+                base64::engine::general_purpose::STANDARD
+                    .decode(data)
+                    .map_err(|e| {
+                        anyhow::anyhow!("segment {}: proof.data is not base64: {e}", seg.index)
+                    })?
             }
-            // Parse them so a malformed stream is rejected here, and store the canonical form.
-            let parsed: Vec<Felt> = felts
-                .iter()
-                .map(|f| Felt::parse(f))
-                .collect::<Result<_>>()
-                .map_err(|e| anyhow::anyhow!("segment {}: bad proof felt: {e}", seg.index))?;
-            let hexes: Vec<String> = parsed.iter().map(|f| f.to_hex()).collect();
-            serde_json::to_vec(&hexes)?
-        }
-    };
+            ProofFormat::CairoSerdeFelts => {
+                let felts = seg.proof.felts.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("segment {}: proof.felts is required", seg.index)
+                })?;
+                if felts.is_empty() {
+                    bail!("segment {}: proof.felts is empty", seg.index);
+                }
+                // Parse them so a malformed stream is rejected here, and store the canonical form.
+                let parsed: Vec<Felt> = felts
+                    .iter()
+                    .map(|f| Felt::parse(f))
+                    .collect::<Result<_>>()
+                    .map_err(|e| anyhow::anyhow!("segment {}: bad proof felt: {e}", seg.index))?;
+                let hexes: Vec<String> = parsed.iter().map(|f| f.to_hex()).collect();
+                serde_json::to_vec(&hexes)?
+            }
+        };
     if proof_bytes.len() > cfg.max_proof_bytes {
         bail!(
             "segment {}: proof is {} bytes, over the {} byte limit",
@@ -266,8 +272,13 @@ fn validate_segment(
         );
     }
 
-    let leaf_key =
-        leaf_key(registry_hash, &program.id, program.program_hash.as_deref(), hash_function, &args);
+    let leaf_key = leaf_key(
+        registry_hash,
+        &program.id,
+        program.program_hash.as_deref(),
+        hash_function,
+        &args,
+    );
 
     Ok(ValidSegment {
         index: seg.index,
@@ -300,7 +311,13 @@ mod tests {
         SegmentSubmission {
             index,
             args: vec![h_in.into(), "0xfa".into()],
-            output_preimage: vec!["0x5".into(), h_in.into(), h_out.into(), "0xfa".into(), "0x0".into()],
+            output_preimage: vec![
+                "0x5".into(),
+                h_in.into(),
+                h_out.into(),
+                "0xfa".into(),
+                "0x0".into(),
+            ],
             public_outputs: vec![],
             proof: ProofBlob {
                 format: ProofFormat::BincodeB64,
@@ -339,14 +356,20 @@ mod tests {
     #[test]
     fn rejects_out_of_order_indices() {
         let sub = run(vec![seg(1, "0x1", "0x2")]);
-        assert!(validate(&sub, &cfg(), "reg").unwrap_err().to_string().contains("indices"));
+        assert!(validate(&sub, &cfg(), "reg")
+            .unwrap_err()
+            .to_string()
+            .contains("indices"));
     }
 
     #[test]
     fn rejects_unknown_program() {
         let mut sub = run(vec![seg(0, "0x1", "0x2")]);
         sub.program = "doom_run".into();
-        assert!(validate(&sub, &cfg(), "reg").unwrap_err().to_string().contains("unknown program"));
+        assert!(validate(&sub, &cfg(), "reg")
+            .unwrap_err()
+            .to_string()
+            .contains("unknown program"));
     }
 
     #[test]
@@ -396,24 +419,39 @@ mod tests {
         let mut c = cfg();
         c.max_segments_per_run = 1;
         let sub = run(vec![seg(0, "0x1", "0x2"), seg(1, "0x2", "0x3")]);
-        assert!(validate(&sub, &c, "reg").unwrap_err().to_string().contains("exceeds the limit"));
+        assert!(validate(&sub, &c, "reg")
+            .unwrap_err()
+            .to_string()
+            .contains("exceeds the limit"));
 
         let mut c = cfg();
         c.max_proof_bytes = 4;
         let sub = run(vec![seg(0, "0x1", "0x2")]);
-        assert!(validate(&sub, &c, "reg").unwrap_err().to_string().contains("over the"));
+        assert!(validate(&sub, &c, "reg")
+            .unwrap_err()
+            .to_string()
+            .contains("over the"));
     }
 
     #[test]
     fn leaf_key_is_content_addressed() {
         let one = [Felt::parse("0x1").unwrap()];
         let a = leaf_key("reg", "p", None, HashFunction::Blake, &one);
-        let b = leaf_key("reg", "p", None, HashFunction::Blake, &[Felt::parse("1").unwrap()]);
+        let b = leaf_key(
+            "reg",
+            "p",
+            None,
+            HashFunction::Blake,
+            &[Felt::parse("1").unwrap()],
+        );
         let c = leaf_key("reg2", "p", None, HashFunction::Blake, &one);
         let d = leaf_key("reg", "p", None, HashFunction::Poseidon, &one);
         assert_eq!(a, b, "the same args in any notation are the same leaf");
         assert_ne!(a, c, "a different registry is a different circuit");
-        assert_ne!(a, d, "a different program hash function is a different leaf output");
+        assert_ne!(
+            a, d,
+            "a different program hash function is a different leaf output"
+        );
     }
 
     #[test]

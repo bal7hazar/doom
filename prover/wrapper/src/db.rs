@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::model::{BatchStatus, Job, JobKind, JobState, RunStatus};
 
@@ -118,19 +118,23 @@ CREATE INDEX IF NOT EXISTS jobs_state ON jobs(state, kind);
 
 impl Db {
     pub fn open(path: &Path) -> Result<Self> {
-        let conn = Connection::open(path)
-            .with_context(|| format!("cannot open {}", path.display()))?;
+        let conn =
+            Connection::open(path).with_context(|| format!("cannot open {}", path.display()))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "busy_timeout", 5000)?;
         conn.execute_batch(SCHEMA)?;
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     pub fn open_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(SCHEMA)?;
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
@@ -146,7 +150,10 @@ impl Db {
             [],
         )?;
         // A batch caught mid-fold restarts the fold from its (re-queued) job.
-        conn.execute("UPDATE batches SET status = 'closed' WHERE status = 'folding'", [])?;
+        conn.execute(
+            "UPDATE batches SET status = 'closed' WHERE status = 'folding'",
+            [],
+        )?;
         // A leaf caught mid-proof is not trusted: its job is queued again, so is its row.
         conn.execute(
             "UPDATE leaves SET status = 'queued' WHERE status = 'running'",
@@ -173,7 +180,16 @@ impl Db {
             "INSERT INTO runs (id, account, player, program_id, solo, status, submission_hash,
                                n_segments, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, 'verifying', ?6, ?7, ?8, ?8)",
-            params![id, account, player, program_id, solo as i64, submission_hash, n_segments as i64, now],
+            params![
+                id,
+                account,
+                player,
+                program_id,
+                solo as i64,
+                submission_hash,
+                n_segments as i64,
+                now
+            ],
         )?;
         Ok(())
     }
@@ -200,7 +216,8 @@ impl Db {
 
     pub fn runs_with_status(&self, status: &str) -> Result<Vec<String>> {
         let conn = self.lock();
-        let mut stmt = conn.prepare("SELECT id FROM runs WHERE status = ?1 ORDER BY created_at, id")?;
+        let mut stmt =
+            conn.prepare("SELECT id FROM runs WHERE status = ?1 ORDER BY created_at, id")?;
         let rows = stmt.query_map(params![status], |r| r.get::<_, String>(0))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
@@ -217,7 +234,11 @@ impl Db {
              GROUP BY s.run_id",
         )?;
         let rows = stmt.query_map([], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
@@ -250,7 +271,16 @@ impl Db {
             "INSERT INTO segments (run_id, idx, leaf_key, args_json, preimage_json, outputs_json,
                                    proof_path, proof_format)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![run_id, idx, leaf_key, args_json, preimage_json, outputs_json, proof_path, proof_format],
+            params![
+                run_id,
+                idx,
+                leaf_key,
+                args_json,
+                preimage_json,
+                outputs_json,
+                proof_path,
+                proof_format
+            ],
         )?;
         Ok(())
     }
@@ -332,8 +362,11 @@ impl Db {
              VALUES (?1, 'queued', ?2, ?2)",
             params![key, now],
         )?;
-        let status: String =
-            conn.query_row("SELECT status FROM leaves WHERE leaf_key = ?1", params![key], |r| r.get(0))?;
+        let status: String = conn.query_row(
+            "SELECT status FROM leaves WHERE leaf_key = ?1",
+            params![key],
+            |r| r.get(0),
+        )?;
         Ok(status == "done")
     }
 
@@ -352,7 +385,15 @@ impl Db {
                     max_rss_bytes = COALESCE(?5, max_rss_bytes),
                     error = ?6, updated_at = ?7
              WHERE leaf_key = ?1",
-            params![key, status, proof_path, duration_ms, max_rss.map(|v| v as i64), error, now_ms()],
+            params![
+                key,
+                status,
+                proof_path,
+                duration_ms,
+                max_rss.map(|v| v as i64),
+                error,
+                now_ms()
+            ],
         )?;
         Ok(())
     }
@@ -418,13 +459,19 @@ impl Db {
 
     pub fn batch_runs(&self, batch_id: &str) -> Result<Vec<String>> {
         let conn = self.lock();
-        let mut stmt = conn
-            .prepare("SELECT id FROM runs WHERE batch_id = ?1 ORDER BY verified_at, created_at, id")?;
+        let mut stmt = conn.prepare(
+            "SELECT id FROM runs WHERE batch_id = ?1 ORDER BY verified_at, created_at, id",
+        )?;
         let rows = stmt.query_map(params![batch_id], |r| r.get::<_, String>(0))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
-    pub fn set_batch_status(&self, id: &str, status: BatchStatus, error: Option<&str>) -> Result<()> {
+    pub fn set_batch_status(
+        &self,
+        id: &str,
+        status: BatchStatus,
+        error: Option<&str>,
+    ) -> Result<()> {
         self.lock().execute(
             "UPDATE batches SET status = ?2, error = COALESCE(?3, error) WHERE id = ?1",
             params![id, status.as_str(), error],
@@ -472,7 +519,12 @@ impl Db {
              WHERE batch_id = ?1 ORDER BY position",
         )?;
         let rows = stmt.query_map(params![id], |r| {
-            Ok((r.get::<_, u32>(0)?, r.get::<_, String>(1)?, r.get::<_, u32>(2)?, r.get::<_, String>(3)?))
+            Ok((
+                r.get::<_, u32>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, u32>(2)?,
+                r.get::<_, String>(3)?,
+            ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
@@ -507,7 +559,15 @@ impl Db {
             "UPDATE batches SET status = 'done', root_path = ?2, packed_path = ?3,
                     program_output = ?4, fold_ms = ?5, max_rss_bytes = ?6, finished_at = ?7
              WHERE id = ?1",
-            params![id, root_path, packed_path, program_output, fold_ms, max_rss.map(|v| v as i64), now],
+            params![
+                id,
+                root_path,
+                packed_path,
+                program_output,
+                fold_ms,
+                max_rss.map(|v| v as i64),
+                now
+            ],
         )?;
         tx.execute(
             "UPDATE runs SET status = 'done', updated_at = ?2 WHERE batch_id = ?1",
@@ -543,7 +603,9 @@ impl Db {
                      OR (SELECT COUNT(*) FROM runs r WHERE r.batch_id = b.id) >= ?2 )
                AND (SELECT COUNT(*) FROM runs r WHERE r.batch_id = b.id) > 0",
         )?;
-        let rows = stmt.query_map(params![now_ms(), max_runs as i64], |r| r.get::<_, String>(0))?;
+        let rows = stmt.query_map(params![now_ms(), max_runs as i64], |r| {
+            r.get::<_, String>(0)
+        })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
@@ -650,7 +712,11 @@ impl Db {
         let mut stmt =
             conn.prepare("SELECT kind, state, COUNT(*) FROM jobs GROUP BY kind, state")?;
         let rows = stmt.query_map([], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }

@@ -50,7 +50,9 @@ pub struct ApiKeyAuth {
 
 impl ApiKeyAuth {
     pub fn new(cfg: &Config) -> Self {
-        Self { keys: cfg.api_keys.clone() }
+        Self {
+            keys: cfg.api_keys.clone(),
+        }
     }
 }
 
@@ -125,8 +127,17 @@ mod tests {
     fn rejects_missing_and_wrong_keys() {
         let auth = ApiKeyAuth::new(&cfg());
         assert_eq!(auth.authenticate(None).unwrap_err(), AuthError::Missing);
-        assert_eq!(auth.authenticate(Some("secret")).unwrap_err(), AuthError::Missing);
-        assert_eq!(auth.authenticate(Some("Bearer ")).unwrap_err(), AuthError::Missing);
-        assert_eq!(auth.authenticate(Some("Bearer nope")).unwrap_err(), AuthError::Invalid);
+        assert_eq!(
+            auth.authenticate(Some("secret")).unwrap_err(),
+            AuthError::Missing
+        );
+        assert_eq!(
+            auth.authenticate(Some("Bearer ")).unwrap_err(),
+            AuthError::Missing
+        );
+        assert_eq!(
+            auth.authenticate(Some("Bearer nope")).unwrap_err(),
+            AuthError::Invalid
+        );
     }
 }

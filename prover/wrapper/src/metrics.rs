@@ -9,7 +9,9 @@ use std::sync::Mutex;
 
 /// Duration buckets in seconds, chosen around the measured pipeline: verification ~0.05 s, a leaf
 /// ~22 s, a fold ~30 s per reduction, a 50-leaf batch ~45 min.
-const BUCKETS: &[f64] = &[0.05, 0.25, 1.0, 5.0, 15.0, 30.0, 60.0, 120.0, 300.0, 900.0, 3600.0];
+const BUCKETS: &[f64] = &[
+    0.05, 0.25, 1.0, 5.0, 15.0, 30.0, 60.0, 120.0, 300.0, 900.0, 3600.0,
+];
 
 #[derive(Default)]
 struct Histogram {
@@ -55,7 +57,11 @@ impl Metrics {
     }
 
     pub fn incr(&self, name: &'static str, labels: &str) {
-        *self.lock().counters.entry((name, labels.to_string())).or_default() += 1;
+        *self
+            .lock()
+            .counters
+            .entry((name, labels.to_string()))
+            .or_default() += 1;
     }
 
     pub fn set(&self, name: &'static str, labels: &str, value: f64) {
@@ -65,7 +71,10 @@ impl Metrics {
     /// Keeps the largest value ever seen (used for peak RSS).
     pub fn set_max(&self, name: &'static str, labels: &str, value: f64) {
         let mut inner = self.lock();
-        let e = inner.gauges.entry((name, labels.to_string())).or_insert(0.0);
+        let e = inner
+            .gauges
+            .entry((name, labels.to_string()))
+            .or_insert(0.0);
         if value > *e {
             *e = value;
         }

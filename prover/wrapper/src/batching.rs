@@ -17,7 +17,10 @@ pub enum Placement {
     /// Put it in the existing open batch.
     Existing(String),
     /// Open a new batch. `solo` batches are closed as soon as the run joins them.
-    New { solo: bool, close_deadline: Option<i64> },
+    New {
+        solo: bool,
+        close_deadline: Option<i64>,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -30,22 +33,37 @@ pub struct Policy {
 
 impl Policy {
     pub fn new(max_runs: usize, max_wait_secs: u64) -> Self {
-        Self { max_runs: max_runs.max(1), max_wait_ms: (max_wait_secs as i64) * 1000 }
+        Self {
+            max_runs: max_runs.max(1),
+            max_wait_ms: (max_wait_secs as i64) * 1000,
+        }
     }
 
     /// Where a run goes. `open` is the current open shared batch, if any.
     pub fn place(&self, solo: bool, now_ms: i64, open: Option<&str>) -> Placement {
         if solo {
-            return Placement::New { solo: true, close_deadline: Some(now_ms) };
+            return Placement::New {
+                solo: true,
+                close_deadline: Some(now_ms),
+            };
         }
         match open {
             Some(id) => Placement::Existing(id.to_string()),
-            None => Placement::New { solo: false, close_deadline: Some(now_ms + self.max_wait_ms) },
+            None => Placement::New {
+                solo: false,
+                close_deadline: Some(now_ms + self.max_wait_ms),
+            },
         }
     }
 
     /// Whether an open batch must close now.
-    pub fn should_close(&self, solo: bool, run_count: usize, close_deadline: Option<i64>, now_ms: i64) -> bool {
+    pub fn should_close(
+        &self,
+        solo: bool,
+        run_count: usize,
+        close_deadline: Option<i64>,
+        now_ms: i64,
+    ) -> bool {
         if run_count == 0 {
             return false;
         }
@@ -86,13 +104,19 @@ mod tests {
     fn first_run_opens_a_batch_with_a_deadline() {
         assert_eq!(
             policy().place(false, T0, None),
-            Placement::New { solo: false, close_deadline: Some(T0 + 600_000) }
+            Placement::New {
+                solo: false,
+                close_deadline: Some(T0 + 600_000)
+            }
         );
     }
 
     #[test]
     fn later_runs_join_the_open_batch() {
-        assert_eq!(policy().place(false, T0, Some("b1")), Placement::Existing("b1".into()));
+        assert_eq!(
+            policy().place(false, T0, Some("b1")),
+            Placement::Existing("b1".into())
+        );
     }
 
     #[test]
@@ -100,7 +124,10 @@ mod tests {
         let p = policy();
         assert_eq!(
             p.place(true, T0, Some("b1")),
-            Placement::New { solo: true, close_deadline: Some(T0) }
+            Placement::New {
+                solo: true,
+                close_deadline: Some(T0)
+            }
         );
         assert!(p.should_close(true, 1, Some(T0), T0));
     }

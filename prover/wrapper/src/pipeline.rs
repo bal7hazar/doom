@@ -13,11 +13,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{Backend, Config};
@@ -36,7 +36,9 @@ struct ExternalLock(Option<PathBuf>);
 
 impl ExternalLock {
     fn acquire(dir: Option<&Path>) -> Self {
-        let Some(dir) = dir else { return ExternalLock(None) };
+        let Some(dir) = dir else {
+            return ExternalLock(None);
+        };
         loop {
             match fs::create_dir(dir) {
                 Ok(()) => return ExternalLock(Some(dir.to_path_buf())),
@@ -94,7 +96,15 @@ fn run_child(mut cmd: Command, lock_dir: Option<&Path>) -> Result<(String, Strin
     if !out.status.success() {
         let code = out.status.code().unwrap_or(-1);
         // Keep the tail of stderr: these binaries log a lot.
-        let tail: String = stderr.lines().rev().take(15).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+        let tail: String = stderr
+            .lines()
+            .rev()
+            .take(15)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
         bail!("exit {code}: {tail}\n{stdout}");
     }
     Ok((stdout, stderr, resources))
@@ -103,7 +113,10 @@ fn run_child(mut cmd: Command, lock_dir: Option<&Path>) -> Result<(String, Strin
 /// Resident set size of a live process, via `ps` (portable across macOS and Linux, and correct
 /// for a child we do not `wait` on yet).
 fn rss_bytes(pid: u32) -> Option<u64> {
-    let out = Command::new("ps").args(["-o", "rss=", "-p", &pid.to_string()]).output().ok()?;
+    let out = Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output()
+        .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     text.trim().parse::<u64>().ok().map(|kb| kb * 1024)
 }
@@ -192,7 +205,10 @@ pub fn verify_segment_proof(
             ..report
         });
     }
-    let got: Vec<Felt> = outputs.iter().map(|s| Felt::parse(s)).collect::<Result<_>>()?;
+    let got: Vec<Felt> = outputs
+        .iter()
+        .map(|s| Felt::parse(s))
+        .collect::<Result<_>>()?;
     if got[0] != expected_cells[0] || got[1] != expected_cells[1] {
         return Ok(VerifyReport {
             ok: false,
@@ -241,7 +257,10 @@ pub fn prove_leaf(
 
     if cfg.backend == Backend::Stub {
         // Deterministic placeholder: enough for the queue, batching and API tests.
-        let preimage: Vec<String> = hexes.iter().map(|h| Felt::parse(h).unwrap().to_hex()).collect();
+        let preimage: Vec<String> = hexes
+            .iter()
+            .map(|h| Felt::parse(h).unwrap().to_hex())
+            .collect();
         let leaf = serde_json::json!({
             "circuit_preprocessed_root": vec!["0x0"; 8],
             "circuit_hash": vec!["0x0"; 8],
@@ -256,7 +275,10 @@ pub fn prove_leaf(
         return Ok(LeafOutcome {
             proof_path: out_path.to_path_buf(),
             preimage,
-            resources: Resources { duration_ms: 0.0, max_rss_bytes: 0 },
+            resources: Resources {
+                duration_ms: 0.0,
+                max_rss_bytes: 0,
+            },
         });
     }
 
@@ -265,7 +287,8 @@ pub fn prove_leaf(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("leaf_bootloader is not configured"))?;
     let registry = cfg
-        .registry.path
+        .registry
+        .path
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("registry.path is not configured"))?;
     let leaf_prover = cfg
@@ -316,7 +339,10 @@ pub fn prove_leaf(
 
     Ok(LeafOutcome {
         proof_path: out_path.to_path_buf(),
-        preimage: preimage_hex.iter().map(|h| Felt::parse(h).map(|f| f.to_hex())).collect::<Result<_>>()?,
+        preimage: preimage_hex
+            .iter()
+            .map(|h| Felt::parse(h).map(|f| f.to_hex()))
+            .collect::<Result<_>>()?,
         resources,
     })
 }
@@ -366,7 +392,10 @@ pub fn fold_batch(cfg: &Config, leaf_paths: &[PathBuf], out_dir: &Path) -> Resul
         bail!("cannot fold an empty batch");
     }
     let leaves_path = out_dir.join("leaves.json");
-    fs::write(&leaves_path, serde_json::to_vec(&serde_json::json!({ "leaves": leaf_paths }))?)?;
+    fs::write(
+        &leaves_path,
+        serde_json::to_vec(&serde_json::json!({ "leaves": leaf_paths }))?,
+    )?;
     let root_path = out_dir.join("root.proof");
     let packed_path = out_dir.join("packed_output.json");
     let program_output_path = out_dir.join("program_output.json");
@@ -393,7 +422,8 @@ pub fn fold_batch(cfg: &Config, leaf_paths: &[PathBuf], out_dir: &Path) -> Resul
     }
 
     let registry = cfg
-        .registry.path
+        .registry
+        .path
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("registry.path is not configured"))?;
     let tree_bin = cfg
@@ -416,7 +446,8 @@ pub fn fold_batch(cfg: &Config, leaf_paths: &[PathBuf], out_dir: &Path) -> Resul
 
     let root: Vec<String> = serde_json::from_slice(&fs::read(&root_path)?)
         .context("the tree did not write a felt array")?;
-    let program_output: serde_json::Value = serde_json::from_slice(&fs::read(&program_output_path)?)?;
+    let program_output: serde_json::Value =
+        serde_json::from_slice(&fs::read(&program_output_path)?)?;
     Ok(FoldOutcome {
         root_path,
         packed_path,

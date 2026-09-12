@@ -154,7 +154,10 @@ impl RunStatus {
         }
     }
     pub fn terminal(self) -> bool {
-        matches!(self, RunStatus::Rejected | RunStatus::Done | RunStatus::Failed)
+        matches!(
+            self,
+            RunStatus::Rejected | RunStatus::Done | RunStatus::Failed
+        )
     }
 }
 

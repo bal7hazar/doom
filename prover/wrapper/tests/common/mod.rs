@@ -9,15 +9,15 @@
 
 use std::sync::Arc;
 
-use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use axum::Router;
 use hellproof_wrapper::config::{ApiKey, Backend, Config, ProgramEntry};
 use hellproof_wrapper::db::Db;
 use hellproof_wrapper::scheduler::Scheduler;
-use hellproof_wrapper::{AppState, Shared, api};
+use hellproof_wrapper::{api, AppState, Shared};
 use http_body_util::BodyExt;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tower::ServiceExt;
 
 pub const KEY: &str = "test-key";
@@ -69,7 +69,11 @@ impl Harness {
         let state = Arc::new(AppState::new(cfg, db));
         tokio::spawn(Scheduler::new(Arc::clone(&state)).run());
         let router = api::router(Arc::clone(&state));
-        Self { state, router, _dir: dir }
+        Self {
+            state,
+            router,
+            _dir: dir,
+        }
     }
 
     pub async fn call(&self, req: Request<Body>) -> (StatusCode, Value) {

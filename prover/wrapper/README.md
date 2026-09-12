@@ -281,7 +281,7 @@ container image in `infra/wrapper/` builds them for you.
 ## Tests
 
 ```bash
-cargo test                       # 46 tests, no proving
+cargo test                       # 51 tests, no proving
 cargo test --test load           # 20 concurrent runs on the stub backend
 ```
 

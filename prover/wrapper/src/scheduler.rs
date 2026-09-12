@@ -20,7 +20,7 @@ use tokio::sync::Semaphore;
 
 use crate::db::now_ms;
 use crate::model::{BatchStatus, Job, JobKind, JobState, RunStatus};
-use crate::{Shared, pipeline};
+use crate::{pipeline, Shared};
 
 pub struct Scheduler {
     state: Shared,
@@ -71,13 +71,20 @@ impl Scheduler {
             if !db.all_segments_verified(&run_id)? {
                 continue;
             }
-            let Some(run) = db.run(&run_id)? else { continue };
+            let Some(run) = db.run(&run_id)? else {
+                continue;
+            };
             let open = db.open_batch()?;
             let placement =
-                self.state.policy.place(run.solo, now_ms(), open.as_ref().map(|b| b.id.as_str()));
+                self.state
+                    .policy
+                    .place(run.solo, now_ms(), open.as_ref().map(|b| b.id.as_str()));
             let batch_id = match placement {
                 crate::batching::Placement::Existing(id) => id,
-                crate::batching::Placement::New { solo, close_deadline } => {
+                crate::batching::Placement::New {
+                    solo,
+                    close_deadline,
+                } => {
                     let id = crate::new_id();
                     db.create_batch(&id, solo, close_deadline)?;
                     self.state.metrics.incr("wrapper_batches_opened_total", "");
@@ -85,7 +92,9 @@ impl Scheduler {
                 }
             };
             db.assign_run_to_batch(&run_id, &batch_id)?;
-            self.state.metrics.incr("wrapper_runs_total", "status=\"queued\"");
+            self.state
+                .metrics
+                .incr("wrapper_runs_total", "status=\"queued\"");
             tracing::info!(run = %run_id, batch = %batch_id, solo = run.solo, "run verified and batched");
 
             for seg in db.segments(&run_id)? {
@@ -101,7 +110,11 @@ impl Scheduler {
             // exactly M runs instead of one oversized batch.
             let count = db.batch_run_count(&batch_id)?;
             let deadline = db.batch(&batch_id)?.and_then(|b| b.close_deadline);
-            if self.state.policy.should_close(run.solo, count, deadline, now_ms()) {
+            if self
+                .state
+                .policy
+                .should_close(run.solo, count, deadline, now_ms())
+            {
                 self.close(&batch_id)?;
             }
         }
@@ -109,7 +122,11 @@ impl Scheduler {
     }
 
     fn close_due_batches(&self) -> Result<()> {
-        for id in self.state.db.batches_to_close(self.state.cfg.batch_max_runs)? {
+        for id in self
+            .state
+            .db
+            .batches_to_close(self.state.cfg.batch_max_runs)?
+        {
             self.close(&id)?;
         }
         Ok(())
@@ -118,7 +135,9 @@ impl Scheduler {
     fn close(&self, batch_id: &str) -> Result<()> {
         let leaves = self.state.db.close_batch(batch_id)?;
         self.state.metrics.incr("wrapper_batches_closed_total", "");
-        self.state.metrics.observe("wrapper_batch_leaves", "", leaves.len() as f64);
+        self.state
+            .metrics
+            .observe("wrapper_batch_leaves", "", leaves.len() as f64);
         tracing::info!(batch = %batch_id, leaves = leaves.len(), "batch closed");
         Ok(())
     }
@@ -141,7 +160,10 @@ impl Scheduler {
             if let Some(run) = db.run(&run_id)? {
                 if let Some(batch) = run.batch_id.as_deref() {
                     let b = db.batch(batch)?;
-                    if matches!(b.map(|b| b.status), Some(BatchStatus::Closed) | Some(BatchStatus::Folding)) {
+                    if matches!(
+                        b.map(|b| b.status),
+                        Some(BatchStatus::Closed) | Some(BatchStatus::Folding)
+                    ) {
                         db.fail_batch(batch, &msg)?;
                         continue;
                     }
@@ -155,7 +177,11 @@ impl Scheduler {
     fn export_queue_metrics(&self) -> Result<()> {
         let m = &self.state.metrics;
         for (kind, state, n) in self.state.db.queue_depths()? {
-            m.set("wrapper_queue_depth", &format!("kind=\"{kind}\",state=\"{state}\""), n as f64);
+            m.set(
+                "wrapper_queue_depth",
+                &format!("kind=\"{kind}\",state=\"{state}\""),
+                n as f64,
+            );
         }
         for (status, n) in self.state.db.run_counts()? {
             m.set("wrapper_runs", &format!("status=\"{status}\""), n as f64);
@@ -190,7 +216,9 @@ impl Scheduler {
             let outcome = run_job(&state, &job);
             let secs = started.elapsed().as_secs_f64();
             let labels = format!("kind=\"{}\"", kind.as_str());
-            state.metrics.observe("wrapper_job_duration_seconds", &labels, secs);
+            state
+                .metrics
+                .observe("wrapper_job_duration_seconds", &labels, secs);
             match outcome {
                 Ok(()) => {
                     let _ = state.db.finish_job(job.id, JobState::Done, None);
@@ -228,7 +256,9 @@ fn fail_job_subject(state: &Shared, job: &Job, error: &str) -> Result<()> {
     match job.kind {
         JobKind::Verify => {
             if let Some(run) = &job.run_id {
-                state.db.set_run_status(run, RunStatus::Rejected, Some(error))?;
+                state
+                    .db
+                    .set_run_status(run, RunStatus::Rejected, Some(error))?;
             }
         }
         JobKind::Leaf => {
@@ -270,8 +300,13 @@ fn run_job(state: &Shared, job: &Job) -> Result<()> {
 
 /// R8-A1: the Rust verifier on the submitted segment proof, before any expensive work.
 fn verify_job(state: &Shared, job: &Job) -> Result<()> {
-    let run_id = job.run_id.clone().ok_or_else(|| anyhow::anyhow!("verify job without a run"))?;
-    let idx = job.seg_index.ok_or_else(|| anyhow::anyhow!("verify job without a segment"))?;
+    let run_id = job
+        .run_id
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("verify job without a run"))?;
+    let idx = job
+        .seg_index
+        .ok_or_else(|| anyhow::anyhow!("verify job without a segment"))?;
     let seg = state
         .db
         .segment(&run_id, idx)?
@@ -281,7 +316,10 @@ fn verify_job(state: &Shared, job: &Job) -> Result<()> {
     }
     let cells: Vec<crate::felt::Felt> = {
         let hexes: Vec<String> = serde_json::from_str(&seg.outputs_json)?;
-        hexes.iter().map(|h| crate::felt::Felt::parse(h)).collect::<Result<_>>()?
+        hexes
+            .iter()
+            .map(|h| crate::felt::Felt::parse(h))
+            .collect::<Result<_>>()?
     };
     let cells: [crate::felt::Felt; 2] = [cells[0], cells[1]];
 
@@ -289,18 +327,29 @@ fn verify_job(state: &Shared, job: &Job) -> Result<()> {
         .proof_path
         .clone()
         .ok_or_else(|| anyhow::anyhow!("segment {run_id}/{idx} has no stored proof"))?;
-    let report = pipeline::verify_segment_proof(&state.cfg, std::path::Path::new(&proof_path), &cells)?;
-    state
-        .metrics
-        .observe("wrapper_verify_duration_seconds", "", report.verify_ms / 1e3);
+    let report =
+        pipeline::verify_segment_proof(&state.cfg, std::path::Path::new(&proof_path), &cells)?;
+    state.metrics.observe(
+        "wrapper_verify_duration_seconds",
+        "",
+        report.verify_ms / 1e3,
+    );
     if !report.ok {
         let msg = report.error.unwrap_or_else(|| "invalid proof".into());
-        state.db.set_run_status(&run_id, RunStatus::Rejected, Some(&format!("segment {idx}: {msg}")))?;
-        state.metrics.incr("wrapper_runs_total", "status=\"rejected\"");
+        state.db.set_run_status(
+            &run_id,
+            RunStatus::Rejected,
+            Some(&format!("segment {idx}: {msg}")),
+        )?;
+        state
+            .metrics
+            .incr("wrapper_runs_total", "status=\"rejected\"");
         // The job itself did its work: the answer is "no".
         return Ok(());
     }
-    state.db.mark_segment_verified(&run_id, idx, report.verify_ms)?;
+    state
+        .db
+        .mark_segment_verified(&run_id, idx, report.verify_ms)?;
     Ok(())
 }
 
@@ -318,7 +367,10 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
         .db
         .segment(&run_id, idx)?
         .ok_or_else(|| anyhow::anyhow!("unknown segment {run_id}/{idx}"))?;
-    let run = state.db.run(&run_id)?.ok_or_else(|| anyhow::anyhow!("unknown run {run_id}"))?;
+    let run = state
+        .db
+        .run(&run_id)?
+        .ok_or_else(|| anyhow::anyhow!("unknown run {run_id}"))?;
     let program = state
         .cfg
         .program(&run.program_id)
@@ -326,10 +378,15 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
 
     let args: Vec<crate::felt::Felt> = {
         let hexes: Vec<String> = serde_json::from_str(&seg.args_json)?;
-        hexes.iter().map(|h| crate::felt::Felt::parse(h)).collect::<Result<_>>()?
+        hexes
+            .iter()
+            .map(|h| crate::felt::Felt::parse(h))
+            .collect::<Result<_>>()?
     };
 
-    state.db.set_leaf_status(&leaf_key, "running", None, None, None, None)?;
+    state
+        .db
+        .set_leaf_status(&leaf_key, "running", None, None, None, None)?;
     let out = pipeline::prove_leaf(
         &state.cfg,
         &program.executable,
@@ -361,9 +418,11 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
         Some(out.resources.max_rss_bytes),
         None,
     )?;
-    state
-        .metrics
-        .set_max("wrapper_job_max_rss_bytes", "kind=\"leaf\"", out.resources.max_rss_bytes as f64);
+    state.metrics.set_max(
+        "wrapper_job_max_rss_bytes",
+        "kind=\"leaf\"",
+        out.resources.max_rss_bytes as f64,
+    );
     tracing::info!(
         leaf = %leaf_key,
         ms = out.resources.duration_ms,
@@ -375,7 +434,10 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
 
 /// `stwo_run_and_prove_recursive_tree` on a closed batch.
 fn fold_job(state: &Shared, job: &Job) -> Result<()> {
-    let batch_id = job.batch_id.clone().ok_or_else(|| anyhow::anyhow!("fold job without a batch"))?;
+    let batch_id = job
+        .batch_id
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("fold job without a batch"))?;
     let leaves = state.db.batch_leaves(&batch_id)?;
     if leaves.is_empty() {
         anyhow::bail!("batch {batch_id} has no leaves");
@@ -391,7 +453,9 @@ fn fold_job(state: &Shared, job: &Job) -> Result<()> {
             .ok_or_else(|| anyhow::anyhow!("leaf {key} has no proof file"))?;
         paths.push(std::path::PathBuf::from(path));
     }
-    state.db.set_batch_status(&batch_id, BatchStatus::Folding, None)?;
+    state
+        .db
+        .set_batch_status(&batch_id, BatchStatus::Folding, None)?;
     let out = pipeline::fold_batch(&state.cfg, &paths, &state.batch_dir(&batch_id))?;
 
     // Self-check: recompute the root's output words from the leaves' preimages the way the
@@ -425,10 +489,14 @@ fn fold_job(state: &Shared, job: &Job) -> Result<()> {
         out.resources.duration_ms,
         Some(out.resources.max_rss_bytes),
     )?;
+    state.metrics.set_max(
+        "wrapper_job_max_rss_bytes",
+        "kind=\"fold\"",
+        out.resources.max_rss_bytes as f64,
+    );
     state
         .metrics
-        .set_max("wrapper_job_max_rss_bytes", "kind=\"fold\"", out.resources.max_rss_bytes as f64);
-    state.metrics.observe("wrapper_root_proof_felts", "", out.root_felt_count as f64);
+        .observe("wrapper_root_proof_felts", "", out.root_felt_count as f64);
     tracing::info!(
         batch = %batch_id,
         leaves = leaves.len(),

@@ -27,9 +27,9 @@ use axum::http::{Request, StatusCode};
 use hellproof_wrapper::config::{ApiKey, Backend, Config, ProgramEntry};
 use hellproof_wrapper::db::Db;
 use hellproof_wrapper::scheduler::Scheduler;
-use hellproof_wrapper::{AppState, api};
+use hellproof_wrapper::{api, AppState};
 use http_body_util::BodyExt;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tower::ServiceExt;
 
 const KEY: &str = "e2e";
@@ -45,7 +45,10 @@ struct Env {
 
 fn env() -> Option<Env> {
     let fixtures = PathBuf::from(std::env::var("WRAPPER_E2E_FIXTURES").ok()?);
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().ok()?;
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .ok()?;
     Some(Env {
         fixtures,
         bin_dir: PathBuf::from(std::env::var("WRAPPER_E2E_BIN_DIR").ok()?),
@@ -117,7 +120,10 @@ async fn call(router: &axum::Router, req: Request<Body>) -> (StatusCode, Value) 
     let res = router.clone().oneshot(req).await.unwrap();
     let status = res.status();
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
-    (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
 }
 
 async fn post(router: &axum::Router, uri: &str, body: Value) -> (StatusCode, Value) {
@@ -146,7 +152,8 @@ async fn wraps_two_real_segment_proofs_into_one_root() {
     let e = env().expect("set WRAPPER_E2E_* (see the module docs)");
     let dir = tempfile::tempdir().unwrap();
     let cfg = config(&e, dir.path().to_path_buf());
-    cfg.check_runnable().expect("pipeline binaries and fixtures must exist");
+    cfg.check_runnable()
+        .expect("pipeline binaries and fixtures must exist");
 
     let db = Db::open(&dir.path().join("queue.sqlite3")).unwrap();
     let state = Arc::new(AppState::new(cfg, db));
@@ -162,8 +169,14 @@ async fn wraps_two_real_segment_proofs_into_one_root() {
     let verify_wall = started.elapsed();
     assert_eq!(code, StatusCode::ACCEPTED, "{res}");
     assert_ne!(res["status"], "rejected", "{res}");
-    eprintln!("verification of {n} segments: {:.2} s", verify_wall.as_secs_f64());
-    assert!(verify_wall.as_secs() < 30, "verification should take seconds");
+    eprintln!(
+        "verification of {n} segments: {:.2} s",
+        verify_wall.as_secs_f64()
+    );
+    assert!(
+        verify_wall.as_secs() < 30,
+        "verification should take seconds"
+    );
 
     let run_id = res["run_id"].as_str().unwrap().to_string();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1800);
@@ -204,7 +217,10 @@ async fn wraps_two_real_segment_proofs_into_one_root() {
     assert_eq!(batch["leaves"].as_array().unwrap().len(), n);
     // S4 measured 93 797 felts for N = 2 with this registry.
     let felts = batch["root_proof_felt_count"].as_u64().unwrap();
-    assert!((90_000..100_000).contains(&felts), "unexpected root proof size: {felts}");
+    assert!(
+        (90_000..100_000).contains(&felts),
+        "unexpected root proof size: {felts}"
+    );
 
     // The root's output words are the recomposition of the leaves' preimages — the same
     // computation the on-chain consumer performs (`recursion_outputs::fold_tree`).
@@ -212,8 +228,8 @@ async fn wraps_two_real_segment_proofs_into_one_root() {
     let (preimages, leaf_hash, mv_hash) =
         hellproof_wrapper::recompose::parse_packed_output(&packed).unwrap();
     assert_eq!(preimages.len(), n);
-    let root = hellproof_wrapper::recompose::root_from_preimages(&preimages, leaf_hash, mv_hash)
-        .unwrap();
+    let root =
+        hellproof_wrapper::recompose::root_from_preimages(&preimages, leaf_hash, mv_hash).unwrap();
     let program_output: Vec<u32> = serde_json::from_value(batch["program_output"].clone()).unwrap();
     assert_eq!(program_output, root.output, "root output vs recomposition");
     eprintln!(
@@ -254,7 +270,9 @@ async fn a_tampered_proof_is_rejected_in_seconds() {
     {
         use base64::Engine;
         let data = body["segments"][0]["proof"]["data"].as_str().unwrap();
-        let mut bytes = base64::engine::general_purpose::STANDARD.decode(data).unwrap();
+        let mut bytes = base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .unwrap();
         let mid = bytes.len() / 2;
         for b in &mut bytes[mid..mid + 64] {
             *b ^= 0xff;
@@ -269,7 +287,10 @@ async fn a_tampered_proof_is_rejected_in_seconds() {
     eprintln!("rejection in {:.2} s: {res}", elapsed.as_secs_f64());
     assert_eq!(code, StatusCode::UNPROCESSABLE_ENTITY, "{res}");
     assert_eq!(res["status"], "rejected");
-    assert!(elapsed.as_secs() < 20, "R8-A1: reject an invalid leaf in seconds");
+    assert!(
+        elapsed.as_secs() < 20,
+        "R8-A1: reject an invalid leaf in seconds"
+    );
 
     // No leaf was ever queued.
     let depths = state.db.queue_depths().unwrap();
