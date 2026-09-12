@@ -1,19 +1,129 @@
 # blockmap
 
-**Does**: maps a `geom2d::Point` to its blockmap cell coordinates
-(`try_block_of`) and a cell coordinate pair to a linear storage index
-(`cell_index`), given a `BlockMap` (origin, fixed square cell size, grid
-width/height) — the spatial acceleration structure `P_TryMove` and
-`P_PathTraverse` iterate over instead of scanning every line/thing.
+**Does**: the 128-unit spatial grid Doom iterates over instead of scanning
+every line. `Grid` holds the geometry (origin, columns, rows); `cell_of`
+locates a point, `cell_index` maps a cell to its list index, `cells_of_box`
+returns the clamped rectangle of cells a bounding box overlaps and
+`range_len`/`range_cell` enumerate it without allocating. `walk_start` /
+`walk_next` walk the cells a segment crosses, nearest first, with **no
+division** (`P_PathTraverse`'s job, minus the intercept fractions).
+`PackedLists` (a `start` offset array plus a concatenated `items` array) is
+read back by `list_range` / `list_item` — the allocation-free form R2-A10
+asks for — or through the `ItemVisitor` trait with `for_each_in_cell`.
 
-**Does not**: store or iterate the actual per-cell line/thing lists (that
-data comes from `tools/wad` and is owned by `doom_map`); it does not (yet)
-implement the cell-by-cell traversal along an arbitrary segment (the
-`P_PathTraverse`-style walk) — that is a Phase 1 addition once `doom_map`
-exists to provide real cell contents to traverse.
+**Does not**: own the lists (the WAD tool generates them; `doom_map` holds
+them), know what an item *is* (a linedef id to `doom_physics`, a subsector id
+to the R2-A9 accelerator), test anything geometric about the items
+(`geom2d`), or deduplicate across cells — see below.
 
-**Invariants**: `try_block_of` returns `Option::None` for any point outside
-the blockmap's bounding box (never a wrapped/clamped index) and
-`Option::Some((cx, cy))` with `cx < width` and `cy < height` otherwise;
-`cell_index` is injective over the valid `(cx, cy)` range (`cy * width +
-cx`), so distinct cells never alias to the same storage index.
+**Invariants**:
+
+* `cell_of` returns `None` for any point outside the grid, never a wrapped
+  or clamped index; a coordinate exactly on a cell boundary belongs to the
+  cell above/right of it, matching `(x - bmaporgx) >> MAPBLOCKSHIFT`;
+* `cells_of_box` returns a range **clamped to the grid**, or `None` when the
+  box misses it entirely; the cell of any corner that is itself inside the
+  grid is inside the returned range;
+* a walk yields **only cells that are on the grid**, starts in the cell
+  containing `p1`, yields orthogonally adjacent cells (exactly one axis
+  changes, by one), and stops at the border for a ray aimed outside instead
+  of underflowing — Doom instead walks off the grid and lets
+  `P_BlockLinesIterator` reject each out-of-range cell;
+* nothing allocates: no `Array` is ever built for a cell's list or a walk.
+
+## Two rejected optimizations, and one adopted
+
+* **Cross-cell deduplication (R2-A5) is not implemented**, deliberately: S1
+  §5.6 measured it as a *pessimisation* — O(n²) over the accumulated list,
+  taking a hitscan from 8 781 to 40 308 steps. A line in two visited cells is
+  tested twice. If a consumer ever needs once-only semantics (counting
+  damage), the fix is Doom's `validcount` epoch array, not a search.
+* **Per-cell sorting/deduplication is a no-op** on Freedoom E1M1 (2 064
+  blocklist entries before and after), so the WAD tool may do it for
+  tidiness but no gain should be expected (S1 §4).
+* **Allocation-free iteration (R2-A10) is adopted**: measured, iterating a
+  4-entry cell costs **121 steps** open-coded and **132** through the
+  visitor, against the ~180 steps of pure plumbing S1 measured for
+  materializing the list in an `Array` and reading it back.
+
+## The walk, and what it gives up
+
+`walk_next` decides which boundary comes first by comparing two cross
+products (`|dy| * distance_to_next_vertical` against
+`|dx| * distance_to_next_horizontal`), each incremented by a constant per
+step. There is **no division anywhere** in the walk — S1 §7's
+recommendation — which costs one thing: hits are ordered by *cell*, not
+within a cell, where `P_PathTraverse` sorts intercepts by fraction. For
+`P_CheckSight` (any blocking line stops the ray) that is irrelevant; a
+hitscan that must pick the *nearest* target inside one cell has to order the
+candidates of that last cell itself, with `geom2d::intercept_fraction`.
+
+## Measured step costs
+
+`bench/` is a standalone Scarb package; `bench/measure.py` is the crate's
+**step-budget test** (fails at +10 % over `bench/budgets.json`). Costs are
+net of the baseline op that builds the same operands.
+
+```sh
+cd bench && python3 measure.py          # measure + check budgets
+python3 measure.py --update             # re-baseline after an intended change
+```
+
+| Operation | steps (net) | range checks | note |
+|---|---:|---:|---|
+| `cell_index` | 7 | 2 | a multiply and an add |
+| `cell_of` | 92 | 18 | two comparisons, two `u128` divisions |
+| `cells_of_box` | 199 | 36 | four `axis_cell` |
+| `P_TryMove` cell preamble | 272 | 42 | `cells_of_box` + enumerating its cells |
+| `walk_start` | 272 | 45 | one `cell_of` plus the two cross products |
+| walk, 4 cells | 662 | 51 | `walk_start` included |
+| walk, 22 cells across the grid | 2 168 | 87 | ~84 steps per extra cell |
+| cell list (4 entries), open-coded | 121 | 6 | `list_range` + 4 × `list_item` |
+| cell list (4 entries), visitor | 132 | 9 | ~3 steps per entry more |
+
+Bytecode: **4 517 words** for the benchmark executable, `geom2d`/`fixed`
+included.
+
+The consequence for `doom_physics` is S1 §7's advice, now quantified:
+`cell_of` at 92 steps is too expensive to call four times per move, so
+compute the **range once** per `P_TryMove` (272 steps for the whole
+preamble) and keep the mobj's own cell in its state, updating it
+incrementally (R2-A11) — a mobj moves less than 30 units per tic inside a
+128-unit cell.
+
+## Tests
+
+`scarb test -p blockmap` — 13 unit tests + 2 integration tests, against
+vectors generated by `scripts/gen_vectors.py` over an E1M1-shaped grid
+(32 × 27 cells, origin (-1024, -1024)):
+
+* **reference values**: 1 000 points (405 of them outside the grid, on every
+  side) with their cell; 400 boxes (96 missing the grid) with their clamped
+  cell range; **200 segments with the full ordered list of cells the walk
+  yields** (3 119 cells, longest 47), including horizontal rays, vertical
+  rays and rays aimed off the grid; a 3 409-entry packed list over 864 cells.
+* **the walk vectors are cross-checked independently**: the generator samples
+  each segment densely with exact rational arithmetic and asserts that every
+  cell the sampling sees appears, in the same order, in the DDA's output. All
+  200 passed, so the committed expectations are not merely a copy of the
+  implementation.
+* **properties**: a walk starts in `cell_of(p1)`, stays on the grid and moves
+  one cell at a time; `cell_index` is row-major and injective over the whole
+  grid; every corner inside the grid lands inside the cell range of its box;
+  `range_cell` enumerates each cell of a range exactly once; the visitor sees
+  exactly what the open-coded loop reads.
+* **edge cases**: the origin corner and one ulp outside it on each side; the
+  last cell and one ulp past it; a cell boundary; a degenerate ray; a ray
+  from outside the grid (no walk); a ray aimed off the grid (stops at the
+  border); an empty cell list; an early stop after one entry.
+
+The integration target covers only the loop-free API: `scarb test` computes
+gas for it even though the workspace disables gas, and Cairo lowers `while`
+into recursive functions, whose cost computation then fails.
+
+`cairo-coverage` (0.5.0, installed via asdf) was **not** run: it consumes
+`snforge test --save-trace-data` traces and this workspace's runner is
+`scarb cairo-test`. Coverage is argued instead: the vectors reach both
+outcomes of `cell_of`, all four "outside" branches of `cells_of_box`, all
+four step directions of the walk plus all four border stops, and both the
+empty and early-stop paths of the list iteration.

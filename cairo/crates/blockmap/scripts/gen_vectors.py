@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+"""Generate `src/tests/vectors.cairo` for the `blockmap` crate.
+
+The grid is E1M1-shaped: 32 x 27 cells of 128 map units, origin at
+(-1024, -1024). Four families of vectors:
+
+* `CO_*`   -- 1 000 points and the cell they fall in, a fifth of them
+              outside the grid on each side;
+* `BX_*`   --   400 boxes and the clamped cell rectangle they overlap
+              (or "outside");
+* `WK_*`   --   200 segments and the ordered cells a walk yields,
+              flattened with a start offset per segment;
+* `PL_*`   -- a synthetic packed list (0 to 8 entries per cell) with the
+              per-cell offsets the crate must read back.
+
+The walk expectations are produced by the same division-free DDA the Cairo
+crate implements, but each one is then **checked independently** by dense
+rational sampling of the segment: every cell the sampling sees must appear,
+in the same order, in the DDA's output. The header records how many
+segments were checked that way.
+
+Usage: python3 scripts/gen_vectors.py --write && scarb fmt -p blockmap
+"""
+
+from __future__ import annotations
+
+import sys
+from fractions import Fraction
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BIAS = 1 << 32
+UNIT = 65536
+CELL = 128 * UNIT          # 2^23
+COLUMNS, ROWS = 32, 27
+ORG_X, ORG_Y = -1024 * UNIT, -1024 * UNIT
+NEVER = 1 << 70
+
+
+class Rng:
+    def __init__(self, seed: int) -> None:
+        self.s = seed
+
+    def next(self) -> int:
+        self.s = (self.s * 6364136223846793005 + 1442695040888963407) % (1 << 64)
+        return self.s >> 11
+
+    def span(self, lo: int, hi: int) -> int:
+        return lo + self.next() % (hi - lo)
+
+
+def axis_cell(origin: int, v: int, count: int) -> tuple[int, int]:
+    if v < origin:
+        return (0, 1)
+    c = (v - origin) // CELL
+    if c >= count:
+        return (count - 1, 2)
+    return (c, 0)
+
+
+def cell_of(p) -> tuple[int, int] | None:
+    cx, ox = axis_cell(ORG_X, p[0], COLUMNS)
+    if ox:
+        return None
+    cy, oy = axis_cell(ORG_Y, p[1], ROWS)
+    if oy:
+        return None
+    return (cx, cy)
+
+
+def cells_of_box(box) -> tuple[int, int, int, int] | None:
+    left, bottom, right, top = box
+    x0, ox0 = axis_cell(ORG_X, left, COLUMNS)
+    x1, ox1 = axis_cell(ORG_X, right, COLUMNS)
+    if ox1 == 1 or ox0 == 2:
+        return None
+    y0, oy0 = axis_cell(ORG_Y, bottom, ROWS)
+    y1, oy1 = axis_cell(ORG_Y, top, ROWS)
+    if oy1 == 1 or oy0 == 2:
+        return None
+    return (x0, y0, x1, y1)
+
+
+def walk(p1, p2) -> list[tuple[int, int]] | None:
+    """The crate's division-free DDA."""
+    start = cell_of(p1)
+    if start is None:
+        return None
+    cx, cy = start
+    ex, _ = axis_cell(ORG_X, p2[0], COLUMNS)
+    ey, _ = axis_cell(ORG_Y, p2[1], ROWS)
+    east = p2[0] >= p1[0]
+    north = p2[1] >= p1[1]
+    adx = abs(p2[0] - p1[0])
+    ady = abs(p2[1] - p1[1])
+    cell_start_x = ORG_X + cx * CELL
+    to_x = cell_start_x + CELL - p1[0] if east else p1[0] - cell_start_x
+    cell_start_y = ORG_Y + cy * CELL
+    to_y = cell_start_y + CELL - p1[1] if north else p1[1] - cell_start_y
+    tx, dtx = (NEVER, 0) if adx == 0 else (ady * to_x, ady * CELL)
+    ty, dty = (NEVER, 0) if ady == 0 else (adx * to_y, adx * CELL)
+    budget = abs(ex - cx) + abs(ey - cy) + 1
+    out = []
+    while True:
+        out.append((cx, cy))
+        if budget == 1 or (cx == ex and cy == ey):
+            return out
+        budget -= 1
+        # A step that would leave the grid ends the walk, exactly like the
+        # Cairo implementation: the yielded cells are always on the grid.
+        if ty >= tx:
+            if east and cx + 1 == COLUMNS:
+                return out
+            if not east and cx == 0:
+                return out
+            cx += 1 if east else -1
+            tx += dtx
+        else:
+            if north and cy + 1 == ROWS:
+                return out
+            if not north and cy == 0:
+                return out
+            cy += 1 if north else -1
+            ty += dty
+
+
+def sampled_cells(p1, p2, samples: int = 4001) -> list[tuple[int, int]]:
+    """Independent check: the cells a dense sampling of the segment sees."""
+    out: list[tuple[int, int]] = []
+    for k in range(samples):
+        t = Fraction(k, samples - 1)
+        x = p1[0] + (p2[0] - p1[0]) * t
+        y = p1[1] + (p2[1] - p1[1]) * t
+        c = cell_of((int(x), int(y)))
+        if c is not None and (not out or out[-1] != c):
+            out.append(c)
+    return out
+
+
+def is_subsequence(small, big) -> bool:
+    it = iter(big)
+    return all(item in it for item in small)
+
+
+def emit(name: str, values: list[int], per_line: int = 10, typ: str = "felt252") -> str:
+    body = ",\n    ".join(
+        ", ".join(str(v) for v in values[i:i + per_line])
+        for i in range(0, len(values), per_line)
+    )
+    return "pub const %s: [%s; %d] = [\n    %s,\n];\n\n" % (name, typ, len(values), body)
+
+
+HEADER = """// SPDX-License-Identifier: Apache-2.0
+// GENERATED by scripts/gen_vectors.py -- do not edit by hand.
+//
+// Grid: %(cols)d x %(rows)d cells of 128 map units, origin (-1024, -1024).
+//
+//   CO_* : %(co)d points (%(co_out)d outside the grid) and their cell;
+//   BX_* : %(bx)d boxes (%(bx_out)d missing the grid) and the clamped cell
+//          rectangle they cover;
+//   WK_* : %(wk)d segments and the ordered cells the walk yields
+//          (%(wk_cells)d cells in all, longest %(wk_max)d). Every one of
+//          them was checked against a dense rational sampling of the
+//          segment: the sampled cells appear, in order, in the walk.
+//   PL_* : a packed list of %(pl_items)d entries over %(pl_cells)d cells.
+"""
+
+
+def main() -> int:
+    rng = Rng(0xB10CB10C)
+    lo_x, hi_x = ORG_X - 4 * CELL, ORG_X + (COLUMNS + 4) * CELL
+    lo_y, hi_y = ORG_Y - 4 * CELL, ORG_Y + (ROWS + 4) * CELL
+
+    # -- cell_of ------------------------------------------------------------
+    co_x, co_y, co_ok, co_cx, co_cy = [], [], [], [], []
+    outside = 0
+    specials = [
+        (ORG_X, ORG_Y),                                  # the origin corner
+        (ORG_X - 1, ORG_Y),                              # one ulp west of it
+        (ORG_X + COLUMNS * CELL - 1, ORG_Y + ROWS * CELL - 1),  # last cell
+        (ORG_X + COLUMNS * CELL, ORG_Y),                 # one ulp too far east
+        (ORG_X, ORG_Y + ROWS * CELL),                    # one ulp too far north
+        (ORG_X + CELL, ORG_Y + CELL),                    # a cell boundary
+    ]
+    for k in range(1000):
+        p = specials[k] if k < len(specials) else (rng.span(lo_x, hi_x), rng.span(lo_y, hi_y))
+        c = cell_of(p)
+        co_x.append(p[0] + BIAS)
+        co_y.append(p[1] + BIAS)
+        if c is None:
+            outside += 1
+            co_ok.append(0); co_cx.append(0); co_cy.append(0)
+        else:
+            co_ok.append(1); co_cx.append(c[0]); co_cy.append(c[1])
+
+    # -- cells_of_box -------------------------------------------------------
+    bx_l, bx_b, bx_r, bx_t, bx_ok = [], [], [], [], []
+    bx_x0, bx_y0, bx_x1, bx_y1 = [], [], [], []
+    box_outside = 0
+    for _ in range(400):
+        cx0, cy0 = rng.span(lo_x, hi_x), rng.span(lo_y, hi_y)
+        w = rng.span(UNIT, 6 * CELL)
+        h = rng.span(UNIT, 6 * CELL)
+        box = (cx0, cy0, cx0 + w, cy0 + h)
+        r = cells_of_box(box)
+        bx_l.append(box[0] + BIAS); bx_b.append(box[1] + BIAS)
+        bx_r.append(box[2] + BIAS); bx_t.append(box[3] + BIAS)
+        if r is None:
+            box_outside += 1
+            bx_ok.append(0); bx_x0.append(0); bx_y0.append(0); bx_x1.append(0); bx_y1.append(0)
+        else:
+            bx_ok.append(1)
+            bx_x0.append(r[0]); bx_y0.append(r[1]); bx_x1.append(r[2]); bx_y1.append(r[3])
+
+    # -- walk ---------------------------------------------------------------
+    wk_x1, wk_y1, wk_x2, wk_y2, wk_start, wk_flat = [], [], [], [], [], []
+    longest = 0
+    checked = 0
+    inside_lo_x, inside_hi_x = ORG_X, ORG_X + COLUMNS * CELL - 1
+    inside_lo_y, inside_hi_y = ORG_Y, ORG_Y + ROWS * CELL - 1
+    cases = 0
+    while cases < 200:
+        p1 = (rng.span(inside_lo_x, inside_hi_x), rng.span(inside_lo_y, inside_hi_y))
+        if cases % 4 == 0:      # a purely horizontal ray
+            p2 = (rng.span(inside_lo_x, inside_hi_x), p1[1])
+        elif cases % 4 == 1:    # a purely vertical ray
+            p2 = (p1[0], rng.span(inside_lo_y, inside_hi_y))
+        elif cases % 4 == 2:    # a ray aimed outside the grid
+            p2 = (rng.span(lo_x, hi_x), rng.span(lo_y, hi_y))
+        else:
+            p2 = (rng.span(inside_lo_x, inside_hi_x), rng.span(inside_lo_y, inside_hi_y))
+        cells = walk(p1, p2)
+        assert cells is not None
+        sampled = sampled_cells(p1, p2)
+        if sampled and not is_subsequence(sampled, cells):
+            # The walk stops at the grid border for a ray aimed outside, so
+            # only cells up to the walk's last one can be compared.
+            last = cells[-1]
+            if last in sampled:
+                trimmed = sampled[:sampled.index(last) + 1]
+                assert is_subsequence(trimmed, cells), (p1, p2, cells, trimmed)
+            else:
+                raise SystemExit("walk and sampling disagree: %s %s" % (p1, p2))
+        checked += 1
+        longest = max(longest, len(cells))
+        wk_x1.append(p1[0] + BIAS); wk_y1.append(p1[1] + BIAS)
+        wk_x2.append(p2[0] + BIAS); wk_y2.append(p2[1] + BIAS)
+        wk_start.append(len(wk_flat))
+        for c in cells:
+            wk_flat.append(c[0])
+            wk_flat.append(c[1])
+        cases += 1
+    wk_start.append(len(wk_flat))
+
+    # -- packed lists -------------------------------------------------------
+    n_cells = COLUMNS * ROWS
+    pl_start, pl_items = [], []
+    for c in range(n_cells):
+        pl_start.append(len(pl_items))
+        for _ in range(rng.next() % 9):
+            pl_items.append(rng.next() % 1175)   # E1M1 has 1 175 linedefs
+    pl_start.append(len(pl_items))
+
+    text = HEADER % dict(cols=COLUMNS, rows=ROWS, co=1000, co_out=outside, bx=400,
+                         bx_out=box_outside, wk=200, wk_cells=len(wk_flat) // 2,
+                         wk_max=longest, pl_items=len(pl_items), pl_cells=n_cells)
+    text += "\n"
+    text += "pub const COLUMNS: u32 = %d;\npub const ROWS: u32 = %d;\n" % (COLUMNS, ROWS)
+    text += "pub const ORIGIN_X_ENC: felt252 = %d;\n" % (ORG_X + BIAS)
+    text += "pub const ORIGIN_Y_ENC: felt252 = %d;\n\n" % (ORG_Y + BIAS)
+    text += emit("CO_X", co_x, 6) + emit("CO_Y", co_y, 6)
+    text += emit("CO_OK", co_ok, 20, "u32") + emit("CO_CX", co_cx, 20, "u32")
+    text += emit("CO_CY", co_cy, 20, "u32")
+    text += emit("BX_L", bx_l, 6) + emit("BX_B", bx_b, 6)
+    text += emit("BX_R", bx_r, 6) + emit("BX_T", bx_t, 6)
+    text += emit("BX_OK", bx_ok, 20, "u32")
+    text += emit("BX_X0", bx_x0, 20, "u32") + emit("BX_Y0", bx_y0, 20, "u32")
+    text += emit("BX_X1", bx_x1, 20, "u32") + emit("BX_Y1", bx_y1, 20, "u32")
+    text += emit("WK_X1", wk_x1, 6) + emit("WK_Y1", wk_y1, 6)
+    text += emit("WK_X2", wk_x2, 6) + emit("WK_Y2", wk_y2, 6)
+    text += emit("WK_START", wk_start, 20, "u32") + emit("WK_CELLS", wk_flat, 20, "u32")
+    text += emit("PL_START", pl_start, 20, "u32") + emit("PL_ITEMS", pl_items, 20, "u32")
+
+    if "--write" in sys.argv:
+        out = ROOT / "src" / "tests" / "vectors.cairo"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text)
+        print("wrote %s: %d points (%d outside), %d boxes (%d outside), "
+              "%d walks (%d cells, longest %d, %d cross-checked), %d list entries"
+              % (out, 1000, outside, 400, box_outside, 200, len(wk_flat) // 2,
+                 longest, checked, len(pl_items)), file=sys.stderr)
+    else:
+        sys.stdout.write(text)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

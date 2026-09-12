@@ -1,0 +1,61 @@
+{
+  "crate": "blockmap",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 bare loop, 1 a point, 2 a point + its box, 3 a pair of points, 12 the cell index arithmetic). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4).",
+  "bytecode_words": 4517,
+  "operations": [
+    {
+      "name": "cell_of",
+      "op": 4,
+      "base": 1,
+      "budget": 92
+    },
+    {
+      "name": "cell_index",
+      "op": 5,
+      "base": 14,
+      "budget": 7
+    },
+    {
+      "name": "cells_of_box",
+      "op": 6,
+      "base": 2,
+      "budget": 199
+    },
+    {
+      "name": "P_TryMove cell preamble",
+      "op": 7,
+      "base": 2,
+      "budget": 272
+    },
+    {
+      "name": "walk_start",
+      "op": 8,
+      "base": 3,
+      "budget": 272
+    },
+    {
+      "name": "walk across the grid",
+      "op": 9,
+      "base": 3,
+      "budget": 2168
+    },
+    {
+      "name": "walk 4 cells east",
+      "op": 13,
+      "base": 1,
+      "budget": 662
+    },
+    {
+      "name": "cell list: open-coded loop",
+      "op": 10,
+      "base": 12,
+      "budget": 121
+    },
+    {
+      "name": "cell list: for_each_in_cell",
+      "op": 11,
+      "base": 12,
+      "budget": 132
+    }
+  ]
+}

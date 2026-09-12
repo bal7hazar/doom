@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# Standalone package (NOT a member of the cairo/ workspace, like
+# cairo/doom_contracts): it owns an executable target so that
+# `scarb execute --print-resource-usage` can measure the step cost of the
+# `blockmap` crate. See ../README.md ("Measured step costs").
+[package]
+name = "blockmap_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+blockmap = { path = ".." }
+geom2d = { path = "../../geom2d" }
+fixed = { path = "../../fixed" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "blockmap_bench"
+function = "blockmap_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false
