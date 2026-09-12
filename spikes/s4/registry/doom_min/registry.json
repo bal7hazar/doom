@@ -1,0 +1,71 @@
+{
+  "cairo_prover_params": {
+    "channel_hash": "blake2s",
+    "channel_salt": 0,
+    "fri_config": {
+      "pow_bits": 26,
+      "log_blowup_factor": 1,
+      "log_last_layer_degree_bound": 0,
+      "n_queries": 70,
+      "fold_step": 1
+    },
+    "preprocessed_trace": "canonical_small",
+    "store_polynomials_coefficients": false,
+    "include_all_preprocessed_columns": true,
+    "opt_n_id_to_big_components": 16,
+    "lifting_size_policy": "at_least_preprocessed"
+  },
+  "circuit_proof_configs": {
+    "default": {
+      "fri_config": {
+        "pow_bits": 26,
+        "log_blowup_factor": 1,
+        "log_last_layer_degree_bound": 0,
+        "n_queries": 70,
+        "fold_step": 4
+      },
+      "component_log_sizes": {
+        "eq": 20,
+        "qm31_ops": 23,
+        "m31_to_u32": 20,
+        "triple_xor": 19,
+        "blake_g_gate": 23
+      }
+    }
+  },
+  "leaf_verifiers": [
+    {
+      "config": "default",
+      "trace_log_size": 20,
+      "circuit_hash": [
+        "0x700e2f2b",
+        "0x3d94ff2e",
+        "0x735291a8",
+        "0xd5b2e9bd",
+        "0x7a47b751",
+        "0x70efbab1",
+        "0xb29e3d14",
+        "0x585ef31f"
+      ]
+    }
+  ],
+  "multiverifiers": [
+    {
+      "config": "default",
+      "input_configs": [
+        "default",
+        "default"
+      ],
+      "circuit_hash": [
+        "0x976fb1bb",
+        "0xa7867307",
+        "0x7bf13821",
+        "0xee4e2801",
+        "0xbfce8e56",
+        "0xaa63a974",
+        "0x315bf6c9",
+        "0xa791ee7c"
+      ]
+    }
+  ]
+}
