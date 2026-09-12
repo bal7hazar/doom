@@ -11,11 +11,14 @@
   "sectorHeights": "planar",
   "blockmap": "planar",
   "accelerator": "packed",
+  "cellNode": "planar",
 
   "reject": "packed",
   "things": "packed",
   "linedefSpecial": "packed",
   "sidedefSector": "packed",
   "subsectorSector": "packed",
-  "sectorMeta": "packed"
+  "sectorMeta": "packed",
+
+  "emitAccelCandidates": false
 }

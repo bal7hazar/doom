@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { computeCellSubsectors } from "./accelerator.js";
+import { computeCellAccelerator } from "./accelerator.js";
 import { ArrayEntry, assertBudget, BudgetExceededError, computeBytecodeBudget } from "./bytecodeBudget.js";
 import { buildMapCairo } from "./cairoOutput.js";
 import { ALL_PACKED_CONFIG, ALL_PLANAR_CONFIG, DEFAULT_EMIT_CONFIG, EmitConfig, resolveEmitConfig } from "./emitConfig.js";
@@ -132,7 +132,7 @@ export function main(): void {
   const jsonPath = join(resolvedOut, `${mapNameLower}.json`);
   const cairoPath = join(resolvedOut, `${mapNameLower}.cairo`);
 
-  const { spans: accelSpans, stats: accelStats } = computeCellSubsectors(map);
+  const { spans: accelSpans, stats: accelStats } = computeCellAccelerator(map);
   const json = buildMapJson(map, assets, accelSpans);
   writeFileSync(jsonPath, JSON.stringify(json, null, 2) + "\n");
   console.error(`Wrote ${jsonPath}`);
