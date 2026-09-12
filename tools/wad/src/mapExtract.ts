@@ -2,7 +2,7 @@ import { listFlats, listSprites } from "./assets/markers.js";
 import { parseColormap } from "./assets/colormap.js";
 import { parsePlaypal } from "./assets/playpal.js";
 import { parsePnames, parseTextureLump } from "./assets/textures.js";
-import { computeBoundingBox, computeSectorLines, MapBoundingBox } from "./derive.js";
+import { computeBoundingBox, computeSectorLines, computeSubsectorSectors, MapBoundingBox } from "./derive.js";
 import {
   parseBlockmap,
   parseLinedefs,
@@ -59,6 +59,14 @@ export interface MapData {
   boundingBox: MapBoundingBox;
   /** sectorLines[s] = indices into `linedefs` bordering sector `s`. */
   sectorLines: number[][];
+  /**
+   * subsectorSectors[ss] = sector index that subsector `ss` lies in (WAD
+   * tool v2, task item 1): resolved via SEGS/LINEDEFS/SIDEDEFS at
+   * extraction time so the Cairo output can drop SEGS entirely and still
+   * answer "which sector is this subsector in" with a single array read.
+   * See `derive.ts#computeSubsectorSectors`.
+   */
+  subsectorSectors: number[];
 }
 
 export function extractMap(wad: Wad, mapName: string): MapData {
@@ -92,6 +100,7 @@ export function extractMap(wad: Wad, mapName: string): MapData {
     linedefs,
     sidedefs.map((s) => s.sector),
   );
+  const subsectorSectors = computeSubsectorSectors(subsectors, segs, linedefs, sidedefs);
 
   return {
     name: mapName,
@@ -108,6 +117,7 @@ export function extractMap(wad: Wad, mapName: string): MapData {
     blockmapLumpBuffer: data.BLOCKMAP,
     boundingBox,
     sectorLines,
+    subsectorSectors,
   };
 }
 

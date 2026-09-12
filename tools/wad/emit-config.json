@@ -1,0 +1,21 @@
+{
+  "_comment": "Layout ('planar' | 'packed') for each Cairo const group emitted by tools/wad. See README.md and src/emitConfig.ts for what each group covers and docs/spikes/S1.md sections 5.3/5.9/7 for the sizing rule behind these defaults. Delete a key to fall back to the built-in default for that group.",
+
+  "vertices": "planar",
+  "nodePredicates": "planar",
+  "nodeChildren": "planar",
+  "linedefPredicates": "planar",
+  "linedefBBox": "packed",
+  "linedefFlags": "planar",
+  "linedefSides": "packed",
+  "sectorHeights": "planar",
+  "blockmap": "planar",
+  "accelerator": "packed",
+
+  "reject": "packed",
+  "things": "packed",
+  "linedefSpecial": "packed",
+  "sidedefSector": "packed",
+  "subsectorSector": "packed",
+  "sectorMeta": "packed"
+}

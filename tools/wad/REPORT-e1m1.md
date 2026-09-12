@@ -149,3 +149,73 @@ Monsters that Phase 1 (`doom_monsters`) must implement for this map:
 
 Linedef special categories present: door, exit, floor, lift.
 
+
+## Cell -> subsector accelerator (R2-A9)
+
+For each blockmap cell, the list of subsectors whose geometry can overlap that cell (RISKS.md R2-A9), replacing a full BSP descent (docs/spikes/S1.md §7 `bsp`: ~1 014 steps, 35% of an optimized tic) with a span lookup.
+
+**Method**: a subsector's bounding box is the union of the vertex coordinates of its SEGS (the vanilla node builder always closes a subsector's polygon with SEGS, wall segs and internal partition segs alike). A subsector is listed for a cell whenever the two boxes intersect.
+
+**Why it is conservative**: for any polygon, every interior point's x and y coordinates lie between the min and max of the polygon's own vertex coordinates (a point inside a polygon is a convex combination of its vertices), so the polygon is always a subset of its own vertex bounding box. If a point lies in both subsector S and blockmap cell C, then the point lies in `bbox(S)` (by the fact above) and in `bbox(C)` (by construction), so the two boxes intersect and S is listed for C. The accelerator can list extra subsectors whose bbox reaches a cell without their polygon actually doing so, but it can never omit the true one. `test/accelerator.test.ts` checks this by sampling points in every cell and comparing against a ground-truth BSP descent (`accelerator.ts#locateSubsector`).
+
+| Metric | Value |
+|---|---:|
+| Blockmap cells | 864 |
+| Total (cell, subsector) entries | 2272 |
+| Average subsectors per cell | 2.63 |
+| Max subsectors in one cell | 20 |
+| Cells resolved by a single subsector | 71 (8.2%) |
+| Cells with no candidate subsector (outside all subsector bboxes) | 314 |
+
+## Bytecode budget (R2-A12)
+
+docs/spikes/S1.md §5.9 measured that a `const [felt252; N]` array costs exactly one word of compiled bytecode per element, and that the bootloader rehashes the whole compiled program on every proof segment for `2 340 + 14.7 * words` steps (docs/spikes/S0.md §5.2). This table applies that 1-word-per-element rule to every array this tool emits (approximated uniformly across `felt252`/`u32`, see `bytecodeBudget.ts`), for the `emit-config.json` layout actually used to produce out/e1m1.cairo.
+
+| Array | Group | Layout | Felts | Words |
+|---|---|---|---:|---:|
+| BLOCKMAP_WORDS | blockmap | planar | 3764 | 3764 |
+| VERTEX_X | vertices | planar | 1196 | 1196 |
+| VERTEX_Y | vertices | planar | 1196 | 1196 |
+| LINEDEF_AB | linedefPredicates | planar | 1175 | 1175 |
+| LINEDEF_BB | linedefPredicates | planar | 1175 | 1175 |
+| LINEDEF_CB | linedefPredicates | planar | 1175 | 1175 |
+| LINEDEF_DIAG | linedefPredicates | planar | 1175 | 1175 |
+| LINEDEF_BBOX_LR | linedefBBox | packed | 1175 | 1175 |
+| LINEDEF_BBOX_BT | linedefBBox | packed | 1175 | 1175 |
+| LINEDEF_BLOCKING | linedefFlags | planar | 1175 | 1175 |
+| LINEDEF_BLOCK_MONSTERS | linedefFlags | planar | 1175 | 1175 |
+| LINEDEF_TWO_SIDED | linedefFlags | planar | 1175 | 1175 |
+| LINEDEF_SIDES | linedefSides | packed | 1175 | 1175 |
+| LINEDEF_SPECIAL | linedefSpecial | packed | 1175 | 1175 |
+| BLOCKMAP_OFFSETS | blockmap | planar | 864 | 864 |
+| ACCEL_START | accelerator | packed | 864 | 864 |
+| ACCEL_COUNT | accelerator | packed | 864 | 864 |
+| NODE_AB | nodePredicates | planar | 681 | 681 |
+| NODE_BB | nodePredicates | planar | 681 | 681 |
+| NODE_CB | nodePredicates | planar | 681 | 681 |
+| NODE_CHILD0 | nodeChildren | planar | 681 | 681 |
+| NODE_CHILD1 | nodeChildren | planar | 681 | 681 |
+| REJECT_ROWS | reject | packed | 364 | 364 |
+| THINGS | things | packed | 292 | 292 |
+| ACCEL_SUBSECTORS_PACKED | accelerator | packed | 284 | 284 |
+| SIDEDEF_SECTOR_PACKED | sidedefSector | packed | 229 | 229 |
+| SECTOR_FLOOR | sectorHeights | planar | 182 | 182 |
+| SECTOR_CEILING | sectorHeights | planar | 182 | 182 |
+| SECTOR_META | sectorMeta | packed | 182 | 182 |
+| SS_SECTOR_PACKED | subsectorSector | packed | 86 | 86 |
+| *(24 scalar consts)* | scalar | - | - | 24 |
+
+**Total: 26903 words** (budget: 12000, EXCEEDED).
+
+At `2 340 + 14.7 * words`, this is ~397,814 steps of bootloader program-hashing cost per proof segment for the level-data constants alone (docs/G0.md D4 budgets 16 000 words for the whole `doom_run` program; this tool's default `--max-words` is a 12 000-word slice of that for level data).
+
+### Size vs. layout choice
+
+The same map, re-emitted with every group forced to `planar`, forced to `packed`, and with the recommended per-group mix actually used above (`emit-config.json`):
+
+| Layout | Total words | Bootloader hash / segment |
+|---|---:|---:|
+| all planar | 70075 | 1,032,443 |
+| all packed | 17604 | 261,119 |
+| recommended mix (emit-config.json) | 26903 | 397,814 |
+
