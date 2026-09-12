@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# The "with physics" side of the bytecode measurement: the smallest
+# executable that calls every public entry point of `doom_physics` once on
+# the loaded level. `../baseline` is the same package with the same level and
+# table data but no physics call; the difference between the two compiled
+# sizes is what this crate's code costs (docs/DECISIONS.md D23, code <= 12 k
+# words in all, <= 5 000 for this crate).
+[package]
+name = "doom_physics_size"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_physics = { path = "../.." }
+doom_map = { path = "../../../doom_map" }
+doom_things = { path = "../../../doom_things" }
+fixed = { path = "../../../../crates/fixed" }
+geom2d = { path = "../../../../crates/geom2d" }
+prng = { path = "../../../../crates/prng" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_physics_size"
+function = "doom_physics_size::main"
+sierra = true
+
+[cairo]
+enable-gas = false

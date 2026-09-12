@@ -592,10 +592,16 @@ pub fn blockmap_lists(m: @LevelMap) -> PackedLists {
 /// The matrix is symmetric as vanilla node builders emit it; the crate's
 /// tests assert it over all 33 124 pairs.
 pub fn reject(m: @LevelMap, s1: u32, s2: u32) -> bool {
-    let word: u128 = (*(*m.reject).at(s1 * *m.reject_stride + s2 / REJECT_BITS))
-        .try_into()
-        .unwrap();
-    let bit: u128 = (*(*m.pow2).at(s2 % REJECT_BITS)).try_into().unwrap();
+    reject_of(*m.reject, *m.reject_stride, *m.pow2, s1, s2)
+}
+
+/// [`reject`] on the hoisted spans (D24: `HotMap::reject`, `reject_stride`,
+/// `pow2`), for `doom_physics`.
+pub fn reject_of(
+    reject: Span<felt252>, stride: u32, pow2: Span<felt252>, s1: u32, s2: u32,
+) -> bool {
+    let word: u128 = (*reject.at(s1 * stride + s2 / REJECT_BITS)).try_into().unwrap();
+    let bit: u128 = (*pow2.at(s2 % REJECT_BITS)).try_into().unwrap();
     (word / bit) % 2 == 1
 }
 

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Standalone package (NOT a member of the cairo/ workspace, like the other
+# benches): it owns an executable target so that
+# `scarb execute --print-resource-usage` can measure the step cost of every
+# `doom_physics` operation on the real E1M1. See ../README.md.
+[package]
+name = "doom_physics_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_physics = { path = ".." }
+doom_map = { path = "../../doom_map" }
+doom_things = { path = "../../doom_things" }
+fixed = { path = "../../../crates/fixed" }
+geom2d = { path = "../../../crates/geom2d" }
+bam = { path = "../../../crates/bam" }
+prng = { path = "../../../crates/prng" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_physics_bench"
+function = "doom_physics_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false

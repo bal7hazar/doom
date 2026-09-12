@@ -5,7 +5,12 @@ edition.workspace = true
 
 [dependencies]
 fixed = { path = "../../crates/fixed" }
+bam = { path = "../../crates/bam" }
 geom2d = { path = "../../crates/geom2d" }
+bsp = { path = "../../crates/bsp" }
+blockmap = { path = "../../crates/blockmap" }
+prng = { path = "../../crates/prng" }
+fsm = { path = "../../crates/fsm" }
 doom_map = { path = "../doom_map" }
 doom_things = { path = "../doom_things" }
 
