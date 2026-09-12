@@ -2,3 +2,4 @@
 target/
 # profiler binaries: the text tops in results/ are the deliverable
 *.pb.gz
+__pycache__/

@@ -469,6 +469,7 @@ fn test_optimisations_preserve_the_result() {
     assert!(run(2, 60, opts_from(0, 0, 0, 1, 0, 0)) == base); // blockmap dedup
     assert!(run(2, 60, opts_from(0, 0, 0, 0, 1, 0)) == base); // bbox reject
     assert!(run(2, 60, opts_from(1, 0, 1, 1, 1, 1)) == base); // all together
+    assert!(run(2, 60, opts_from(1, 0, 1, 0, 1, 0)) == base); // the retained config
 }
 
 #[test]

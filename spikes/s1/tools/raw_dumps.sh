@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../proto"
 OUT=../results/resource_usage.txt
 : > "$OUT"
 for sc in 0 1 2 3; do
-  for cfg in "1,1,1,0,0,1 optimised" "0,0,0,0,1,0 baseline"; do
+  for cfg in "1,1,1,0,1,0 optimised" "0,0,0,0,1,0 baseline"; do
     set -- $cfg
     echo "=== scenario $sc, 350 tics, $2 (opts $1) ===" >> "$OUT"
     scarb execute --no-build --executable-name proto --output none \

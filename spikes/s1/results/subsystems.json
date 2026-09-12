@@ -74,8 +74,8 @@
   "try_move (player)": {
     "opt": {
       "op": 6,
-      "steps_per_call": 544.0,
-      "rc_per_call": 72.0
+      "steps_per_call": 1454.0,
+      "rc_per_call": 143.0
     },
     "base": {
       "op": 6,
@@ -122,8 +122,8 @@
   "monster_think (awake, chasing)": {
     "opt": {
       "op": 10,
-      "steps_per_call": 2898.0,
-      "rc_per_call": 317.0
+      "steps_per_call": 2788.0,
+      "rc_per_call": 297.0
     },
     "base": {
       "op": 10,
@@ -134,8 +134,8 @@
   "step_tic scenario 2": {
     "opt": {
       "op": 11,
-      "steps_per_call": 18565.7,
-      "rc_per_call": 1969.9
+      "steps_per_call": 17555.5,
+      "rc_per_call": 1823.5
     },
     "base": {
       "op": 11,
@@ -146,8 +146,8 @@
   "step_tic scenario 0 (player only)": {
     "opt": {
       "op": 12,
-      "steps_per_call": 3152.2,
-      "rc_per_call": 304.1
+      "steps_per_call": 2801.8,
+      "rc_per_call": 261.6
     },
     "base": {
       "op": 12,
@@ -230,8 +230,8 @@
   "try_move (monster radius)": {
     "opt": {
       "op": 19,
-      "steps_per_call": 3095.4,
-      "rc_per_call": 288.5
+      "steps_per_call": 2863.4,
+      "rc_per_call": 262.5
     },
     "base": {
       "op": 19,
@@ -242,8 +242,8 @@
   "sector_at_fast (uniform cell)": {
     "opt": {
       "op": 20,
-      "steps_per_call": 135.0,
-      "rc_per_call": 23.0
+      "steps_per_call": 1045.0,
+      "rc_per_call": 94.0
     },
     "base": {
       "op": 20,
@@ -254,8 +254,8 @@
   "tic loop overhead (empty tics)": {
     "opt": {
       "op": 21,
-      "steps_per_call": 4012.6,
-      "rc_per_call": 385.2
+      "steps_per_call": 3755.9,
+      "rc_per_call": 355.7
     },
     "base": {
       "op": 21,

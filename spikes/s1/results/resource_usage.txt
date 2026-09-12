@@ -1,16 +1,16 @@
-=== scenario 0, 350 tics, optimised (opts 1,1,1,0,0,1) ===
+=== scenario 0, 350 tics, optimised (opts 1,1,1,0,1,0) ===
    Executing proto
 Resources:
-	steps: 1,266,758
-	max memory address: 1,962,621
-	memory holes: 693,020
+	steps: 1,204,134
+	max memory address: 1,948,357
+	memory holes: 721,624
 	builtins:
-		range_check_builtin: 122,777
+		range_check_builtin: 114,274
 		poseidon_builtin: 7
 		output_builtin: 1
 	memory segments:
-		execution: 1,732,864
-		range_check: 122,777
+		execution: 1,718,600
+		range_check: 114,274
 		poseidon: 42
 		output: 1
 
@@ -30,19 +30,19 @@ Resources:
 		poseidon: 42
 		output: 1
 
-=== scenario 1, 350 tics, optimised (opts 1,1,1,0,0,1) ===
+=== scenario 1, 350 tics, optimised (opts 1,1,1,0,1,0) ===
    Executing proto
 Resources:
-	steps: 1,545,309
-	max memory address: 2,342,711
-	memory holes: 729,324
+	steps: 1,482,685
+	max memory address: 2,197,375
+	memory holes: 757,928
 	builtins:
-		range_check_builtin: 133,316
+		range_check_builtin: 124,813
 		poseidon_builtin: 27
 		output_builtin: 1
 	memory segments:
-		execution: 1,981,786
-		range_check: 133,316
+		execution: 1,967,522
+		range_check: 124,813
 		poseidon: 162
 		output: 1
 
@@ -62,19 +62,19 @@ Resources:
 		poseidon: 162
 		output: 1
 
-=== scenario 2, 350 tics, optimised (opts 1,1,1,0,0,1) ===
+=== scenario 2, 350 tics, optimised (opts 1,1,1,0,1,0) ===
    Executing proto
 Resources:
-	steps: 6,757,010
-	max memory address: 9,424,595
-	memory holes: 2,822,318
+	steps: 6,452,780
+	max memory address: 9,270,891
+	memory holes: 2,883,716
 	builtins:
-		range_check_builtin: 709,028
+		range_check_builtin: 661,943
 		poseidon_builtin: 27
 		output_builtin: 1
 	memory segments:
-		execution: 8,277,238
-		range_check: 709,028
+		execution: 8,123,534
+		range_check: 661,943
 		poseidon: 162
 		output: 1
 
@@ -94,19 +94,19 @@ Resources:
 		poseidon: 162
 		output: 1
 
-=== scenario 3, 350 tics, optimised (opts 1,1,1,0,0,1) ===
+=== scenario 3, 350 tics, optimised (opts 1,1,1,0,1,0) ===
    Executing proto
 Resources:
-	steps: 7,031,027
-	max memory address: 9,908,164
-	memory holes: 3,090,566
+	steps: 6,726,797
+	max memory address: 9,754,460
+	memory holes: 3,151,964
 	builtins:
-		range_check_builtin: 736,932
+		range_check_builtin: 689,847
 		poseidon_builtin: 27
 		output_builtin: 1
 	memory segments:
-		execution: 8,760,807
-		range_check: 736,932
+		execution: 8,607,103
+		range_check: 689,847
 		poseidon: 162
 		output: 1
 

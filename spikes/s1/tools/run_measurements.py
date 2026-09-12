@@ -19,7 +19,7 @@ RE = re.compile(r"^\s*([a-z_ ]+):\s*([0-9,]+)\s*$")
 ENV = dict(os.environ, ASDF_SCARB_VERSION="2.16.0")
 
 # opts order: reject, cadence, three, dedup, bboxreject(Doom order), fastsector
-FULL = (1, 1, 1, 0, 0, 1)
+FULL = (1, 1, 1, 0, 1, 0)
 NONE = (0, 0, 0, 0, 1, 0)
 
 
