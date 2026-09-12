@@ -240,6 +240,23 @@ sécurité, seulement la décentralisation) et/ou un client natif (Tauri/egui) u
   ~6× de marge à aller chercher. Écart de convention de comptage des felts avec S0 (688 k vs 290 k, même
   taille en MB) à trancher.
 
+### 5.2 ter Résultats de P3.1 : paquet `@hellproof/prover-wasm` (2026-09-12, `prover/wasm/README.md`)
+
+- **Threads** (rayon sur `+atomics` + mémoire partagée, Workers pré-démarrés, sans wasm-bindgen) : 2^20 steps
+  en **11,7 s à 4 threads** (36,5 s mono), 2 M steps en 15,6 s ; mémoire 3,05–4,6 GiB. Au-delà de 4 threads
+  l'écriture de trace régresse (spin-lock de l'allocateur std) → `auto` plafonne à 4. Repli mono-thread
+  vérifié quand `crossOriginIsolated` est faux. 6 patches au total (PR upstream rédigées).
+- **Plafond de segment** : ~2,3 M steps pour le programme de test (le composant `memory_id_to_small`
+  dépasse 2^20 lignes, panique upstream « Seq(21) missing ») ; `resources()` le prédit exactement
+  (`fits_leaf_registry`) → le client coupe les segments par ressources, pas par steps.
+- **Felts** : un leaf proof 2^20 avec les params du registre = **755 500 felts cairo-serde / 4,2 MB bincode**,
+  plat de 2^14 à 2,3 M steps ; l'écart S0/S2 venait du bootloader (le bootloader de feuille active ~3×
+  plus de composants AIR).
+- Artefact 45 MB / 8,1 MB gzip ; pas de trim possible (`cairo-lang-executable` entraîne tout le compilateur).
+  CI `prover-wasm.yml` : build conteneur reproductible **par hôte** (hash différent entre macOS et Linux),
+  tests Playwright 1 et 4 threads, repli sans isolation.
+- Risque ouvert : 2 blocages sur ~16 runs avec threads sur des segments ≥ 2 M steps (R1-A8).
+
 ### 5.3 Résultats du spike S3 : exécution temps réel (2026-09-12, voir `docs/spikes/S3.md`) — GO
 
 - `prover/sim` (`hellproof-sim`, wasm32 + wasm-bindgen, cairo-vm 3.2 / cairo-lang 2.19.4) : programme
