@@ -82,6 +82,26 @@ jobs:
           # them at compile time).
           node-version: "24"
 
+      - name: The leaf parameters still match the recursion registry
+        # `prove_leaf` takes the registry's `cairo_prover_params` verbatim and hardcodes the
+        # Blake2sM31 channel, so every field but `channel_hash` must be identical to
+        # spikes/s4/registry/doom/cairo_prover_params.json (see prover/wasm/README.md §Parameters).
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          ours = json.load(open("prover/wasm/harness/params/leaf.json"))
+          reg = json.load(open("spikes/s4/registry/doom/cairo_prover_params.json"))
+          assert ours.pop("channel_hash") == "blake2s_m31", "the leaf proves with Blake2sM31"
+          reg.pop("channel_hash")
+          if ours != reg:
+              print("leaf params drifted from the registry:")
+              for k in sorted(set(ours) | set(reg)):
+                  if ours.get(k) != reg.get(k):
+                      print(f"  {k}: ours={ours.get(k)!r} registry={reg.get(k)!r}")
+              sys.exit(1)
+          print("leaf parameters match the doom registry (channel_hash aside)")
+          PY
+
       - uses: actions/download-artifact@v4
         with:
           name: hellproof-prover-wasm

@@ -6,6 +6,7 @@
 // Uses ProverCore directly (Node has no DOM Worker for the prover wrapper itself; the rayon
 // thread workers do run in `node:worker_threads`).
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ProverCore } from "../dist/core.js";
@@ -67,6 +68,7 @@ console.log(
     n_steps: stats.n_steps,
     prove_s: +(proveMs / 1000).toFixed(2),
     proof_felts: felts.length,
+    proof_sha256: crypto.createHash("sha256").update(proof).digest("hex").slice(0, 16),
     trace_log_size: pstats.trace_log_size,
     max_trace_component_log_size: pstats.max_trace_component_log_size,
     resources_log_max: res.log_max_component_size,
