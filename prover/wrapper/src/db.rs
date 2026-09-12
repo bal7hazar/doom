@@ -611,7 +611,8 @@ impl Db {
                     run_id: r.get(2)?,
                     seg_index: r.get(3)?,
                     batch_id: r.get(4)?,
-                    attempts: r.get(5)?,
+                    // Reported as the attempt this claim *is*, not the count before it.
+                    attempts: r.get::<_, u32>(5)? + 1,
                 })
             })?;
             rows.collect::<rusqlite::Result<Vec<_>>>()?

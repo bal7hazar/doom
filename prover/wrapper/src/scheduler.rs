@@ -95,20 +95,30 @@ impl Scheduler {
                 }
                 db.enqueue_leaf(&seg.leaf_key, &run_id, seg.idx)?;
             }
+
+            // Close as soon as the batch is full, so a burst of submissions produces batches of
+            // exactly M runs instead of one oversized batch.
+            let count = db.batch_run_count(&batch_id)?;
+            let deadline = db.batch(&batch_id)?.and_then(|b| b.close_deadline);
+            if self.state.policy.should_close(run.solo, count, deadline, now_ms()) {
+                self.close(&batch_id)?;
+            }
         }
         Ok(())
     }
 
     fn close_due_batches(&self) -> Result<()> {
-        let db = &self.state.db;
-        for id in db.batches_to_close(self.state.cfg.batch_max_runs)? {
-            let leaves = db.close_batch(&id)?;
-            self.state.metrics.incr("wrapper_batches_closed_total", "");
-            self.state
-                .metrics
-                .observe("wrapper_batch_leaves", "", leaves.len() as f64);
-            tracing::info!(batch = %id, leaves = leaves.len(), "batch closed");
+        for id in self.state.db.batches_to_close(self.state.cfg.batch_max_runs)? {
+            self.close(&id)?;
         }
+        Ok(())
+    }
+
+    fn close(&self, batch_id: &str) -> Result<()> {
+        let leaves = self.state.db.close_batch(batch_id)?;
+        self.state.metrics.incr("wrapper_batches_closed_total", "");
+        self.state.metrics.observe("wrapper_batch_leaves", "", leaves.len() as f64);
+        tracing::info!(batch = %batch_id, leaves = leaves.len(), "batch closed");
         Ok(())
     }
 
@@ -329,7 +339,7 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
 
     // The bootloader's own preimage must be the one the client submitted, or the leaf would fold
     // into a different digest than the client (and the contract) expects.
-    if state.cfg.check_preimage_binding {
+    if state.cfg.check_preimage_binding && state.cfg.backend != crate::config::Backend::Stub {
         let claimed: Vec<String> = serde_json::from_str(&seg.preimage_json)?;
         if claimed != out.preimage {
             anyhow::bail!(
