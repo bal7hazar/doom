@@ -1,0 +1,11 @@
+{
+  "package": "prng_bench",
+  "baseline": { "n1": 2000, "n2": 4000 },
+  "ops": [
+    { "op": 1, "label": "next(table)", "n1": 2000, "n2": 4000, "budget": 18 },
+    { "op": 2, "label": "below(table, 8)", "n1": 2000, "n2": 4000, "budget": 29 },
+    { "op": 3, "label": "chance(table, 128)", "n1": 2000, "n2": 4000, "budget": 31 },
+    { "op": 4, "label": "sub_random(table)", "n1": 2000, "n2": 4000, "budget": 55 },
+    { "op": 5, "label": "-- cursor wrap only (not an API call)", "n1": 2000, "n2": 4000, "budget": null }
+  ]
+}
