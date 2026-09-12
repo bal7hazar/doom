@@ -18,7 +18,8 @@ const opt = (n, d) => {
   return i >= 0 ? argv[i + 1] : d;
 };
 const threads = Number(opt("threads", 1));
-const k = Number(opt("k", 14));
+const size = opt("size", `k${opt("k", 14)}`);
+const initialPages = Number(opt("initial-pages", 512));
 const paramsFile = opt("params", null);
 const params = paramsFile ? fs.readFileSync(paramsFile, "utf8") : undefined;
 
@@ -27,14 +28,14 @@ const executable = fs.readFileSync(
   "utf8",
 );
 const args = JSON.parse(
-  fs.readFileSync(path.join(here, `../../harness/programs/steps_k/args/k${k}.json`), "utf8"),
+  fs.readFileSync(path.join(here, `../../harness/programs/steps_k/args/${size}.json`), "utf8"),
 );
 
 const core = new ProverCore((e) => {
   if (e.type === "log" && (e.level === "error" || e.level === "warn")) console.error(`[${e.level}] ${e.message}`);
 });
 
-const info = await core.init({ threads });
+const info = await core.init({ threads, initialPages });
 console.log(`init: ${JSON.stringify(info)}`);
 
 const { input, stats, ms: execMs } = core.execute(executable, args);
@@ -64,7 +65,8 @@ if (felts.length !== pstats.proof_felts) {
 console.log(
   JSON.stringify({
     threads: info.threads,
-    k,
+    size,
+    initialPages,
     n_steps: stats.n_steps,
     prove_s: +(proveMs / 1000).toFixed(2),
     proof_felts: felts.length,

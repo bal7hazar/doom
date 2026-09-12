@@ -137,6 +137,10 @@ jobs:
         working-directory: prover/wasm/harness
         run: node bench.mjs --channel chromium --sizes k14 --threads 1,4 --runs 1 --ci
 
+      - name: Single-threaded fallback without cross-origin isolation
+        working-directory: prover/wasm/harness
+        run: node test-fallback.mjs --channel chromium
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

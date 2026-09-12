@@ -15,12 +15,18 @@ const opt = (n, d) => {
   return i >= 0 ? argv[i + 1] : d;
 };
 
-// Same app, without the COOP/COEP headers.
+// The same app served *without* the COOP/COEP headers (hence no SharedArrayBuffer), so the
+// config file is bypassed and only its resolution bits are repeated here.
+const pkg = path.resolve(here, "../pkg");
 const server = await createServer({
   root: here,
-  configFile: path.join(here, "vite.config.js"),
+  configFile: false,
   logLevel: "warn",
-  server: { headers: {}, port: 0 },
+  publicDir: "public",
+  resolve: { alias: { "@hellproof/prover-wasm": path.join(pkg, "dist/index.js") } },
+  worker: { format: "es" },
+  build: { target: "esnext" },
+  server: { port: 0, fs: { allow: [here, pkg] } },
 });
 await server.listen();
 const url = server.resolvedUrls.local[0];

@@ -28,6 +28,9 @@ const channel = opt("channel", "chrome"); // "chrome" = installed Google Chrome,
 const paramsFile = opt("params", null);
 const params = paramsFile ? fs.readFileSync(paramsFile, "utf8") : "";
 const timeoutMs = Number(opt("timeout-min", 40)) * 60_000;
+// Pre-grow the shared memory instead of letting the prover grow it under the threads (see
+// README §Threads): 512 pages = 32 MiB is the package default.
+const initialPages = Number(opt("initial-pages", 512));
 const label = opt("label", "");
 const ci = flag("ci");
 
@@ -113,8 +116,9 @@ try {
           try {
             page.setDefaultTimeout(timeoutMs);
             const r = await page.evaluate(
-              async ({ size, params, threads }) => await window.hellproof.run({ size, params, threads }),
-              { size, params, threads },
+              async ({ size, params, threads, initialPages }) =>
+                await window.hellproof.run({ size, params, threads, initialPages }),
+              { size, params, threads, initialPages },
             );
             r.run = run;
             r.browser = `${channel} ${version}`;

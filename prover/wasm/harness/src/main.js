@@ -49,7 +49,7 @@ async function uaMemory() {
  * One measurement: a fresh prover Worker (so the whole linear memory is released between runs and
  * every run pays V8's tier-up), then execute -> resources -> prove -> verify -> proof_to_felts.
  */
-async function run({ size = "k14", params = "", threads = 1, felts = true } = {}) {
+async function run({ size = "k14", params = "", threads = 1, felts = true, initialPages } = {}) {
   const spans = { execute: [], prove: [], verify: [], proof_to_felts: [], resources: [] };
   let peakMemory = 0;
   const prover = createProver({
@@ -61,7 +61,7 @@ async function run({ size = "k14", params = "", threads = 1, felts = true } = {}
   });
 
   const t0 = performance.now();
-  const info = await prover.init({ threads });
+  const info = await prover.init({ threads, ...(initialPages ? { initialPages } : {}) });
   log("info", `init: ${info.threads} thread(s), ${info.threaded ? "threaded" : "single-threaded"} artifact`);
 
   const exe = executable();
@@ -89,6 +89,7 @@ async function run({ size = "k14", params = "", threads = 1, felts = true } = {}
     threaded: info.threaded,
     wasm_url: info.wasmUrl.split("/").pop(),
     instantiate_ms: info.instantiateMs,
+    initial_pages: initialPages ?? null,
     n_steps: ex.stats.n_steps,
     builtins: ex.stats.builtins,
     execute_ms: ex.ms,
