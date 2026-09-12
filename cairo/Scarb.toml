@@ -1,0 +1,42 @@
+[workspace]
+members = [
+    "crates/fixed",
+    "crates/bam",
+    "crates/prng",
+    "crates/geom2d",
+    "crates/bsp",
+    "crates/blockmap",
+    "crates/fsm",
+    "crates/ticcmd",
+    "crates/state_hash",
+    "crates/segment",
+    "doom/doom_map",
+    "doom/doom_things",
+    "doom/doom_physics",
+    "doom/doom_player",
+    "doom/doom_monsters",
+    "doom/doom_specials",
+    "doom/doom_game",
+    "doom/doom_run",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024_07"
+
+[workspace.dependencies]
+cairo_test = "2.16.0"
+
+# NOTE (Scarb 2.16.0): inside a workspace, only the workspace-level `[cairo]`
+# table is honored -- a per-package `[cairo]` table is ignored with a warning.
+# `doom_run` (cairo/doom/doom_run) compiles a `[[target.executable]]` via
+# `cairo_execute`, which *requires* `enable-gas = false`. That setting is
+# harmless for every plain library crate in this workspace (it only affects
+# gas bookkeeping, not correctness), so it is set once, here, for the whole
+# workspace. `cairo/doom_contracts` needs the opposite (a starknet-contract
+# target hard-requires gas to stay enabled), which is incompatible with a
+# single shared `[cairo]` table; it is therefore intentionally kept OUTSIDE
+# this workspace as its own standalone Scarb package (see
+# cairo/doom_contracts/Scarb.toml and cairo/doom_contracts/README.md).
+[cairo]
+enable-gas = false

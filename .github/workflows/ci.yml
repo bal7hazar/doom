@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cairo:
+    name: Cairo workspace (fmt, build, test, crate graph)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up scarb (from cairo/.tool-versions)
+        uses: software-mansion/setup-scarb@v1
+        with:
+          tool-versions: cairo/.tool-versions
+
+      - name: scarb fmt --check
+        working-directory: cairo
+        run: scarb fmt --check
+
+      - name: scarb build
+        working-directory: cairo
+        run: scarb build
+
+      - name: scarb test
+        working-directory: cairo
+        run: scarb test
+
+      - name: scarb execute -p doom_run
+        working-directory: cairo
+        run: scarb execute -p doom_run --arguments 1 --output none
+
+      - name: Crate dependency graph check
+        run: python3 infra/check_crate_graph.py
+
+      - name: doom_contracts build (standalone package, see cairo/doom_contracts/README.md)
+        working-directory: cairo/doom_contracts
+        run: scarb fmt --check && scarb build
+
+  reuse:
+    name: REUSE license compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: REUSE Compliance Check
+        uses: fsfe/reuse-action@v5
+
+  node:
+    name: tools/wad (Node, only if present)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tools/wad exists
+        id: check
+        run: |
+          if [ -d "tools/wad" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node.js
+        if: steps.check.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+          cache: npm
+          cache-dependency-path: tools/wad/package-lock.json
+
+      - name: npm ci && npm test
+        if: steps.check.outputs.present == 'true'
+        working-directory: tools/wad
+        run: |
+          npm ci
+          npm test

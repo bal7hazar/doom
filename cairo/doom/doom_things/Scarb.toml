@@ -1,0 +1,11 @@
+[package]
+name = "doom_things"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fixed = { path = "../../crates/fixed" }
+fsm = { path = "../../crates/fsm" }
+
+[dev-dependencies]
+cairo_test.workspace = true

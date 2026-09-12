@@ -1,0 +1,13 @@
+[package]
+name = "doom_physics"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fixed = { path = "../../crates/fixed" }
+geom2d = { path = "../../crates/geom2d" }
+doom_map = { path = "../doom_map" }
+doom_things = { path = "../doom_things" }
+
+[dev-dependencies]
+cairo_test.workspace = true

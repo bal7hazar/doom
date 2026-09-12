@@ -1,0 +1,13 @@
+[package]
+name = "doom_map"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fixed = { path = "../../crates/fixed" }
+geom2d = { path = "../../crates/geom2d" }
+blockmap = { path = "../../crates/blockmap" }
+bsp = { path = "../../crates/bsp" }
+
+[dev-dependencies]
+cairo_test.workspace = true

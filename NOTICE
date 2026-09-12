@@ -1,0 +1,97 @@
+Hellproof — third-party notices
+================================
+
+This repository is licensed under Apache-2.0 by default, except for the
+Doom-specific gameplay crates under `cairo/doom/**`, which are licensed
+GPL-2.0-or-later. See REUSE.toml and RISKS.md (R9) for the full licensing
+policy and rationale, and the LICENSES/ directory for the complete license
+texts.
+
+Hellproof does not vendor, copy, or link against any of the source code
+listed below. The generic Cairo crates (`cairo/crates/**`) are original,
+clean-room implementations of well-known, license-agnostic algorithms (fixed
+point arithmetic, BAM angles, BSP traversal, blockmaps, finite state
+machines) written without reading or copying GPL-licensed source, per
+PLAN.md decision A10. The Doom-specific crates (`cairo/doom/**`) reimplement
+game rules and data whose *design* (state machines, formulas, data layout)
+is derived from the public-domain-adjacent knowledge of the original Doom
+engine and its GPL-licensed descendants; because that derivation is close
+enough to constitute a derivative work in the sense of copyright law, those
+crates are released under the same family of license (GPL-2.0-or-later) as
+their most permissive-compatible upstream source, as decided in RISKS.md
+R9-A1.
+
+The sections below list the upstream projects that informed this work, and
+the exact license under which each is distributed upstream, verified against
+the GitHub API and the projects' own license files/headers on 2026-09-12.
+
+1. linuxdoom-1.10 (id Software)
+   -------------------------------
+   Source:  https://github.com/id-Software/DOOM (subdirectory linuxdoom-1.10)
+   License: GPL-2.0-only
+   Verification:
+     - `gh api repos/id-Software/DOOM --jq '.license'` reports
+       `{"key":"gpl-2.0","name":"GNU General Public License v2.0",
+       "spdx_id":"GPL-2.0", ...}`.
+     - The repository's top-level `README.TXT` (John Carmack, 1997-12-23)
+       ends with: "Copyright (c) ZeniMax Media Inc. Licensed under the GNU
+       General Public License 2.0." — no "or (at your option) any later
+       version" clause is present anywhere in the id Software re-release.
+     - `LICENSE.TXT` is the plain, unmodified GPLv2 license text.
+     - Individual source files (e.g. `linuxdoom-1.10/d_main.c`) still carry
+       id Software's original 1993-1996 header referencing the (superseded)
+       "DOOM Source Code License", which was replaced by the GPLv2 grant at
+       the top of the repository when id Software open-sourced the engine
+       in 1997/1999.
+   Conclusion: linuxdoom-1.10 is GPL-2.0-only (no "-or-later" grant from
+   id Software). Copyright (C) 1993-1996 id Software, Inc.
+
+2. doomgeneric (ozkl, based on Chocolate Doom / linuxdoom)
+   -------------------------------
+   Source:  https://github.com/ozkl/doomgeneric
+   License: GPL-2.0-or-later
+   Verification:
+     - `gh api repos/ozkl/doomgeneric --jq '.license'` reports
+       `{"key":"gpl-2.0","name":"GNU General Public License v2.0",
+       "spdx_id":"GPL-2.0", ...}` (GitHub's detector does not distinguish
+       "-only" from "-or-later").
+     - Individual source files (e.g. `doomgeneric/d_main.c`) carry the
+       explicit grant: "This program is free software; you can redistribute
+       it and/or modify it under the terms of the GNU General Public
+       License as published by the Free Software Foundation; either
+       version 2 of the License, or (at your option) any later version."
+   Conclusion: doomgeneric is GPL-2.0-or-later.
+   Copyright (C) 1993-1996 Id Software, Inc.; (C) 2005-2014 Simon Howard
+   (Chocolate Doom); (C) ozkl and contributors (doomgeneric port layer).
+
+3. Freedoom
+   -------------------------------
+   Source:  https://freedoom.github.io/ , https://github.com/freedoom/freedoom
+   License: BSD-3-Clause
+   Notes: Freedoom provides the free game data (WAD) used to play levels.
+   Freedoom `.wad` files are NEVER committed to this repository (see
+   REUSE.toml); they are obtained by the player or by developer tooling
+   (`tools/wad`) at build/run time, outside of version control.
+
+4. stwo / stwo-cairo / the `proving` monorepo (StarkWare)
+   -------------------------------
+   Source:  https://github.com/starkware-libs/stwo ,
+            https://github.com/starkware-libs/stwo-cairo ,
+            and the `proving` monorepo referenced in CONTEXT.md / RISKS.md R3
+   License: Apache-2.0
+   Notes: the prover/verifier toolchain is pinned by commit (RISKS.md
+   R3-A1) and vendored/re-pinned where needed (PLAN.md A3); no source is
+   copied into this repository's Apache-2.0-licensed portions beyond what
+   Apache-2.0 permits with attribution.
+
+5. stwo-starknet-verifier (modeofO)
+   -------------------------------
+   Source:  https://github.com/modeofO/stwo-starknet-verifier (or successor
+            referenced in CONTEXT.md / PLAN.md A3)
+   License: Apache-2.0
+   Notes: reference implementation for on-chain Stwo fact verification; the
+   `StwoFactRegistry` design is re-pinned on the current `proving` monorepo
+   per PLAN.md A3.
+
+See LICENSES/Apache-2.0.txt, LICENSES/GPL-2.0-or-later.txt and
+LICENSES/BSD-3-Clause.txt for the full license texts.

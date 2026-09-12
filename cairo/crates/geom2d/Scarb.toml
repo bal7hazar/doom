@@ -1,0 +1,11 @@
+[package]
+name = "geom2d"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fixed = { path = "../fixed" }
+bam = { path = "../bam" }
+
+[dev-dependencies]
+cairo_test.workspace = true

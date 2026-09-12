@@ -1,0 +1,10 @@
+[package]
+name = "doom_specials"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+doom_map = { path = "../doom_map" }
+
+[dev-dependencies]
+cairo_test.workspace = true
