@@ -1,0 +1,34 @@
+[
+  {
+    "inflate_words": 0,
+    "executable_json_bytes": 4131,
+    "load_ms": 0.133,
+    "cached_ms": 0.2192,
+    "naive_reparse_ms": 0.2794,
+    "speedup": 1.2746350364963503
+  },
+  {
+    "inflate_words": 5000,
+    "executable_json_bytes": 42781,
+    "load_ms": 0.907,
+    "cached_ms": 0.2487,
+    "naive_reparse_ms": 1.0327,
+    "speedup": 4.152392440691596
+  },
+  {
+    "inflate_words": 20000,
+    "executable_json_bytes": 158731,
+    "load_ms": 3.146,
+    "cached_ms": 0.3354,
+    "naive_reparse_ms": 3.2886,
+    "speedup": 9.805008944543829
+  },
+  {
+    "inflate_words": 100000,
+    "executable_json_bytes": 777671,
+    "load_ms": 16.172,
+    "cached_ms": 0.8342,
+    "naive_reparse_ms": 14.8691,
+    "speedup": 17.824382642052264
+  }
+]
