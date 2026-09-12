@@ -30,3 +30,7 @@ scarb.workspace = true
 
 [tool.snforge]
 max_n_steps = 200000000
+# starknet-devnet 0.10 / blockifier 0.14.4 bill these classes by VM steps + builtins: the
+# receipts match this mode within 3 % (docs/design/onchain-verifier.md §7), while the default
+# sierra-gas mode understates by 1.4-2.1x.
+tracked_resource = "cairo-steps"

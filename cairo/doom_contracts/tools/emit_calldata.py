@@ -229,14 +229,15 @@ def tx_fri(sec: dict, first: int, last: int, proof_id: int, idx: int) -> dict:
             "meta": {"layers": list(range(first, last))}}
 
 
-def plan(sec: dict, proof_id: int, fri_split: int, max_calldata: int) -> list[dict]:
+def plan(sec: dict, proof_id: int, fri_split: str, max_calldata: int) -> list[dict]:
     txs = [
         tx_begin(sec, [0, 1], proof_id),
         tx_merkle(sec, [2, 3], proof_id),
         tx_answers(sec, proof_id),
     ]
     n_layers = len(sec["layers"])
-    cuts = [0, min(fri_split, n_layers), n_layers] if fri_split < n_layers else [0, n_layers]
+    inner_cuts = sorted({int(c) for c in fri_split.split(",") if 0 < int(c) < n_layers})
+    cuts = [0] + inner_cuts + [n_layers]
     for i in range(len(cuts) - 1):
         txs.append(tx_fri(sec, cuts[i], cuts[i + 1], proof_id, i + 1))
     for tx in txs:
@@ -262,9 +263,10 @@ def main() -> None:
     ap.add_argument("proof", type=Path)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--proof-id", type=lambda s: int(s, 0), default=1)
-    ap.add_argument("--fri-split", type=int, default=2,
-                    help="layers in the first FRI transaction (default 2: first + inner 0); "
-                         ">= 6 puts the whole walk in one transaction")
+    ap.add_argument("--fri-split", default="2",
+                    help="comma-separated layer indices where the FRI walk is cut into "
+                         "transactions (default '2': {first, inner 0} then {inner 1..4}; "
+                         "'1,3' = 3 transactions; '6' = the whole walk in one transaction)")
     ap.add_argument("--max-calldata", type=int, default=DEFAULT_MAX_CALLDATA)
     a = ap.parse_args()
 

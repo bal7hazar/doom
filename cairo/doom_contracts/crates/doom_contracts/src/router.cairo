@@ -71,6 +71,11 @@ pub trait IStwoCircuitRouter<TContractState> {
     ) -> Array<felt252>;
 
     fn is_valid(self: @TContractState, fact: felt252) -> bool;
+    /// Calibration probes (no state): `probe_unpack` unpacks a fast-path payload and returns
+    /// the value count; `probe_noop` only returns the payload length. Their devnet receipts
+    /// isolate the transport cost per packed slot (docs/design/onchain-verifier.md §7).
+    fn probe_unpack(self: @TContractState, payload: Span<felt252>, n_values: u32) -> u32;
+    fn probe_noop(self: @TContractState, payload: Span<felt252>) -> u32;
     fn checkpoint(
         self: @TContractState, caller: starknet::ContractAddress, proof_id: felt252,
     ) -> Checkpoint;
@@ -242,6 +247,14 @@ pub mod StwoCircuitRouter {
 
         fn is_valid(self: @ContractState, fact: felt252) -> bool {
             self.facts.entry(fact).read()
+        }
+
+        fn probe_unpack(self: @ContractState, payload: Span<felt252>, n_values: u32) -> u32 {
+            unpack_u32(payload, n_values).len()
+        }
+
+        fn probe_noop(self: @ContractState, payload: Span<felt252>) -> u32 {
+            payload.len()
         }
 
         fn checkpoint(
