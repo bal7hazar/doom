@@ -234,6 +234,20 @@ Mesures modeofO (fixture `poseidon_chain(100)`, Sepolia) :
 | Wrap (natif, M-series) | prove 3,3 s / 7,9 GB ; wrap 13 s / 13,6–21,9 GB ; chaîne complète 2–3 min |
 | Fait | `fact = poseidon(blake2s(multiverifier_root ‖ outputs))`, `outputs` = chaîne blake2s finissant par `[n_tasks, output_len, app_program_hash, app_outputs…]` ; `stwo_fact_binding.compute_fact(program_hash, outputs, inner_root)` la recalcule côté consommateur (~0,8 M gas) |
 
+**Résultats du spike S4 (2026-09-12, `proving@cd7bc5f`, voir `docs/spikes/S4.md`) — verdict GO :**
+
+| Élément | Valeur mesurée |
+|---|---|
+| Registre `doom` (log 20 = 20, `canonical_small`, pow 26) | hash multiverifier **identique à `production`** (`a5989715…973f680f`) → constantes du vérifieur on-chain inchangées ; génération 6,9 s / 8 GB |
+| Feuille (stub 145 k steps sous bootloader) | 22 s, **32,5 GB RSS** (2 s preuve Cairo + 18 s preuve de circuit), 546 KB |
+| Repli d'une paire | 23–36 s, 32 GB |
+| Racine (N = 1…4) | **93,5–96 k felts** ; vérifieur Cairo **5,26–5,37 M steps** (golden upstream : 5,31 M / 94,7 k felts) — soit +40 % de steps et ×2,6 felts par rapport aux mesures modeofO de juillet (3,8 M / 36 k) |
+| Recomposition Cairo des sorties (`spikes/s4/recursion_outputs`) | 14 tests verts ; N = 4 : 5 645 steps ; N = 50 : 68 315 steps (≈ 7,5 M gas) |
+| Extrapolation wrap séquentiel | N = 8 ≈ 6,5 min ; N = 50 ≈ 43 min ; serveur ≥ 48–64 GB requis |
+
+Le bootloader de feuille (`leaf_simple_bootloader_compiled.json`) n'est fourni que compilé (source interne
+StarkWare) : il est épinglé par hash. Plage 19–20 impossible (`canonical_small` est en colonnes log 20).
+
 Points d'attention :
 
 - **Couplage de versions** : la topologie du multiverifier codée en dur dans le vérifieur Cairo doit

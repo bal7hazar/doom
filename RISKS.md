@@ -125,7 +125,10 @@ steps/tic sur le corpus de replays.
 - Le monorepo n'a **aucune release taggée** ; les topologies bougent (`TODO(Gali): Change to MultiVerifier consts`).
 - Contraintes on-chain mesurées : plafond invoke **1,21e9 L2 gas**, calldata 5 000 felts, state-diff
   4 000 entrées/bloc ; vérification racine 3,8 M steps mais **1,43e9 gas en production** (snforge
-  sous-estime de 1,6×) → découpe en 2 phases obligatoire.
+  sous-estime de 1,6×) → découpe en 2 phases obligatoire. **S4 (cd7bc5f) mesure 5,3 M steps et
+  93–96 k felts pour la racine** : à ce niveau, il faut prévoir ~3 phases de vérification et ~19 tx de
+  staging (7 felts/slot) — à re-chiffrer en S5/P4.1 ; la réduction du nombre de tx (packing, calldata
+  au maximum, agrégation multi-parties R7-A3) devient un sujet de Phase 4.
 - Recomposition des sorties : pour N feuilles, le fait racine engage un arbre de digests blake2s
   (`packed_output`). `DoomRuns` doit recalculer cet arbre à partir des sorties de chaque segment
   (8 felts × N) : ~N × 2 blake2s + digests internes ≈ **quelques centaines de milliers de gas** pour
@@ -254,7 +257,7 @@ Risque résiduel : un changement upstream incompatible juste avant une saison �
 | R8-A2 | Authentification par signature de session Controller + quotas par compte ; taille max par job ; file persistante (Postgres/SQLite) ; reprise après crash. | Phase 3 | 5 jp | Test de charge 20 jobs concurrents. |
 | R8-A3 | Parallélisme par niveau d'arbre (les réductions d'un même niveau sont indépendantes) et cache des feuilles déjà repliées (idempotence par hash). | Phase 3 | 3 jp | Wrap N = 48 < 10 min sur 16 cœurs/64 GB. |
 | R8-A4 | Auto-hébergement documenté (`docker compose`) pour que tout joueur/organisateur puisse faire tourner son wrapper ; contrat indifférent à l'origine de la preuve. | Phase 5 | 2 jp | Un tiers reproduit un wrap depuis la doc. |
-| R8-A5 | Coût d'exploitation : machine 16 vCPU/64 GB ≈ 0,5–1 $/h → 0,15–0,35 $ par partie ; budgétiser par saison ; métriques Prometheus (durée, RSS, file). | Phase 5 | 1 jp | Tableau de bord. |
+| R8-A5 | Coût d'exploitation : **S4 mesure 32,5 GB RSS par preuve de circuit** (feuille ou repli) → machine ≥ 64 GB, 2 preuves en parallèle max par 64 GB ; N = 50 ≈ 43 min séquentiel ≈ 0,5–1 $ par partie à 1 $/h ; budgétiser par saison ; métriques Prometheus (durée, RSS, file). | Phase 5 | 1 jp | Tableau de bord. |
 
 ---
 
