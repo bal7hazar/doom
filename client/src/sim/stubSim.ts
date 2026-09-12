@@ -100,8 +100,16 @@ export function createStubSim(level: LevelJson, skill = 3): StubSim {
       const sector = pointInSector(level, at.x, at.y);
       const sectorDef = level.sectors[sector];
       const floor = sectorDef?.floorHeight ?? 0;
-      // `P_CalcHeight`'s bob: a 20-unit sine at half the movement period.
+      const ceiling = sectorDef?.ceilingHeight ?? floor + 128;
+      // `P_CalcHeight`'s bob: a small sine at half the movement period.
       const bob = Math.sin((tic / 20) * Math.PI) * 2.2;
+      // The tour routes through linedef midpoints, which are often door tracks
+      // and other sectors with less than VIEWHEIGHT of head room. With no
+      // collision to stop it, the stub would put the eye inside the ceiling
+      // and the renderer would look out of the map; clamping is what
+      // `P_CalcHeight` does after `P_TryMove` has already kept the body below
+      // the ceiling.
+      const viewZ = Math.max(floor, Math.min(floor + VIEW_HEIGHT + bob, ceiling - 4));
 
       const dynamicSectors: SectorSnapshot[] = [];
       if (door) {
@@ -128,7 +136,7 @@ export function createStubSim(level: LevelJson, skill = 3): StubSim {
           x: toFixed(at.x),
           y: toFixed(at.y),
           z: toFixed(floor),
-          viewZ: toFixed(floor + VIEW_HEIGHT + bob),
+          viewZ: toFixed(viewZ),
           angle: smoothed,
           pitch: 0,
           sector,
@@ -304,20 +312,31 @@ function blinkLight(special: number, base: number, sectorIndex: number, tic: num
   }
 }
 
-/** Area-weighted centroid of every sector, from its subsector polygons. */
+/**
+ * Area-weighted centroid of every sector, from its subsector polygons.
+ *
+ * Polygons are clamped to the map bounding box first: `buildSubsectorPolygons`
+ * starts from a rectangle grown by a margin, so the leaves along the map's
+ * outer boundary extend past it. Without the clamp a border sector's centroid
+ * can land outside the map and the tour walks into the void.
+ */
 export function sectorCentroids(level: LevelJson): Map<number, { x: number; y: number }> {
+  const bb = level.boundingBox;
+  const clampX = (v: number): number => Math.min(bb.maxX, Math.max(bb.minX, v));
+  const clampY = (v: number): number => Math.min(bb.maxY, Math.max(bb.minY, v));
   const acc = new Map<number, { x: number; y: number; area: number }>();
   for (const poly of buildSubsectorPolygons(level)) {
-    const area = Math.abs(signedArea(poly.points));
+    const points = poly.points.map((p) => ({ x: clampX(p.x), y: clampY(p.y) }));
+    const area = Math.abs(signedArea(points));
     if (area <= 0) continue;
     let cx = 0;
     let cy = 0;
-    for (const p of poly.points) {
+    for (const p of points) {
       cx += p.x;
       cy += p.y;
     }
-    cx /= poly.points.length;
-    cy /= poly.points.length;
+    cx /= points.length;
+    cy /= points.length;
     const entry = acc.get(poly.sector) ?? { x: 0, y: 0, area: 0 };
     entry.x += cx * area;
     entry.y += cy * area;

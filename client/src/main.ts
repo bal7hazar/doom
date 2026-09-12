@@ -23,6 +23,36 @@ import { selectPalette } from "./wad/playpal.js";
 const WAD_URL = import.meta.env?.VITE_WAD_URL ?? "/freedoom1.wad";
 const LEVEL_URL = import.meta.env?.VITE_LEVEL_URL ?? "/levels/e1m1.json";
 
+export interface FrameHistogram {
+  /** Number of distinct RGB values in the frame. A cleared buffer has one. */
+  distinct: number;
+  /** Fraction of pixels that are not pure black. */
+  nonBlackFraction: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Reads the drawing buffer back and summarises it. Only ever called on demand
+ * (the Playwright smoke test): `readPixels` is a full pipeline stall.
+ */
+function readFrameHistogram(
+  gl: WebGL2RenderingContext,
+  width: number,
+  height: number,
+): FrameHistogram {
+  const pixels = new Uint8Array(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  const colors = new Set<number>();
+  let nonBlack = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const rgb = (pixels[i]! << 16) | (pixels[i + 1]! << 8) | pixels[i + 2]!;
+    colors.add(rgb);
+    if (rgb !== 0) nonBlack++;
+  }
+  return { distinct: colors.size, nonBlackFraction: nonBlack / (width * height), width, height };
+}
+
 interface FrameStats {
   fps: number;
   frameMs: number;
@@ -108,6 +138,7 @@ async function main(): Promise<void> {
   let showHud = true;
 
   const frame: FrameStats = { fps: 0, frameMs: 0, frames: 0, windowFrames: 0, windowStart: performance.now() };
+  let captureRequest: ((histogram: FrameHistogram) => void) | null = null;
 
   const overlayCtx = overlay.getContext("2d");
   const resize = (): void => {
@@ -197,6 +228,16 @@ async function main(): Promise<void> {
       );
       renderer.render(view, renderOptions);
 
+      // The drawing buffer is discarded once the frame is composited (the
+      // context is created without `preserveDrawingBuffer`, which would cost a
+      // copy every frame), so a caller that wants to inspect the pixels has to
+      // be served here, right after the draw calls.
+      if (captureRequest) {
+        const request = captureRequest;
+        captureRequest = null;
+        request(readFrameHistogram(gl, canvas.width, canvas.height));
+      }
+
       if (overlayCtx) {
         overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
         const dpr = overlay.width / Math.max(1, canvas.clientWidth);
@@ -232,6 +273,13 @@ async function main(): Promise<void> {
       frame.frames = 0;
       frame.windowFrames = 0;
       frame.windowStart = performance.now();
+      scheduler.droppedTics = 0;
+    },
+    /** Resolves with a colour histogram of the next rendered frame. */
+    captureFrame(): Promise<FrameHistogram> {
+      return new Promise((resolve) => {
+        captureRequest = resolve;
+      });
     },
     fpsSince(startFrames: number, startMs: number): number {
       return ((frame.frames - startFrames) * 1000) / Math.max(1, performance.now() - startMs);

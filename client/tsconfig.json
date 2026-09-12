@@ -18,5 +18,8 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": false
   },
-  "include": ["src", "test", "e2e", "scripts", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"]
+  "include": ["src", "test", "e2e", "scripts", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"],
+  // Reaches into tools/wad/src, which has its own compiler options and is
+  // owned by another lane; it runs under tsx, never through this project.
+  "exclude": ["test/fixtures/generate.ts"]
 }

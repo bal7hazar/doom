@@ -250,9 +250,12 @@ export class SnapshotRing {
         new Int32Array(this.buffer, (SLOTS_OFFSET_WORDS + i * SNAPSHOT_WORDS) * 4, SNAPSHOT_WORDS),
       );
     }
-    // A fresh ring starts with nothing published; -1 keeps `readLatest` honest.
+    // A fresh ring starts with nothing published and no ticcmd recorded; -1
+    // keeps `readLatest` and `readTiccmd` honest about tic 0, which is a
+    // legitimate tic number and so cannot double as "empty".
     if (this.header[Header.SEQ] === 0 && this.header[Header.TIC] === 0) {
       this.header[Header.PUBLISHED] = -1;
+      this.header[Header.INPUT_HEAD] = -1;
     }
   }
 

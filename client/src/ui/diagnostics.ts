@@ -19,7 +19,7 @@ export function renderDiagnostics(
     ["· exceptions", yesNo(caps.wasm.exceptions), caps.wasm.exceptions],
     [
       "navigator.deviceMemory",
-      caps.deviceMemoryGiB === null ? "unavailable" : `${caps.deviceMemoryGiB} GiB (capped at 8)`,
+      caps.deviceMemoryGiB === null ? "unavailable (Firefox/Safari)" : `${caps.deviceMemoryGiB} GiB reported`,
       caps.deviceMemoryGiB === null ? null : caps.deviceMemoryGiB >= 8,
     ],
     ["hardwareConcurrency", `${caps.hardwareConcurrency} logical cores`, null],
