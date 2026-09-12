@@ -8,7 +8,12 @@
 # by path; it is compiled under THIS `[cairo]` table (gas enabled, no `qm31_opcode`).
 
 [workspace]
-members = ["crates/stwo_circuit_phases", "crates/doom_contracts"]
+members = [
+    "crates/stwo_circuit_phases",
+    "crates/doom_contracts",
+    "crates/recursion_outputs",
+    "crates/doom_runs",
+]
 
 [workspace.package]
 version = "0.1.0"

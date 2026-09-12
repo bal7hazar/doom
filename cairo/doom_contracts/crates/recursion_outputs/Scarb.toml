@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "recursion_outputs"
+version.workspace = true
+edition.workspace = true
+description = "Recomputes the recursive tree's root output hash from the leaves' output preimages (port of spikes/s4/recursion_outputs)."
+
+[dependencies]
+
+[dev-dependencies]
+snforge_std.workspace = true
+assert_macros.workspace = true
+
+[scripts]
+test = "snforge test"
+
+[tool]
+scarb.workspace = true
+
+[tool.snforge]
+tracked_resource = "cairo-steps"
+
+[lib]
