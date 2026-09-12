@@ -1,0 +1,4 @@
+# Scarb build output
+target/
+# profiler binaries: the text tops in results/ are the deliverable
+*.pb.gz

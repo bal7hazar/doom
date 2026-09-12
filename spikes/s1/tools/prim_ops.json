@@ -1,0 +1,22 @@
+[
+ {"name":"bare loop iteration","op":0,"n1":1000,"n2":3000},
+ {"name":"felt252 add","op":1,"n1":1000,"n2":3000},
+ {"name":"felt252 mul+add","op":2,"n1":1000,"n2":3000},
+ {"name":"u32 comparison","op":3,"n1":1000,"n2":3000},
+ {"name":"felt252 -> u128","op":4,"n1":1000,"n2":3000},
+ {"name":"felt252 -> u32","op":5,"n1":1000,"n2":3000},
+ {"name":"const span index (10240)","op":6,"n1":1000,"n2":3000},
+ {"name":"const span index (256)","op":7,"n1":100,"n2":200},
+ {"name":"const span index (2049)","op":8,"n1":1000,"n2":2000},
+ {"name":"dyn array span index (4096)","op":9,"n1":1000,"n2":3000},
+ {"name":"point_on_side","op":10,"n1":1000,"n2":3000},
+ {"name":"fixed_mul","op":11,"n1":1000,"n2":3000},
+ {"name":"fixed_div","op":12,"n1":1000,"n2":3000},
+ {"name":"hades_permutation","op":13,"n1":1000,"n2":3000},
+ {"name":"poseidon_hash_span(1 felt)","op":14,"n1":1000,"n2":3000},
+ {"name":"u128 comparison","op":15,"n1":1000,"n2":3000},
+ {"name":"felt_ge","op":16,"n1":1000,"n2":3000},
+ {"name":"unpack 5x16b packed felt","op":17,"n1":1000,"n2":3000},
+ {"name":"u32 division","op":18,"n1":1000,"n2":3000},
+ {"name":"Felt252Dict insert+get","op":19,"n1":1000,"n2":3000}
+]

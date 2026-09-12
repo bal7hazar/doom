@@ -1,0 +1,4 @@
+[
+ {"name":"poseidon_hash_span(3000 felts)","op":28,"n1":2,"n2":6},
+ {"name":"build 3000-felt array","op":29,"n1":2,"n2":6}
+]

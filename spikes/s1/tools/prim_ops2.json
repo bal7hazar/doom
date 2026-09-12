@@ -1,0 +1,11 @@
+[
+ {"name":"bare loop iteration","op":0,"n1":1000,"n2":3000},
+ {"name":"u64 comparison","op":20,"n1":1000,"n2":3000},
+ {"name":"felt252 -> u64","op":21,"n1":1000,"n2":3000},
+ {"name":"if-tree lookup (16 entries)","op":22,"n1":1000,"n2":3000},
+ {"name":"  baseline: i % 16","op":23,"n1":1000,"n2":3000},
+ {"name":".span() inside loop + index","op":24,"n1":1000,"n2":3000},
+ {"name":"two span indexes, same span","op":25,"n1":1000,"n2":3000},
+ {"name":"Array append","op":26,"n1":1000,"n2":3000},
+ {"name":"planar 5-field record read","op":27,"n1":1000,"n2":3000}
+]
