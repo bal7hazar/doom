@@ -1,54 +1,85 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Packed transport of proof sections: 7 little-endian u32 limbs per felt252 slot.
-//! A limb of `0xFFFFFFFF` escapes a `(low, high)` u64 pair (the two PoW nonces).
-//! Mirrors `tools/emit_calldata.py::pack`.
+//! Mirrors `tools/emit_calldata.py`.
+//!
+//! Two encodings:
+//! - `unpack_u32` (fast path): every value is a u32 (M31 values, blake2s words, lengths). Used
+//!   for every section but the head. One `deconstruct_f252` and 7 appends per slot.
+//! - `unpack` (escaped): a limb of `0xFFFFFFFF` escapes a `(low, high)` u64 pair — the two
+//!   proof-of-work nonces of the head; a plain value >= 0xFFFFFFFF is escaped too.
+//!
+//! Unpacking is on the hot path of every transaction (~4 600 slots): it uses the vendored
+//! `deconstruct_f252` (bounded-int `div_rem` by 2^32) and a single pass; the first version
+//! (u128 divmod + an intermediate limb array + a second pass) cost ~80 k gas per slot on devnet
+//! (docs/design §7).
+use stwo_verifier_utils::deconstruct_f252;
 
 pub const ESCAPE: u32 = 0xFFFFFFFF;
+const SHIFT_32: felt252 = 0x100000000;
 
-/// Decodes `packed` (7 u32 limbs per slot) into `n_values` felt252 values.
-pub fn unpack(packed: Span<felt252>, n_values: u32) -> Array<felt252> {
-    let nz32: NonZero<u128> = 0x100000000_u128.try_into().unwrap();
-    let mut limbs: Array<u32> = array![];
-    for slot in packed {
-        let v: u256 = (*slot).into();
-        let (q, l0) = DivRem::div_rem(v.low, nz32);
-        let (q, l1) = DivRem::div_rem(q, nz32);
-        let (l3, l2) = DivRem::div_rem(q, nz32);
-        let (q, l4) = DivRem::div_rem(v.high, nz32);
-        let (l6, l5) = DivRem::div_rem(q, nz32);
-        limbs.append(l0.try_into().unwrap());
-        limbs.append(l1.try_into().unwrap());
-        limbs.append(l2.try_into().unwrap());
-        limbs.append(l3.try_into().unwrap());
-        limbs.append(l4.try_into().unwrap());
-        limbs.append(l5.try_into().unwrap());
-        limbs.append(l6.try_into().unwrap());
-    }
-    let limbs = limbs.span();
-    let mut values: Array<felt252> = array![];
-    let mut i: usize = 0;
-    while values.len() != n_values {
-        let limb = *limbs[i];
-        if limb == ESCAPE {
-            let lo: felt252 = (*limbs[i + 1]).into();
-            let hi: felt252 = (*limbs[i + 2]).into();
-            values.append(lo + hi * 0x100000000);
-            i += 3;
-        } else {
-            values.append(limb.into());
-            i += 1;
-        }
-    }
-    values
+/// Number of slots a section of `n_values` escape-free values occupies.
+pub fn n_slots(n_values: u32) -> u32 {
+    (n_values + 6) / 7
 }
 
-/// Encodes `values` as 7 u32 limbs per slot (the inverse of `unpack`); values >= 2^32 (< 2^64)
-/// take the 3-limb escape. Test/tooling helper: the client packs off-chain.
+/// Fast path: decodes `packed` into `n_values` felts, every limb being one value (no escapes).
+/// The zero padding of the last slot is dropped.
+pub fn unpack_u32(packed: Span<felt252>, n_values: u32) -> Span<felt252> {
+    assert!(packed.len() == n_slots(n_values), "unpack: slot count");
+    let mut values: Array<felt252> = array![];
+    for slot in packed {
+        let [l0, l1, l2, l3, l4, l5, l6, l7] = deconstruct_f252(*slot).unbox();
+        assert!(l7 == 0, "unpack: slot overflow");
+        values.append(l0.into());
+        values.append(l1.into());
+        values.append(l2.into());
+        values.append(l3.into());
+        values.append(l4.into());
+        values.append(l5.into());
+        values.append(l6.into());
+    }
+    values.span().slice(0, n_values)
+}
+
+/// Escaped decoding: `n_values` felts; values >= 2^32 (< 2^64) arrive as `ESCAPE, low, high`.
+pub fn unpack(packed: Span<felt252>, n_values: u32) -> Array<felt252> {
+    let mut values: Array<felt252> = array![];
+    // 0: plain; 1: an escape was seen, the next limb is `low`; 2: `low` is held, next is `high`.
+    let mut pending: u8 = 0;
+    let mut low: felt252 = 0;
+    for slot in packed {
+        let [l0, l1, l2, l3, l4, l5, l6, _] = deconstruct_f252(*slot).unbox();
+        for limb in [l0, l1, l2, l3, l4, l5, l6].span() {
+            if pending == 0 {
+                if *limb == ESCAPE {
+                    pending = 1;
+                } else {
+                    values.append((*limb).into());
+                }
+            } else if pending == 1 {
+                low = (*limb).into();
+                pending = 2;
+            } else {
+                let high: felt252 = (*limb).into();
+                values.append(low + high * SHIFT_32);
+                pending = 0;
+            }
+        }
+    }
+    assert!(pending == 0, "unpack: truncated escape");
+    assert!(values.len() >= n_values, "unpack: short payload");
+    // Drop the padding (the trailing zeros of the last slot).
+    let mut out = array![];
+    out.append_span(values.span().slice(0, n_values));
+    out
+}
+
+/// Escaped encoding (the inverse of `unpack`). Test/tooling helper: the client packs off-chain.
 pub fn pack(values: Span<felt252>) -> Array<felt252> {
     let mut limbs: Array<felt252> = array![];
     for v in values {
         let v256: u256 = (*v).into();
-        if v256 < 0x100000000 {
+        if v256 < ESCAPE.into() {
             limbs.append(*v);
         } else {
             assert!(v256 < 0x10000000000000000, "pack: value does not fit the u64 escape");
@@ -59,8 +90,20 @@ pub fn pack(values: Span<felt252>) -> Array<felt252> {
             limbs.append(hi.into());
         }
     }
+    pack_limbs(limbs.span())
+}
+
+/// Fast-path encoding (the inverse of `unpack_u32`): every value must be < 2^32.
+pub fn pack_u32(values: Span<felt252>) -> Array<felt252> {
+    for v in values {
+        let v256: u256 = (*v).into();
+        assert!(v256 < 0x100000000, "pack_u32: value >= 2^32");
+    }
+    pack_limbs(values)
+}
+
+fn pack_limbs(mut limbs: Span<felt252>) -> Array<felt252> {
     let mut slots: Array<felt252> = array![];
-    let mut limbs = limbs.span();
     while !limbs.is_empty() {
         let mut slot: felt252 = 0;
         let mut mult: felt252 = 1;
@@ -69,7 +112,7 @@ pub fn pack(values: Span<felt252>) -> Array<felt252> {
                 Some(l) => { slot += *l * mult; },
                 None => {},
             }
-            mult *= 0x100000000;
+            mult *= SHIFT_32;
         }
         slots.append(slot);
     }
