@@ -28,7 +28,9 @@ Reads `budget.json` next to this script:
               "budget": 15}]}
 
 `budget` is the maximum *net* steps allowed; the script exits non-zero when
-an operation exceeds it. `op` 0 is always the bare-loop baseline.
+an operation exceeds it. `op` 0 is always the bare-loop baseline; an entry
+may name a different baseline with `"base_op": <n>` when its loop carries
+extra bookkeeping the bare loop does not (a cursor step, say).
 """
 
 from __future__ import annotations
@@ -92,10 +94,16 @@ def main() -> int:
     print(f"{'operation':<38}{'gross':>9}{'net':>9}{'budget':>9}  verdict")
 
     results = {"baseline": baseline, "ops": []}
+    bases = {0: baseline}
+    for entry in config["ops"]:
+        base_op = entry.get("base_op")
+        if base_op is not None and base_op not in bases:
+            bases[base_op] = per_iteration(base_op, entry["n1"], entry["n2"])
+
     failed = False
     for entry in config["ops"]:
         gross = per_iteration(entry["op"], entry["n1"], entry["n2"])
-        net = gross - baseline
+        net = gross - bases[entry.get("base_op", 0)]
         over = entry.get("budget") is not None and net > entry["budget"]
         failed = failed or over
         results["ops"].append(
