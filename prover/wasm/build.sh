@@ -125,6 +125,9 @@ rustup component list --toolchain "$TOOLCHAIN" --installed | grep -q '^rust-src'
 # They have different rustflags, hence different fingerprints: each gets its own target directory
 # so switching variants does not invalidate the other's cache.
 SIMD=",+simd128"; [[ "${NO_SIMD:-0}" == "1" ]] && SIMD=""
+# The rustup sysroot differs between machines (~/.rustup on macOS, /usr/local/rustup in the
+# container); its path reaches the artifact through `-Z build-std`'s std sources, so remap it too.
+SYSROOT="$(rustc +"$TOOLCHAIN" --print sysroot)"
 MAX_MEMORY=17179869184   # 16 GiB — V8's Memory64 implementation limit
 STACK_SIZE=16777216      # main-thread shadow stack; worker stacks are allocated by the host
 
@@ -151,7 +154,7 @@ build_variant() {
  -C target-feature=+bulk-memory,+nontrapping-fptoint,+sign-ext,+mutable-globals$SIMD$atomics \
  -C link-arg=--max-memory=$MAX_MEMORY -C link-arg=-zstack-size=$STACK_SIZE $link_exports \
  --remap-path-prefix=$HERE=/hellproof --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo \
- --remap-path-prefix=$tdir=/target"
+ --remap-path-prefix=$SYSROOT=/rustc --remap-path-prefix=$tdir=/target"
   echo "building variant '$variant' -> dist/$out" >&2
   # NOTE: with -Z build-std cargo also resolves the sysroot workspace, for which every [patch] is
   # unused; the "patch ... was not used in the crate graph" warnings it prints are spurious.

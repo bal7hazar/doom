@@ -4,14 +4,16 @@ name: prover-wasm
 # headless Chrome) for `prover/wasm`.
 #
 # 1. `docker-build` rebuilds both wasm64 artifacts in the pinned container and compares their
-#    hashes with the committed `prover/wasm/SHA256SUMS` — i.e. checks that an independent build on
-#    another OS lands on the same bytes.
+#    hashes with the committed `prover/wasm/SHA256SUMS.linux` — i.e. checks that an independent
+#    container build lands on the same bytes. `SHA256SUMS` (macOS) is printed next to it for
+#    reference: the build is bit-reproducible on a given host, but rustc is not byte-identical
+#    across hosts (see prover/wasm/README.md).
 # 2. `browser-smoke` takes those artifacts, builds the npm package and proves a 2^14-step program
 #    in headless Chromium through Playwright (single-threaded *and* with 4 threads), verifying the
-#    proof in the browser.
+#    proof in the browser, then checks the no-isolation fallback.
 #
-# The container build is ~20 min cold (it compiles std twice with `-Z build-std`, once per
-# variant); the smoke test is ~2 min.
+# The container build is ~6 min on an M2 (it compiles std twice with `-Z build-std`, once per
+# variant) and ~20 min on a GitHub runner; the smoke tests are ~3 min.
 
 on:
   push:
@@ -46,16 +48,18 @@ jobs:
           docker build --progress=plain -o out -f Dockerfile .
           ls -l out
 
-      - name: Compare with the committed SHA256SUMS
+      - name: Compare with the committed SHA256SUMS.linux
         working-directory: prover/wasm
         run: |
           (cd out && sha256sum hellproof_prover_wasm.wasm hellproof_prover_wasm.threads.wasm) \
             | sed 's|  | |' | sort > /tmp/built.txt
-          sed 's|  | |' SHA256SUMS | sort > /tmp/committed.txt
-          echo "--- built"; cat /tmp/built.txt
-          echo "--- committed"; cat /tmp/committed.txt
-          # A mismatch means the build is not reproducible across OSes (the macOS hashes are the
-          # committed ones) or that SHA256SUMS was not refreshed: fail loudly, with the diff.
+          sed 's|  | |' SHA256SUMS.linux | sort > /tmp/committed.txt
+          echo "--- built here"; cat /tmp/built.txt
+          echo "--- committed (Linux container)"; cat /tmp/committed.txt
+          echo "--- committed (macOS, for reference — rustc is not bit-reproducible across hosts)"
+          cat SHA256SUMS
+          # A mismatch means the container build stopped being reproducible, or that
+          # SHA256SUMS.linux was not refreshed with the artifacts: fail loudly, with the diff.
           diff -u /tmp/committed.txt /tmp/built.txt
 
       - uses: actions/upload-artifact@v4

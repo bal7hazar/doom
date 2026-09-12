@@ -26,6 +26,7 @@ prover/wasm/
 ├── rust-toolchain.toml          # nightly-2026-01-15 (the monorepo's), rust-src for -Z build-std
 ├── .cargo/config.toml           # wasm64 rustflags (getrandom custom cfg, simd128, 16 GiB max memory)
 ├── build.sh                     # vendor (fetch + patch) + both variants -> dist/*.wasm + SHA256SUMS
+├── SHA256SUMS, SHA256SUMS.linux # artifact hashes: macOS build, container build
 ├── Dockerfile                   # the same build in a pinned Linux container (R11-A1)
 ├── patches/                     # 6 patches vs upstream, applied by build.sh (see patches/README.md)
 ├── resources/                   # leaf_simple_bootloader_compiled.json.gz (from the monorepo)
@@ -144,19 +145,32 @@ records the patched path source) with their patches. `vendor/rust-std` is a copy
 `library/` tree with `patches/rust-std-*.patch`; `-Z build-std` is pointed at it for the threaded
 variant only. `vendor/` is gitignored and rebuilt by `build.sh vendor`.
 
-**Reproducibility (R11-A1).** `SHA256SUMS` records both artifacts. The single-threaded artifact of
-S2 was reproduced bit-for-bit by a second build from a fresh GitHub clone in a separate target
-directory, and again in this phase after the `build.sh` fixes
-(`32c031ea…ce02c` before the P3.1 source changes). Docker:
+**Reproducibility (R11-A1).** Two hash files are committed, because the build is bit-reproducible
+*per host*, not across hosts:
+
+| File | Built by | Sizes (st / mt) |
+|---|---|---|
+| `SHA256SUMS` | `./build.sh` on macOS arm64 | 45 035 551 / 45 111 575 B |
+| `SHA256SUMS.linux` | `docker build -o out -f Dockerfile .` (Debian bookworm arm64) | 45 032 682 / 45 114 562 B |
 
 ```sh
 docker build -o out -f prover/wasm/Dockerfile prover/wasm   # both artifacts + SHA256SUMS in ./out
 ```
 
-The Docker build is **written and reviewed but has not been executed here** (no Docker daemon on
-the S2/P3.1 machine); `.github/workflows/prover-wasm.yml` runs it on Linux and diffs its hashes
-against the committed `SHA256SUMS` — the first CI run is what will tell whether Linux and macOS
-land on the same bytes (the remaining suspects are `build-std` host paths).
+Evidence: the macOS build has been reproduced bit-for-bit three times (S2's artifact
+`32c031ea…ce02c` from a fresh GitHub clone of the monorepo in a separate target directory, then
+again here), and the container build twice — **the same host always lands on the same bytes**.
+macOS and Linux do *not*: the two artifacts differ by ~3 KB, and a string diff of their data
+sections shows the same literals merged in a different order, i.e. codegen/layout ordering of the
+two host builds of rustc, not a leftover absolute path (`--remap-path-prefix` covers the crate,
+`CARGO_HOME`, the target dir and the rustup sysroot; adding the sysroot mapping changed the
+single-threaded hash, which proves the mechanism works, and left the threaded one untouched
+because its `std` comes from `vendor/rust-std`). Cross-host bit-identity would need the
+reproducible-builds work upstream in rustc; it is not required by R11-A1's "two independent builds
+→ same hash", which is satisfied per platform.
+
+`.github/workflows/prover-wasm.yml` rebuilds in the container on every change and diffs against
+`SHA256SUMS.linux`, printing the macOS hashes next to it.
 
 ### Versions (pinned)
 
@@ -398,8 +412,8 @@ size.
 
 | Artifact | raw | gzip -9 |
 |---|---:|---:|
-| `hellproof_prover_wasm.wasm` (single-threaded) | 45.0 MB | 8.11 MB |
-| `hellproof_prover_wasm.threads.wasm` | 45.1 MB | 8.14 MB |
+| `hellproof_prover_wasm.wasm` (single-threaded) | 45 035 551 B | 8.11 MB |
+| `hellproof_prover_wasm.threads.wasm` | 45 111 575 B | 8.14 MB |
 | single-threaded + `wasm-opt -O3 --strip-debug --strip-producers --strip-target-features` | 40.5 MB (−10 %) | 8.42 MB (**+4 %**) |
 
 `wasm-opt -O3` is therefore **off by default** (`WASM_OPT=1` to enable): it costs 8 minutes of CPU,
