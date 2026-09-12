@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# getrandom >= 0.3 needs both its `wasm_js` feature (see Cargo.toml) and this
+# cfg to select the browser backend on wasm32-unknown-unknown.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

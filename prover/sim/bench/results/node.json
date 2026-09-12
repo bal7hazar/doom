@@ -1,0 +1,142 @@
+{
+  "environment": "node v22.22.2 (wasm)",
+  "iters": 2000,
+  "warmup": 500,
+  "cases": [
+    {
+      "name": "4k",
+      "state_felts": 112,
+      "steps_per_call": 3986,
+      "output_felts": 113,
+      "payload_bytes_in": 3648,
+      "output_fingerprint": 3756648543,
+      "tics_per_s": 1980.7811401967901,
+      "steps_per_s": 7895393.624824406,
+      "js_fill_args_ms": 0.0018354960000008874,
+      "call": {
+        "mean_ms": 0.5026828654999993,
+        "p50_ms": 0.484375,
+        "p95_ms": 0.5502079999999978,
+        "p99_ms": 0.9376250000000255,
+        "max_ms": 1.9537500000000136,
+        "over_28_6_ms": 0
+      },
+      "zero_copy": {
+        "mean_ms": 0.4957720939999981,
+        "p50_ms": 0.48404200000004494,
+        "p95_ms": 0.5269590000000335,
+        "p99_ms": 0.6269170000000486,
+        "max_ms": 1.851458999999977,
+        "over_28_6_ms": 0
+      },
+      "copy_in_only_ms": 0.0009646639999882609,
+      "in_wasm_breakdown_ms": {
+        "decode_args": 0.010038076666666408,
+        "runner_init": 0.0034089100000035915,
+        "vm_run": 0.48356651999998956,
+        "read_output": 0.00208223000000847,
+        "encode_output": 0.0026030600000005203
+      },
+      "_sink": 56000
+    },
+    {
+      "name": "10k",
+      "state_felts": 284,
+      "steps_per_call": 10006,
+      "output_felts": 285,
+      "payload_bytes_in": 9152,
+      "output_fingerprint": 3700935762,
+      "tics_per_s": 828.183955691857,
+      "steps_per_s": 8286808.660652721,
+      "js_fill_args_ms": 0.004101564999998573,
+      "call": {
+        "mean_ms": 1.2030120355000042,
+        "p50_ms": 1.1850000000004002,
+        "p95_ms": 1.2629170000000158,
+        "p99_ms": 1.5374580000002425,
+        "max_ms": 2.8496670000004087,
+        "over_28_6_ms": 0
+      },
+      "zero_copy": {
+        "mean_ms": 1.199007496000002,
+        "p50_ms": 1.1899999999995998,
+        "p95_ms": 1.24225000000024,
+        "p99_ms": 1.3622910000003685,
+        "max_ms": 2.6523329999999987,
+        "over_28_6_ms": 0
+      },
+      "copy_in_only_ms": 0.0010589160000035918,
+      "in_wasm_breakdown_ms": {
+        "decode_args": 0.023867769999991045,
+        "runner_init": 0.0030358399999992495,
+        "vm_run": 1.1481552933333115,
+        "read_output": 0.004669986666691936,
+        "encode_output": 0.006003163333322542
+      },
+      "_sink": 14000
+    },
+    {
+      "name": "full-1500",
+      "state_felts": 1500,
+      "steps_per_call": 52566,
+      "output_felts": 1501,
+      "payload_bytes_in": 48064,
+      "output_fingerprint": 3578092456,
+      "tics_per_s": 146.07995046024527,
+      "steps_per_s": 7678838.675893254,
+      "js_fill_args_ms": 0.022408595499966395,
+      "call": {
+        "mean_ms": 6.822250278499999,
+        "p50_ms": 6.192250000000058,
+        "p95_ms": 10.251625000000786,
+        "p99_ms": 21.08233300000029,
+        "max_ms": 46.764375000000655,
+        "over_28_6_ms": 7
+      },
+      "zero_copy": {
+        "mean_ms": 6.196076662000109,
+        "p50_ms": 6.104458000001614,
+        "p95_ms": 6.442542000000685,
+        "p99_ms": 7.963292000000365,
+        "max_ms": 12.294834000000264,
+        "over_28_6_ms": 0
+      },
+      "copy_in_only_ms": 0.0017609160000502016,
+      "in_wasm_breakdown_ms": {
+        "decode_args": 0.12320704000012483,
+        "runner_init": 0.003948633333396477,
+        "vm_run": 5.90176721999982,
+        "read_output": 0.022616520000119635,
+        "encode_output": 0.029028803333361188
+      },
+      "_sink": 110000
+    }
+  ],
+  "first_call": {
+    "case": "4k",
+    "load_ms": 7.739333000000002,
+    "first_run_ms": 7.071083999999999,
+    "total_ms": 14.810417000000001
+  },
+  "naive_reparse": {
+    "case": "4k",
+    "per_call_ms": 0.6117521000000125,
+    "iters": 20,
+    "executable_json_bytes": 4131
+  },
+  "memory": {
+    "case": "4k",
+    "iters": 10000,
+    "wasm_bytes_before": 6619136,
+    "wasm_bytes_after": 6619136,
+    "wasm_growth_bytes": 0,
+    "js_heap_before": null,
+    "js_heap_after": null,
+    "js_heap_growth": null,
+    "agent_memory_before": null,
+    "agent_memory_after": null,
+    "agent_memory_growth": null,
+    "sustained_tics_per_s": 2102.761443727812
+  },
+  "wasm_bytes": 12624703
+}

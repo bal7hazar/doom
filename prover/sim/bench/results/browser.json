@@ -1,0 +1,147 @@
+{
+  "environment": "chromium worker (wasm)",
+  "iters": 2000,
+  "warmup": 500,
+  "cases": [
+    {
+      "name": "4k",
+      "state_felts": 112,
+      "steps_per_call": 3986,
+      "output_felts": 113,
+      "payload_bytes_in": 3648,
+      "output_fingerprint": 3756648543,
+      "tics_per_s": 2288.98426323319,
+      "steps_per_s": 9123891.273247497,
+      "js_fill_args_ms": 0.0009275000076740981,
+      "call": {
+        "mean_ms": 0.43558500000089406,
+        "p50_ms": 0.4299999997019768,
+        "p95_ms": 0.4649999998509884,
+        "p99_ms": 0.5049999989569187,
+        "max_ms": 0.7149999998509884,
+        "over_28_6_ms": 0
+      },
+      "zero_copy": {
+        "mean_ms": 0.4307799999937415,
+        "p50_ms": 0.42500000074505806,
+        "p95_ms": 0.44999999925494194,
+        "p99_ms": 0.4950000010430813,
+        "max_ms": 0.5350000001490116,
+        "over_28_6_ms": 0
+      },
+      "copy_in_only_ms": 0.001320000022649765,
+      "in_wasm_breakdown_ms": {
+        "decode_args": 0.008799999989569186,
+        "runner_init": 0.0029833332697550455,
+        "vm_run": 0.4123333334301909,
+        "read_output": 0.001900000050663948,
+        "encode_output": 0.002233333239952723
+      },
+      "_sink": 56000
+    },
+    {
+      "name": "10k",
+      "state_felts": 284,
+      "steps_per_call": 10006,
+      "output_felts": 285,
+      "payload_bytes_in": 9152,
+      "output_fingerprint": 3700935762,
+      "tics_per_s": 936.4326131383565,
+      "steps_per_s": 9369944.727062395,
+      "js_fill_args_ms": 0.0011750000063329934,
+      "call": {
+        "mean_ms": 1.0662674999833106,
+        "p50_ms": 1.0599999986588955,
+        "p95_ms": 1.1200000010430813,
+        "p99_ms": 1.1650000028312206,
+        "max_ms": 1.2450000010430813,
+        "over_28_6_ms": 0
+      },
+      "zero_copy": {
+        "mean_ms": 1.0579800000041724,
+        "p50_ms": 1.050000000745058,
+        "p95_ms": 1.1099999994039536,
+        "p99_ms": 1.1400000005960464,
+        "max_ms": 1.2049999982118607,
+        "over_28_6_ms": 0
+      },
+      "copy_in_only_ms": 0.001380000002682209,
+      "in_wasm_breakdown_ms": {
+        "decode_args": 0.02249999997516473,
+        "runner_init": 0.002800000123679638,
+        "vm_run": 1.0231999999160568,
+        "read_output": 0.004433333314955235,
+        "encode_output": 0.0046000001455346745
+      },
+      "_sink": 14000
+    },
+    {
+      "name": "full-1500",
+      "state_felts": 1500,
+      "steps_per_call": 52566,
+      "output_felts": 1501,
+      "payload_bytes_in": 48064,
+      "output_fingerprint": 3578092456,
+      "tics_per_s": 179.34678314645285,
+      "steps_per_s": 9427543.00287644,
+      "js_fill_args_ms": 0.005492499986663461,
+      "call": {
+        "mean_ms": 5.569559999994934,
+        "p50_ms": 5.570000000298023,
+        "p95_ms": 5.744999997317791,
+        "p99_ms": 5.820000000298023,
+        "max_ms": 6.110000003129244,
+        "over_28_6_ms": 0
+      },
+      "zero_copy": {
+        "mean_ms": 5.588890000030398,
+        "p50_ms": 5.58500000089407,
+        "p95_ms": 5.730000000447035,
+        "p99_ms": 5.804999999701977,
+        "max_ms": 6.005000002682209,
+        "over_28_6_ms": 0
+      },
+      "copy_in_only_ms": 0.0025099999979138372,
+      "in_wasm_breakdown_ms": {
+        "decode_args": 0.1159666667257746,
+        "runner_init": 0.004550000006953875,
+        "vm_run": 5.396433333245416,
+        "read_output": 0.02031666667511066,
+        "encode_output": 0.022483333523074786
+      },
+      "_sink": 110000
+    }
+  ],
+  "first_call": {
+    "case": "4k",
+    "load_ms": 7.1099999994039536,
+    "first_run_ms": 4.785000000149012,
+    "total_ms": 11.894999999552965
+  },
+  "naive_reparse": {
+    "case": "4k",
+    "per_call_ms": 0.5824999999254942,
+    "iters": 20,
+    "executable_json_bytes": 4131
+  },
+  "memory": {
+    "case": "4k",
+    "iters": 10000,
+    "wasm_bytes_before": 6619136,
+    "wasm_bytes_after": 6619136,
+    "wasm_growth_bytes": 0,
+    "js_heap_before": null,
+    "js_heap_after": null,
+    "js_heap_growth": null,
+    "agent_memory_before": null,
+    "agent_memory_after": null,
+    "agent_memory_growth": null,
+    "sustained_tics_per_s": 2280.350900397018
+  },
+  "wasm_bytes": 12624703,
+  "wasm_fetch_ms": 22.359999999403954,
+  "wasm_instantiate_ms": 9.215000003576279,
+  "hardware_concurrency": 12,
+  "cross_origin_isolated": true,
+  "browser": "chromium 153.0.8010.12 (playwright)"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "hellproof-sim-bench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Spike S3 benchmarks: Cairo step_tic throughput natively, in Node and in a browser Worker",
+  "scripts": {
+    "build:cairo": "cd step_tic && scarb build",
+    "build:wasm": "cd .. && wasm-pack build --release --target web --out-dir pkg --out-name hellproof_sim",
+    "build:native": "cd .. && cargo build --release",
+    "build": "npm run build:cairo && npm run build:wasm && npm run build:native",
+    "bench:native": "node native.mjs",
+    "bench:node": "node node.mjs",
+    "bench:browser": "node browser.mjs",
+    "bench": "node run.mjs",
+    "serve": "node server.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}
