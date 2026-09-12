@@ -185,13 +185,13 @@ jobs:
         if: steps.check.outputs.present == 'true'
         run: npm run typecheck --workspace tools/wad
 
-      - name: npm test
-        if: steps.check.outputs.present == 'true'
-        run: npm test --workspace tools/wad
-
       - name: Fetch Freedoom WAD (cached)
         if: steps.check.outputs.present == 'true'
         uses: ./.github/actions/fetch-freedoom
+
+      - name: npm test
+        if: steps.check.outputs.present == 'true'
+        run: npm test --workspace tools/wad
 
       - name: Extract E1M1 (writes out/e1m1.cairo for verify-cairo.sh)
         if: steps.check.outputs.present == 'true'

@@ -15,5 +15,9 @@ export const hasRealWad = existsSync(REAL_WAD_PATH);
  * tests that need the real WAD do the `readFileSync` themselves: `Wad.fromBytes(readRealWad())`.
  */
 export function readRealWad(): Uint8Array {
+  // `describe.skipIf(!hasRealWad)` still runs the suite factory during
+  // collection, so callers evaluate this even when the suite is skipped:
+  // return an empty buffer instead of throwing (the suite never runs).
+  if (!hasRealWad) return new Uint8Array(0);
   return readFileSync(REAL_WAD_PATH);
 }
