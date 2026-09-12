@@ -1,0 +1,6 @@
+leaf_0                  21.30 real 179.28 user 8.64 sys  32562561024 maximum resident set size 
+leaf_1                  22.17 real 191.43 user 8.48 sys  32324288512 maximum resident set size 
+leaf proof bytes: 545896
+tree                    36.38 real 173.91 user 6.24 sys  32284852224 maximum resident set size 
+root.proof felts: 93797
+verify                  1.85 real 0.81 user 0.81 sys  807960576 maximum resident set size 
