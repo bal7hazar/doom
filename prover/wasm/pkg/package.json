@@ -29,7 +29,9 @@
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "test": "node test/smoke.mjs --threads 1 --k 14 && node test/smoke.mjs --threads 4 --k 14",
+    "sizing": "node test/sizing.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.13.4",
