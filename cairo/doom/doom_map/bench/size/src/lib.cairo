@@ -17,7 +17,7 @@ fn main(op: u32) -> felt252 {
     acc += g.id + g.start.x.enc + g.start.y.enc + g.angle.into() + g.num_things.into();
     acc += num_linedefs(@m).into() + m.id + m.root.into() + m.reject_stride.into();
     acc += *m.l_ab.at(0) + *m.l_bb.at(0) + *m.l_cb.at(0);
-    acc += *m.l_box_lr.at(0) + *m.l_box_bt.at(0) + *m.l_packed.at(0);
+    acc += *m.l_box.at(0) + *m.l_packed.at(0);
     acc += *m.n_ab.at(0) + *m.n_bb.at(0) + *m.n_cb.at(0);
     acc += (*m.n_child0.at(0)).into() + (*m.n_child1.at(0)).into();
     acc += (*m.ss_sector.at(0)).into();

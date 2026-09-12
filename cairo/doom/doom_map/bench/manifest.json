@@ -1,7 +1,7 @@
 {
   "map": "E1M1",
   "scalars": 19,
-  "total_words": 16326,
+  "total_words": 15151,
   "arrays": [
     {
       "name": "L_AB",
@@ -22,13 +22,7 @@
       "words": 1175
     },
     {
-      "name": "L_BOX_LR",
-      "group": "linedefBox",
-      "layout": "packed",
-      "words": 1175
-    },
-    {
-      "name": "L_BOX_BT",
+      "name": "L_BOX",
       "group": "linedefBox",
       "layout": "packed",
       "words": 1175

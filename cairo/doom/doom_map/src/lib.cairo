@@ -63,7 +63,6 @@ pub const REJECT_BITS: u32 = 64;
 // Shifts and widths of the packed records, as `u128` so that the decoders
 // below are plain integer divisions (never `/` on a `felt252`, which is a
 // field division — S1 §7, transverse rule 3).
-const BOX_SHIFT: u128 = 0x400000000; // 2^34, two `Fixed::enc` per felt
 const W16: u128 = 0x10000;
 const W8: u128 = 0x100;
 const W13: u128 = 0x2000;
@@ -108,9 +107,9 @@ pub struct LevelMap {
     pub l_ab: Span<felt252>,
     pub l_bb: Span<felt252>,
     pub l_cb: Span<felt252>,
-    /// Linedef bounding box, two `Fixed::enc` per felt (left‖right, bottom‖top).
-    pub l_box_lr: Span<felt252>,
-    pub l_box_bt: Span<felt252>,
+    /// Linedef bounding box: four 16-bit biased map units in one felt
+    /// (left, bottom, right, top from the low end), see [`unpack_box`].
+    pub l_box: Span<felt252>,
     /// Linedef flags, special, tag, diagonal bit and the two face sectors.
     pub l_packed: Span<felt252>,
     /// BSP node partition predicates and children (`bsp::SUBSECTOR_FLAG`).
@@ -214,8 +213,7 @@ pub struct HotMap {
     pub l_ab: Span<felt252>,
     pub l_bb: Span<felt252>,
     pub l_cb: Span<felt252>,
-    pub l_box_lr: Span<felt252>,
-    pub l_box_bt: Span<felt252>,
+    pub l_box: Span<felt252>,
     pub l_packed: Span<felt252>,
     pub n_ab: Span<felt252>,
     pub n_bb: Span<felt252>,
@@ -248,8 +246,7 @@ pub fn load(level: LevelId) -> LevelMap {
             l_ab: e1m1::L_AB.span(),
             l_bb: e1m1::L_BB.span(),
             l_cb: e1m1::L_CB.span(),
-            l_box_lr: e1m1::L_BOX_LR.span(),
-            l_box_bt: e1m1::L_BOX_BT.span(),
+            l_box: e1m1::L_BOX.span(),
             l_packed: e1m1::L_PACKED.span(),
             n_ab: e1m1::N_AB.span(),
             n_bb: e1m1::N_BB.span(),
@@ -283,8 +280,7 @@ pub fn hot(m: @LevelMap) -> HotMap {
         l_ab: *m.l_ab,
         l_bb: *m.l_bb,
         l_cb: *m.l_cb,
-        l_box_lr: *m.l_box_lr,
-        l_box_bt: *m.l_box_bt,
+        l_box: *m.l_box,
         l_packed: *m.l_packed,
         n_ab: *m.n_ab,
         n_bb: *m.n_bb,
@@ -329,18 +325,26 @@ fn field(packed: felt252, shift: u128, width: u128) -> u128 {
     (v / shift) % width
 }
 
-/// Split a felt holding two `Fixed::enc` values (`hi * 2^34 + lo`).
-fn split_pair(packed: felt252) -> (Fixed, Fixed) {
-    let v: u128 = packed.try_into().unwrap();
-    let hi = v / BOX_SHIFT;
-    let lo = v - hi * BOX_SHIFT;
-    (Fixed { enc: hi.into() }, Fixed { enc: lo.into() })
-}
-
 /// A 16-bit biased map unit (`u + 2^15`) as a `Fixed`.
 fn coord(biased: u128) -> Fixed {
     let b: felt252 = biased.into();
     Fixed { enc: b * 65536 + COORD_OFFSET }
+}
+
+/// Decode one `L_BOX` felt: `left | bottom << 16 | right << 32 | top << 48`,
+/// each a 16-bit biased map unit.
+///
+/// Public so that `doom_physics` can decode a felt it has already read from
+/// the hoisted span (D24) without paying the `@LevelMap` snapshot. Three
+/// `u128` divmods: **measured ~40 steps** against ~90 for the previous
+/// two-felt form.
+pub fn unpack_box(packed: felt252) -> Box {
+    let v: u128 = packed.try_into().unwrap();
+    let w16: NonZero<u128> = 0x10000;
+    let (q1, left) = DivRem::div_rem(v, w16);
+    let (q2, bottom) = DivRem::div_rem(q1, w16);
+    let (top, right) = DivRem::div_rem(q2, w16);
+    Box { left: coord(left), bottom: coord(bottom), right: coord(right), top: coord(top) }
 }
 
 // ---------------------------------------------------------------------------
@@ -360,9 +364,7 @@ pub fn linedef_half_plane(m: @LevelMap, i: u32) -> HalfPlane {
 
 /// The bounding box of linedef `i`, the first half of `PIT_CheckLine`.
 pub fn linedef_box(m: @LevelMap, i: u32) -> Box {
-    let (left, right) = split_pair(*(*m.l_box_lr).at(i));
-    let (bottom, top) = split_pair(*(*m.l_box_bt).at(i));
-    Box { left, bottom, right, top }
+    unpack_box(*(*m.l_box).at(i))
 }
 
 /// Raw WAD flags word of linedef `i` (`ML_BLOCKING` &c.), the cheapest field

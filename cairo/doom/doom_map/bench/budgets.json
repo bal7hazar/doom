@@ -1,109 +1,109 @@
 {
   "crate": "doom_map",
   "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 bare loop, 1 index arithmetic, 2 point + hoisted term). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4). 'data_words' is the compiled size of the level data, measured against bench/baseline (docs/G0.md D4: <= 20 000).",
-  "data_words": 16762,
+  "data_words": 15568,
   "operations": [
     {
       "name": "linedef_half_plane",
       "op": 3,
       "base": 1,
-      "budget": 72
+      "budget": 70
     },
     {
-      "name": "linedef_box (packed, 2 felts)",
+      "name": "linedef_box (packed, 4 x 16 bits)",
       "op": 4,
       "base": 1,
-      "budget": 168
+      "budget": 154
     },
     {
       "name": "linedef_flags",
       "op": 5,
       "base": 1,
-      "budget": 72
+      "budget": 70
     },
     {
       "name": "linedef_special",
       "op": 6,
       "base": 1,
-      "budget": 170
+      "budget": 166
     },
     {
       "name": "linedef_sectors",
       "op": 7,
       "base": 1,
-      "budget": 170
+      "budget": 166
     },
     {
       "name": "linedef_diagonal",
       "op": 8,
       "base": 1,
-      "budget": 142
+      "budget": 138
     },
     {
       "name": "linedef_v1",
       "op": 9,
       "base": 1,
-      "budget": 323
+      "budget": 307
     },
     {
       "name": "linedef (full record)",
       "op": 10,
       "base": 1,
-      "budget": 491
+      "budget": 473
     },
     {
       "name": "sector_floor + sector_ceiling",
       "op": 11,
       "base": 1,
-      "budget": 72
+      "budget": 70
     },
     {
       "name": "sector (full record)",
       "op": 12,
       "base": 1,
-      "budget": 214
+      "budget": 210
     },
     {
       "name": "subsector_sector",
       "op": 13,
       "base": 1,
-      "budget": 56
+      "budget": 54
     },
     {
       "name": "reject",
       "op": 14,
       "base": 1,
-      "budget": 190
+      "budget": 186
     },
     {
       "name": "thing",
       "op": 15,
       "base": 1,
-      "budget": 234
+      "budget": 230
     },
     {
       "name": "descent_start",
       "op": 16,
       "base": 1,
-      "budget": 56
+      "budget": 54
     },
     {
       "name": "subsector_at (descent from root)",
       "op": 19,
       "base": 2,
-      "budget": 1248
+      "budget": 1246
     },
     {
       "name": "subsector_in_cell (R2-A9)",
       "op": 20,
       "base": 2,
-      "budget": 785
+      "budget": 783
     },
     {
       "name": "node_side",
       "op": 21,
       "base": 2,
-      "budget": 110
+      "budget": 108
     },
     {
       "name": "blockmap cell list",

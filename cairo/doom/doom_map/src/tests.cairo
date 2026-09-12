@@ -50,8 +50,7 @@ fn test_spans_are_consistently_sized() {
     let lines = num_linedefs(@m);
     assert(m.l_bb.len() == lines, 'l_bb');
     assert(m.l_cb.len() == lines, 'l_cb');
-    assert(m.l_box_lr.len() == lines, 'l_box_lr');
-    assert(m.l_box_bt.len() == lines, 'l_box_bt');
+    assert(m.l_box.len() == lines, 'l_box');
     assert(m.l_packed.len() == lines, 'l_packed');
     assert(m.n_bb.len() == m.n_ab.len(), 'n_bb');
     assert(m.n_cb.len() == m.n_ab.len(), 'n_cb');
@@ -574,8 +573,7 @@ fn test_every_constant_stays_below_2_pow_72() {
     check_below(m.l_ab, limit);
     check_below(m.l_bb, limit);
     check_below(m.l_cb, limit);
-    check_below(m.l_box_lr, limit);
-    check_below(m.l_box_bt, limit);
+    check_below(m.l_box, limit);
     check_below(m.l_packed, limit);
     check_below(m.n_ab, limit);
     check_below(m.n_bb, limit);

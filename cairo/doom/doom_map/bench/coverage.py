@@ -155,14 +155,17 @@ fn test_every_accessor_runs() {
 def fixture_level() -> str:
     """A miniature level with the same array names and shapes as a real one."""
     arr = G.Arrays()
-    ab, bb, cb, lr, bt, pk = [], [], [], [], [], []
+    ab, bb, cb, bx, pk = [], [], [], [], []
     for v1, v2 in FIXTURE_LINES:
         a, b, c = G.half_plane(v1, v2)
         ab.append(a)
         bb.append(b)
         cb.append(c)
-        lr.append(G.enc(min(v1[0], v2[0])) * G.BOX_SHIFT + G.enc(max(v1[0], v2[0])))
-        bt.append(G.enc(min(v1[1], v2[1])) * G.BOX_SHIFT + G.enc(max(v1[1], v2[1])))
+        bx.append(
+            G.pack_box(
+                min(v1[0], v2[0]), min(v1[1], v2[1]), max(v1[0], v2[0]), max(v1[1], v2[1])
+            )
+        )
         pk.append(
             (1 << G.LP_FLAGS)
             | (11 << G.LP_SPECIAL)
@@ -174,8 +177,7 @@ def fixture_level() -> str:
     arr.add("L_AB", "felt252", ab, "linedefPredicates")
     arr.add("L_BB", "felt252", bb, "linedefPredicates")
     arr.add("L_CB", "felt252", cb, "linedefPredicates")
-    arr.add("L_BOX_LR", "felt252", lr, "linedefBox")
-    arr.add("L_BOX_BT", "felt252", bt, "linedefBox")
+    arr.add("L_BOX", "felt252", bx, "linedefBox")
     arr.add("L_PACKED", "felt252", pk, "linedefMeta")
 
     # One node: the diagonal (0, 0) -> (64, 64), front leaf 0, back leaf 1.

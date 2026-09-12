@@ -54,7 +54,7 @@ at K = 100, not by taste.
 | Group | Layout | Words | Why |
 |---|---|---:|---|
 | `L_AB` / `L_BB` / `L_CB` | planar | 3 525 | the predicate itself, read tens of times per tic; packing would cost more than it saves at any K |
-| `L_BOX_LR` / `L_BOX_BT` | **packed** (2 `enc` per felt) | 2 350 | 2 350 felts saved for **+96 steps** on a full 4-corner unpack; but a `bbox_reject` short-circuits on the `LR` felt alone (48 steps), and the alternative planar form costs 4 700 words = 691 steps/tic amortized |
+| `L_BOX` | **packed** (4 × 16-bit map units per felt) | 1 175 | 3 525 felts saved against the planar form; the full 4-corner decode is three `u128` divmods (~40 steps, measured), cheaper than the earlier two-`enc`-per-felt form (2 350 words, ~90 steps) on both axes |
 | `L_PACKED` (flags, special, tag, diagonal, both sectors) | **packed** (63 bits) | 1 175 | S1 §7's worked example: read 2–5 times per tic, saves 4 700 felts |
 | `N_AB` / `N_BB` / `N_CB` / `N_CHILD0` / `N_CHILD1` | planar | 3 405 | the BSP descent's inner loop |
 | `SS_SECTOR` | planar | 682 | 10+ reads per tic; packing 8-per-felt would save 596 words (88 steps/tic) and cost ~60 steps per read |
@@ -65,7 +65,7 @@ at K = 100, not by taste.
 | `REJECT_ROWS` + `POW2` | **packed** (64 bits/felt) | 610 | S1 §7's headline: flat REJECT is 33 124 felts = 4 870 steps/tic amortized, packed is 90 |
 | `THINGS` | **packed** (64 bits) | 221 | read once, at genesis |
 | scalars | — | 19 | counts, blockmap header, player start, bounds |
-| **Total** | | **16 326** | measured at **16 762 words** (D22 removed the 1 578-word candidate lists) |
+| **Total** | | **15 151** | measured at **15 568 words** (D22 removed the 1 578-word candidate lists; the one-felt `L_BOX` another 1 175) |
 
 Two sizing decisions differ from S1 §7's suggestions, both deliberately:
 
@@ -155,13 +155,13 @@ python3 measure.py --update             # re-baseline after an intended change
 | `blockmap` cell list (4 entries) | 101 | 5 | `list_range` + `list_item` ×4 |
 | `node_side` | 114 | 8 | `geom2d::point_side_at` |
 | `linedef_diagonal` | 150 | 11 | one read, one `u128` div/mod |
-| `linedef_box` (packed) | 172 | 32 | two reads, two splits |
+| `linedef_box` (packed, 4 × 16 bits) | 154 | 14 | one read, three `u128` divmods (`unpack_box`) |
 | `linedef_special` / `linedef_sectors` | 178 | 21 | one read, two fields |
 | `reject` | 198 | 24 | two reads, one bit |
 | `sector` (full record) | 222 | 33 | |
 | `thing` | 242 | 42 | four fields |
-| `linedef_v1` | 335 | 38 | box + two sign tests |
-| `linedef` (full record) | 503 | 97 | cold path: tests, `doom_specials` |
+| `linedef_v1` | 307 | 20 | box + two sign tests |
+| `linedef` (full record) | 473 | 79 | cold path: tests, `doom_specials` |
 | `subsector_in_cell` (R2-A9) | **789** | 65 | `cell_of` included |
 | `subsector_at` (descent from root) | 1 252 | 84 | the ground truth |
 
