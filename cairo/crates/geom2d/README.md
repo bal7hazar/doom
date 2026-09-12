@@ -5,8 +5,10 @@
 `DivLine` (Doom's `divline_t`), and — the heart of the crate — the
 **stored half-plane predicate** `HalfPlane`: three biased coefficients per
 line plus a per-point `hoist`ed term, from which `point_side`,
-`point_side_alone`, `point_side_at` (the planar, three-array form) and
-`divline_side` (three-valued, for BSP ray traversal) decide sides.
+`point_side_alone`, `point_side_at` (the planar, three-array form),
+`point_on_side` (from two vertices, for callers with no stored
+coefficients) and `divline_side` (three-valued, for BSP ray traversal)
+decide sides.
 `bbox_reject` and `box_on_line_side` are the two halves of `PIT_CheckLine`,
 in Doom's order. `intercept_fraction` is `P_InterceptVector`,
 `approx_distance` is `P_AproxDistance`, `angle_between` forwards to
@@ -97,6 +99,7 @@ python3 measure.py --update             # re-baseline after an intended change
 | `point_side_alone` | 21 | 2 | hoists for you |
 | `divline_side` | 20 | 2 | three-valued |
 | `point_side_at` (planar) | 60 | 5 | +42 for three `Span` indexes, 14 each |
+| `point_on_side` (two vertices) | 73 | 12 | rebuilds the predicate; for callers without stored coefficients |
 | `bbox_reject`, far line | 26 | 2 | short-circuits on the first comparison |
 | `bbox_reject`, overlapping | 57 | 8 | all four comparisons |
 | `box_on_line_side` | 66 | 4 | S1 measured 92; its budget was ≤ 100 |
@@ -115,7 +118,7 @@ computing both fractions.
 
 ## Tests
 
-`scarb test -p geom2d` — 17 unit tests (`src/tests.cairo`) + 2 integration
+`scarb test -p geom2d` — 18 unit tests (`src/tests.cairo`) + 2 integration
 tests:
 
 * **reference values** from `scripts/gen_vectors.py`, which computes every
@@ -127,7 +130,9 @@ tests:
   600 `bbox_reject` cases, 600 `box_on_line_side` cases, 200
   `intercept_fraction` and 200 `approx_distance` cases. The Cairo
   `half_plane` builder is checked against the generator's coefficients on
-  all 1 000 lines, so the offline tool and the runtime cannot drift apart.
+  all 1 000 lines, so the offline tool and the runtime cannot drift apart,
+  and the two-vertex `point_on_side` is checked against the same 1 000
+  expectations.
 * **properties**: reversing a line flips every side; the hoisted, standalone
   and planar forms agree; `bbox_reject` never drops one of the 301 segments
   that really cross the box (computed exactly with rational Liang–Barsky);

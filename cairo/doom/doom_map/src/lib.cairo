@@ -36,10 +36,10 @@ pub fn is_line_blocking(level: @Level, id: u32) -> bool {
 /// real E1M1 extraction until `tools/wad` lands (PLAN.md §3.1, task 1).
 pub fn sample_level() -> Level {
     let mut sectors = array![];
-    sectors
-        .append(
-            Sector { floor_height: 0, ceiling_height: fixed::from_int(128).raw, light_level: 200 },
-        );
+    // 128 map units as a raw 16.16 value: `fixed::Fixed` is now an
+    // offset-encoded felt (`enc`), so the raw value is spelled out here
+    // rather than read out of a `Fixed`.
+    sectors.append(Sector { floor_height: 0, ceiling_height: 128 * 65536, light_level: 200 });
 
     let mut lines = array![];
     lines

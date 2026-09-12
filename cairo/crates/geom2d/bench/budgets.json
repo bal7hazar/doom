@@ -1,7 +1,7 @@
 {
   "crate": "geom2d",
   "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 bare loop, 1 point, 2 point+box, 3 point+hoisted term). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4).",
-  "bytecode_words": 4548,
+  "bytecode_words": 4837,
   "operations": [
     {
       "name": "hoist",
@@ -74,6 +74,12 @@
       "op": 14,
       "base": 1,
       "budget": 228
+    },
+    {
+      "name": "point_on_side (two vertices)",
+      "op": 17,
+      "base": 1,
+      "budget": 73
     },
     {
       "name": "point_on_side_truncated",

@@ -20,7 +20,8 @@ use vectors::{
 use super::{
     Box, DivLine, HalfPlane, Point, SIDE_BACK, SIDE_CROSS, SIDE_FRONT, approx_distance, bbox_reject,
     box_around, box_of_segment, box_on_line_side, diagonal, divline_side, half_plane, hoist,
-    intercept_fraction, point_on_side_truncated, point_side, point_side_alone, point_side_at,
+    intercept_fraction, point_on_side, point_on_side_truncated, point_side, point_side_alone,
+    point_side_at,
 };
 
 fn pt(x: felt252, y: felt252) -> Point {
@@ -102,6 +103,30 @@ fn test_point_side_variants_agree() {
         // The three-valued form agrees except exactly on the line.
         let d = divline_side(hp, p, rhs);
         assert(d == a || d == SIDE_CROSS, 'divline agrees or is on');
+        i += 1;
+    }
+}
+
+#[test]
+fn test_point_on_side_from_two_vertices_matches_the_stored_predicate() {
+    // The convenience form must agree with the stored one on every vector,
+    // or a caller without precomputed coefficients would see another map.
+    let v1x = PS_V1X_ENC.span();
+    let v1y = PS_V1Y_ENC.span();
+    let v2x = PS_V2X_ENC.span();
+    let v2y = PS_V2Y_ENC.span();
+    let x = PS_X_ENC.span();
+    let y = PS_Y_ENC.span();
+    let side = PS_SIDE.span();
+    let mut i: u32 = 0;
+    while i != 1000 {
+        let got: felt252 = point_on_side(
+            pt_enc(*x.at(i), *y.at(i)),
+            pt_enc(*v1x.at(i), *v1y.at(i)),
+            pt_enc(*v2x.at(i), *v2y.at(i)),
+        )
+            .into();
+        assert(got == *side.at(i), 'two-vertex form matches');
         i += 1;
     }
 }

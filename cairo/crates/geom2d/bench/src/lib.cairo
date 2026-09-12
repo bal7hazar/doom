@@ -19,8 +19,8 @@
 use fixed::Fixed;
 use geom2d::{
     Box, DivLine, HalfPlane, Point, approx_distance, bbox_reject, box_around, box_on_line_side,
-    divline_side, hoist, intercept_fraction, point_on_side_truncated, point_side, point_side_alone,
-    point_side_at,
+    divline_side, hoist, intercept_fraction, point_on_side, point_on_side_truncated, point_side,
+    point_side_alone, point_side_at,
 };
 
 /// Three parallel coefficient arrays, the shape the level data uses.
@@ -185,6 +185,15 @@ fn main(op: u32, n: u32) -> felt252 {
                 dy: Fixed { enc: 4297064448 },
             };
             acc += intercept_fraction(trace, wall).enc;
+            i += 1;
+        }
+    } else if op == 17 {
+        // the two-vertex convenience form, which rebuilds the predicate
+        while i != n {
+            let p = Point { x: Fixed { enc: x0 + i.into() }, y: Fixed { enc: y0 + i.into() } };
+            let a = Point { x: Fixed { enc: 4294967296 }, y: Fixed { enc: 4294967296 } };
+            let b = Point { x: Fixed { enc: 4299161600 }, y: Fixed { enc: 4294967296 } };
+            acc += point_on_side(p, a, b).into();
             i += 1;
         }
     } else if op == 15 {

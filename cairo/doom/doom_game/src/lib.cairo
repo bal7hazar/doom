@@ -30,8 +30,11 @@ pub fn step_tic(level: @Level, state: GameState, cmd: TicCmd) -> GameState {
 pub fn serialize(state: GameState) -> Array<felt252> {
     let mut out: Array<felt252> = array![];
     out.append(state.tic.into());
-    out.append(state.player.position.x.raw.into());
-    out.append(state.player.position.y.raw.into());
+    // `fixed::Fixed` is an offset-encoded felt (`enc`): serializing the
+    // encoded value keeps every serialized word non-negative and below
+    // 2^33, which is what the provability bound of A7 asks for.
+    out.append(state.player.position.x.enc);
+    out.append(state.player.position.y.enc);
     out.append(state.player.health.into());
     out
 }
