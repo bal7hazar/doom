@@ -311,6 +311,25 @@ Mesures modeofO (fixture `poseidon_chain(100)`, Sepolia) :
 | Recomposition Cairo des sorties (`spikes/s4/recursion_outputs`) | 14 tests verts ; N = 4 : 5 645 steps ; N = 50 : 68 315 steps (≈ 7,5 M gas) |
 | Extrapolation wrap séquentiel | N = 8 ≈ 6,5 min ; N = 50 ≈ 43 min ; serveur ≥ 48–64 GB requis |
 
+**Résultats du spike S4b (2026-09-12, voir `docs/spikes/S4b.md`) :**
+
+- **Le plafond n'est pas 2^20 steps par segment.** La taille de trace du registre vient du **plus gros
+  composant AIR** (`prover.rs:134`), pas du nombre de steps : un segment de **1,59 M steps** passe de bout
+  en bout avec le registre `doom` inchangé (feuille 22,5 s / 33,5 GB, racine 96 k felts, vérifieur 5,37 M
+  steps) et des exécutions de 3,2 / 4,4 / **5,4 M steps** gardent `trace_log_size = 20`. Les contraintes
+  réelles : RSS du prouveur navigateur (≈ 4–5 M steps sous 12 GB d'après S0) et la règle du plus gros
+  composant (à mesurer sur `doom_run`). Un registre à lifting 2^21/2^22 est accepté par `circuit-params`
+  mais **inatteignable** (`canonical_small` s'arrête à `seq_20` ; `canonical` ne démarre qu'à log 23).
+- **Hachage poseidon du programme : GO.** Bootloader de feuille : blake = 2 340 + 14,75 × mots ;
+  **poseidon = 1 969 + 5,5 × mots** (32 k mots : 177 k steps au lieu de 471 k). Route complète inchangée
+  (même circuit, même hash), seul `preimage[0]` change : `DoomRuns` doit épingler la *fonction* de hachage
+  avec le hash du programme.
+- **`fold_step = 4`** : accepté de bout en bout mais sans gain sous le padding production ; avec un
+  padding minimal (`doom_fold4_min`) : **feuille 21,9 GB / 13,3 s (−33 % RSS, −41 % temps)**, repli
+  21,4 GB / 13,5 s — au prix d'un **hash de multiverifier différent de production** (`02b34360…`) qui
+  exige de régénérer les constantes du vérifieur on-chain. `include_all_preprocessed_columns = false`
+  est **refusé** par `leaf_prover` (le registre l'accepte silencieusement : piège).
+
 Le bootloader de feuille (`leaf_simple_bootloader_compiled.json`) n'est fourni que compilé (source interne
 StarkWare) : il est épinglé par hash. Plage 19–20 impossible (`canonical_small` est en colonnes log 20).
 
@@ -439,6 +458,25 @@ comme tables, `cairo-profiler ≥ 0.17` sans `--show-inlined-functions`. Avec R2
 cellule → sous-secteurs, itération blockmap sans tableau, cellule mémorisée dans le mobj) le tic complet
 est projeté à ~11 900 steps ; **K ≈ 81–162 tics par segment** (et non 250) ; atteindre 4 000 exige R2-A6
 (moins de monstres éveillés) et R2-A7 (17,5 Hz).
+
+**Outil WAD v2 (2026-09-12, `tools/wad`)** : taille des constantes de niveau en mots de bytecode (1 mot/felt),
+sans SEGS ni noms de textures, avec sous-secteur → secteur précalculé, prédicats de demi-plan (linedefs et
+nœuds) et accélérateur cellule → sous-secteurs (R2-A9 : 2,63 sous-secteurs/cellule en moyenne, max 20) :
+
+| Map Freedoom | Mots (mix recommandé) | | Map | Mots |
+|---|---:|---|---|---:|
+| **E1M1** | **26 903** (tout packé 17 604, tout planaire 70 075) | | E1M5 | 28 841 |
+| E1M2 | 46 956 | | E1M6 | 59 524 |
+| E1M3 | 42 533 | | E1M7 | 91 302 |
+| E1M4 | 51 011 | | E1M8 | 22 945 |
+| E1M9 | 41 244 | | | |
+
+E1M1 est déjà l'une des plus petites maps de Freedoom Phase 1. Les données seules dépassent le budget
+D4 de 16 k mots : le coût de hachage bootloader d'un programme de ~30 k mots est ≈ 440 k steps (blake,
+42 % d'un segment 2^20) ou ≈ 165 k steps (poseidon, 16 %) ; avec un lifting de registre 2^21 (S4b) ces
+parts sont divisées par deux. Stratégie retenue : hachage poseidon + segments 2^21 si S4b les valide,
+données froides packées, budget global 32 k mots ; repli : données de niveau fournies en entrée et
+engagées par Merkle avec vérification des accès.
 
 ## 10. Inconnues à lever (référencées par le PLAN)
 

@@ -112,3 +112,37 @@ fn root_output_hash_is_deterministic_and_order_sensitive() {
     assert_eq!(ab, root_output_hash(array![a, b].span(), golden_leaf_hash(), golden_mv_hash()));
     assert_ne!(ab, ba);
 }
+
+/// D4 (S4b): switching the task's `program_hash_function` from blake to poseidon changes nothing
+/// in this library — the leaf bootloader's preimage keeps its shape, `[program_hash, outputs…]`,
+/// and only `preimage[0]` changes value. Both hashes below are the ones the leaf
+/// bootloader actually dumped for `segment_stub` (`results/N2_doom/` and
+/// `results/N2_doom_poseidon/`), and the matching root hashes are pinned by
+/// `fixtures::fixture_n2_doom{,_poseidon}`.
+///
+/// The consequence for the consumer contract: the program hash it pins per season is the one of
+/// the *chosen* hash function; a root proved with the other one recomposes to a different
+/// `output_hash` and must be rejected.
+#[test]
+fn program_hash_function_binds_the_root() {
+    const BLAKE_PROGRAM_HASH: felt252 =
+        2784737126826178369939993031080194949960354326733421464854849544232566095676;
+    const POSEIDON_PROGRAM_HASH: felt252 =
+        3123429690541791732247651535885863506882260532123250961348241600396459994871;
+    let outputs = array![
+        1, 2171758236178030472946753621190837933414225933392145722773936413471492471342, 250, 1,
+    ];
+    let mut blake_preimage = array![BLAKE_PROGRAM_HASH];
+    blake_preimage.append_span(outputs.span());
+    let mut poseidon_preimage = array![POSEIDON_PROGRAM_HASH];
+    poseidon_preimage.append_span(outputs.span());
+    assert_ne!(leaf_output(blake_preimage.span()), leaf_output(poseidon_preimage.span()));
+    assert_ne!(
+        root_output_hash(
+            array![blake_preimage.span()].span(), golden_leaf_hash(), golden_mv_hash(),
+        ),
+        root_output_hash(
+            array![poseidon_preimage.span()].span(), golden_leaf_hash(), golden_mv_hash(),
+        ),
+    );
+}

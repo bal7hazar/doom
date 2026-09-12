@@ -1,13 +1,18 @@
+import { CellSubsectorSpans } from "./accelerator.js";
 import { AssetIndex, MapData } from "./mapExtract.js";
 import { BLOCKMAP_UNIT } from "./types.js";
 
 /**
- * Output A (roadmap P0.2): the full map, in original map units (no bias
- * encoding - this is plain JSON for the TypeScript client, not Cairo), plus
- * derived data useful for rendering/collision: bounding box, blockmap grid
- * geometry, and per-sector line lists.
+ * Output A (roadmap P0.2, extended by WAD tool v2): the full map, in
+ * original map units (no bias encoding - this is plain JSON for the
+ * TypeScript client, not Cairo), plus derived data useful for
+ * rendering/collision: bounding box, blockmap grid geometry, per-sector
+ * line lists, the subsector -> sector map, and the R2-A9 cell -> subsector
+ * accelerator spans. SEGS and texture/flat names are kept here even though
+ * `cairoOutput.ts` v2 drops them from the Cairo output - the client still
+ * needs them for rendering.
  */
-export function buildMapJson(map: MapData, assets: AssetIndex) {
+export function buildMapJson(map: MapData, assets: AssetIndex, cellSubsectors?: CellSubsectorSpans) {
   return {
     map: map.name,
     counts: {
@@ -45,6 +50,13 @@ export function buildMapJson(map: MapData, assets: AssetIndex) {
     },
     derived: {
       sectorLines: map.sectorLines,
+      // subsectorSectors[ss] = sector index subsector `ss` lies in (see
+      // derive.ts#computeSubsectorSectors); this is the same data
+      // cairoOutput.ts emits as SS_SECTOR/SS_SECTOR_PACKED.
+      subsectorSectors: map.subsectorSectors,
+      // R2-A9 accelerator (accelerator.ts#computeCellSubsectors), omitted
+      // when the caller doesn't need it (e.g. a lightweight JSON build).
+      ...(cellSubsectors ? { cellSubsectors } : {}),
     },
     assets: assets,
   };

@@ -1,0 +1,3 @@
+thread 'main' (931831) panicked at crates/constraint-framework/src/component.rs:137:25:
+Preprocessed column PreProcessedColumnId { id: "seq_21" } is missing from static allocation
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

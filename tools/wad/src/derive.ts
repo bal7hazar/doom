@@ -1,4 +1,4 @@
-import { Linedef, Vertex } from "./types.js";
+import { Linedef, Seg, Sidedef, Subsector, Vertex } from "./types.js";
 
 export interface MapBoundingBox {
   minX: number;
@@ -47,4 +47,47 @@ export function computeSectorLines(linedefs: Linedef[], sidedefSectors: number[]
     }
   });
   return out;
+}
+
+/**
+ * Maps every subsector to the sector it lies in (WAD tool v2, task item 1;
+ * RISKS.md R2-A9/R2-A12): looks at the subsector's first seg, the linedef
+ * that seg belongs to, and the sidedef facing the seg's side - exactly the
+ * indirection vanilla Doom's `R_PointInSubsector` -> `sector_t*` lookup
+ * performs once at map load. Doing it here at extraction time means the
+ * Cairo core never needs SEGS (or the sidedef/linedef chain) at runtime:
+ * it can index straight from a subsector index into a `SS_SECTOR` array.
+ *
+ * A subsector's segs all belong to the same sector by construction (they
+ * bound one convex leaf of the BSP split), so the first seg is
+ * representative of the whole subsector.
+ *
+ * A well-formed map always resolves every subsector; the `0xFFFF` sentinel
+ * (matching `NO_SIDEDEF`) is returned instead of throwing only so this
+ * function tolerates the deliberately-incomplete synthetic WADs used by
+ * unit tests that exercise NODES/SSECTORS in isolation (e.g.
+ * `test/nodes.test.ts`), which omit LINEDEFS/SIDEDEFS entirely.
+ */
+export const SUBSECTOR_SECTOR_UNRESOLVED = 0xffff;
+
+export function computeSubsectorSectors(
+  subsectors: Subsector[],
+  segs: Seg[],
+  linedefs: Linedef[],
+  sidedefs: Sidedef[],
+): number[] {
+  return subsectors.map((ss) => {
+    const seg = segs[ss.firstSeg];
+    if (!seg) return SUBSECTOR_SECTOR_UNRESOLVED;
+    const line = linedefs[seg.linedef];
+    if (!line) return SUBSECTOR_SECTOR_UNRESOLVED;
+    // seg.direction: 0 = seg runs the same way as the linedef (front side),
+    // 1 = opposite (back side) - matches spikes/s1/tools/extract.py's
+    // `ld['side1'] if sg['side'] else ld['side0']`.
+    const sidedefIndex = seg.direction ? line.backSidedef : line.frontSidedef;
+    if (sidedefIndex === 0xffff) return SUBSECTOR_SECTOR_UNRESOLVED;
+    const sidedef = sidedefs[sidedefIndex];
+    if (!sidedef) return SUBSECTOR_SECTOR_UNRESOLVED;
+    return sidedef.sector;
+  });
 }
