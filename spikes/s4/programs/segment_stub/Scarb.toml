@@ -1,0 +1,15 @@
+[package]
+name = "segment_stub"
+version = "0.1.0"
+edition = "2024_07"
+
+# A stand-in for a game segment (`run_segment`): input (h_in, n), ~2^17 steps of felt arithmetic,
+# output [h_in, h_out, n, status] with h_out = poseidon(h_in, n) so consecutive leaves chain.
+
+[dependencies]
+cairo_execute = "2.18.0"
+
+[[target.executable]]
+
+[cairo]
+enable-gas = false

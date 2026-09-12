@@ -1,0 +1,22 @@
+
+thread 'main' (419154) panicked at crates/stark_verifier/src/constraint_eval.rs:72:36:
+index out of bounds: the len is 20 but the index is 20
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+        0.78 real         0.15 user         0.59 sys
+            68386816  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                4540  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   3  voluntary context switches
+                 343  involuntary context switches
+          7433352393  instructions retired
+          2287274043  cycles elapsed
+            65012144  peak memory footprint

@@ -1,0 +1,21 @@
+[package]
+name = "recursion_outputs"
+version = "0.1.0"
+edition = "2024_07"
+description = "Recomputes the recursive tree's root output hash from each leaf's raw output preimage (S4 prototype of the future cairo/crates/recursion_outputs)."
+
+[dependencies]
+cairo_execute = "2.18.0"
+
+[dev-dependencies]
+cairo_test = "2.18.0"
+
+[lib]
+
+# Step-cost bench: `scarb execute --arguments <N> --print-resource-usage`.
+[[target.executable]]
+name = "bench"
+function = "recursion_outputs::bench::main"
+
+[cairo]
+enable-gas = false

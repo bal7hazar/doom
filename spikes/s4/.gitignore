@@ -1,0 +1,4 @@
+# Scarb build outputs of the spike packages.
+target/
+# Registry generation scratch (times are kept; the copy into the monorepo lives in the scratchpad).
+registry/*/registry.first.json

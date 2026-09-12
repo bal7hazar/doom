@@ -1,0 +1,12 @@
+cairo_run_program:cairo run: cairo_vm::cairo_run: Initializing Cairo runner. layout=all_cairo_stwo proof_mode=true trace_enabled=true disable_trace_padding=true allow_missing_builtins=true
+cairo_run_program:cairo run: cairo_vm::cairo_run: Ending run. disable_trace_padding=true fill_holes=true
+cairo_run_program:cairo run: cairo_vm::cairo_run: Relocating. relocate_mem=false relocate_trace=false
+adapt:relocate_trace: stwo_cairo_adapter::relocator: enter
+adapt:relocate_trace: stwo_cairo_adapter::relocator: close time.busy=1.11ms time.idle=291ns
+prove_cairo:Write Preprocessed trace: stwo_cairo_prover::prover: enter
+prove_cairo:Write Preprocessed trace: stwo_cairo_prover::prover: close time.busy=154µs time.idle=14.4µs
+prove_cairo:Write Base trace: stwo_cairo_prover::prover: enter
+prove_cairo:Write Base trace: stwo_cairo_prover::prover: close time.busy=141ms time.idle=1.29µs
+prove_cairo:Compute preprocessed trace commitment: stwo_cairo_prover::prover: enter
+prove_cairo:Compute preprocessed trace commitment:Extension: stwo::prover::pcs: enter
+prove_cairo:Compute preprocessed trace commitment:Extension: stwo::prover::pcs: close time.busy=14.2ms time.idle=750ns

@@ -1,0 +1,12 @@
+stwo_run_and_prove_recursive_tree::run:stwo_run_and_prove_recursive_tree: stwo_run_and_prove_recursive_tree: Folding leaf circuit proofs into a recursive tree. n_leaves=4
+stwo_run_and_prove_recursive_tree::run:stwo_run_and_prove_recursive_tree:CanonicalCircuit::build: stwo_run_and_prove_recursive_tree::canonical: Canonical multiverifier circuit ready. trace_log_size=23
+stwo_run_and_prove_recursive_tree::run:stwo_run_and_prove_recursive_tree: stwo_run_and_prove_recursive_tree: Reducing recursive-tree layer. layer_idx=0 n_entries=4
+stwo_run_and_prove_recursive_tree::run:stwo_run_and_prove_recursive_tree: stwo_run_and_prove_recursive_tree: Reducing recursive-tree layer. layer_idx=1 n_entries=2
+stwo_run_and_prove_recursive_tree::run:stwo_run_and_prove_recursive_tree: stwo_run_and_prove_recursive_tree: Recursive tree reduction complete. n_layers=2 n_pair_reductions=3
+stwo_run_and_prove_recursive_tree::run: stwo_run_and_prove_recursive_tree: Recursive tree reduction complete. n_layers=2 n_pair_reductions=3
+reduce{layer_idx=1 pair_idx=0 is_root=false}:prove_ex: stwo::prover: proof_size_estimate=381216
+reduce{layer_idx=1 pair_idx=0 is_root=false}: stwo_run_and_prove_recursive_tree::fold: close time.busy=22.7s time.idle=1.00µs
+reduce{layer_idx=1 pair_idx=1 is_root=false}:prove_ex: stwo::prover: proof_size_estimate=381872
+reduce{layer_idx=1 pair_idx=1 is_root=false}: stwo_run_and_prove_recursive_tree::fold: close time.busy=24.7s time.idle=750ns
+reduce{layer_idx=2 pair_idx=0 is_root=true}:prove_ex: stwo::prover: proof_size_estimate=382432
+reduce{layer_idx=2 pair_idx=0 is_root=true}: stwo_run_and_prove_recursive_tree::fold: close time.busy=35.8s time.idle=1.54µs
