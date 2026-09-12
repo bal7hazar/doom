@@ -35,10 +35,13 @@ cp proto/src/tables.cairo prim/src/tables.cairo
 python3 tools/measure.py prim prim tools/prim_ops.json  results/primitives.json
 python3 tools/measure.py prim prim tools/prim_ops2.json results/primitives2.json
 python3 tools/measure.py prim prim tools/prim_ops3.json results/primitives3.json
+python3 tools/measure.py prim prim tools/prim_ops4.json results/primitives4.json
 python3 tools/run_measurements.py subsystems
 python3 tools/run_measurements.py scenarios    350
 python3 tools/run_measurements.py optimisations 350
 sh tools/raw_dumps.sh
+python3 tools/bytecode_size.py "$SCRATCH"     # needs a scratch dir, builds throwaway packages
+python3 tools/const_inventory.py
 python3 tools/render_tables.py
 ```
 
@@ -68,5 +71,17 @@ probe probe_main(op, n, reject, cadence, three, dedup, bboxreject, fastsector)
 ```
 
 `scenario`: 0 player only, 1 +5 dormant monsters, 2 +5 chasing monsters,
-3 = 2 plus one hitscan every 10 tics. The five flags are the R2 optimisations,
-each switchable on its own (see `mobj.cairo::Opts`).
+3 = 2 plus one hitscan every 10 tics. The six flags are the R2 optimisations,
+each switchable on its own (see `mobj.cairo::Opts`). The configuration the spike
+recommends is `1,1,1,0,0,1` — every optimisation except `dedup`, which is a
+pessimisation (see S1.md 5.7).
+
+## Bytecode size
+
+Since S0, the proving bootloader re-hashes the program every segment at
+`2340 + 14.7 x words` steps, so program size is part of the per-tic budget.
+Read the prototype's size with:
+
+```sh
+python3 -c "import json;print(len(json.load(open('proto/target/dev/proto.executable.json'))['program']['bytecode']))"
+```

@@ -1,0 +1,128 @@
+=== scenario 0, 350 tics, optimised (opts 1,1,1,0,0,1) ===
+   Executing proto
+Resources:
+	steps: 1,266,758
+	max memory address: 1,962,621
+	memory holes: 693,020
+	builtins:
+		range_check_builtin: 122,777
+		poseidon_builtin: 7
+		output_builtin: 1
+	memory segments:
+		execution: 1,732,864
+		range_check: 122,777
+		poseidon: 42
+		output: 1
+
+=== scenario 0, 350 tics, baseline (opts 0,0,0,0,1,0) ===
+   Executing proto
+Resources:
+	steps: 1,427,236
+	max memory address: 2,122,345
+	memory holes: 694,056
+	builtins:
+		range_check_builtin: 130,753
+		poseidon_builtin: 7
+		output_builtin: 1
+	memory segments:
+		execution: 1,892,588
+		range_check: 130,753
+		poseidon: 42
+		output: 1
+
+=== scenario 1, 350 tics, optimised (opts 1,1,1,0,0,1) ===
+   Executing proto
+Resources:
+	steps: 1,545,309
+	max memory address: 2,342,711
+	memory holes: 729,324
+	builtins:
+		range_check_builtin: 133,316
+		poseidon_builtin: 27
+		output_builtin: 1
+	memory segments:
+		execution: 1,981,786
+		range_check: 133,316
+		poseidon: 162
+		output: 1
+
+=== scenario 1, 350 tics, baseline (opts 0,0,0,0,1,0) ===
+   Executing proto
+Resources:
+	steps: 6,712,792
+	max memory address: 8,327,087
+	memory holes: 1,817,522
+	builtins:
+		range_check_builtin: 665,280
+		poseidon_builtin: 27
+		output_builtin: 1
+	memory segments:
+		execution: 7,179,730
+		range_check: 665,280
+		poseidon: 162
+		output: 1
+
+=== scenario 2, 350 tics, optimised (opts 1,1,1,0,0,1) ===
+   Executing proto
+Resources:
+	steps: 6,757,010
+	max memory address: 9,424,595
+	memory holes: 2,822,318
+	builtins:
+		range_check_builtin: 709,028
+		poseidon_builtin: 27
+		output_builtin: 1
+	memory segments:
+		execution: 8,277,238
+		range_check: 709,028
+		poseidon: 162
+		output: 1
+
+=== scenario 2, 350 tics, baseline (opts 0,0,0,0,1,0) ===
+   Executing proto
+Resources:
+	steps: 9,745,620
+	max memory address: 12,333,883
+	memory holes: 3,209,307
+	builtins:
+		range_check_builtin: 951,994
+		poseidon_builtin: 27
+		output_builtin: 1
+	memory segments:
+		execution: 11,186,526
+		range_check: 951,994
+		poseidon: 162
+		output: 1
+
+=== scenario 3, 350 tics, optimised (opts 1,1,1,0,0,1) ===
+   Executing proto
+Resources:
+	steps: 7,031,027
+	max memory address: 9,908,164
+	memory holes: 3,090,566
+	builtins:
+		range_check_builtin: 736,932
+		poseidon_builtin: 27
+		output_builtin: 1
+	memory segments:
+		execution: 8,760,807
+		range_check: 736,932
+		poseidon: 162
+		output: 1
+
+=== scenario 3, 350 tics, baseline (opts 0,0,0,0,1,0) ===
+   Executing proto
+Resources:
+	steps: 10,019,637
+	max memory address: 12,817,452
+	memory holes: 3,477,555
+	builtins:
+		range_check_builtin: 979,898
+		poseidon_builtin: 27
+		output_builtin: 1
+	memory segments:
+		execution: 11,670,095
+		range_check: 979,898
+		poseidon: 162
+		output: 1
+
