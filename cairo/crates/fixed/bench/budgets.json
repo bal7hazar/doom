@@ -1,7 +1,7 @@
 {
   "crate": "fixed",
   "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; op 0 is the bare loop, op 1 the two-operand pair, op 2 a single operand). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4).",
-  "bytecode_words": 2562,
+  "bytecode_words": 2681,
   "operations": [
     {
       "name": "felt_ge",
@@ -84,6 +84,12 @@
     {
       "name": "split",
       "op": 16,
+      "base": 2,
+      "budget": 16
+    },
+    {
+      "name": "shr8",
+      "op": 18,
       "base": 2,
       "budget": 16
     },

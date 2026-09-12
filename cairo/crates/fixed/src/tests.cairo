@@ -15,7 +15,7 @@ use vectors::{DIV_A_ENC, DIV_B_ENC, DIV_R_ENC, MUL_A_ENC, MUL_B_ENC, MUL_R_ENC};
 use super::{
     BIAS, ENC_MAX, FRACUNIT, FRACUNIT_RAW, Fixed, HALF, RAW_MAX, RAW_MIN, ZERO, abs, add, div,
     felt_ge, from_int, from_raw, from_units, ge, gt, is_neg, le, lt, magnitude, max, min, mul, neg,
-    split, sub, to_raw, to_units,
+    shr8, split, sub, to_raw, to_units,
 };
 
 /// Deterministic pseudo-random raw values in `(-2^31, 2^31)`, from a
@@ -176,6 +176,25 @@ fn test_split_returns_sign_and_magnitude() {
     assert(!n3 && m3 == 0, 'split(0) is positive');
     let (n4, m4) = split(from_raw(-1));
     assert(n4 && m4 == 1, 'split(-1 ulp)');
+}
+
+#[test]
+fn test_shr8_floors_like_a_signed_shift() {
+    assert(shr8(from_raw(0)) == from_raw(0), 'shr8(0)');
+    assert(shr8(from_raw(256)) == from_raw(1), 'shr8(256)');
+    assert(shr8(from_raw(255)) == from_raw(0), 'shr8(255) truncates');
+    assert(shr8(from_raw(-1)) == from_raw(-1), 'shr8(-1) floors to -1');
+    assert(shr8(from_raw(-256)) == from_raw(-1), 'shr8(-256)');
+    assert(shr8(from_raw(-257)) == from_raw(-2), 'shr8(-257) floors');
+    assert(shr8(from_units(1)) == from_raw(256), 'shr8(FRACUNIT)');
+    // Property: shr8 is monotone and never leaves the domain.
+    let mut i: u64 = 0;
+    while i != 32 {
+        let v = from_raw(sample_small_raw(i));
+        let w = from_raw(sample_small_raw(i) + 256);
+        assert(felt_ge(shr8(w).enc, shr8(v).enc), 'shr8 is monotone');
+        i += 1;
+    }
 }
 
 #[test]

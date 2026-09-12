@@ -226,6 +226,23 @@ pub fn abs(a: Fixed) -> Fixed {
     }
 }
 
+/// `a >> 8` with C's semantics on a signed value: a division by 256
+/// rounding toward minus infinity.
+///
+/// It exists because Doom pre-shifts its operands by 8 bits in
+/// `P_InterceptVector` (and in the slide-move slopes) to keep the `int32`
+/// intermediate products in range; reproducing the formula means
+/// reproducing the shift. The encoding makes it free of sign tests: `BIAS`
+/// is `2^32`, a multiple of 256, so shifting the encoded value and
+/// subtracting `2^24` shifts the raw value.
+///
+/// **Measured: 15 steps, 5 range checks.**
+pub fn shr8(a: Fixed) -> Fixed {
+    let e: u128 = a.enc.try_into().unwrap();
+    let q: felt252 = (e / 256).into();
+    Fixed { enc: q - 0x1000000 + BIAS }
+}
+
 /// `a * b`, i.e. Doom's `FixedMul`: the exact product shifted right by 16
 /// bits, **rounding toward minus infinity** (an arithmetic shift, exactly
 /// what `((int64_t) a * b) >> FRACBITS` does in C).

@@ -25,7 +25,7 @@
 
 use fixed::{
     BIAS, Fixed, abs, add, div, felt_ge, from_units, ge, is_neg, magnitude, max, min, mul, neg,
-    split, sub, to_units,
+    shr8, split, sub, to_units,
 };
 
 #[executable]
@@ -144,6 +144,12 @@ fn main(op: u32, n: u32) -> felt252 {
             let b = Fixed { enc: b0 + i.into() };
             let (s, m) = split(b);
             acc += m + s.into();
+            i += 1;
+        }
+    } else if op == 18 {
+        while i != n {
+            let a = Fixed { enc: a0 + i.into() };
+            acc += shr8(a).enc;
             i += 1;
         }
     } else if op == 17 {
