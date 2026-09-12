@@ -117,6 +117,17 @@ cases (empty group, short group, eighth word ignored, cursor at the end,
 corrupted word, oversized and negative felts), and a provability test
 asserting word widths. The step-budget test is `bench/measure.py`.
 
+**Coverage**: `python3 bench/coverage.py` reports **97/97 production
+lines = 100 %** (29 tests). It copies the crate to a temporary directory
+and patches the manifest there, because `cairo-coverage` only reads
+`snforge` traces and `snforge` cannot compile this workspace with
+`enable-gas = false`; lines at or below a file's `#[cfg(test)]` marker are
+excluded, so the figure is the coverage of the code that ships.
+`cairo-coverage` 0.5.0 emits no `BRF`/`BRH` records, so **branch** coverage
+cannot be reported by the tool — line coverage is the proxy, and since
+`scarb fmt` puts every branch arm on its own line, a missed arm shows up as
+a missed line. The script exits non-zero below 90 % (C7).
+
 ## Transitional
 
 `pack`/`unpack` are kept as deprecated aliases of `encode`/`decode` because

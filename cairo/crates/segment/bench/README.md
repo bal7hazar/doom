@@ -8,7 +8,8 @@ above it.
 |---|---|
 | `src/lib.cairo` | `main(op, n)`: one loop per measured operation |
 | `budget.json` | the operations to measure and their step budgets |
-| `measure.py` | the driver; exits non-zero when a budget is exceeded |
+| `measure.py` | the step-budget driver; exits non-zero over budget |
+| `coverage.py` | line-coverage report; exits non-zero below 90 % |
 | `reference.py` | the output layout and the run-level checks, in Python |
 
 ## Method
@@ -44,5 +45,6 @@ so the Cairo and Python sides are checked against each other.
 ```sh
 export ASDF_SCARB_VERSION=2.16.0
 python3 cairo/crates/segment/bench/measure.py     # exit code is the verdict
+python3 cairo/crates/segment/bench/coverage.py    # line coverage
 python3 cairo/crates/segment/bench/reference.py   # layout + run-level checks
 ```

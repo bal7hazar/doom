@@ -10,7 +10,8 @@ it. It is never built by `scarb build` at the workspace root.
 |---|---|
 | `src/lib.cairo` | `main(op, n)`: one loop per measured operation |
 | `budget.json` | the operations to measure and their step budgets |
-| `measure.py` | the driver; exits non-zero when a budget is exceeded |
+| `measure.py` | the step-budget driver; exits non-zero over budget |
+| `coverage.py` | line-coverage report; exits non-zero below 90 % |
 | `reference.py` | independent Python model, source of the test vectors |
 
 ## Method
@@ -42,5 +43,6 @@ regression margin PLAN.md §3.1 rule 4 asks for.
 ```sh
 export ASDF_SCARB_VERSION=2.16.0
 python3 cairo/crates/prng/bench/measure.py          # exit code is the verdict
+python3 cairo/crates/prng/bench/coverage.py    # line coverage
 python3 cairo/crates/prng/bench/reference.py        # reference vectors
 ```
