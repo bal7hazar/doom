@@ -1,0 +1,97 @@
+{
+  "crate": "bam",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; op 0 is the bare loop, op 1 the angle operand, op 2 the (dx, dy) pair). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4). bytecode_words covers the bench executable, the two tables included.",
+  "bytecode_words": 8551,
+  "operations": [
+    {
+      "name": "add",
+      "op": 3,
+      "base": 1,
+      "budget": 16
+    },
+    {
+      "name": "sub",
+      "op": 4,
+      "base": 1,
+      "budget": 11
+    },
+    {
+      "name": "neg",
+      "op": 5,
+      "base": 1,
+      "budget": 10
+    },
+    {
+      "name": "reduce",
+      "op": 6,
+      "base": 1,
+      "budget": 17
+    },
+    {
+      "name": "angle_to_fine_index",
+      "op": 7,
+      "base": 1,
+      "budget": 8
+    },
+    {
+      "name": "finesine",
+      "op": 8,
+      "base": 1,
+      "budget": 45
+    },
+    {
+      "name": "finecosine",
+      "op": 9,
+      "base": 1,
+      "budget": 58
+    },
+    {
+      "name": "sine",
+      "op": 10,
+      "base": 1,
+      "budget": 51
+    },
+    {
+      "name": "cosine",
+      "op": 11,
+      "base": 1,
+      "budget": 64
+    },
+    {
+      "name": "sin_cos",
+      "op": 12,
+      "base": 1,
+      "budget": 109
+    },
+    {
+      "name": "tantoangle",
+      "op": 13,
+      "base": 1,
+      "budget": 16
+    },
+    {
+      "name": "slope_div",
+      "op": 14,
+      "base": 1,
+      "budget": 45
+    },
+    {
+      "name": "point_to_angle",
+      "op": 15,
+      "base": 2,
+      "budget": 118
+    },
+    {
+      "name": "point_to_angle2",
+      "op": 16,
+      "base": 2,
+      "budget": 122
+    },
+    {
+      "name": "turn + sin_cos (player step)",
+      "op": 17,
+      "base": 1,
+      "budget": 125
+    }
+  ]
+}
