@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Standalone package (NOT a member of the cairo/ workspace, like
+# cairo/crates/*/bench and cairo/doom/*/bench): it owns an executable target
+# so that `scarb execute --print-resource-usage` can measure the step cost of
+# the specials ticker and its triggers. `size/` and `baseline/` next to it
+# weigh the compiled tables (docs/G0.md D4, R2-A12). See ../README.md.
+[package]
+name = "doom_specials_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_specials = { path = ".." }
+doom_map = { path = "../../doom_map" }
+doom_things = { path = "../../doom_things" }
+fixed = { path = "../../../crates/fixed" }
+prng = { path = "../../../crates/prng" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_specials_bench"
+function = "doom_specials_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false

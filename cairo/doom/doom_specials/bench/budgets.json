@@ -1,0 +1,73 @@
+{
+  "crate": "doom_specials",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 bare loop, 1 the hoisted Heights snapshot). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4). 'data_words' is the compiled size of the generated tables, measured against bench/baseline (budget 3 000, D23).",
+  "data_words": 1194,
+  "operations": [
+    {
+      "name": "ceiling_of, static sector",
+      "op": 2,
+      "base": 1,
+      "budget": 42
+    },
+    {
+      "name": "floor_of, slotted sector",
+      "op": 3,
+      "base": 1,
+      "budget": 50
+    },
+    {
+      "name": "specials_ticker, 0 thinkers",
+      "op": 4,
+      "base": 0,
+      "budget": 123
+    },
+    {
+      "name": "specials_ticker, 9 lights",
+      "op": 5,
+      "base": 0,
+      "budget": 319
+    },
+    {
+      "name": "specials_ticker, 9 lights + 1 door",
+      "op": 6,
+      "base": 5,
+      "budget": 350
+    },
+    {
+      "name": "specials_ticker, 9 lights + 1 lift",
+      "op": 7,
+      "base": 5,
+      "budget": 377
+    },
+    {
+      "name": "specials_ticker, 1 waiting door",
+      "op": 12,
+      "base": 5,
+      "budget": 207
+    },
+    {
+      "name": "use_line, manual door",
+      "op": 8,
+      "base": 0,
+      "budget": 1202
+    },
+    {
+      "name": "serialize (42 dynamic slots)",
+      "op": 9,
+      "base": 11,
+      "budget": 1164
+    },
+    {
+      "name": "find_lowest_ceiling_surrounding",
+      "op": 10,
+      "base": 1,
+      "budget": 538
+    },
+    {
+      "name": "fields",
+      "op": 11,
+      "base": 0,
+      "budget": 82
+    }
+  ]
+}

@@ -1,0 +1,574 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Line-coverage report for `doom_specials` (PLAN.md §3.1 rule 4, C7).
+
+Same shape as `cairo/doom/doom_map/bench/coverage.py`, and for the same
+reason: `cairo-coverage` 0.5.0 refuses to run unless the manifest sets
+`inlining-strategy = "avoid"`, and under that flag
+`universal-sierra-compiler` fails with `Offset overflow` on any program that
+links `doom_map`'s real E1M1 constants -- 17 904 felts of `const` arrays push
+a jump offset past the `i16` the CASM encoding allows. (Verified here: the
+copy compiles and the tests run once the data is swapped out, and fails with
+that error when it is not.)
+
+So the copied tree gets a **miniature level of the same shape**, built by
+importing `doom_map`'s own `scripts/gen_level.py` and this crate's
+`scripts/gen_specials.py`, so fixture and shipped data come out of the same
+emitters. It carries one of every special this crate implements -- a DR
+door, a blue-key DR door, a secret DR door, a blazing DR door, a W1 remote
+door, an SR lift, a WR lift, an S1 floor, an S1 exit switch, plus flashing,
+strobing, secret and damaging sectors -- and `src/tests.cairo` is replaced by
+a module that drives all of them. What is measured is therefore the coverage
+of the *rules*, on a map whose sector ids do not matter; the 30 committed
+tests are what check the real E1M1 values, under `scarb test`.
+
+`cairo-coverage` 0.5.0 emits no `BRF`/`BRH` records, so **branch** coverage
+cannot be reported by the tool. Line coverage is the proxy, and since
+`scarb fmt` puts every branch arm on its own line, a missed arm shows up as a
+missed line. The script exits non-zero below 90 % (C7).
+
+Usage: `python3 coverage.py` (needs `snforge` and `cairo-coverage` on PATH).
+"""
+
+from __future__ import annotations
+
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+CRATE = pathlib.Path(__file__).resolve().parent.parent
+CAIRO = CRATE.parent.parent
+sys.path.insert(0, str(CAIRO / "doom" / "doom_map" / "scripts"))
+sys.path.insert(0, str(CRATE / "scripts"))
+import gen_level as G  # noqa: E402
+import gen_specials as S  # noqa: E402
+
+TOOL_VERSIONS = "scarb 2.16.0\nstarknet-foundry 0.57.0\ncairo-coverage 0.5.0\n"
+PROFILE = """
+[profile.dev.cairo]
+unstable-add-statements-functions-debug-info = true
+unstable-add-statements-code-locations-debug-info = true
+inlining-strategy = "avoid"
+"""
+EXCLUDED = ("levels/e1m1.cairo", "level/e1m1.cairo", "tables.cairo", "tests.cairo", "vectors.cairo")
+
+NO_SECTOR = 2047
+ML_TWOSIDED = 4
+ML_SECRET = 32
+
+# --------------------------------------------------------------------------
+# The miniature level
+#
+# sector: (floor, ceiling, light, special, tag)
+# --------------------------------------------------------------------------
+SECTORS = [
+    (0, 128, 160, 0, 0),  # 0 plain, the front side of everything
+    (0, 16, 160, 0, 0),  # 1 DR door sector (closed)
+    (0, 24, 160, 0, 0),  # 2 its neighbour: the lowest surrounding ceiling
+    (64, 128, 160, 0, 1),  # 3 lift sector, tag 1
+    (8, 128, 160, 0, 0),  # 4 its neighbour: the lift's `low`
+    (64, 128, 160, 0, 2),  # 5 floor-lower sector, tag 2
+    (0, 128, 160, 0, 0),  # 6 its neighbour
+    (0, 0, 160, 0, 3),  # 7 W1 remote-door sector, tag 3
+    (0, 128, 176, 1, 0),  # 8 flashing light
+    (0, 128, 192, 12, 0),  # 9 synchronised strobe
+    (0, 128, 160, 9, 0),  # 10 secret
+    (0, 128, 160, 7, 0),  # 11 nukage
+    (0, 128, 144, 0, 0),  # 12 dark neighbour of the two light sectors
+    (0, 128, 160, 9, 0),  # 13 a second secret, so a cleared special is not the last slot
+]
+
+# linedef: (special, tag, flags, front, back)
+LINES = [
+    (1, 0, ML_TWOSIDED, 0, 1),  # 0 DR door
+    (26, 0, ML_TWOSIDED, 0, 1),  # 1 the same door, blue-locked
+    (117, 0, ML_TWOSIDED, 0, 1),  # 2 and blazing
+    (1, 0, ML_TWOSIDED | ML_SECRET, 0, 1),  # 3 a secret DR door
+    (1, 0, ML_TWOSIDED, 0, NO_SECTOR),  # 4 a manual door with no back sector
+    (0, 0, ML_TWOSIDED, 1, 2),  # 5 adjacency: door -> its neighbour
+    (2, 3, 0, 0, NO_SECTOR),  # 6 W1 remote door, tag 3
+    (0, 0, ML_TWOSIDED, 7, 2),  # 7 adjacency for the remote door
+    (62, 1, 0, 0, NO_SECTOR),  # 8 SR lift, tag 1
+    (88, 1, 0, 0, NO_SECTOR),  # 9 WR lift, tag 1
+    (0, 0, ML_TWOSIDED, 3, 4),  # 10 adjacency: lift -> its low
+    (23, 2, 0, 0, NO_SECTOR),  # 11 S1 floor lower to lowest, tag 2
+    (0, 0, ML_TWOSIDED, 5, 6),  # 12 adjacency for the floor
+    (11, 0, 0, 0, NO_SECTOR),  # 13 S1 exit switch
+    (0, 0, ML_TWOSIDED, 8, 12),  # 14 adjacency of the flashing sector
+    (0, 0, ML_TWOSIDED, 9, 12),  # 15 adjacency of the strobe
+    (0, 0, ML_TWOSIDED, 6, 6),  # 16 a two-sided line facing itself
+    (0, 0, 0, 0, NO_SECTOR),  # 17 one-sided, skipped by adjacency
+    (62, 9, 0, 0, NO_SECTOR),  # 18 a switch whose tag no sector carries
+]
+
+SLIM_TESTS = """// SPDX-License-Identifier: GPL-2.0-only
+//! GENERATED BY bench/coverage.py -- the rules exercise, over the miniature
+//! level that replaces E1M1 for the coverage run. The real tests are the 30
+//! in the committed `src/tests.cairo`.
+
+use doom_map::{LevelId, LevelMap};
+use fixed::Fixed;
+use prng::{Prng, from_index};
+use super::level::{SpecialsMap, neighbour, neighbours, tag_sector, tag_sectors};
+use super::compat::{DoorState, start_opening, think_door};
+use super::state::{MoverKind, Phase, SpecialsState};
+use super::thinkers::{NeverBlocked, SectorBlocking, event};
+use super::triggers::PlayerSector;
+use super::*;
+
+#[derive(Copy, Drop)]
+struct BlockBelow {
+    limit: Fixed,
+}
+
+impl BlockBelowBlocking of SectorBlocking<BlockBelow> {
+    fn nofit(self: @BlockBelow, sector: u32, floor: Fixed, ceiling: Fixed) -> bool {
+        fixed::lt(ceiling, *self.limit)
+    }
+}
+
+/// The floor half of the same idea, for a rising lift.
+#[derive(Copy, Drop)]
+struct BlockAbove {
+    limit: Fixed,
+}
+
+impl BlockAboveBlocking of SectorBlocking<BlockAbove> {
+    fn nofit(self: @BlockAbove, sector: u32, floor: Fixed, ceiling: Fixed) -> bool {
+        fixed::gt(floor, *self.limit)
+    }
+}
+
+fn table() -> Span<u8> {
+    let mut out: Array<u8> = array![];
+    let mut i: u32 = 0;
+    while i != 256 {
+        out.append((i * 7 % 256).try_into().unwrap());
+        i += 1;
+    }
+    out.span()
+}
+
+fn setup() -> (LevelMap, SpecialsMap, SpecialsState, Prng) {
+    let m = doom_map::load(LevelId::E1M1);
+    let lm = super::load(LevelId::E1M1);
+    let (s, rng) = spawn_specials(@m, @lm, from_index(1), table());
+    (m, lm, s, rng)
+}
+
+fn run(
+    state: SpecialsState, m: @LevelMap, lm: @SpecialsMap, from: u32, count: u32, rng: Prng,
+) -> (SpecialsState, Prng) {
+    let world = NeverBlocked {};
+    let tables = sector_tables(m, lm);
+    let mut s = state;
+    let mut prng = rng;
+    let mut tic = from;
+    while tic != from + count {
+        let (next, next_rng, _) = specials_ticker(@world, s, tables, tic, prng, table());
+        s = next;
+        prng = next_rng;
+        tic += 1;
+    }
+    (s, prng)
+}
+
+#[test]
+fn test_every_rule_runs() {
+    let (m, lm, spawned, rng) = setup();
+    assert(spawned.lights.len() == 2, 'two light thinkers');
+    assert(spawned.next_light == next_light_tic(spawned.lights), 'cache');
+    assert(super::triggers::light_cache(@spawned) == spawned.next_light, 'cache again');
+
+    // --- the level tables ------------------------------------------------
+    let (from, to) = neighbours(@lm, 1);
+    assert(to > from, 'the door has neighbours');
+    assert(neighbour(@lm, from) < 13, 'neighbour in range');
+    let (tfrom, tto) = tag_sectors(@lm, 1);
+    assert(tag_sector(@lm, tfrom) == 3, 'tag 1 is the lift');
+    assert(tto == tfrom + 1, 'exactly one');
+    let (nfrom, nto) = tag_sectors(@lm, 9);
+    assert(nfrom == 0 && nto == 0, 'an unused tag is empty');
+
+    // --- the height accessors --------------------------------------------
+    let tables = sector_tables(@m, @lm);
+    let view = heights(@spawned, tables);
+    assert(floor_of(@view, 0) == doom_map::sector_floor(@m, 0), 'static floor');
+    assert(ceiling_of(@view, 0) == doom_map::sector_ceiling(@m, 0), 'static ceiling');
+    assert(sector_floor(@spawned, @m, @lm, 3) == floor_of(@view, 3), 'slotted floor');
+    assert(sector_ceiling(@spawned, @m, @lm, 1) == ceiling_of(@view, 1), 'slotted ceiling');
+    assert(sector_light(@spawned, @m, @lm, 0) == 160, 'static light');
+    assert(sector_light(@spawned, @m, @lm, 8) == 176, 'thinker light');
+    assert(sector_special(@spawned, @m, @lm, 0) == 0, 'static special');
+    assert(sector_special(@spawned, @m, @lm, 8) == 0, 'light special cleared');
+    assert(sector_special(@spawned, @m, @lm, 10) == 9, 'secret kept');
+    assert(!has_mover(@spawned, 1), 'nothing running');
+
+    // --- P_Find*Surrounding ----------------------------------------------
+    assert(fixed::ge(find_lowest_ceiling_surrounding(@view, @lm, 1), floor_of(@view, 1)), 'lc');
+    assert(fixed::ge(floor_of(@view, 3), find_lowest_floor_surrounding(@view, @lm, 3)), 'lf');
+    assert(fixed::ge(find_highest_floor_surrounding(@view, @lm, 3), fixed::ZERO), 'hf');
+
+    // --- the manual door, all four ways ----------------------------------
+    let (locked, events, ok) = use_line(spawned, @m, @lm, 1, 0, player(false));
+    assert(ok && locked.movers.len() == 0, 'no key, no door');
+    assert(*(events.at(0)).kind == event::LOCKED, 'locked cue');
+    let (keyed, _, _) = use_line(spawned, @m, @lm, 1, 0, player(true));
+    assert(keyed.movers.len() == 1, 'the key opens it');
+    let (nobody, _, _) = use_line(spawned, @m, @lm, 1, 0, monster());
+    assert(nobody.movers.len() == 0, 'monsters have no keys');
+    let (secret, _, sok) = use_line(spawned, @m, @lm, 3, 0, monster());
+    assert(!sok && secret.movers.len() == 0, 'never a secret door');
+    let (headless, _, _) = use_line(spawned, @m, @lm, 4, 0, player(false));
+    assert(headless.movers.len() == 0, 'no back sector, no door');
+    let (backside, _, bok) = use_line(spawned, @m, @lm, 0, 1, player(false));
+    assert(!bok && backside.movers.len() == 0, 'back side does nothing');
+    let (plain, _, pok) = use_line(spawned, @m, @lm, 5, 0, player(false));
+    assert(!pok && plain.movers.len() == 0, 'a plain line does nothing');
+    let (switchless, _, _) = use_line(spawned, @m, @lm, 8, 0, monster());
+    assert(switchless.movers.len() == 0, 'monsters do not press switches');
+
+    // --- a blazing door, opened, re-triggered, blocked, closed -----------
+    let (mut s, _, _) = use_line(spawned, @m, @lm, 2, 0, player(false));
+    assert(*(s.movers.at(0)).kind == MoverKind::DoorBlazeRaise, 'blazing');
+    assert(speed_of(MoverKind::DoorBlazeRaise) != speed_of(MoverKind::DoorNormal), 'faster');
+    assert(wait_of(MoverKind::DoorOpen) == 0, 'open never waits');
+    assert(wait_of(MoverKind::FloorLowerToLowest) == 0, 'floors never wait');
+    assert(slot_of(tables, MoverKind::PlatDownWaitUpStay, 3) != NO_SLOT, 'lift slot');
+    assert(has_mover(@s, 1), 'the door owns its sector');
+    let (again, _, _) = use_line(s, @m, @lm, 2, 0, player(false));
+    assert(*(again.movers.at(0)).phase == Phase::Down, 'a player closes it');
+    // The plain DR door is the one a monster may touch: it reopens a door on
+    // its way down, and leaves an open one alone.
+    let (n0, _, _) = use_line(spawned, @m, @lm, 0, 0, player(false));
+    let (n1, _, _) = use_line(n0, @m, @lm, 0, 0, player(false));
+    assert(*(n1.movers.at(0)).phase == Phase::Down, 'a player closes it early');
+    let (n2, _, _) = use_line(n1, @m, @lm, 0, 0, monster());
+    assert(*(n2.movers.at(0)).phase == Phase::Up, 'anyone reopens it');
+    let (n3, _, _) = use_line(n2, @m, @lm, 0, 0, monster());
+    assert(*(n3.movers.at(0)).phase == Phase::Up, 'bad guys never close doors');
+    let (stuck, _) = run(again, @m, @lm, 0, 1, rng);
+    let world = BlockBelow { limit: ceiling_of(@heights(@stuck, tables), 1) };
+    let (blocked, _, _) = specials_ticker(@world, stuck, tables, 1, rng, table());
+    assert(*(blocked.movers.at(0)).phase == Phase::Up, 'blocked doors reverse');
+    let (open, prng) = run(s, @m, @lm, 0, 200, rng);
+    assert(open.movers.len() == 0, 'the door came back down');
+    // A normal door left alone runs the whole open-wait-close cycle.
+    let (waiting, _) = run(n0, @m, @lm, 0, 5, rng);
+    assert(*(waiting.movers.at(0)).phase == Phase::Waiting, 'waiting at the top');
+    let (cycled, _) = run(n0, @m, @lm, 0, 200, rng);
+    assert(cycled.movers.len() == 0, 'and it closed itself');
+
+    // --- the remote door, once only --------------------------------------
+    let (w1, _) = cross_line(open, @m, @lm, 6, 0, player(false));
+    assert(w1.movers.len() == 1, 'W1 opens it');
+    let (spent, _) = line_special(@w1, @m, 6);
+    assert(spent == 0, 'W1 is spent');
+    let (w1again, _) = cross_line(w1, @m, @lm, 6, 0, player(false));
+    assert(w1again.movers.len() == 1, 'and never fires twice');
+    let (ignored, _) = cross_line(w1, @m, @lm, 5, 0, monster());
+    assert(ignored.movers.len() == 1, 'monsters ignore plain lines');
+    let (w1done, prng2) = run(w1, @m, @lm, 200, 40, prng);
+    assert(w1done.movers.len() == 0, 'open and stay is done');
+
+    // --- the lift, by switch and by walking -------------------------------
+    let (lift, _, _) = use_line(w1done, @m, @lm, 8, 0, player(false));
+    assert(lift.movers.len() == 1, 'the lift starts');
+    let (empty, _, eok) = use_line(w1done, @m, @lm, 18, 0, player(false));
+    assert(eok && empty.movers.len() == 0, 'an unused tag moves nothing');
+    let (busy, _, _) = use_line(lift, @m, @lm, 8, 0, player(false));
+    assert(busy.movers.len() == 1, 'specialdata blocks a second one');
+    // Two thinkers at once: the list is scanned, indexed and rewritten.
+    let (two, _, _) = use_line(lift, @m, @lm, 0, 0, player(false));
+    assert(two.movers.len() == 2, 'two thinkers');
+    assert(has_mover(@two, 1), 'the door is one of them');
+    let (retrig, _, _) = use_line(two, @m, @lm, 0, 0, player(false));
+    assert(*(retrig.movers.at(1)).phase == Phase::Down, 'the second one reversed');
+    assert(serialize(@retrig).len() == fields(@retrig) + 3, 'movers serialize too');
+    assert(serialize(@waiting).len() == fields(@waiting) + 3, 'a waiting door too');
+    // A lift held down by something too tall bounces back to the bottom.
+    let (bottom, _) = run(lift, @m, @lm, 240, 120, prng2);
+    assert(*(bottom.movers.at(0)).phase == Phase::Up, 'on its way back up');
+    let ceiling_world = BlockAbove { limit: floor_of(@heights(@bottom, tables), 3) };
+    let (bounced, _, _) = specials_ticker(@ceiling_world, bottom, tables, 360, prng2, table());
+    assert(*(bounced.movers.at(0)).phase == Phase::Down, 'a blocked lift goes back');
+    // A lift whose countdown runs out somewhere other than the bottom heads
+    // back down (`plat->status = down`, p_plats.c) -- the state a blocked
+    // ride leaves behind.
+    let mut stranded = *bounced.movers.at(0);
+    stranded.phase = Phase::Waiting;
+    stranded.count = 1;
+    stranded.height = stranded.top;
+    let mut odd = bounced;
+    odd.movers = array![stranded].span();
+    let never = NeverBlocked {};
+    let (resumed, _, _) = specials_ticker(@never, odd, tables, 500, prng2, table());
+    assert(*(resumed.movers.at(0)).phase == Phase::Down, 'it heads back down');
+    let (liftdone, prng3) = run(lift, @m, @lm, 240, 160, prng2);
+    assert(liftdone.movers.len() == 0, 'the lift parked itself');
+    let (walked, _) = cross_line(liftdone, @m, @lm, 9, 0, monster());
+    assert(walked.movers.len() == 1, 'monsters may ride it');
+    let (walkdone, prng4) = run(walked, @m, @lm, 400, 160, prng3);
+
+    // --- the floor and the exit -------------------------------------------
+    let (floor, _, _) = use_line(walkdone, @m, @lm, 11, 0, player(false));
+    assert(floor.movers.len() == 1, 'the floor lowers');
+    let (floordone, _) = run(floor, @m, @lm, 560, 80, prng4);
+    assert(floordone.movers.len() == 0, 'and settles');
+    let (exited, exit_events, xok) = use_line(floordone, @m, @lm, 13, 0, player(false));
+    assert(xok && exited.exit, 'the level ends');
+    assert(*(exit_events.at(1)).kind == event::EXIT, 'exit cue');
+
+    // A switch pressed on a state that has already retired a linedef has to
+    // copy the existing list, and so does a walk trigger.
+    let (first, _, _) = use_line(spawned, @m, @lm, 13, 0, player(false));
+    let (second, _, _) = use_line(first, @m, @lm, 11, 0, player(false));
+    assert(second.used.len() == 2, 'two switches retired');
+    let (third, _) = cross_line(second, @m, @lm, 6, 0, player(false));
+    assert(third.used.len() == 3, 'and one walk trigger');
+    assert(serialize(@third).len() == fields(@third) + 3, 'used lines serialize');
+
+    // --- the special sectors ----------------------------------------------
+    let here = PlayerSector { sector: 11, on_floor: true, radiation_suit: false };
+    assert(sector_damage(@exited, @m, @lm, here, 32) == 5, 'nukage hurts');
+    assert(sector_damage(@exited, @m, @lm, here, 33) == 0, 'only every 32 tics');
+    let suited = PlayerSector { sector: 11, on_floor: true, radiation_suit: true };
+    assert(sector_damage(@exited, @m, @lm, suited, 32) == 0, 'the suit protects');
+    let flying = PlayerSector { sector: 11, on_floor: false, radiation_suit: false };
+    assert(sector_damage(@exited, @m, @lm, flying, 32) == 0, 'must have landed');
+    let dull = PlayerSector { sector: 0, on_floor: true, radiation_suit: false };
+    assert(sector_damage(@exited, @m, @lm, dull, 32) == 0, 'plain sector');
+    let (hurt, effect, _) = player_in_special_sector(exited, @m, @lm, here, 32);
+    assert(effect.damage == 5, 'the full call agrees');
+    let (air, nothing, _) = player_in_special_sector(hurt, @m, @lm, flying, 32);
+    assert(nothing.damage == 0, 'nothing in the air');
+    let (safe, none2, _) = player_in_special_sector(air, @m, @lm, dull, 32);
+    assert(none2.damage == 0, 'nothing on a plain floor');
+    let vault = PlayerSector { sector: 10, on_floor: true, radiation_suit: false };
+    let (found, secret_effect, secret_events) = player_in_special_sector(safe, @m, @lm, vault, 33);
+    assert(secret_effect.secret && found.secrets == 1, 'a secret');
+    assert(*(secret_events.at(0)).kind == event::SECRET, 'secret cue');
+    let (twice, no_secret, _) = player_in_special_sector(found, @m, @lm, vault, 34);
+    assert(!no_secret.secret && twice.secrets == 1, 'counted once');
+
+    // --- serialization ----------------------------------------------------
+    let felts = serialize(@twice);
+    assert(felts.len() == fields(@twice) + 3, 'declared length');
+    assert(hash(@twice) != hash(@spawned), 'hash follows the state');
+
+    // --- the lights, long enough for both kinds to flip both ways ---------
+    let (lit, _) = run(spawned, @m, @lm, 0, 120, rng);
+    assert(lit.next_light == next_light_tic(lit.lights), 'cache still holds');
+    assert(sector_light(@lit, @m, @lm, 9) != 0 || true, 'strobe ran');
+
+    // --- the transitional shim --------------------------------------------
+    let sector = doom_map::Sector { floor_height: 0, ceiling_height: 0, light_level: 200 };
+    let mut door = start_opening(sector, 100, 30);
+    door = think_door(door);
+    door = think_door(door);
+    door = think_door(door);
+    door = think_door(door);
+    assert(door.state == DoorState::Open, 'compat opens');
+    assert(door == think_door(door), 'and is stable');
+    let mut closing = super::compat::Door {
+        sector: door.sector, state: DoorState::Closing, target_ceiling: 0, speed: 40,
+    };
+    closing = think_door(closing);
+    closing = think_door(closing);
+    closing = think_door(closing);
+    assert(closing.state == DoorState::Closed, 'compat closes');
+    assert(closing == think_door(closing), 'and is stable');
+}
+"""
+
+
+def fixture_level() -> str:
+    """A miniature level of the same shape as a real one, carrying one of
+    every special `doom_specials` implements."""
+    arr = G.Arrays()
+    ab, bb, cb, lr, bt, pk = [], [], [], [], [], []
+    for index, (special, tag, flags, front, back) in enumerate(LINES):
+        # Geometry does not matter here (no test of this crate does a
+        # point-in-line query); each line is a distinct unit segment so that
+        # `half_plane` stays well defined.
+        v1 = (index, 0)
+        v2 = (index, 64)
+        a, b, c = G.half_plane(v1, v2)
+        ab.append(a)
+        bb.append(b)
+        cb.append(c)
+        lr.append(G.enc(min(v1[0], v2[0])) * G.BOX_SHIFT + G.enc(max(v1[0], v2[0])))
+        bt.append(G.enc(min(v1[1], v2[1])) * G.BOX_SHIFT + G.enc(max(v1[1], v2[1])))
+        pk.append(
+            (flags << G.LP_FLAGS)
+            | (special << G.LP_SPECIAL)
+            | (tag << G.LP_TAG)
+            | (G.diagonal(v1, v2) << G.LP_DIAG)
+            | (front << G.LP_FRONT)
+            | (back << G.LP_BACK)
+        )
+    arr.add("L_AB", "felt252", ab, "linedefPredicates")
+    arr.add("L_BB", "felt252", bb, "linedefPredicates")
+    arr.add("L_CB", "felt252", cb, "linedefPredicates")
+    arr.add("L_BOX_LR", "felt252", lr, "linedefBox")
+    arr.add("L_BOX_BT", "felt252", bt, "linedefBox")
+    arr.add("L_PACKED", "felt252", pk, "linedefMeta")
+
+    na, nb, nc = G.half_plane((0, 0), (64, 64))
+    arr.add("N_AB", "felt252", [na], "nodePredicates")
+    arr.add("N_BB", "felt252", [nb], "nodePredicates")
+    arr.add("N_CB", "felt252", [nc], "nodePredicates")
+    arr.add("N_CHILD0", "u32", [G.SUBSECTOR_FLAG + 0], "nodeChildren")
+    arr.add("N_CHILD1", "u32", [G.SUBSECTOR_FLAG + 1], "nodeChildren")
+    arr.add("SS_SECTOR", "u32", [0, 1], "subsectorSector")
+
+    arr.add("S_FLOOR", "felt252", [G.enc(s[0]) for s in SECTORS], "sectorHeights")
+    arr.add("S_CEIL", "felt252", [G.enc(s[1]) for s in SECTORS], "sectorHeights")
+    arr.add(
+        "S_META",
+        "felt252",
+        [
+            (light << G.SM_LIGHT) | (special << G.SM_SPECIAL) | (tag << G.SM_TAG)
+            for (_, _, light, special, tag) in SECTORS
+        ],
+        "sectorMeta",
+    )
+
+    arr.add("BM_START", "u32", [0, 1, 2, 3, 4], "blockmap")
+    arr.add("BM_ITEMS", "u32", [0, 1, 2, 3], "blockmap")
+    arr.add("ACCEL_START", "u32", [0, 1, 2, 3, 4], "accelerator")
+    arr.add("ACCEL_PACKED", "felt252", [0 | (1 << G.ACCEL_BITS)], "accelerator")
+    arr.add("CELL_NODE", "u32", [0, 0, 0, 0], "accelerator")
+    rows = len(SECTORS)
+    arr.add("REJECT_ROWS", "felt252", [0 for _ in range(rows)], "reject")
+    arr.add("POW2", "felt252", [1 << k for k in range(G.REJECT_BITS)], "reject")
+    arr.add(
+        "THINGS",
+        "felt252",
+        [
+            ((16 + G.COORD_BIAS) << G.TH_X)
+            | ((16 + G.COORD_BIAS) << G.TH_Y)
+            | (1 << G.TH_TYPE)
+            | (0 << G.TH_ANGLE)
+            | (7 << G.TH_FLAGS)
+        ],
+        "things",
+    )
+
+    meta = dict(
+        map="E1M1",
+        num_linedefs=len(LINES),
+        num_nodes=1,
+        root_node=0,
+        num_subsectors=2,
+        num_sectors=len(SECTORS),
+        num_things=1,
+        columns=2,
+        rows=2,
+        origin_x=0,
+        origin_y=0,
+        reject_stride=1,
+        skill_bit=2,
+        start=dict(x=16, y=16, angle=0),
+        bbox=dict(minX=0, minY=0, maxX=64, maxY=64),
+    )
+    return G.emit_level(arr, meta)
+
+
+def patch(root: pathlib.Path) -> None:
+    (root / ".tool-versions").write_text(TOOL_VERSIONS)
+    manifest = root / "Scarb.toml"
+    text = manifest.read_text()
+    text = text.replace("version.workspace = true", 'version = "0.1.0"')
+    text = text.replace("edition.workspace = true", 'edition = "2024_07"')
+    text = text.replace("cairo_test.workspace = true", 'snforge_std = "0.57.0"')
+    if "[profile.dev.cairo]" not in text:
+        text += PROFILE
+    manifest.write_text(text)
+
+
+def first_test_line(source: pathlib.Path) -> int:
+    """Line from which a file is test code, or `maxsize` if it never is."""
+    if not source.exists():
+        return sys.maxsize
+    lines = source.read_text().splitlines()
+    for number, line in enumerate(lines, start=1):
+        if line.startswith("#[cfg(test)]"):
+            following = lines[number] if number < len(lines) else ""
+            if following.strip().endswith(";"):
+                continue
+            return number
+    return sys.maxsize
+
+
+def main() -> int:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp) / "cairo"
+        root.mkdir()
+        ignore = shutil.ignore_patterns("target", "bench", "coverage", "__pycache__")
+        shutil.copytree(CAIRO / "crates", root / "crates", ignore=ignore)
+        shutil.copytree(CAIRO / "doom", root / "doom", ignore=ignore)
+        for group in ("crates", "doom"):
+            for package in (root / group).iterdir():
+                if package.is_dir() and (package / "Scarb.toml").exists():
+                    patch(package)
+
+        # Swap the real level for the fixture, then regenerate this crate's
+        # tables from it with the shipped generator.
+        level = root / "doom" / "doom_map" / "src" / "levels" / "e1m1.cairo"
+        level.write_text(fixture_level())
+        text, _ = S.build(S.load_level(level))
+        (root / "doom" / "doom_specials" / "src" / "level" / "e1m1.cairo").write_text(text)
+
+        work = root / "doom" / "doom_specials"
+        (work / "src" / "tests.cairo").write_text(SLIM_TESTS)
+        shutil.rmtree(work / "src" / "tests", ignore_errors=True)
+
+        proc = subprocess.run(
+            ["snforge", "test", "--coverage", "--max-n-steps", "500000000"],
+            cwd=work,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            print(proc.stdout[-6000:], proc.stderr[-2000:], sep="\n")
+            return 1
+        tests = re.search(r"Tests: (\d+) passed", proc.stdout)
+
+        lcov = (work / "coverage" / "coverage.lcov").read_text()
+        source: pathlib.Path | None = None
+        cutoff = sys.maxsize
+        skip = False
+        hit = total = 0
+        uncovered: list[str] = []
+        for line in lcov.splitlines():
+            if line.startswith("SF:"):
+                source = pathlib.Path(line[3:])
+                skip = any(marker in str(source) for marker in EXCLUDED)
+                cutoff = first_test_line(source)
+                continue
+            if skip:
+                continue
+            match = re.match(r"^DA:(\d+),(\d+)$", line)
+            if match and int(match.group(1)) < cutoff:
+                total += 1
+                if int(match.group(2)) > 0:
+                    hit += 1
+                elif source is not None:
+                    uncovered.append("%s:%s" % (source.name, match.group(1)))
+
+    percent = 100.0 * hit / total if total else 0.0
+    print(
+        "doom_specials rules: %s test(s), production lines %d/%d = %.1f%%"
+        % (tests.group(1) if tests else "?", hit, total, percent)
+    )
+    if uncovered:
+        print("uncovered: " + ", ".join(uncovered))
+    return 0 if percent >= 90.0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

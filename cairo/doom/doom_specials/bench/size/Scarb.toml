@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# The "with data" side of the bytecode measurement: the smallest executable
+# that references every generated `const` table of `doom_specials` once.
+# `../baseline` is the same package with those tables left out; the
+# difference between the two compiled sizes is what they cost
+# (docs/G0.md D4, R2-A12).
+[package]
+name = "doom_specials_size"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_specials = { path = "../.." }
+doom_map = { path = "../../../doom_map" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_specials_size"
+function = "doom_specials_size::main"
+sierra = true
+
+[cairo]
+enable-gas = false
