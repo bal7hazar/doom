@@ -204,10 +204,11 @@ Consequences and limits:
 * Proving blocks its thread on `Atomics.wait`, which browsers forbid on the main thread — always
   run it in a Worker (what `createProver()` does).
 * Each thread costs 16 MiB of linear memory (`threadStackBytes`), never released.
-* `"auto"` = `hardwareConcurrency - 2`, clamped to `[1, 8]` (R6-A1 leaves cores for the game loop).
-  **4 threads was the fastest setting measured** (§Measurements): above that the wasm allocator's
-  spin lock (std's dlmalloc takes a spin lock when `+atomics`) makes witness generation *slower*,
-  and the gain on the STARK part no longer compensates.
+* `"auto"` = `hardwareConcurrency - 2` **capped at 4** (`MAX_AUTO_THREADS`). R6-A1 asks for
+  `hardwareConcurrency - 2`; the cap is measured (§Measurements): past 4 threads the wasm
+  allocator's spin lock (std's dlmalloc takes one when `+atomics`) makes witness generation
+  *slower*, and the gain on the STARK part no longer compensates. Pass an explicit `threads` to
+  override on other hardware.
 * A panic on any thread aborts the whole module (`panic = "abort"`); the package surfaces it as a
   rejected promise with the panic message.
 
@@ -286,8 +287,9 @@ Measured on the `steps_k` program (a felt loop that writes one new memory value 
 | 2 369 919 | `memory_id_to_small` | 2 097 152 | 21 | **no** — prover panics |
 | 2 999 999 / 3 999 998 | `memory_id_to_small` | 2 097 152 | 21 | **no** |
 
-So for *this* program the browser ceiling is ≈ 2.33 M steps, and it is set by distinct memory
-values, not by time or memory (2.3 M steps peak at 4.7 GiB and 55 s single-threaded). A program
+So for *this* program the browser ceiling is between 2.31 M and 2.37 M steps, and it is set by
+distinct memory values, not by time or memory (2.31 M steps peak at 4.49 GiB and prove in 48 s
+single-threaded, 16 s with 4 threads). A program
 with a different memory profile (Doom: a few thousand live felts, rewritten every tic) will reach
 a very different step count at the same 2^20-row limit — which is exactly why the client must ask
 `resources()` rather than count steps.

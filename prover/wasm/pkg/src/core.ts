@@ -22,18 +22,24 @@ import type {
   StageName,
 } from "./types.js";
 
-const PAGE = 65536;
-
 function isCrossOriginIsolated(): boolean {
   // Node has no such notion: SharedArrayBuffer is always available there.
   if (typeof globalThis.crossOriginIsolated === "boolean") return globalThis.crossOriginIsolated;
   return typeof SharedArrayBuffer !== "undefined";
 }
 
-/** `hardwareConcurrency - 2`, clamped to [1, 8]: R6-A1 leaves room for the game loop. */
+/**
+ * `hardwareConcurrency - 2` (R6-A1: leave cores for the game loop), capped at 4.
+ *
+ * The cap is measured, not conservative: on an M2 Max, 2^20 steps prove in 36.5 s with 1 thread,
+ * 11.7 s with 4 and 12.4 s with 8 — witness generation starts losing to the allocator's spin lock
+ * past 4 threads (README, Threads section). Pass an explicit `threads` to override.
+ */
+export const MAX_AUTO_THREADS = 4;
+
 export function autoThreads(): number {
   const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
-  return Math.max(1, Math.min(8, cores - 2));
+  return Math.max(1, Math.min(MAX_AUTO_THREADS, cores - 2));
 }
 
 export class ProverCore {

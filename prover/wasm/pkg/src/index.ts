@@ -46,7 +46,7 @@ export type {
   ResourceSummary,
   StageName,
 } from "./types.js";
-export { ProverCore, autoThreads } from "./core.js";
+export { MAX_AUTO_THREADS, ProverCore, autoThreads } from "./core.js";
 
 export interface CreateProverOptions {
   /** Progress, memory and log events forwarded from the Worker. */

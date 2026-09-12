@@ -108,9 +108,10 @@ export type StageName = "execute" | "prove" | "verify" | "proof_to_felts" | "res
 /** Options of {@link createProver} / {@link ProverCore.init}. */
 export interface InitOptions {
   /**
-   * Number of rayon worker threads. `"auto"` = `hardwareConcurrency - 2` clamped to `[1, 8]`
-   * (R6-A1: leave room for the game loop), `1` = no pool. Ignored — with a warning — when the
-   * page is not cross-origin isolated, where only the single-threaded artifact can run.
+   * Number of rayon worker threads. `"auto"` = `hardwareConcurrency - 2` capped at 4 (R6-A1
+   * leaves room for the game loop; 4 is also the fastest setting measured, see the README),
+   * `1` = no pool. Ignored — with a warning — when the page is not cross-origin isolated, where
+   * only the single-threaded artifact can run.
    */
   threads?: number | "auto";
   /** URL of the single-threaded artifact. Defaults to `../wasm/hellproof_prover_wasm.wasm`. */
