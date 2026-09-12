@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Standalone workspace: `prover/sim` is built on its own (wasm32 target) and must
+# not be pulled into a future root workspace by accident.
+[workspace]
+
+[package]
+name = "hellproof-sim"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = "Real-time execution of a Cairo `step_tic` executable in the browser (spike S3, risk R5-A1)"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "hellproof-sim-bench"
+path = "src/bin/bench.rs"
+
+# Versions are pinned to the ones StarkWare's `proving` repository pins
+# (Cargo.lock @ cd7bc5f), so that the simulation VM is byte-for-byte the VM the
+# prover executes.
+[dependencies]
+cairo-vm = { version = "=3.2.0", features = ["mod_builtin"] }
+cairo-lang-casm = { version = "=2.19.4", features = ["serde"] }
+cairo-lang-executable = "=2.19.4"
+cairo-lang-runner = "=2.19.4"
+cairo-lang-utils = "=2.19.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+# `rand` reaches `getrandom` through three major versions in this dependency
+# tree, and each needs its JS backend enabled for wasm32-unknown-unknown.
+# Nothing on the simulation path draws randomness (the VM is deterministic);
+# these entries only exist so that the crates link.
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+getrandom_04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
+
+# The wasm-opt that ships with wasm-pack 0.12 predates the wasm features LLVM
+# now emits by default; enable them explicitly instead of turning wasm-opt off.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-O2",
+    "--enable-bulk-memory",
+    "--enable-sign-ext",
+    "--enable-mutable-globals",
+    "--enable-nontrapping-float-to-int",
+    "--enable-reference-types",
+    "--enable-multivalue",
+]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

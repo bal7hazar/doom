@@ -1,0 +1,5 @@
+# Build outputs — the wasm artifact is rebuilt with `npm run build`.
+/target
+/pkg
+/bench/node_modules
+/bench/step_tic/target
