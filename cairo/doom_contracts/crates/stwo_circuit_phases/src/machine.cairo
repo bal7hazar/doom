@@ -106,6 +106,8 @@ pub struct FriLayerParams {
 /// every later state.
 #[derive(Drop, Serde)]
 pub struct Params {
+    /// `blake2s(log_blowup ‖ component_log_sizes ‖ preprocessed_root)` (transcript-bound).
+    pub circuit_hash: [u32; 8],
     /// `blake2s(circuit_hash ‖ outputs)`: the fact material (valid only after the last phase).
     pub output_hash: [u32; 8],
     /// Merkle roots of the 4 trees (transcript-bound in `begin`).
@@ -393,6 +395,7 @@ pub fn begin(head: Span<felt252>) -> MerkleState {
 
     MerkleState {
         params: Params {
+            circuit_hash: circuit_hash.hash.unbox(),
             output_hash,
             tree_roots,
             d_sampled,

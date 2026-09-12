@@ -41,3 +41,37 @@ pub fn unpack(packed: Span<felt252>, n_values: u32) -> Array<felt252> {
     }
     values
 }
+
+/// Encodes `values` as 7 u32 limbs per slot (the inverse of `unpack`); values >= 2^32 (< 2^64)
+/// take the 3-limb escape. Test/tooling helper: the client packs off-chain.
+pub fn pack(values: Span<felt252>) -> Array<felt252> {
+    let mut limbs: Array<felt252> = array![];
+    for v in values {
+        let v256: u256 = (*v).into();
+        if v256 < 0x100000000 {
+            limbs.append(*v);
+        } else {
+            assert!(v256 < 0x10000000000000000, "pack: value does not fit the u64 escape");
+            let nz32: NonZero<u128> = 0x100000000_u128.try_into().unwrap();
+            let (hi, lo) = DivRem::div_rem(v256.low, nz32);
+            limbs.append(ESCAPE.into());
+            limbs.append(lo.into());
+            limbs.append(hi.into());
+        }
+    }
+    let mut slots: Array<felt252> = array![];
+    let mut limbs = limbs.span();
+    while !limbs.is_empty() {
+        let mut slot: felt252 = 0;
+        let mut mult: felt252 = 1;
+        for _ in 0..7_u32 {
+            match limbs.pop_front() {
+                Some(l) => { slot += *l * mult; },
+                None => {},
+            }
+            mult *= 0x100000000;
+        }
+        slots.append(slot);
+    }
+    slots
+}

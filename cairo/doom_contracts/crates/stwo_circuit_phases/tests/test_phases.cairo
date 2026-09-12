@@ -4,7 +4,7 @@
 //! cost probe (`cost_*` tests: read the per-test gas and subtract).
 use stwo_circuit_phases::machine::{FriState, MerkleState, answers, begin, fri_layers, merkle};
 use super::fixture::{load_n4_proof, n4_expected_output_hash};
-use super::sections::{Sections, fri_chunk, split};
+use stwo_circuit_phases::sections::{Sections, fri_chunk, split};
 
 fn roundtrip_merkle(state: MerkleState) -> MerkleState {
     let mut s = array![];

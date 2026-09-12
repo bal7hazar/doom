@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Splits a cairo-serde `CircuitProof` felt stream into the per-phase calldata sections
-//! (the in-Cairo twin of `tools/emit_calldata.py`, used by the tests).
+//! (the in-Cairo twin of `tools/emit_calldata.py`; used by the tests, never on chain).
 use stwo_circuit_air::claims::{CircuitClaim, CircuitInteractionClaim};
-use stwo_circuit_phases::machine::FriHead;
+use crate::machine::FriHead;
 use stwo_verifier_core::Hash;
 use stwo_verifier_core::fields::m31::M31;
 use stwo_verifier_core::fields::qm31::{QM31, QM31Serde};
