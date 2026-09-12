@@ -1,0 +1,6 @@
+stub: segment_stub10 (1511 bytecode words), shape 2, program_hash_function: blake
+leaf_0                  21.51 real 189.23 user 9.76 sys  32639090688 maximum resident set size 
+leaf_1                  22.59 real 198.73 user 9.63 sys  32462520320 maximum resident set size 
+tree                    24.49 real 226.71 user 9.23 sys  32228638720 maximum resident set size 
+root.proof felts: 95985
+verify                  1.61 real 0.78 user 0.81 sys  812695552 maximum resident set size 
