@@ -197,8 +197,10 @@ jobs:
         if: steps.check.outputs.present == 'true'
         run: |
           set +e
+          # npm runs workspace scripts with cwd = tools/wad, so --out is
+          # relative to the package (verify-cairo.sh expects tools/wad/out).
           npm run extract --workspace tools/wad -- \
-            --wad "$FREEDOOM_DIR/freedoom1.wad" --map E1M1 --out tools/wad/out
+            --wad "$FREEDOOM_DIR/freedoom1.wad" --map E1M1 --out "$GITHUB_WORKSPACE/tools/wad/out"
           code=$?
           set -e
           # Exit 3 is the documented R2-A12 bytecode-budget gate: real E1M1
@@ -215,6 +217,7 @@ jobs:
         uses: software-mansion/setup-scarb@v1
         with:
           scarb-version: "2.16.0"
+          cache: false
 
       - name: verify-cairo.sh
         if: steps.check.outputs.present == 'true'

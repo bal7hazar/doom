@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { describe } from "vitest";
 import { join } from "node:path";
 
 // Mirrors scripts/fetch-freedoom.sh's default output location.
@@ -21,3 +22,16 @@ export function readRealWad(): Uint8Array {
   if (!hasRealWad) return new Uint8Array(0);
   return readFileSync(REAL_WAD_PATH);
 }
+
+/**
+ * `describe.skipIf(cond)` still executes the suite factory during collection,
+ * so a suite whose body parses the real WAD would throw when the file is
+ * absent. This helper registers a skipped placeholder instead and never runs
+ * the factory.
+ */
+export const describeIfRealWad: typeof describe = hasRealWad
+  ? describe
+  : (Object.assign(
+      (name: string, _fn: () => void) => describe.skip(name, () => {}),
+      describe,
+    ) as unknown as typeof describe);

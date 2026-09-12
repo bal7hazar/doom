@@ -3,7 +3,7 @@ import { computeCellSubsectors, computeSubsectorBBoxes, locateSubsector } from "
 import { extractMap } from "../src/mapExtract.js";
 import { NODE_LEAF_FLAG } from "../src/types.js";
 import { Wad } from "../src/wad.js";
-import { hasRealWad, readRealWad } from "./realWad.js";
+import { describeIfRealWad, readRealWad } from "./realWad.js";
 import {
   blockmapLump,
   buildWad,
@@ -145,7 +145,7 @@ describe("R2-A9 accelerator: conservativeness (synthetic map)", () => {
   });
 });
 
-describe.skipIf(!hasRealWad)("R2-A9 accelerator: conservativeness (real E1M1)", () => {
+describeIfRealWad("R2-A9 accelerator: conservativeness (real E1M1)", () => {
   const wad = Wad.fromBytes(readRealWad());
   const map = extractMap(wad, "E1M1");
   const { spans, stats } = computeCellSubsectors(map);

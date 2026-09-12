@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeSubsectorSectors, SUBSECTOR_SECTOR_UNRESOLVED } from "../src/derive.js";
 import { extractMap } from "../src/mapExtract.js";
 import { Wad } from "../src/wad.js";
-import { hasRealWad, readRealWad } from "./realWad.js";
+import { describeIfRealWad, readRealWad } from "./realWad.js";
 import {
   blockmapLump,
   buildWad,
@@ -124,7 +124,7 @@ describe("computeSubsectorSectors", () => {
   });
 });
 
-describe.skipIf(!hasRealWad)("computeSubsectorSectors: correctness against SEGS (real E1M1)", () => {
+describeIfRealWad("computeSubsectorSectors: correctness against SEGS (real E1M1)", () => {
   it("every subsector's SS_SECTOR matches a direct SEGS -> LINEDEF -> SIDEDEF walk, independently reimplemented", () => {
     const wad = Wad.fromBytes(readRealWad());
     const map = extractMap(wad, "E1M1");
