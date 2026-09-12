@@ -6,57 +6,64 @@
  * C structures) or 32-bit (WAD header only). This wrapper centralizes bounds
  * checking so a truncated/corrupt lump fails fast with a clear message
  * instead of returning garbage.
+ *
+ * Reads through a `DataView` over a plain `Uint8Array`, so this class has no
+ * dependency on Node's `Buffer` and works unchanged in a browser. A Node
+ * `Buffer` *is* a `Uint8Array` (it extends it), so every existing caller that
+ * passes a `Buffer` (e.g. from `readFileSync`) keeps working without change.
  */
 
 export class BinaryReader {
-  readonly buffer: Buffer;
+  readonly bytes: Uint8Array;
+  private readonly view: DataView;
   offset: number;
 
-  constructor(buffer: Buffer, offset = 0) {
-    this.buffer = buffer;
+  constructor(bytes: Uint8Array, offset = 0) {
+    this.bytes = bytes;
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     this.offset = offset;
   }
 
   private checkAvailable(size: number): void {
-    if (this.offset + size > this.buffer.length) {
+    if (this.offset + size > this.bytes.length) {
       throw new RangeError(
         `BinaryReader: attempted to read ${size} bytes at offset ${this.offset}, ` +
-          `but buffer length is ${this.buffer.length}`,
+          `but buffer length is ${this.bytes.length}`,
       );
     }
   }
 
   int16(): number {
     this.checkAvailable(2);
-    const v = this.buffer.readInt16LE(this.offset);
+    const v = this.view.getInt16(this.offset, true);
     this.offset += 2;
     return v;
   }
 
   uint16(): number {
     this.checkAvailable(2);
-    const v = this.buffer.readUInt16LE(this.offset);
+    const v = this.view.getUint16(this.offset, true);
     this.offset += 2;
     return v;
   }
 
   int32(): number {
     this.checkAvailable(4);
-    const v = this.buffer.readInt32LE(this.offset);
+    const v = this.view.getInt32(this.offset, true);
     this.offset += 4;
     return v;
   }
 
   uint32(): number {
     this.checkAvailable(4);
-    const v = this.buffer.readUInt32LE(this.offset);
+    const v = this.view.getUint32(this.offset, true);
     this.offset += 4;
     return v;
   }
 
   uint8(): number {
     this.checkAvailable(1);
-    const v = this.buffer.readUInt8(this.offset);
+    const v = this.view.getUint8(this.offset);
     this.offset += 1;
     return v;
   }
@@ -64,16 +71,15 @@ export class BinaryReader {
   /** Reads a fixed-size, NUL-padded ASCII lump/texture/flat name (typically 8 bytes). */
   name(size: number): string {
     this.checkAvailable(size);
-    const raw = this.buffer.subarray(this.offset, this.offset + size);
+    const s = readName(this.bytes, this.offset, size);
     this.offset += size;
-    const nul = raw.indexOf(0);
-    const bytes = nul === -1 ? raw : raw.subarray(0, nul);
-    return bytes.toString("ascii");
+    return s;
   }
 
-  bytes(size: number): Buffer {
+  /** Returns the next `size` bytes as a view (no copy) and advances the cursor. */
+  bytesOf(size: number): Uint8Array {
     this.checkAvailable(size);
-    const v = this.buffer.subarray(this.offset, this.offset + size);
+    const v = this.bytes.subarray(this.offset, this.offset + size);
     this.offset += size;
     return v;
   }
@@ -84,18 +90,38 @@ export class BinaryReader {
   }
 
   get remaining(): number {
-    return this.buffer.length - this.offset;
+    return this.bytes.length - this.offset;
   }
 
   get eof(): boolean {
-    return this.offset >= this.buffer.length;
+    return this.offset >= this.bytes.length;
   }
 }
 
-/** Reads a NUL-padded ASCII name of `size` bytes directly out of a Buffer at `offset`. */
-export function readName(buffer: Buffer, offset: number, size: number): string {
-  const raw = buffer.subarray(offset, offset + size);
-  const nul = raw.indexOf(0);
-  const bytes = nul === -1 ? raw : raw.subarray(0, nul);
-  return bytes.toString("ascii");
+/**
+ * Reads a NUL-padded ASCII name of `size` bytes directly out of a byte array
+ * at `offset`. Doom lump/texture/flat names are pure 7-bit ASCII, so a plain
+ * per-byte `String.fromCharCode` is equivalent to Node's `"ascii"` string
+ * decoding for every valid name, without depending on `Buffer`.
+ */
+export function readName(bytes: Uint8Array, offset: number, size: number): string {
+  let end = offset + size;
+  for (let i = offset; i < offset + size; i++) {
+    if (bytes[i] === 0) {
+      end = i;
+      break;
+    }
+  }
+  let s = "";
+  for (let i = offset; i < end; i++) s += String.fromCharCode(bytes[i]!);
+  return s;
+}
+
+/** Lowercase-hex encoding of a byte array (equivalent to Node's `Buffer#toString("hex")`). */
+export function bytesToHex(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) {
+    s += bytes[i]!.toString(16).padStart(2, "0");
+  }
+  return s;
 }

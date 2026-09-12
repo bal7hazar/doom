@@ -231,7 +231,7 @@ export function rejectChunksPerRow(numSectors: number): number {
  * felts, row-major, chunk 0 (bits for sectors [0,128)) before chunk 1 (sectors
  * [128,256)), etc. Bit `b` of a chunk (LSB-first) is sector `chunkIndex*128+b`.
  */
-export function packRejectRows(data: Buffer, numSectors: number): bigint[] {
+export function packRejectRows(data: Uint8Array, numSectors: number): bigint[] {
   const chunksPerRow = rejectChunksPerRow(numSectors);
   const out: bigint[] = [];
   for (let i = 0; i < numSectors; i++) {
@@ -284,13 +284,14 @@ export function unpackBlockmapHeader(packed: bigint): BlockmapHeaderFields {
  * is a word offset directly into this array, exactly as in the original
  * format, so no additional bias/adjustment is needed at lookup time.
  */
-export function packBlockmapWords(lumpBuffer: Buffer): bigint[] {
+export function packBlockmapWords(lumpBuffer: Uint8Array): bigint[] {
   if (lumpBuffer.length % 2 !== 0) {
     throw new Error(`packBlockmapWords: BLOCKMAP lump size ${lumpBuffer.length} is odd`);
   }
+  const view = new DataView(lumpBuffer.buffer, lumpBuffer.byteOffset, lumpBuffer.byteLength);
   const words: bigint[] = [];
   for (let off = 0; off < lumpBuffer.length; off += 2) {
-    words.push(BigInt(lumpBuffer.readUInt16LE(off)));
+    words.push(BigInt(view.getUint16(off, true)));
   }
   return words;
 }

@@ -98,3 +98,20 @@ export function frameLetters(def: SpriteDef): string {
     .map((f, i) => (f ? String.fromCharCode(A_CODE + i) : ""))
     .join("");
 }
+
+/**
+ * Picks the lump (and whether it must be drawn mirrored) for one frame at a
+ * given camera/facing pair, combining `spriteRotation` with the frame's
+ * per-rotation lump table. Returns `null` when that rotation has no lump
+ * (a malformed WAD's sparse frame).
+ */
+export function selectSpriteLump(
+  frame: SpriteFrame,
+  viewToThingBam: number,
+  thingAngleBam: number,
+): { lump: number; flip: boolean } | null {
+  const rot = frame.rotate ? spriteRotation(viewToThingBam, thingAngleBam) : 0;
+  const lump = frame.lump[rot] ?? -1;
+  if (lump < 0) return null;
+  return { lump, flip: frame.flip[rot] ?? false };
+}

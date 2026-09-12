@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { extractMap } from "../src/mapExtract.js";
 import { BBox, NODE_LEAF_FLAG, Node, Subsector, Vertex } from "../src/types.js";
 import { Wad } from "../src/wad.js";
-import { hasRealWad, REAL_WAD_PATH } from "./realWad.js";
+import { hasRealWad, readRealWad } from "./realWad.js";
 import { buildWad, nodeLump, segLump, subsectorLump, vertexLump } from "./testWad.js";
 
 function within(bbox: BBox, v: Vertex): boolean {
@@ -86,7 +86,7 @@ describe("NODES bounding boxes contain their children", () => {
   });
 
   it.skipIf(!hasRealWad)("real E1M1: every node's bbox contains every vertex of its subtree", () => {
-    const wad = Wad.fromFile(REAL_WAD_PATH);
+    const wad = Wad.fromBytes(readRealWad());
     const map = extractMap(wad, "E1M1");
     const segPairs: [number, number][] = map.segs.map((s) => [s.startVertex, s.endVertex]);
 

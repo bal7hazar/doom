@@ -22,8 +22,9 @@ describe("Wad container: header, directory, lump lookup", () => {
     const buf = buildWad([{ name: "VERTEXES", data: vertexLump([[1, 2]]) }]);
     const wad = Wad.fromBuffer(buf);
     const data = wad.lumpDataByName("VERTEXES");
-    expect(data.readInt16LE(0)).toBe(1);
-    expect(data.readInt16LE(2)).toBe(2);
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    expect(view.getInt16(0, true)).toBe(1);
+    expect(view.getInt16(2, true)).toBe(2);
   });
 
   it("throws a clear error for a missing lump", () => {
@@ -73,5 +74,28 @@ describe("Wad container: header, directory, lump lookup", () => {
     buf.writeInt32LE(5, 4); // claims 5 lumps
     buf.writeInt32LE(12, 8); // directory starts right after header, but no data follows
     expect(() => Wad.fromBuffer(buf)).toThrow(/exceeds file length/);
+  });
+
+  it("parses from a plain Uint8Array with no Buffer involved (browser-safe entry point)", () => {
+    // Copies the synthetic WAD's bytes into a fresh, non-Buffer Uint8Array,
+    // exactly what a browser gets back from `await response.arrayBuffer()`.
+    const buf = buildWad([{ name: "VERTEXES", data: vertexLump([[7, -3]]) }]);
+    const plain = new Uint8Array(buf.length);
+    plain.set(buf);
+    expect(plain).not.toBeInstanceOf(Buffer);
+
+    const wad = Wad.fromBytes(plain);
+    expect(wad.header.identification).toBe("IWAD");
+    const data = wad.lumpDataByName("VERTEXES");
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    expect(view.getInt16(0, true)).toBe(7);
+    expect(view.getInt16(2, true)).toBe(-3);
+  });
+
+  it("fromBuffer is an alias of fromBytes", () => {
+    const buf = buildWad([{ name: "E1M1", data: Buffer.alloc(0) }]);
+    const viaBuffer = Wad.fromBuffer(buf);
+    const viaBytes = Wad.fromBytes(buf);
+    expect(viaBuffer.lumps).toEqual(viaBytes.lumps);
   });
 });

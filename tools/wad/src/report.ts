@@ -5,11 +5,6 @@ import { thingTypeInfo } from "./lookup/thingTypes.js";
 import { ThingFlag } from "./types.js";
 import { rejectChunksPerRow } from "./recordPacking.js";
 
-interface Count<T> {
-  key: T;
-  count: number;
-}
-
 function countBy<T>(items: T[], key: (item: T) => string): [string, number][] {
   const m = new Map<string, number>();
   for (const item of items) {

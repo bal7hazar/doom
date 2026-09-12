@@ -1,12 +1,21 @@
+import {
+  buildSpriteDefs,
+  composeTexture,
+  decodeFlat,
+  decodePatch,
+  parseColormap,
+  parsePlaypal,
+  readPnames,
+  readTextureDefs,
+  Wad,
+  type Colormap,
+  type Picture,
+  type Playpal,
+  type SpriteDef,
+} from "@hellproof/wad";
 import type { LevelJson } from "../map/level.js";
 import { SKY_FLAT } from "../map/level.js";
 import { mobjInfoFor } from "../map/mobjInfo.js";
-import { parseColormap, type Colormap } from "../wad/colormap.js";
-import { parsePlaypal, type Playpal } from "../wad/playpal.js";
-import { decodeFlat, decodePicture, type Picture } from "../wad/picture.js";
-import { buildSpriteDefs, type SpriteDef } from "../wad/sprites.js";
-import { composeTexture, parsePnames, readTextureDefs } from "../wad/textures.js";
-import { Wad } from "../wad/wad.js";
 import { packAtlas, type Atlas, type AtlasEntry } from "./atlas.js";
 
 /** Atlas key namespaces: a wall texture and a flat may legitimately share a name. */
@@ -71,11 +80,11 @@ export function buildAssetStore(
   const missing: string[] = [];
 
   progress("palette", 0.05);
-  const playpal = parsePlaypal(wad.dataByName("PLAYPAL"));
-  const colormap = parseColormap(wad.dataByName("COLORMAP"));
+  const playpal = parsePlaypal(wad.lumpDataByName("PLAYPAL"));
+  const colormap = parseColormap(wad.lumpDataByName("COLORMAP"));
 
   progress("wall textures", 0.1);
-  const pnames = parsePnames(wad.dataByName("PNAMES"));
+  const pnames = readPnames(wad);
   const defs = readTextureDefs(wad);
   const patchCache = new Map<string, Picture>();
 
@@ -90,7 +99,7 @@ export function buildAssetStore(
       missing.push(`texture ${name}`);
       continue;
     }
-    surfaceEntries.push({ key: texKey(name), picture: composeTexture(def, pnames, wad, patchCache) });
+    surfaceEntries.push({ key: texKey(name), picture: composeTexture(wad, def, pnames, patchCache) });
   }
   const wallTextures = surfaceEntries.length;
 
@@ -99,7 +108,7 @@ export function buildAssetStore(
   for (const raw of level.assets.referencedFlats) {
     const name = raw.toUpperCase();
     if (name === SKY_FLAT) continue; // never drawn: the sky pass covers it
-    const entry = wad.find(name);
+    const entry = wad.findLump(name);
     if (!entry) {
       missing.push(`flat ${name}`);
       continue;
@@ -138,7 +147,7 @@ export function buildAssetStore(
         try {
           spriteEntries.push({
             key: spriteKey(lumpIndex),
-            picture: decodePicture(wad.dataByIndex(lumpIndex)),
+            picture: decodePatch(wad.lumpData(wad.lumps[lumpIndex]!)),
           });
         } catch (err) {
           missing.push(`sprite lump ${lumpIndex} (${(err as Error).message})`);

@@ -4,42 +4,45 @@
  *   npm run fixtures                       # uses tools/wad's default WAD path
  *   WAD=/path/to/freedoom1.wad npm run fixtures
  *
- * The expected pixels are produced by **`tools/wad`'s decoders**, not the
- * client's: `test/wadDecode.test.ts` then checks the client's independent
- * browser-side implementation against them, so the two copies (see
- * `client/src/wad/README.md`) cannot drift silently. The raw lump bytes are
- * embedded too, so the test can also verify structural invariants straight
- * from the on-disk format without trusting either decoder.
+ * The expected pixels are produced by `@hellproof/wad` (tools/wad), the same
+ * package the client itself imports for asset decoding: `test/wadDecode.test.ts`
+ * then checks that package's output against this fixture as a regression/
+ * snapshot check. The raw lump bytes are embedded too, so the test can also
+ * verify structural invariants straight from the on-disk format without
+ * trusting the decoder.
  *
  * Output is gitignored: it is derived from a WAD, and WADs never enter git.
  * Tests skip themselves when it is absent.
  *
- * This file is excluded from `tsconfig.json` on purpose - it reaches across
- * package boundaries into `tools/wad/src`, which has its own compiler options.
+ * This file is excluded from `tsconfig.json` on purpose - it runs under
+ * `tsx`, never through Vite/vitest's build.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseColormap } from "../../../tools/wad/src/assets/colormap.js";
 import {
+  buildSpriteDefs,
   composeTexture,
   decodeFlat,
   decodePatch,
+  parseColormap,
+  parsePlaypal,
   readPnames,
   readTextureDefs,
+  spriteRotation,
+  Wad,
   type Picture,
-} from "../../../tools/wad/src/assets/pictures.js";
-import { parsePlaypal } from "../../../tools/wad/src/assets/playpal.js";
-import { buildSpriteDefs, spriteRotation } from "../../../tools/wad/src/assets/spriteFrames.js";
-import { Wad } from "../../../tools/wad/src/wad.js";
+} from "@hellproof/wad";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_WAD =
   "/private/tmp/claude-501/-Users-bal7hazar-git-doom/052c133d-8e48-4871-8024-3d2fd1081b4c/scratchpad/freedoom/freedoom1.wad";
 
 const wadPath = resolve(process.env.WAD ?? DEFAULT_WAD);
-const wad = Wad.fromFile(wadPath);
+// Reading the file is the caller's job (this script), not the library's -
+// `Wad.fromBytes` is the only entry point @hellproof/wad exposes.
+const wad = Wad.fromBytes(readFileSync(wadPath));
 
 const b64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
 

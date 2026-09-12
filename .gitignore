@@ -1,1 +1,5 @@
 .claude/
+
+# npm workspaces (tools/wad, client) hoist most of node_modules up here.
+node_modules/
+

@@ -12,12 +12,11 @@ import { parsePnames, parseTextureLump, TextureDef } from "./textures.js";
  * apply `PLAYPAL`/`COLORMAP` itself. `toRgba()` is provided for the cases that
  * do want pixels.
  *
- * Note for P2.1/P2.2: the web client carries its own copy of these decoders in
- * `client/src/wad/`, because this package is `Buffer`-typed, imports `node:fs`,
- * and has no package `exports`. Retyping `BinaryReader` from `Buffer` to
- * `Uint8Array` (a `Buffer` *is* a `Uint8Array`, so no Node caller changes) and
- * adding an `exports` map would let that copy be deleted. See
- * `client/src/wad/README.md`.
+ * `BinaryReader` reads through a `DataView` over a plain `Uint8Array`, and
+ * this module imports nothing from `node:*`, so it works unchanged in the
+ * browser: the web client imports these decoders directly from
+ * `@hellproof/wad` instead of carrying its own copy (see git history and
+ * tools/wad/README.md for the P2.1/P2.2 duplication this replaced).
  */
 
 export interface Picture {
@@ -46,7 +45,7 @@ export interface Picture {
  * Patches with strictly increasing deltas - all vanilla-sized ones - are
  * unaffected.
  */
-export function decodePatch(buffer: Buffer): Picture {
+export function decodePatch(buffer: Uint8Array): Picture {
   const r = new BinaryReader(buffer);
   const width = r.uint16();
   const height = r.uint16();
@@ -68,9 +67,9 @@ export function decodePatch(buffer: Buffer): Picture {
     }
     let lastTop = -1;
     for (;;) {
-      const topDelta = buffer.readUInt8(p);
+      const topDelta = buffer[p]!;
       if (topDelta === 0xff) break;
-      const length = buffer.readUInt8(p + 1);
+      const length = buffer[p + 1]!;
       const top = topDelta <= lastTop ? lastTop + topDelta : topDelta;
       lastTop = top;
       const dataStart = p + 3;
@@ -91,7 +90,7 @@ export function decodePatch(buffer: Buffer): Picture {
 }
 
 /** Decodes a flat: a raw, fully opaque square of palette indices (64×64 in vanilla). */
-export function decodeFlat(buffer: Buffer): Picture {
+export function decodeFlat(buffer: Uint8Array): Picture {
   const side = Math.round(Math.sqrt(buffer.length));
   if (side === 0 || side * side !== buffer.length) {
     throw new Error(`Flat: size ${buffer.length} is not a square number of pixels`);
