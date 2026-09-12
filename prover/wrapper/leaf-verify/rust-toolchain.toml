@@ -1,0 +1,5 @@
+# Same nightly as starkware-libs/proving @ cd7bc5f (its own rust-toolchain.toml).
+[toolchain]
+channel = "nightly-2026-01-15"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
