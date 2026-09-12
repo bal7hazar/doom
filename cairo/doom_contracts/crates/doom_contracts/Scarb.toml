@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "doom_contracts"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+starknet.workspace = true
+stwo_circuit_phases = { path = "../stwo_circuit_phases" }
+stwo_circuit_air.workspace = true
+stwo_verifier_core.workspace = true
+stwo_verifier_utils.workspace = true
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+# Declare-time allowlist: qm31 opcodes are NOT audited, so the vendored verifier must
+# build with its naive field arithmetic.
+allowed-libfuncs-list.name = "audited"
+
+[dev-dependencies]
+snforge_std.workspace = true
+assert_macros.workspace = true
+
+[scripts]
+test = "snforge test"
+
+[tool]
+scarb.workspace = true
+
+[tool.snforge]
+max_n_steps = 200000000

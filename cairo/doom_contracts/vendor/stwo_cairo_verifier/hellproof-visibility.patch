@@ -1,0 +1,175 @@
+diff -ru a/crates/circuit_air/src/lib.cairo b/crates/circuit_air/src/lib.cairo
+--- a/crates/circuit_air/src/lib.cairo
++++ b/crates/circuit_air/src/lib.cairo
+@@ -40,7 +40,7 @@
+ 
+ // Security constants.
+ pub const INTERACTION_POW_BITS: u32 = 20;
+-const SECURITY_BITS: u32 = 96;
++pub const SECURITY_BITS: u32 = 96;
+ 
+ pub const P_U32_CONST: u32 = P_U32;
+ 
+@@ -219,7 +219,7 @@
+ /// In Cairo we have native `u64` arithmetic, so the accumulator in
+ /// `stwo_constraint_framework::accumulate_relation_uses` already sums directly — the check
+ /// here is the plain `< P` bound on that accumulated `u64`.
+-fn verify_claim(component_log_sizes: PerComponent<u32>) {
++pub fn verify_claim(component_log_sizes: PerComponent<u32>) {
+     let mut relation_uses: RelationUsesDict = Default::default();
+     accumulate_circuit_relation_uses(component_log_sizes, ref relation_uses);
+ 
+diff -ru a/crates/verifier_core/src/channel/blake2s.cairo b/crates/verifier_core/src/channel/blake2s.cairo
+--- a/crates/verifier_core/src/channel/blake2s.cairo
++++ b/crates/verifier_core/src/channel/blake2s.cairo
+@@ -25,7 +25,7 @@
+ /// to zero. Every draw of 8 words increments `n_draws` by one.
+ #[derive(Drop)]
+ pub struct Blake2sChannel {
+-    digest: Blake2sHash,
++    pub digest: Blake2sHash,
+     /// Number of consecutive draws since the last value was mixed into the channel.
+     n_draws: usize,
+ }
+diff -ru a/crates/verifier_core/src/fri.cairo b/crates/verifier_core/src/fri.cairo
+--- a/crates/verifier_core/src/fri.cairo
++++ b/crates/verifier_core/src/fri.cairo
+@@ -37,11 +37,11 @@
+ 
+ #[derive(Drop)]
+ pub struct FriVerifier {
+-    config: FriConfig,
+-    first_layer: FriFirstLayerVerifier,
+-    inner_layers: Array<FriInnerLayerVerifier>,
+-    last_layer_domain: LineDomain,
+-    last_layer_poly: LinePoly,
++    pub config: FriConfig,
++    pub first_layer: FriFirstLayerVerifier,
++    pub inner_layers: Array<FriInnerLayerVerifier>,
++    pub last_layer_domain: LineDomain,
++    pub last_layer_poly: LinePoly,
+ }
+ 
+ #[generate_trait]
+@@ -246,20 +246,20 @@
+ }
+ 
+ #[derive(Drop)]
+-struct FriFirstLayerVerifier {
++pub struct FriFirstLayerVerifier {
+     /// The log blowup factor for all the columns in the first layer.
+-    log_blowup_factor: u32,
++    pub log_blowup_factor: u32,
+     /// The degree bound of the circle polynomial committed in the first layer.
+-    log_bound: u32,
++    pub log_bound: u32,
+     /// The commitment domain of the circle polynomial committed in the first layer.
+-    commitment_domain: CircleDomain,
+-    folding_alpha: QM31,
+-    proof: FriLayerProof,
+-    fold_step: u32,
++    pub commitment_domain: CircleDomain,
++    pub folding_alpha: QM31,
++    pub proof: FriLayerProof,
++    pub fold_step: u32,
+ }
+ 
+ #[generate_trait]
+-impl FriFirstLayerVerifierImpl of FriFirstLayerVerifierTrait {
++pub impl FriFirstLayerVerifierImpl of FriFirstLayerVerifierTrait {
+     /// Verifies the first layer's Merkle decommitment, and returns the evaluations needed for
+     /// folding the columns to their corresponding layer.
+     ///
+@@ -326,17 +326,17 @@
+ }
+ 
+ #[derive(Drop, Debug)]
+-struct FriInnerLayerVerifier {
+-    log_degree_bound: u32,
+-    domain: LineDomain,
+-    folding_alpha: QM31,
+-    layer_index: usize,
+-    proof: @FriLayerProof,
+-    fold_step: u32,
++pub struct FriInnerLayerVerifier {
++    pub log_degree_bound: u32,
++    pub domain: LineDomain,
++    pub folding_alpha: QM31,
++    pub layer_index: usize,
++    pub proof: @FriLayerProof,
++    pub fold_step: u32,
+ }
+ 
+ #[generate_trait]
+-impl FriInnerLayerVerifierImpl of FriInnerLayerVerifierTrait {
++pub impl FriInnerLayerVerifierImpl of FriInnerLayerVerifierTrait {
+     /// Verifies the layer's Merkle decommitment and returns the the folded queries and query evals.
+     ///
+     /// # Panics
+@@ -465,14 +465,14 @@
+ 
+ /// Foldable subsets of evaluations on a circle polynomial or univariate polynomial.
+ #[derive(Drop)]
+-struct SparseEvaluation {
++pub struct SparseEvaluation {
+     // TODO(andrew): Perhaps subset isn't the right word. Coset, Subgroup?
+-    subset_evals: Array<Array<QM31>>,
+-    subset_domain_initial_indexes: Span<usize>,
++    pub subset_evals: Array<Array<QM31>>,
++    pub subset_domain_initial_indexes: Span<usize>,
+ }
+ 
+ #[generate_trait]
+-impl SparseEvaluationImpl of SparseEvaluationTrait {
++pub impl SparseEvaluationImpl of SparseEvaluationTrait {
+     fn new(
+         subset_evals: Array<Array<QM31>>, subset_domain_initial_indexes: Span<usize>,
+     ) -> SparseEvaluation {
+diff -ru a/crates/verifier_core/src/lib.cairo b/crates/verifier_core/src/lib.cairo
+--- a/crates/verifier_core/src/lib.cairo
++++ b/crates/verifier_core/src/lib.cairo
+@@ -20,7 +20,7 @@
+ 
+ pub mod poly;
+ 
+-mod queries;
++pub mod queries;
+ #[cfg(test)]
+ mod queries_test;
+ 
+diff -ru a/crates/verifier_core/src/pcs/verifier.cairo b/crates/verifier_core/src/pcs/verifier.cairo
+--- a/crates/verifier_core/src/pcs/verifier.cairo
++++ b/crates/verifier_core/src/pcs/verifier.cairo
+@@ -197,7 +197,7 @@
+ }
+ 
+ #[inline]
+-fn mix_sampled_values(sampled_values: TreeSpan<ColumnSpan<Span<QM31>>>, ref channel: Channel) {
++pub fn mix_sampled_values(sampled_values: TreeSpan<ColumnSpan<Span<QM31>>>, ref channel: Channel) {
+     let mut flattened_sampled_values = array![];
+ 
+     for sampled_values in sampled_values {
+diff -ru a/crates/verifier_core/src/pcs.cairo b/crates/verifier_core/src/pcs.cairo
+--- a/crates/verifier_core/src/pcs.cairo
++++ b/crates/verifier_core/src/pcs.cairo
+@@ -12,7 +12,7 @@
+ use crate::fields::qm31::QM31Trait;
+ use crate::fri::FriConfig;
+ 
+-mod quotients;
++pub mod quotients;
+ pub mod verifier;
+ #[cfg(test)]
+ mod verifier_test;
+diff -ru a/crates/verifier_core/src/verifier.cairo b/crates/verifier_core/src/verifier.cairo
+--- a/crates/verifier_core/src/verifier.cairo
++++ b/crates/verifier_core/src/verifier.cairo
+@@ -126,7 +126,7 @@
+ 
+ /// Attempts to extract and compute the composition trace evaluation from the mask.
+ /// Returns `None` if the mask does not match the expected structure.
+-fn try_extract_composition_eval(
++pub fn try_extract_composition_eval(
+     mask: TreeSpan<ColumnSpan<Span<QM31>>>,
+     oods_point: CirclePoint<QM31>,
+     trace_log_degree_bound: u32,

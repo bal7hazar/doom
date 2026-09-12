@@ -1,0 +1,5 @@
+# Scarb build output
+target/
+.snfoundry_cache/
+# Decompressed fixtures (regenerate with fixtures/unpack.sh)
+fixtures/*.txt
