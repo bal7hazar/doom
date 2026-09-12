@@ -1,0 +1,10 @@
+[package]
+name = "bam"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fixed = { path = "../fixed" }
+
+[dev-dependencies]
+cairo_test.workspace = true

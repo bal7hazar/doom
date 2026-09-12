@@ -1,0 +1,9 @@
+[package]
+name = "fixed"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+cairo_test.workspace = true

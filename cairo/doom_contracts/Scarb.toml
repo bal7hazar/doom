@@ -1,0 +1,15 @@
+[package]
+name = "doom_contracts"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet = "2.16.0"
+
+[[target.starknet-contract]]
+
+[dev-dependencies]
+snforge_std = "0.57.0"
+
+[scripts]
+test = "snforge test"

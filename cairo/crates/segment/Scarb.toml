@@ -1,0 +1,11 @@
+[package]
+name = "segment"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+state_hash = { path = "../state_hash" }
+ticcmd = { path = "../ticcmd" }
+
+[dev-dependencies]
+cairo_test.workspace = true

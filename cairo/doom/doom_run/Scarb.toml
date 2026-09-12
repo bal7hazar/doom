@@ -1,0 +1,15 @@
+[package]
+name = "doom_run"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+doom_game = { path = "../doom_game" }
+doom_map = { path = "../doom_map" }
+ticcmd = { path = "../../crates/ticcmd" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+
+[dev-dependencies]
+cairo_test.workspace = true

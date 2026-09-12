@@ -1,0 +1,20 @@
+[package]
+name = "doom_game"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fixed = { path = "../../crates/fixed" }
+geom2d = { path = "../../crates/geom2d" }
+fsm = { path = "../../crates/fsm" }
+ticcmd = { path = "../../crates/ticcmd" }
+state_hash = { path = "../../crates/state_hash" }
+segment = { path = "../../crates/segment" }
+doom_map = { path = "../doom_map" }
+doom_things = { path = "../doom_things" }
+doom_player = { path = "../doom_player" }
+doom_monsters = { path = "../doom_monsters" }
+doom_specials = { path = "../doom_specials" }
+
+[dev-dependencies]
+cairo_test.workspace = true

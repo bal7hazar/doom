@@ -1,0 +1,11 @@
+[package]
+name = "blockmap"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fixed = { path = "../fixed" }
+geom2d = { path = "../geom2d" }
+
+[dev-dependencies]
+cairo_test.workspace = true
