@@ -42,6 +42,13 @@ recompute it. The tic count is *not* folded in, because the segment output
 pins it separately with `tic_start`/`tic_end`; that is what disambiguates a
 short final group.
 
+`commit_input` is Starknet's **2-to-1** Poseidon — one Hades permutation
+over `(prev, packed, 2)` — and not `poseidon_hash_span([prev, packed])`,
+which pads: 7 steps against 48, and it is exactly `poseidonHash(a, b)` in
+`starknet.js` and `poseidon_hash(a, b)` in `poseidon_py`, so the verifier
+side is a one-liner. That change took `segment`'s per-tic overhead from
+45.7 steps to 35.7.
+
 ## Invariants
 
 - `hash_tagged` is a pure function of `(tag, version, data)`, sensitive to
@@ -70,7 +77,7 @@ per-felt figures. See [`bench/README.md`](bench/README.md). Bare loop
 |---|---:|---:|
 | `open` + append + `seal` | **14.5** | 16 |
 | `hash_tagged` over an existing span | 35.5 | 39 |
-| `commit_input` (per call, not per felt) | 48 | 53 |
+| `commit_input` (per call, not per felt) | 7 | 10 |
 | *(build the array only)* | 4 | — |
 | *(build + bare `poseidon_hash_span`)* | 14.5 | — |
 

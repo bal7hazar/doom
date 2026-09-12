@@ -12,7 +12,7 @@ this repository did not write.
 Run: `python3 reference.py`
 """
 
-from poseidon_py.poseidon_hash import poseidon_hash_many
+from poseidon_py.poseidon_hash import poseidon_hash, poseidon_hash_many
 
 SCHEMA_VERSION = 1
 
@@ -40,7 +40,9 @@ def inputs_seed() -> int:
 
 
 def commit_input(prev: int, packed: int) -> int:
-    return poseidon_hash_many([prev, packed])
+    # Starknet's 2-to-1 Poseidon: one Hades permutation over (prev, packed, 2).
+    # Not poseidon_hash_many([prev, packed]), which pads.
+    return poseidon_hash(prev, packed)
 
 
 def commit_log(packed: list[int]) -> int:

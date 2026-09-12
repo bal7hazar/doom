@@ -47,9 +47,11 @@
 //! [`commit_input`] folds one packed transport felt (7 tics, see the
 //! `ticcmd` crate) into a running commitment, starting from
 //! [`inputs_seed`]. A segment publishes the final value; anyone holding the
-//! packed log can recompute it and check it against the proof.
+//! packed log can recompute it and check it against the proof. It is
+//! Starknet's 2-to-1 Poseidon (7 steps), not `poseidon_hash_span` of a
+//! two-element array (48).
 
-use core::poseidon::poseidon_hash_span;
+use core::poseidon::{hades_permutation, poseidon_hash_span};
 
 /// Schema version of the encodings defined *by this crate* (the segment
 /// output layout and the input-log commitment). Game records carry their
@@ -128,8 +130,15 @@ pub fn inputs_seed() -> felt252 {
 /// different commitment; the number of tics is pinned separately by the
 /// segment output's `tic_start`/`tic_end`, which is what disambiguates a
 /// short final group.
+///
+/// This is Starknet's **2-to-1** Poseidon — one Hades permutation over
+/// `(prev, packed, 2)` — not `poseidon_hash_span([prev, packed])`, which
+/// pads and costs 48 steps against 15. It is the same function as
+/// `poseidon_hash(a, b)` in starknet.js and `poseidon_py`, so a verifier
+/// recomputes the chain with a one-liner.
 pub fn commit_input(prev: felt252, packed: felt252) -> felt252 {
-    poseidon_hash_span(array![prev, packed].span())
+    let (commitment, _, _) = hades_permutation(prev, packed, 2);
+    commitment
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +283,7 @@ mod tests {
     const REFERENCE_INPUTS_SEED: felt252 =
         0x2d5e13ed7c628cddeebe8a20c5aec4389f3c922e8276979479be592bd4f963e;
     const REFERENCE_COMMIT_111: felt252 =
-        0x45ec7ed3399768780190a6bfa20f2d3ca2caeef2d86a03662dda4f72122f28;
+        0x724d2f08e0425f78107ea6c830729ff38c59bf54d1a9ff641cbb1a497a89580;
 
     impl PlayerHashable of Hashable<Player> {
         fn tag(self: @Player) -> felt252 {

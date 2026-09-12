@@ -4,7 +4,7 @@
   "ops": [
     { "op": 3, "label": "open + append + seal (per felt)", "n1": 1000, "n2": 2000, "budget": 16 },
     { "op": 2, "label": "hash_tagged over a span (per felt)", "n1": 1000, "n2": 2000, "budget": 39 },
-    { "op": 6, "label": "commit_input (per call)", "n1": 1000, "n2": 2000, "budget": 53 },
+    { "op": 6, "label": "commit_input (per call)", "n1": 1000, "n2": 2000, "budget": 10 },
     { "op": 1, "label": "-- build the array only", "n1": 1000, "n2": 2000, "budget": null },
     { "op": 5, "label": "-- build + bare poseidon_hash_span", "n1": 1000, "n2": 2000, "budget": null }
   ]
