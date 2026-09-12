@@ -279,6 +279,22 @@ Points d'attention :
   conversion fiat par oracle (Pragma) ou API de prix.
 - Alternative UX : paymaster Cartridge (sponsoring), sans changer la mécanique d'affichage du coût.
 
+**Résultats du spike S5 (2026-09-12, starknet-devnet 0.10.0 / Starknet 0.14.4, voir `docs/spikes/S5.md`) — GO sur C5 :**
+
+| Élément | Valeur mesurée |
+|---|---|
+| Fait de référence (fixture modeofO, 36 k felts) | stage 78,6 M + phase1 **873 757 120** + phase2 815 709 840 = **1,768e9 L2 gas** ; chiffres Sepolia de juillet reproduits au gas près |
+| `starknet_simulateTransactions` sur la séquence ordonnée | écart L2 gas **−0,015 %** (pire tx −0,22 %) ; L1 data gas surestimé de 10–49 % (3 felts/clé simulés vs 2 réels, sens sûr) |
+| Prix mainnet le 2026-09-12 | **30,5 gFri** = 10,2× le plancher ; 1 STRK = 0,0288 $ → fait ≈ **54 STRK ≈ 1,55 $** (plancher : 5,3 STRK ≈ 0,15 $) |
+| Declares (3 classes) | 6,58e9 L2 gas ≈ 200 STRK une fois |
+| Marges recommandées | `l2_gas` ×1,15, `l1_data_gas` ×1,30 ; le ×1,5 global de sncast dépasse le plafond 1,21e9 (rejeté) ; phase1 à 83 % du plafond avec ×1,15 |
+| Classe de compte | le même `stage_proof` coûte **+19 %** depuis une autre classe de compte Cairo 1 → re-mesurer avec Cartridge Controller avant de figer les bornes |
+| Contrat consommateur (stub `DoomRuns`, N×8 felts, 2N Poseidon + N blake2s) | 5,58 M + 86,7 k·N L2 gas → 9,9 M à N = 50 (0,6 % du coût d'un fait) |
+| **Extrapolation aux preuves S4** (94–96 k felts, 5,3 M steps) | staging ≈ 4,3e9 L2 gas sur 5 tx ; chaque phase de vérification à 115–204 % du plafond → **≥ 4 invokes**, ≈ **250 STRK ≈ 7,2 $ par fait** au prix courant ; transport **calldata seulement** du flux packé ≈ 6,8e7 gas contre 4,2e9 stocké (**61× moins cher**) → décision de conception avant la Phase 4 |
+
+Les classes déployées par modeofO sont inutilisables pour nous (vérifieur vendu plus ancien, hashes de
+phases figés dans le constructeur) : le registry sera redéployé depuis nos sources épinglées.
+
 ## 8. Doom : ce qu'il faut savoir pour un port déterministe
 
 ### 8.1 Architecture du jeu original (linuxdoom-1.10 / doomgeneric)
