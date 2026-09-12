@@ -281,7 +281,7 @@ games needs one call.
 
 ## 10. Tests
 
-`(cd cairo/doom_contracts/crates/doom_runs && snforge test)` — **42 tests**:
+`(cd cairo/doom_contracts/crates/doom_runs && snforge test)` — **43 tests**:
 
 - recomposition of the 2 + 1 + 3 synthetic batch and of the single-leaf (self-fold) batch
   against the Python model's `output_hash`, fact and run ids; digest packing round trip;
@@ -290,7 +290,8 @@ games needs one call.
 - the happy path: three games recorded, records, player index, `RunSubmitted` payload;
   `register_member` for one game;
 - every member-level rejection: `ABORT`, unfinished, chain break, tic gap, early terminal,
-  wrong genesis, non-zero first tic, bad layout, unpinned level, out-of-range members, and the
+  wrong genesis, non-zero first tic, bad layout, unpinned level, out-of-range members (an
+  overflowing range included — it must reject that member, not revert the batch), and the
   mixed batch where one member is skipped and the others are recorded;
 - `DEAD` → attempt (no board, no index), replay of the same run refused;
 - replay data: verified and published, wrong commitment, wrong length, partial coverage;

@@ -639,7 +639,9 @@ pub mod DoomRuns {
         ) -> Result<felt252, felt252> {
             let start = *member.leaf_start;
             let len = *member.leaf_len;
-            if len == 0 || start + len > leaves.len() {
+            // Written without `start + len` so that a member claiming an absurd range is
+            // rejected (D18) instead of overflowing and reverting the whole batch.
+            if len == 0 || start >= leaves.len() || len > leaves.len() - start {
                 return Err(reason::RANGE);
             }
             let own = leaves.slice(start, len);
@@ -697,6 +699,8 @@ pub mod DoomRuns {
                 self.attempts.entry(run_id)
             };
             node.player.write(*run.player);
+            // `n_segments` is packed in 16 bits: it is bounded by the number of leaves of one
+            // transaction, itself bounded by the ~4 991-felt calldata limit (10 felts a leaf).
             node
                 .ids
                 .write(

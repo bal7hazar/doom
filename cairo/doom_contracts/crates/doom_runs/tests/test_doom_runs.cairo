@@ -403,6 +403,23 @@ fn an_out_of_bounds_range_is_rejected() {
     assert_eq!(reason_from_end(ref spy, 2), reason::RANGE);
 }
 
+/// A range whose `leaf_start + leaf_len` would overflow must be *rejected*, not revert the
+/// batch: one absurd member may not cost the other players their verification (D18).
+#[test]
+fn an_overflowing_range_is_rejected() {
+    let world = setup();
+    let leaves = array![solo(29, 1, 35, STATUS_EXIT)];
+    let mut spy = spy_events();
+    world.registry.register(world.runs.batch_fact(VERSION_ID, leaves.clone()));
+    let absurd = Member {
+        player: player(9), level_id: LEVEL_ID, leaf_start: 0xFFFF_FFFF, leaf_len: 5,
+    };
+    assert_eq!(
+        world.runs.submit_batch(VERSION_ID, leaves, array![absurd, member(1, 0, 1)], array![]), 1,
+    );
+    assert_eq!(reason_from_end(ref spy, 2), reason::RANGE);
+}
+
 /// A `DEAD` run is kept as an *attempt*: recorded, never on a leaderboard, never in the
 /// player's run index.
 #[test]
