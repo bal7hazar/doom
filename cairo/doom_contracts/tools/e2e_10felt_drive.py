@@ -297,7 +297,7 @@ def main() -> None:
     setup[0]["label"], setup[1]["label"] = "add_version", "set_genesis"
 
     # Each game gets one of the devnet's own predeployed accounts as its player — the player is
-    # a field of `Member`, not the caller, so one account submits for everybody (§11.1).
+    # a field of `Member`, not the caller, so one account submits for everybody (§12.1).
     known = predeployed_accounts(cfg.url) or [owner]
 
     # A run id is the fold of the inputs the proof consumed (R10-A1) — it carries neither the

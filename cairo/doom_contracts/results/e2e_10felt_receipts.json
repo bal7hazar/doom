@@ -1,7 +1,7 @@
 {
  "network": "starknet-devnet 0.10.0 (local)",
  "url": "http://127.0.0.1:5081/rpc",
- "timestamp_utc": "2026-09-12T16:48:49Z",
+ "timestamp_utc": "2026-09-12T16:56:16Z",
  "what": "P4.2b: real ten-felt root proofs verified by the P4.0 router, then consumed by DoomRuns pointed at that router (no MockFactRegistry)",
  "prices": {
   "l1_gas_price_fri": 92599658875965,
@@ -18,8 +18,8 @@
   "strk_usd": 0.02876053,
   "strk_eur": 0.02478928
  },
- "router": "0x03c32d30348b0e868dd99e0d2f2c2965beffb378c9cb92adc5993e59807bd1ae",
- "doom_runs": "0x0557dfd9e1b0779a62e0d596f5fe8382334f7437b6390b02b26095eab20821cb",
+ "router": "0x004e979bc1010653e28a5abbd055c53e61d2ff52cf50dc2c94c1b406aaeba44b",
+ "doom_runs": "0x0489a90c3ca1e57a703ae690c25e16fe30de080bde029c3cbace04afde41cc95",
  "owner": "0x34ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
  "classes": {
   "StwoPhasesBegin": {
@@ -55,12 +55,12 @@
  },
  "deploys": {
   "StwoCircuitRouter": {
-   "tx_hash": "0x07177d30802209e9396b2e62aa8fba8d73070d61cc387783c5d4bc2dba880e07",
+   "tx_hash": "0x02ef06fdba4a6c7a6c5e3afa272849d6efcbb6e39fedafe72bf6dc32383aa6df",
    "l2_gas": 2728880,
    "fee_fri": 83182899185723792
   },
   "DoomRuns": {
-   "tx_hash": "0x069f99683e06c313a0ee5d14dfddc4f81354c5a2c651d10214016ba920b23f1a",
+   "tx_hash": "0x01dc1248cfa2c74e853f1815111f6f00eab3d918935fcbe26dd10fcf2ad42da9",
    "l2_gas": 1744400,
    "fee_fri": 53173281238614320
   }
@@ -212,7 +212,7 @@
    "phase": "verifier",
    "label": "begin",
    "entrypoint": "begin",
-   "tx_hash": "0x0718cb171fd3d9f7ebc080ec172013b9285329c77288a740d1b795e6a8c9e2ff",
+   "tx_hash": "0x01aa028c4ad7d817083391a252554f9967e00e75633064ce989736e9e33bd801",
    "calldata_felts": 4625,
    "payload_slots": 4613,
    "l2_gas": 459195680,
@@ -228,7 +228,7 @@
    "phase": "verifier",
    "label": "merkle",
    "entrypoint": "merkle",
-   "tx_hash": "0x00c14923e55fcf2a41c267881a65865affdc30c2ca0879de09f88c37935b75ec",
+   "tx_hash": "0x02328b9b735423495e8e5cf296dcaed0ff70427100a481d8da9b9db577ab6552",
    "calldata_felts": 4583,
    "payload_slots": 4344,
    "l2_gas": 390816640,
@@ -244,7 +244,7 @@
    "phase": "verifier",
    "label": "answers",
    "entrypoint": "answers",
-   "tx_hash": "0x001ee5998447662c52d84d52406024e5473383fe078ba33fdd3bd4cc03cdb364",
+   "tx_hash": "0x06f3c7741b14b23ac6bc96e1dbe547974b0603998e56cabbe4ad2a4cb672d754",
    "calldata_felts": 3685,
    "payload_slots": 3448,
    "l2_gas": 861338880,
@@ -260,7 +260,7 @@
    "phase": "verifier",
    "label": "fri1",
    "entrypoint": "fri",
-   "tx_hash": "0x059313fb7acbb47d606008d6598c438c74b3446f9b204d241a55755c57fd7e13",
+   "tx_hash": "0x01d301ba8efc3933f0497d9cb1f18a2990d6816c35113411c809b17d04e7188d",
    "calldata_felts": 3564,
    "payload_slots": 2984,
    "l2_gas": 1093159360,
@@ -276,7 +276,7 @@
    "phase": "verifier",
    "label": "fri2",
    "entrypoint": "fri",
-   "tx_hash": "0x01fbbf0a6ad62bf115bcec64af4b2a3f960a4aba4fb59d0dd53476ce81a5b536",
+   "tx_hash": "0x01d4f2d2d93f8fdf95dad4f9ec685173802e847b9fe1094c7e8319b5f289d5f7",
    "calldata_felts": 2360,
    "payload_slots": 1780,
    "l2_gas": 1010107600,
@@ -292,7 +292,7 @@
    "phase": "verifier",
    "label": "begin",
    "entrypoint": "begin",
-   "tx_hash": "0x023cab8b7c66617a5c1565a80cd6acb6a94e7b55c50b6cc553b2c00eb4a812c8",
+   "tx_hash": "0x0435e76c2b5abb1bde2d36501076235d10235f192f79e9f5ebbbc64afe0cd3a9",
    "calldata_felts": 4631,
    "payload_slots": 4619,
    "l2_gas": 459746400,
@@ -308,7 +308,7 @@
    "phase": "verifier",
    "label": "merkle",
    "entrypoint": "merkle",
-   "tx_hash": "0x00eb5c8140eb3d20ff3189003b25cb582dbd72b33fe5d3b54cc7e72eadfcf29b",
+   "tx_hash": "0x07f9c624c39cc4c4f4a5dfb8325e24627a8bc540901099014971780943ee4fbe",
    "calldata_felts": 4589,
    "payload_slots": 4350,
    "l2_gas": 391327360,
@@ -324,7 +324,7 @@
    "phase": "verifier",
    "label": "answers",
    "entrypoint": "answers",
-   "tx_hash": "0x037ac84e856b6019b9c10b8e10d02cc78cedbdeb6b79e0e56b6c4c502c41d1f3",
+   "tx_hash": "0x04a088456a625efdd3920bb9d2c0610fc86f0957f163b3cd324ed090b13cf0c3",
    "calldata_felts": 3685,
    "payload_slots": 3448,
    "l2_gas": 861298880,
@@ -340,7 +340,7 @@
    "phase": "verifier",
    "label": "fri1",
    "entrypoint": "fri",
-   "tx_hash": "0x02ef07a676d874489e70adec6cb9f79e9e9088cec766a4078ba3b53bf2e1c4a2",
+   "tx_hash": "0x059ba5dc777a6aa7e387b1b96e76e29f43e7b899ad977a9022b9404fbe26f75b",
    "calldata_felts": 3571,
    "payload_slots": 2991,
    "l2_gas": 1093715200,
@@ -356,7 +356,7 @@
    "phase": "verifier",
    "label": "fri2",
    "entrypoint": "fri",
-   "tx_hash": "0x048d78a0fd029dd8d868d4b20397514d21fa21b113318c7e0413ab9aa0238dd9",
+   "tx_hash": "0x03c066101c1ef3b788e5e09f920824b19b1f82aad21697b9fff4b12b6ce69a4c",
    "calldata_felts": 2345,
    "payload_slots": 1765,
    "l2_gas": 992150800,
@@ -370,7 +370,7 @@
  ],
  "version_setup": [
   {
-   "tx_hash": "0x009bba14234b30a9cd5a0ef2b0672861d5728f32fa42135968c8892a8136ad15",
+   "tx_hash": "0x0431e2c1ab274826e88cdffb233027a8b0235bb013f96e85ce97f3cb37f2185e",
    "function": "add_version",
    "calldata_felts": 9,
    "l2_gas": 5288640,
@@ -384,7 +384,7 @@
    "label": "add_version"
   },
   {
-   "tx_hash": "0x014eab85cd2905fae2337b62ff33f97c4bea85d41542f707e667da1ba143113a",
+   "tx_hash": "0x04dcb72bf62922688adbde74a5b167a39b7aeb3ae20400959ce74f05bab57c68",
    "function": "set_genesis",
    "calldata_felts": 3,
    "l2_gas": 1843920,
@@ -400,7 +400,7 @@
  ],
  "consumer_txs": [
   {
-   "tx_hash": "0x00fe5701b9fcc4594efafb691c5d5e0d720f267dcc740bb8e5491d1fc6acc7b9",
+   "tx_hash": "0x05b1bf0c992651b7af00906536243df28b4700c4e97b08a2cc1af42e50a0956e",
    "function": "submit_batch",
    "calldata_felts": 111,
    "l2_gas": 16736320,
@@ -424,9 +424,9 @@
    "replay_events": 3
   },
   {
-   "tx_hash": "0x06d82b97a85a3a90bd24d30ab850d07da8735c23cfa85b8ed04782979e527198",
+   "tx_hash": "0x00e1777dd1614592b6fadb3886c975c2616b28ce6b70ae8cfe60cc4856fb7df6",
    "execution_status": "REVERTED",
-   "revert_reason": "Transaction execution has failed:\n0: Error in the called contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nExecution failed. Failure reason:\nError in contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nError in contract (contract address: 0x0557dfd9e1b0779a62e0d596f5fe8382334f7437b6390b02b26095eab20821cb, class hash: 0x020e40513c142b130b57504d5b93fd8b7991f5600f915baf5489904b0bef60a6, selector: 0x012f8c275fb23ab58f0409eee496544156477717c0e5b1f8d3f81980f1ba6d34):\n0x646f6f6d72756e733a2066616374206e6f742072656769737465726564 ('doomruns: fact not registered').\n",
+   "revert_reason": "Transaction execution has failed:\n0: Error in the called contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nExecution failed. Failure reason:\nError in contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nError in contract (contract address: 0x0489a90c3ca1e57a703ae690c25e16fe30de080bde029c3cbace04afde41cc95, class hash: 0x020e40513c142b130b57504d5b93fd8b7991f5600f915baf5489904b0bef60a6, selector: 0x012f8c275fb23ab58f0409eee496544156477717c0e5b1f8d3f81980f1ba6d34):\n0x646f6f6d72756e733a2066616374206e6f742072656769737465726564 ('doomruns: fact not registered').\n",
    "l2_gas": 2005760,
    "fee_fri": 61131134265801728,
    "batch": "B2-1_doom",
@@ -434,7 +434,7 @@
    "label": "submit_batch(tampered kills)"
   },
   {
-   "tx_hash": "0x0334427249bacc8d83c21cc0b34710659aa9ba5bc090b5549e2a79e312790ef4",
+   "tx_hash": "0x07ebd82b4a983ce58d083704a54845a285f0bb1a27022b2a23ed5841c3437d6b",
    "function": "submit_batch",
    "calldata_felts": 75,
    "l2_gas": 2700800,
@@ -463,9 +463,9 @@
    "replay_events": 0
   },
   {
-   "tx_hash": "0x05d36c6248a4afd996bfdf7dc4d9ac8a394fe2377d706c86e2e7a82f33f4e58b",
+   "tx_hash": "0x07d8921d6d3f527b33729a208769ee218937534a02e561069635f76cdef9415a",
    "execution_status": "REVERTED",
-   "revert_reason": "Transaction execution has failed:\n0: Error in the called contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nExecution failed. Failure reason:\nError in contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nError in contract (contract address: 0x0557dfd9e1b0779a62e0d596f5fe8382334f7437b6390b02b26095eab20821cb, class hash: 0x020e40513c142b130b57504d5b93fd8b7991f5600f915baf5489904b0bef60a6, selector: 0x012f8c275fb23ab58f0409eee496544156477717c0e5b1f8d3f81980f1ba6d34):\n0x646f6f6d72756e733a2066616374206e6f742072656769737465726564 ('doomruns: fact not registered').\n",
+   "revert_reason": "Transaction execution has failed:\n0: Error in the called contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nExecution failed. Failure reason:\nError in contract (contract address: 0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba, class hash: 0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nError in contract (contract address: 0x0489a90c3ca1e57a703ae690c25e16fe30de080bde029c3cbace04afde41cc95, class hash: 0x020e40513c142b130b57504d5b93fd8b7991f5600f915baf5489904b0bef60a6, selector: 0x012f8c275fb23ab58f0409eee496544156477717c0e5b1f8d3f81980f1ba6d34):\n0x646f6f6d72756e733a2066616374206e6f742072656769737465726564 ('doomruns: fact not registered').\n",
    "l2_gas": 1654080,
    "fee_fri": 50413545978187968,
    "batch": "B2_doom",

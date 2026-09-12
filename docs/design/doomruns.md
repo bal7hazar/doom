@@ -14,8 +14,9 @@
 | < 5 % of a fact's verification (3.81e9 L2 gas) for N = 25 segments | **0.68 %** (25 segments, one game) to **3.34 %** (25 segments, 25 games) — the worst shape, 25 one-segment games, is 127.1 M |
 | one `submit_batch` ≤ 90 % of the 1.21e9 invoke cap | **58.3 %** at the largest batch driven (480 leaves, 96 games); N = 25 is **2–10 %** |
 | max N per call | **≈ 400 leaves / 80 games** per invoke (4 324 calldata felts, 49.8 % of the cap), bounded by the ~4 990-felt calldata policy, not by gas; beyond that, `register_member` splits the batch |
-| leaf recomposition byte-identical to the proved root | the S4 `N = 1..4` real root proofs recompose to the `output_hash` the on-chain verifier returned (`recursion_outputs` tests), and the 10-felt batches match an independent Python model |
-| replay publication optional and verified | `+0.5 %` gas at N = 1, **+11.1 M (+24 %)** for 25 segments of packed log (575 felts); every log folded and compared to its segment's `inputs_commitment` before it is emitted |
+| leaf recomposition byte-identical to the proved root | **yes, on ten-felt roots** (P4.2b, §10): two batches proved with `segment_stub10` recompose to the `output_hash` `stwo_circuit_verifier` returned, and the fact that recomposition yields is the one `StwoCircuitRouter` registered on devnet |
+| consumer gated by the **real** fact registry | **yes** (P4.2b, §10): `DoomRuns` deployed with `verifier_router` = the P4.0 router, the fact registered by the 5-transaction verification of the root proof; no `MockFactRegistry` in the path |
+| replay publication optional and verified | `+0.5 %` gas at N = 1, **+11.1 M (+24 %)** for 25 segments of packed log (575 felts); every log folded and compared to its segment's `inputs_commitment` before it is emitted — and on the proved batches, against the commitment the **Cairo program itself** computed |
 | declare (once) | 1.179e9 L2 gas ≈ **35.9 STRK**; class 8 572 sierra felts (10 % of the cap), 19 860 casm felts (24 %) |
 
 Per game, at the S5 mainnet snapshot (30.5 gFri, 0.0288 $/STRK): a five-game batch of 25
@@ -279,9 +280,86 @@ call for a 25-leaf batch, i.e. 125.8 M for the five members against 46.4 M in on
 is therefore a fallback for oversized batches, not an optimisation; the wrapper's default M = 8
 games needs one call.
 
-## 10. Tests
+## 10. End to end, on real data (P4.2b)
 
-`(cd cairo/doom_contracts/crates/doom_runs && snforge test)` — **43 tests**:
+Two things in this document were models rather than measurements until P4.2b, and one run
+closes both:
+
+1. **the ten-felt leaves were synthetic.** The only root proofs that existed (S4, `N = 1…4`)
+   were folded over `segment_stub`, whose output is **four** felts — a layout `DoomRuns` cannot
+   read. So the recomposition was pinned against real proofs *of the wrong width*, and against
+   an independent Python model *of the right width*, but never both at once.
+2. **the fact was mocked.** Every drive and every test answered `is_valid` with
+   `MockFactRegistry`, because registering a fact for real costs 3.81e9 L2 gas.
+
+### What was proved
+
+`spikes/s4/programs/segment_stub10` returns exactly the ten felts of D14 — including a real
+per-segment `inputs_commitment`, built by packing its own tic words seven to a transport felt
+and folding them with `state_hash`'s `inputs_seed` / `commit_input` (ported verbatim). Two
+batches were proved with it over the `doom` registry, and `tools/e2e_10felt_drive.py` then ran
+the **whole** path on a local devnet: `emit_calldata` → the four P4.0 classes declared, the
+router deployed, the root proof verified in its 5 transactions → `DoomRuns` deployed with
+`verifier_router` = **that** router → `add_version` + `set_genesis` → `submit_batch`.
+
+| batch | games × segments | tics | root proof | verification | fact |
+|---|---|---:|---:|---:|---|
+| `B2-1_doom` | 2 games, 2 + 1 segments | 297 / 137 | 95 949 felts | **3.815e9** (5 tx) | `0x53ae959a…8c3c40` |
+| `B2_doom` | 1 game, 2 segments | 297 | 95 985 felts | **3.798e9** (5 tx) | `0x805cc03b…c307e` |
+
+For each: the fact the router emitted in `FactRegistered` **is** the fact the ten felts of the
+leaves recompose to (`poseidon(multiverifier_hash ‖ blake2s-fold)`), and `is_valid(fact)`
+answers true. Nothing was pre-registered; nothing was mocked.
+
+### The transactions (devnet 0.10.0, S5 prices), for `B2-1_doom`
+
+| # | call | calldata felts | L2 gas | % of the 1.21e9 cap | writes | fee (STRK) |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | `router.begin` | 4 625 | 459 195 680 | 38.0 | 4 | 13.99 |
+| 2 | `router.merkle` | 4 583 | 390 816 640 | 32.3 | 3 | 11.91 |
+| 3 | `router.answers` | 3 685 | 861 338 880 | 71.2 | 4 | 26.25 |
+| 4 | `router.fri` (layers 0–1) | 3 564 | 1 093 159 360 | **90.3** | 3 | 33.31 |
+| 5 | `router.fri` (layers 2–5) | 2 360 | 1 010 107 600 | 83.5 | 5 | 30.78 |
+| | **fact registered** | | **3 814 618 160** | | | **116.45** |
+| 6 | `runs.submit_batch` (3 leaves, 2 games, replay **on**) | 111 | **16 736 320** | 1.4 | 26 | **0.51** |
+| | **full path** | | **3 831 354 480** | | | **116.96 ≈ $3.35** |
+
+The consumer is **0.44 %** of its own fact — the P4.2 budget was < 5 %, measured there at
+0.68 % on a synthetic 25-segment batch, and this is the same number on the real thing. The
+one-off owner setup is `add_version` 5 288 640 (10 writes, 0.16 STRK) and `set_genesis`
+1 843 920 (3 writes, 0.06 STRK); the declares are 7.874e9 for the four verifier classes and
+1.181e9 for `DoomRuns`. Both batches together — 10 verifier transactions, 2 setup, 2
+`submit_batch` — are **7 639 426 480** L2 gas, 233.2 STRK ≈ $6.71.
+
+### What the chain holds afterwards
+
+Both games of `B2-1_doom` are recorded as finished runs with the counters the proof commits to
+(297 tics / 6 kills / 1 item and 137 tics / 4 kills / 1 item), one per player — the players are
+fields of `Member`, so one account submitted for both (§12.1) — indexed by player, and both
+leaderboards are populated: score `625` then `425`, time in the reverse order. Three `Replay`
+events published the packed input logs, each checked against its segment's `inputs_commitment`
+before emission.
+
+Two negatives were driven on chain, not only in tests:
+
+- the same batch with **one extra kill** on the last leaf reverts with `doomruns: fact not
+  registered` (2 005 760 gas, nothing written): the tampered output moves the blake2s fold,
+  hence the fact;
+- `B2_doom` contains the *same game* as `B2-1_doom`'s first member, proved in a different batch
+  under a different fact — and its member is skipped with `already registered`. A run id is the
+  fold of the inputs the proof consumed (R10-A1); it carries neither the submitter nor the
+  batch, so a copycat cannot re-record someone's run by re-proving it.
+
+### Residual
+
+`fri1` sits at **90.3 %** of the invoke cap in the 5-transaction plan, as in P4.0; the
+6-transaction plan (`--fri-split 1,3`) is the margin until the QM31 lever lands
+(`onchain-verifier.md` §10.2). Receipts, class hashes, addresses and every checked value:
+`cairo/doom_contracts/results/e2e_10felt_receipts.json`.
+
+## 11. Tests
+
+`(cd cairo/doom_contracts/crates/doom_runs && snforge test)` — **53 tests**:
 
 - recomposition of the 2 + 1 + 3 synthetic batch and of the single-leaf (self-fold) batch
   against the Python model's `output_hash`, fact and run ids; digest packing round trip;
@@ -297,19 +375,26 @@ games needs one call.
 - replay data: verified and published, wrong commitment, wrong length, partial coverage;
 - leaderboards: ordering by score and by time, paging, and the top-10 cutoff with 12 runs;
 - version table: read back, stranger refused, no mutation, freeze closes both tables, a frozen
-  table still accepts runs.
+  table still accepts runs;
+- **`test_real_root.cairo`, 10 tests on the proved ten-felt batches** (§10): the recomposition
+  against the verifier's own `output_hash` and the router's fact, `batch_fact`, the proved
+  input logs folded to the `inputs_commitment` the Cairo program computed and their
+  `ceil(tics / 7)` length, D14's continuity rules on the proved leaves, both games recorded
+  with the proved counters and both boards, `run_id_of` against the off-chain id, and the three
+  refusals — one extra kill, the leaves reordered, a wrong replay log.
 
-`(cd cairo/doom_contracts/crates/recursion_outputs && snforge test)` — **18 tests**: the
+`(cd cairo/doom_contracts/crates/recursion_outputs && snforge test)` — **20 tests**: the
 upstream goldens (`four_leaves`), the odd carry and self-fold topologies, the blake2s and felt
-encoding vectors, and the **real S4 root proofs** `N = 1, 2, 3, 4` whose recomposed
-`output_hash` is the one the on-chain verifier returned.
+encoding vectors, the **real S4 root proofs** `N = 1, 2, 3, 4`, and the **real ten-felt roots**
+of §10 — in every case the recomposed `output_hash` is the one the on-chain verifier returned.
 
 The Python model is independent by construction (`poseidon_py` + `hashlib.blake2s`, no shared
 code), and its own commitment path reproduces the reference vector pinned by
 `cairo/crates/segment` (`0x5a1a0083…8cad2` for a nine-tic log), which is what ties the ported
-`commit_log` to the production crate.
+`commit_log` to the production crate. On the proved batches the tie is direct: the packed logs
+come out of a Cairo program that folded them with `state_hash`'s own functions.
 
-## 11. Open questions for P4.3 (client orchestration)
+## 12. Open questions for P4.3 (client orchestration)
 
 1. **Who submits.** The consumer transaction is caller-independent (the player is a field of
    `Member`, not the caller), so the wrapper can submit for everyone — one call for the whole
@@ -338,22 +423,34 @@ code), and its own commitment path reproduces the reference vector pinned by
 7. **Attempts (DEAD) UX.** They are recorded but invisible on the boards; the client should
    decide whether to submit them at all (they cost the same as a run).
 
-## 12. Reproduce
+## 13. Reproduce
 
 ```bash
 cd cairo/doom_contracts                              # scarb 2.18.0, snforge 0.61.0
-(cd crates/recursion_outputs && snforge test)        # 18
-(cd crates/doom_runs && snforge test)                # 42
+(cd crates/recursion_outputs && snforge test)        # 20
+(cd crates/doom_runs && snforge test)                # 53
 python3 tools/doomruns_model.py                      # the model's vectors
 python3 tools/doomruns_model.py --emit-fixtures && (cd crates/doom_runs && scarb fmt)
 
-starknet-devnet --seed 42 --port 5079 --accounts 3 --state-archive-capacity full \
+# the ten-felt batches: check the committed artifacts, or re-prove them (~2 min each, 32 GB)
+python3 tools/real_batch.py crates/recursion_outputs/fixtures/B2-1_doom
+sh ../../spikes/s4/scripts/run_pipeline10.sh 2,1 doom     # then --install --emit-fixtures
+
+starknet-devnet --seed 42 --port 5081 --accounts 3 --state-archive-capacity full \
   --initial-balance 100000000000000000000000 \
   --gas-price 1054411845 --gas-price-fri 92599658875965 \
   --data-gas-price 426840 --data-gas-price-fri 37485578886 \
   --l2-gas-price 347016 --l2-gas-price-fri 30475398907
-sncast --accounts-file accounts.json account import --url http://127.0.0.1:5079/rpc \
+sncast --accounts-file accounts.json account import --url http://127.0.0.1:5081/rpc \
   --name devnet42 --type oz --address <addr> --private-key <key>
+
+# the consumer alone, N = 1…480 against MockFactRegistry (§9)
 python3 tools/doomruns_drive.py --out results/doomruns_receipts.json \
-  --accounts-file accounts.json --url http://127.0.0.1:5079/rpc
+  --accounts-file accounts.json --url http://127.0.0.1:5081/rpc
+
+# the whole path on the proved batches: real router, real fact, real leaves (§10)
+python3 tools/e2e_10felt_drive.py \
+  crates/recursion_outputs/fixtures/B2-1_doom crates/recursion_outputs/fixtures/B2_doom \
+  --out results/e2e_10felt_receipts.json --work /tmp/e2e \
+  --accounts-file accounts.json --url http://127.0.0.1:5081/rpc
 ```
