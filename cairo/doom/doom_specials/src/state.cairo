@@ -89,15 +89,20 @@ pub enum Phase {
 /// It *is* `sec->specialdata`: a sector with a `Mover` in
 /// [`SpecialsState::movers`] is a sector `EV_DoDoor` / `EV_DoPlat` /
 /// `EV_DoFloor` will refuse to start a second thinker on.
+/// Doom's `vldoor_t` also carries `speed`, `topwait` and a back-pointer to
+/// the sector's slot. All three are constants of the `kind` or one table
+/// lookup away ([`super::thinkers::speed_of`],
+/// [`super::thinkers::wait_of`], [`super::thinkers::slot_of`]), so they are
+/// derived rather than stored: three felts less in the hashed state, and no
+/// second place for them to be wrong. (It buys no steps — measured, the
+/// per-tic cost of carrying a thinker is the array rebuild, not the field
+/// count — it buys a smaller record and one source of truth.)
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub struct Mover {
     pub kind: MoverKind,
     pub phase: Phase,
     /// The sector whose plane moves.
     pub sector: u32,
-    /// Its slot in [`SpecialsState::ceilings`] or
-    /// [`SpecialsState::floors`], resolved once when the thinker is created.
-    pub slot: u32,
     /// The live height of the moving plane (`sec->ceilingheight` for a door,
     /// `sec->floorheight` for a lift or a floor).
     pub height: Fixed,
@@ -107,10 +112,6 @@ pub struct Mover {
     /// A door closes onto its sector's *current* floor instead, read live,
     /// as `T_VerticalDoor` does.
     pub bottom: Fixed,
-    /// Raw fixed units per tic, always positive (`door->speed`).
-    pub speed: Fixed,
-    /// `door->topwait` / `plat->wait`, in tics.
-    pub wait: u32,
     /// `door->topcountdown` / `plat->count`, the running countdown.
     pub count: u32,
 }
@@ -213,18 +214,49 @@ pub struct Heights {
     pub map_floor: Span<felt252>,
 }
 
+/// The four level spans a [`Heights`] view needs, hoisted out of
+/// `doom_map::LevelMap` (24 fields, ~51 steps a snapshot) and
+/// [`SpecialsMap`] (14 fields) **once per segment**.
+///
+/// Passing these four instead of the two bundles is what keeps
+/// [`super::specials_ticker`]'s per-tic argument shuffling at a handful of
+/// steps rather than ~80: the ticker never reads anything else of the level.
+#[derive(Copy, Drop)]
+pub struct SectorTables {
+    pub map_floor: Span<felt252>,
+    pub map_ceiling: Span<felt252>,
+    pub floor_slot: Span<u32>,
+    pub ceil_slot: Span<u32>,
+}
+
+/// Hoist the level side of the height view. Call once per segment.
+pub fn sector_tables(m: @LevelMap, lm: @SpecialsMap) -> SectorTables {
+    SectorTables {
+        map_floor: *m.s_floor,
+        map_ceiling: *m.s_ceil,
+        floor_slot: *lm.floor_slot,
+        ceil_slot: *lm.ceil_slot,
+    }
+}
+
 /// Take the height view once per tic; index it with [`floor_of`] /
 /// [`ceiling_of`] afterwards.
-pub fn heights(s: @SpecialsState, m: @LevelMap, lm: @SpecialsMap) -> Heights {
+pub fn heights(s: @SpecialsState, t: SectorTables) -> Heights {
     Heights {
         movers: *s.movers,
-        ceil_slot: *lm.ceil_slot,
-        floor_slot: *lm.floor_slot,
+        ceil_slot: t.ceil_slot,
+        floor_slot: t.floor_slot,
         dyn_ceiling: *s.ceilings,
         dyn_floor: *s.floors,
-        map_ceiling: *m.s_ceil,
-        map_floor: *m.s_floor,
+        map_ceiling: t.map_ceiling,
+        map_floor: t.map_floor,
     }
+}
+
+/// [`heights`] straight from the two level bundles — the cold-path form,
+/// for callers that do not already hold a [`SectorTables`].
+pub fn heights_of(s: @SpecialsState, m: @LevelMap, lm: @SpecialsMap) -> Heights {
+    heights(s, sector_tables(m, lm))
 }
 
 /// `true` when `kind` moves a ceiling rather than a floor.
@@ -282,12 +314,12 @@ pub fn ceiling_of(h: @Heights, sector: u32) -> Fixed {
 
 /// [`floor_of`] without the hoist — for cold paths and tests.
 pub fn sector_floor(s: @SpecialsState, m: @LevelMap, lm: @SpecialsMap, sector: u32) -> Fixed {
-    floor_of(@heights(s, m, lm), sector)
+    floor_of(@heights_of(s, m, lm), sector)
 }
 
 /// [`ceiling_of`] without the hoist — for cold paths and tests.
 pub fn sector_ceiling(s: @SpecialsState, m: @LevelMap, lm: @SpecialsMap, sector: u32) -> Fixed {
-    ceiling_of(@heights(s, m, lm), sector)
+    ceiling_of(@heights_of(s, m, lm), sector)
 }
 
 /// `sector->lightlevel`, dynamic: the light thinker's live value where one
@@ -434,7 +466,7 @@ pub const VERSION: felt252 = 1;
 
 /// Felts per serialized [`Light`] and [`Mover`].
 pub const LIGHT_FELTS: u32 = 8;
-pub const MOVER_FELTS: u32 = 10;
+pub const MOVER_FELTS: u32 = 7;
 
 /// How many felts [`append_to`] writes — declared up front so `doom_game`
 /// can `state_hash::open` a buffer of the right size and never copy (D16).
@@ -529,12 +561,9 @@ pub fn append_to(s: @SpecialsState, ref out: Array<felt252>) {
         out.append(mover_kind_id(mv.kind));
         out.append(phase_id(mv.phase));
         out.append(mv.sector.into());
-        out.append(mv.slot.into());
         out.append(mv.height.enc);
         out.append(mv.top.enc);
         out.append(mv.bottom.enc);
-        out.append(mv.speed.enc);
-        out.append(mv.wait.into());
         out.append(mv.count.into());
         i += 1;
     }

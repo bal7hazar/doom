@@ -30,14 +30,12 @@
 use doom_map::{LevelMap, NO_SECTOR};
 use fixed::Fixed;
 use prng::{Prng, PrngTrait};
-use super::level::{SpecialsMap, neighbour, neighbours, tag_sector, tag_sectors};
+use super::level::{SpecialsMap, neighbours, tag_sector, tag_sectors, unpack};
 use super::state::{
     Heights, Light, LightKind, Mover, MoverKind, Phase, SpecialsState, ceiling_of, floor_of,
-    heights, mover_index, sector_special, set_mover, set_u32,
+    heights_of, mover_index, sector_special, set_mover, set_u32,
 };
-use super::thinkers::{
-    Event, PLATSPEED, PLATWAIT, VDOORSPEED, VDOORWAIT, cue, event, next_light_tic,
-};
+use super::thinkers::{Event, cue, event, next_light_tic};
 
 /// Doom's `ML_SECRET`: a monster never opens a secret door.
 pub const ML_SECRET: u32 = 32;
@@ -57,10 +55,12 @@ const MINUS_500: Fixed = Fixed { enc: fixed::BIAS - 32768000 };
 /// what the next lift sees).
 pub fn find_lowest_floor_surrounding(h: @Heights, lm: @SpecialsMap, sector: u32) -> Fixed {
     let (from, to) = neighbours(lm, sector);
+    let packed = *lm.adj_packed;
+    let shift8 = *lm.shift8;
     let mut lowest = floor_of(h, sector);
     let mut k = from;
     while k != to {
-        let other = floor_of(h, neighbour(lm, k));
+        let other = floor_of(h, unpack(packed, shift8, k));
         if fixed::lt(other, lowest) {
             lowest = other;
         }
@@ -73,10 +73,12 @@ pub fn find_lowest_floor_surrounding(h: @Heights, lm: @SpecialsMap, sector: u32)
 /// seeded at `-500 * FRACUNIT` and **not** including `sec` itself.
 pub fn find_highest_floor_surrounding(h: @Heights, lm: @SpecialsMap, sector: u32) -> Fixed {
     let (from, to) = neighbours(lm, sector);
+    let packed = *lm.adj_packed;
+    let shift8 = *lm.shift8;
     let mut highest = MINUS_500;
     let mut k = from;
     while k != to {
-        let other = floor_of(h, neighbour(lm, k));
+        let other = floor_of(h, unpack(packed, shift8, k));
         if fixed::gt(other, highest) {
             highest = other;
         }
@@ -90,10 +92,12 @@ pub fn find_highest_floor_surrounding(h: @Heights, lm: @SpecialsMap, sector: u32
 /// height a door opens to, minus four units.
 pub fn find_lowest_ceiling_surrounding(h: @Heights, lm: @SpecialsMap, sector: u32) -> Fixed {
     let (from, to) = neighbours(lm, sector);
+    let packed = *lm.adj_packed;
+    let shift8 = *lm.shift8;
     let mut lowest = MAXINT;
     let mut k = from;
     while k != to {
-        let other = ceiling_of(h, neighbour(lm, k));
+        let other = ceiling_of(h, unpack(packed, shift8, k));
         if fixed::lt(other, lowest) {
             lowest = other;
         }
@@ -106,10 +110,12 @@ pub fn find_lowest_ceiling_surrounding(h: @Heights, lm: @SpecialsMap, sector: u3
 /// level is still `doom_map`'s, because `P_SpawnSpecials` changes none.
 fn find_min_surrounding_light(m: @LevelMap, lm: @SpecialsMap, sector: u32, max: u32) -> u32 {
     let (from, to) = neighbours(lm, sector);
+    let packed = *lm.adj_packed;
+    let shift8 = *lm.shift8;
     let mut min = max;
     let mut k = from;
     while k != to {
-        let other = doom_map::sector(m, neighbour(lm, k)).light;
+        let other = doom_map::sector(m, unpack(packed, shift8, k)).light;
         if other < min {
             min = other;
         }
@@ -291,7 +297,7 @@ pub fn ev_do_door(
     ref events: Array<Event>,
 ) -> (SpecialsState, bool) {
     let mut s = state;
-    let view = heights(@s, m, lm);
+    let view = heights_of(@s, m, lm);
     let (from, to) = tag_sectors(lm, tag);
     let mut movers = clone_movers(s.movers);
     let mut started = false;
@@ -316,12 +322,9 @@ pub fn ev_do_door(
                         kind,
                         phase: Phase::Up,
                         sector: id,
-                        slot,
                         height: here,
                         top,
                         bottom: floor_of(@view, id),
-                        speed: Fixed { enc: fixed::BIAS + VDOORSPEED },
-                        wait: VDOORWAIT,
                         count: 0,
                     },
                 );
@@ -338,7 +341,7 @@ pub fn ev_do_plat(
     state: SpecialsState, m: @LevelMap, lm: @SpecialsMap, tag: u32, ref events: Array<Event>,
 ) -> (SpecialsState, bool) {
     let mut s = state;
-    let view = heights(@s, m, lm);
+    let view = heights_of(@s, m, lm);
     let (from, to) = tag_sectors(lm, tag);
     let mut movers = clone_movers(s.movers);
     let mut started = false;
@@ -360,12 +363,9 @@ pub fn ev_do_plat(
                         kind: MoverKind::PlatDownWaitUpStay,
                         phase: Phase::Down,
                         sector: id,
-                        slot,
                         height: here,
                         top: here,
                         bottom: low,
-                        speed: Fixed { enc: fixed::BIAS + PLATSPEED },
-                        wait: PLATWAIT,
                         count: 0,
                     },
                 );
@@ -381,7 +381,7 @@ pub fn ev_do_floor(
     state: SpecialsState, m: @LevelMap, lm: @SpecialsMap, tag: u32, ref events: Array<Event>,
 ) -> (SpecialsState, bool) {
     let mut s = state;
-    let view = heights(@s, m, lm);
+    let view = heights_of(@s, m, lm);
     let (from, to) = tag_sectors(lm, tag);
     let mut movers = clone_movers(s.movers);
     let mut started = false;
@@ -398,12 +398,9 @@ pub fn ev_do_floor(
                         kind: MoverKind::FloorLowerToLowest,
                         phase: Phase::Down,
                         sector: id,
-                        slot,
                         height: here,
                         top: here,
                         bottom: find_lowest_floor_surrounding(@view, lm, id),
-                        speed: Fixed { enc: fixed::BIAS + super::thinkers::FLOORSPEED },
-                        wait: 0,
                         count: 0,
                     },
                 );
@@ -482,7 +479,7 @@ fn ev_vertical_door(
         Option::None => {},
     }
 
-    let view = heights(@s, m, lm);
+    let view = heights_of(@s, m, lm);
     events.append(cue(if blazing {
         event::BLAZE_OPEN
     } else {
@@ -503,19 +500,9 @@ fn ev_vertical_door(
                 },
                 phase: Phase::Up,
                 sector: back,
-                slot,
                 height: ceiling_of(@view, back),
                 top,
                 bottom: floor_of(@view, back),
-                speed: Fixed {
-                    enc: fixed::BIAS
-                        + if blazing {
-                            super::thinkers::BLAZESPEED
-                        } else {
-                            VDOORSPEED
-                        },
-                },
-                wait: VDOORWAIT,
                 count: 0,
             },
         );

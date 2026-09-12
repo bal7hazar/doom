@@ -89,7 +89,11 @@ pub fn load(level: LevelId) -> SpecialsMap {
 /// One 8-bit id out of a packed span: `(felt / 2^(8 k)) % 256`, the same
 /// `u128` extraction `doom_map` uses (never `/` on a `felt252`, which is a
 /// field division).
-fn unpack(items: Span<felt252>, shift8: Span<felt252>, k: u32) -> u32 {
+///
+/// Public in its **hoisted** form on purpose: a `P_Find*Surrounding` loop
+/// takes `adj_packed` and `shift8` into locals once and calls this, instead
+/// of paying the 14-field `@SpecialsMap` snapshot on every neighbour.
+pub fn unpack(items: Span<felt252>, shift8: Span<felt252>, k: u32) -> u32 {
     let word: u128 = (*items.at(k / PER_FELT)).try_into().unwrap();
     let shift: u128 = (*shift8.at(k % PER_FELT)).try_into().unwrap();
     ((word / shift) % 256).try_into().unwrap()

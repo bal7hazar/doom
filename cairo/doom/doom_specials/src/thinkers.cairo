@@ -29,13 +29,12 @@
 //! | `SLOWDARK` | 35 tics | strobe, dark phase (special 12) |
 //! | flash `maxtime` / `mintime` | 64 / 7 | `P_SpawnLightFlash` |
 
-use doom_map::LevelMap;
 use fixed::Fixed;
 use prng::{Prng, PrngTrait};
-use super::level::SpecialsMap;
+use super::level::NO_SLOT;
 use super::state::{
-    Heights, Light, LightKind, Mover, MoverKind, Phase, SpecialsState, ceiling_of, floor_of,
-    heights, moves_ceiling, set_felt,
+    Heights, Light, LightKind, Mover, MoverKind, Phase, SectorTables, SpecialsState, ceiling_of,
+    floor_of, heights, moves_ceiling, set_felt,
 };
 
 // ---------------------------------------------------------------------------
@@ -68,6 +67,44 @@ pub const SLOWDARK: u32 = 35;
 pub const FLASH_MAXTIME: u32 = 64;
 /// `flash->mintime`, the mask of the dark phase.
 pub const FLASH_MINTIME: u32 = 7;
+
+/// `door->speed` / `plat->speed` / `floor->speed`: a constant of the
+/// thinker's type in every special E1M1 carries, so it is derived rather
+/// than carried through the state on every tic.
+pub fn speed_of(kind: MoverKind) -> Fixed {
+    Fixed {
+        enc: fixed::BIAS
+            + match kind {
+                MoverKind::DoorNormal => VDOORSPEED,
+                MoverKind::DoorOpen => VDOORSPEED,
+                MoverKind::DoorBlazeRaise => BLAZESPEED,
+                MoverKind::PlatDownWaitUpStay => PLATSPEED,
+                MoverKind::FloorLowerToLowest => FLOORSPEED,
+            },
+    }
+}
+
+/// `door->topwait` / `plat->wait`, likewise a constant of the type. `0` for
+/// the types that never wait.
+pub fn wait_of(kind: MoverKind) -> u32 {
+    match kind {
+        MoverKind::DoorNormal => VDOORWAIT,
+        MoverKind::DoorOpen => 0,
+        MoverKind::DoorBlazeRaise => VDOORWAIT,
+        MoverKind::PlatDownWaitUpStay => PLATWAIT,
+        MoverKind::FloorLowerToLowest => 0,
+    }
+}
+
+/// The slot of the plane `kind` moves in `sector` — `sec->specialdata`'s
+/// other half, one span read instead of a field on every thinker.
+pub fn slot_of(tables: SectorTables, kind: MoverKind, sector: u32) -> u32 {
+    if moves_ceiling(kind) {
+        *tables.ceil_slot.at(sector)
+    } else {
+        *tables.floor_slot.at(sector)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // The one callback into the world
@@ -175,10 +212,11 @@ pub const RES_PASTDEST: u8 = 2;
 pub fn move_plane<W, +SectorBlocking<W>, +Drop<W>>(
     world: @W, h: @Heights, mover: Mover, dest: Fixed, up: bool,
 ) -> (Fixed, u8) {
+    let speed = speed_of(mover.kind);
     let candidate = if up {
-        fixed::add(mover.height, mover.speed)
+        fixed::add(mover.height, speed)
     } else {
-        fixed::sub(mover.height, mover.speed)
+        fixed::sub(mover.height, speed)
     };
     let past = if up {
         fixed::gt(candidate, dest)
@@ -282,7 +320,7 @@ fn tick_door<W, +SectorBlocking<W>, +Drop<W>>(
                 return (mv, false);
             }
             mv.phase = Phase::Waiting;
-            mv.count = mv.wait;
+            mv.count = wait_of(mv.kind);
             (mv, true)
         },
     }
@@ -303,7 +341,7 @@ fn tick_plat<W, +SectorBlocking<W>, +Drop<W>>(
                 events.append(Event { kind: event::SECTOR_MOVED, subject: mv.sector, value: 0 });
             }
             if res == RES_CRUSHED {
-                mv.count = mv.wait;
+                mv.count = wait_of(mv.kind);
                 mv.phase = Phase::Down;
                 events.append(cue(event::PLAT_START, mv.sector));
                 return (mv, true);
@@ -324,7 +362,7 @@ fn tick_plat<W, +SectorBlocking<W>, +Drop<W>>(
                 events.append(Event { kind: event::SECTOR_MOVED, subject: mv.sector, value: 0 });
             }
             if res == RES_PASTDEST {
-                mv.count = mv.wait;
+                mv.count = wait_of(mv.kind);
                 mv.phase = Phase::Waiting;
                 events.append(cue(event::PLAT_STOP, mv.sector));
             }
@@ -433,13 +471,7 @@ pub fn next_light_tic(lights: Span<Light>) -> u32 {
 /// `Copy`, so no array is rebuilt and the tic costs a handful of
 /// comparisons.
 pub fn specials_ticker<W, +SectorBlocking<W>, +Drop<W>>(
-    world: @W,
-    state: SpecialsState,
-    m: @LevelMap,
-    lm: @SpecialsMap,
-    tic: u32,
-    rng: Prng,
-    table: Span<u8>,
+    world: @W, state: SpecialsState, tables: SectorTables, tic: u32, rng: Prng, table: Span<u8>,
 ) -> (SpecialsState, Prng, Span<Event>) {
     let mut s = state;
     let mut prng = rng;
@@ -473,29 +505,40 @@ pub fn specials_ticker<W, +SectorBlocking<W>, +Drop<W>>(
     // --- plane movers -----------------------------------------------------
     let movers = s.movers;
     if movers.len() != 0 {
-        let view = heights(@s, m, lm);
+        let view = heights(@s, tables);
         let mut kept: Array<Mover> = array![];
         let mut ceilings = s.ceilings;
         let mut floors = s.floors;
         let mut i: u32 = 0;
         while i != movers.len() {
             let mv = *movers.at(i);
-            let result = match mv.kind {
-                MoverKind::DoorNormal => tick_door(world, @view, mv, ref events),
-                MoverKind::DoorOpen => tick_door(world, @view, mv, ref events),
-                MoverKind::DoorBlazeRaise => tick_door(world, @view, mv, ref events),
-                MoverKind::PlatDownWaitUpStay => tick_plat(world, @view, mv, ref events),
-                MoverKind::FloorLowerToLowest => tick_floor(world, @view, mv, tic, ref events),
+            // Three call sites, not five: the three door kinds share
+            // `T_VerticalDoor` and each extra site is code the loop pays for.
+            let result = if moves_ceiling(mv.kind) {
+                tick_door(world, @view, mv, ref events)
+            } else if mv.kind == MoverKind::PlatDownWaitUpStay {
+                tick_plat(world, @view, mv, ref events)
+            } else {
+                tick_floor(world, @view, mv, tic, ref events)
             };
             let (next, keep) = result;
             if keep {
                 kept.append(next);
-            } else if moves_ceiling(next.kind) {
+            } else {
                 // `P_RemoveThinker`: the plane keeps the height it stopped
                 // at, so it is latched into the slot array.
-                ceilings = set_felt(ceilings, next.slot, next.height.enc);
-            } else {
-                floors = set_felt(floors, next.slot, next.height.enc);
+                let slot = slot_of(tables, next.kind, next.sector);
+                if slot == NO_SLOT {
+                    // Unreachable on a map `scripts/gen_specials.py` has
+                    // generated tables for -- `EV_Do*` refuses to start a
+                    // thinker on a slotless sector -- but total rather than
+                    // panicking (R4-A2).
+                    kept.append(next);
+                } else if moves_ceiling(next.kind) {
+                    ceilings = set_felt(ceilings, slot, next.height.enc);
+                } else {
+                    floors = set_felt(floors, slot, next.height.enc);
+                }
             }
             i += 1;
         }

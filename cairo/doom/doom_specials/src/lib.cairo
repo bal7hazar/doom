@@ -56,12 +56,13 @@ pub mod triggers;
 pub use compat::{Door, DoorState, start_opening, think_door};
 pub use level::{NO_SLOT, SpecialsMap, load};
 pub use state::{
-    Heights, Light, LightKind, Mover, MoverKind, Phase, SpecialsState, ceiling_of, fields, floor_of,
-    has_mover, hash, heights, line_special, sector_ceiling, sector_floor, sector_light,
-    sector_special, serialize,
+    Heights, Light, LightKind, Mover, MoverKind, Phase, SectorTables, SpecialsState, ceiling_of,
+    fields, floor_of, has_mover, hash, heights, heights_of, line_special, sector_ceiling,
+    sector_floor, sector_light, sector_special, sector_tables, serialize,
 };
 pub use thinkers::{
-    Event, NeverBlocked, SectorBlocking, event, move_plane, next_light_tic, specials_ticker,
+    Event, NeverBlocked, SectorBlocking, event, move_plane, next_light_tic, slot_of,
+    specials_ticker, speed_of, wait_of,
 };
 pub use triggers::{
     Actor, PlayerSector, SectorEffect, cross_line, ev_do_door, ev_do_floor, ev_do_plat,

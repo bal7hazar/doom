@@ -23,9 +23,9 @@ use super::thinkers::{NeverBlocked, SectorBlocking, event};
 use super::triggers::PlayerSector;
 use super::{
     ceiling_of, cross_line, fields, find_highest_floor_surrounding, find_lowest_ceiling_surrounding,
-    find_lowest_floor_surrounding, floor_of, has_mover, hash, heights, line_special, monster,
+    find_lowest_floor_surrounding, floor_of, has_mover, hash, heights_of, line_special, monster,
     next_light_tic, player, player_in_special_sector, sector_damage, sector_light, sector_special,
-    serialize, spawn_specials, specials_ticker, use_line,
+    sector_tables, serialize, spawn_specials, specials_ticker, use_line,
 };
 
 /// A world where every mobj is too tall for a ceiling below `limit` — the
@@ -55,11 +55,12 @@ fn run_tics(
     state: SpecialsState, m: @LevelMap, lm: @SpecialsMap, from: u32, count: u32, rng: Prng,
 ) -> (SpecialsState, Prng) {
     let world = NeverBlocked {};
+    let tables = sector_tables(m, lm);
     let mut s = state;
     let mut prng = rng;
     let mut tic = from;
     while tic != from + count {
-        let (next, next_rng, _) = specials_ticker(@world, s, m, lm, tic, prng, rndtable());
+        let (next, next_rng, _) = specials_ticker(@world, s, tables, tic, prng, rndtable());
         s = next;
         prng = next_rng;
         tic += 1;
@@ -121,7 +122,7 @@ fn test_spawn_clears_the_light_sectors_special_only() {
 #[test]
 fn test_manual_door_topheights_match_the_python_model() {
     let (m, lm, s, _) = setup();
-    let view = heights(@s, @m, @lm);
+    let view = heights_of(@s, @m, @lm);
     let rows = vectors::MANUAL_DOORS.span();
     let mut i: u32 = 0;
     while i != vectors::NUM_MANUAL_DOORS {
@@ -173,13 +174,14 @@ fn test_tagged_specials_reach_the_expected_sectors() {
 fn test_light_timeline_matches_vanilla() {
     let (m, lm, state, rng) = setup();
     let world = NeverBlocked {};
+    let tables = sector_tables(@m, @lm);
     let expected = vectors::LIGHT_TIMELINE.span();
     let mut s = state;
     let mut prng = rng;
     let mut tic: u32 = 0;
     let mut sample: u32 = 0;
     while tic != vectors::LIGHT_SAMPLES * 10 {
-        let (next, next_rng, _) = specials_ticker(@world, s, @m, @lm, tic, prng, rndtable());
+        let (next, next_rng, _) = specials_ticker(@world, s, tables, tic, prng, rndtable());
         s = next;
         prng = next_rng;
         if tic % 10 == 0 {
@@ -202,6 +204,7 @@ fn test_light_timeline_matches_vanilla() {
 fn test_scripted_seven_hundred_tic_run() {
     let (m, lm, state, rng) = setup();
     let world = NeverBlocked {};
+    let tables = sector_tables(@m, @lm);
     let mut s = state;
     let mut prng = rng;
     let door_sector = vectors::SEQ_DOOR_SECTOR;
@@ -231,7 +234,7 @@ fn test_scripted_seven_hundred_tic_run() {
         }
         let before_door = phase_of(@s, door_sector);
         let before_lift = phase_of(@s, lift_sector);
-        let (next, next_rng, _) = specials_ticker(@world, s, @m, @lm, tic, prng, rndtable());
+        let (next, next_rng, _) = specials_ticker(@world, s, tables, tic, prng, rndtable());
         s = next;
         prng = next_rng;
         let after_door = phase_of(@s, door_sector);
@@ -255,7 +258,7 @@ fn test_scripted_seven_hundred_tic_run() {
             lift_done_tic = tic;
         }
 
-        let view = heights(@s, @m, @lm);
+        let view = heights_of(@s, @m, @lm);
         let ceiling = ceiling_of(@view, door_sector).enc;
         let floor = floor_of(@view, lift_sector).enc;
         let mut lights: felt252 = 0;
@@ -315,19 +318,20 @@ fn phase_of(s: @SpecialsState, sector: u32) -> u32 {
 fn test_door_height_is_monotone_between_its_endpoints() {
     let (m, lm, state, rng) = setup();
     let world = NeverBlocked {};
+    let tables = sector_tables(@m, @lm);
     let (mut s, _, _) = use_line(state, @m, @lm, 55, 0, player(false));
     let sector = 10;
-    let start = ceiling_of(@heights(@s, @m, @lm), sector);
+    let start = ceiling_of(@heights_of(@s, @m, @lm), sector);
     let top = *(s.movers.at(0)).top;
     let mut prng = rng;
     let mut previous = start;
     let mut tic: u32 = 0;
     // Up to the moment it starts closing again.
     while tic != 200 {
-        let (next, next_rng, _) = specials_ticker(@world, s, @m, @lm, tic, prng, rndtable());
+        let (next, next_rng, _) = specials_ticker(@world, s, tables, tic, prng, rndtable());
         s = next;
         prng = next_rng;
-        let now = ceiling_of(@heights(@s, @m, @lm), sector);
+        let now = ceiling_of(@heights_of(@s, @m, @lm), sector);
         assert(fixed::ge(now, previous), 'ceiling never dips');
         assert(fixed::ge(top, now), 'ceiling never overshoots');
         assert(fixed::ge(now, start), 'ceiling never goes below');
@@ -341,14 +345,16 @@ fn test_door_height_is_monotone_between_its_endpoints() {
 fn test_no_thinker_leaks_and_the_height_is_latched() {
     let (m, lm, state, rng) = setup();
     let (s0, _, _) = use_line(state, @m, @lm, 55, 0, player(false));
-    let closed = ceiling_of(@heights(@s0, @m, @lm), 10);
+    let closed = ceiling_of(@heights_of(@s0, @m, @lm), 10);
     let (s1, _) = run_tics(s0, @m, @lm, 0, 400, rng);
     assert(s1.movers.len() == 0, 'no thinker left running');
     assert(!has_mover(@s1, 10), 'sector free again');
     // A `normal` door ends exactly where it started, and the latched value
     // in the slot array is that height, not `doom_map`'s stale copy.
-    assert(ceiling_of(@heights(@s1, @m, @lm), 10).enc == closed.enc, 'door back to its floor');
-    assert(fixed::lt(ceiling_of(@heights(@s1, @m, @lm), 10), *(s0.movers.at(0)).top), 'and closed');
+    assert(ceiling_of(@heights_of(@s1, @m, @lm), 10).enc == closed.enc, 'door back to its floor');
+    assert(
+        fixed::lt(ceiling_of(@heights_of(@s1, @m, @lm), 10), *(s0.movers.at(0)).top), 'and closed',
+    );
 }
 
 #[test]
@@ -411,9 +417,10 @@ fn test_next_light_cache_matches_the_thinkers() {
     let mut s = state;
     let mut prng = rng;
     let world = NeverBlocked {};
+    let tables = sector_tables(@m, @lm);
     let mut tic: u32 = 0;
     while tic != 120 {
-        let (next, next_rng, _) = specials_ticker(@world, s, @m, @lm, tic, prng, rndtable());
+        let (next, next_rng, _) = specials_ticker(@world, s, tables, tic, prng, rndtable());
         s = next;
         prng = next_rng;
         assert(s.next_light == next_light_tic(s.lights), 'cache holds every tic');
@@ -430,7 +437,9 @@ fn test_ticker_leaves_a_quiet_state_untouched() {
     let before = hash(@quiet);
     let world = NeverBlocked {};
     let tic = quiet.next_light - 1;
-    let (after, _, events) = specials_ticker(@world, quiet, @m, @lm, tic, prng, rndtable());
+    let (after, _, events) = specials_ticker(
+        @world, quiet, sector_tables(@m, @lm), tic, prng, rndtable(),
+    );
     assert(hash(@after) == before, 'nothing changed');
     assert(events.len() == 0, 'no cues');
 }
@@ -446,12 +455,12 @@ fn test_door_retriggered_while_closing_reverses() {
     // Open, wait out `VDOORWAIT`, and catch it on the way down.
     let (s1, prng) = run_tics(s0, @m, @lm, 0, 240, rng);
     assert(phase_of(@s1, 10) == 3, 'door is closing');
-    let falling = ceiling_of(@heights(@s1, @m, @lm), 10);
+    let falling = ceiling_of(@heights_of(@s1, @m, @lm), 10);
     let (s2, events, _) = use_line(s1, @m, @lm, 55, 0, player(false));
     assert(phase_of(@s2, 10) == 1, 'door reversed to opening');
     assert(*(events.at(0)).kind == event::DOOR_OPEN, 'it announces reopening');
     let (s3, _) = run_tics(s2, @m, @lm, 240, 5, prng);
-    assert(fixed::gt(ceiling_of(@heights(@s3, @m, @lm), 10), falling), 'and it climbs again');
+    assert(fixed::gt(ceiling_of(@heights_of(@s3, @m, @lm), 10), falling), 'and it climbs again');
 }
 
 #[test]
@@ -593,34 +602,35 @@ fn test_blocked_door_reverses_and_a_blocked_lift_keeps_going() {
     // the halfway mark does not fit.
     let (s1, prng) = run_tics(s0, @m, @lm, 0, 240, rng);
     assert(phase_of(@s1, 10) == 3, 'closing');
-    let stuck = ceiling_of(@heights(@s1, @m, @lm), 10);
+    let stuck = ceiling_of(@heights_of(@s1, @m, @lm), 10);
     let world = BlockBelow { limit: stuck };
+    let tables = sector_tables(@m, @lm);
     let mut s = s1;
     let mut tic: u32 = 240;
     while tic != 244 {
-        let (next, _, _) = specials_ticker(@world, s, @m, @lm, tic, prng, rndtable());
+        let (next, _, _) = specials_ticker(@world, s, tables, tic, prng, rndtable());
         s = next;
         tic += 1;
     }
     assert(phase_of(@s, 10) == 1, 'a blocked door goes back up');
-    assert(fixed::ge(ceiling_of(@heights(@s, @m, @lm), 10), stuck), 'it never sank');
+    assert(fixed::ge(ceiling_of(@heights_of(@s, @m, @lm), 10), stuck), 'it never sank');
 }
 
 #[test]
 fn test_floor_lower_to_lowest_reaches_the_lowest_neighbour() {
     let (m, lm, state, rng) = setup();
-    let view = heights(@state, @m, @lm);
+    let view = heights_of(@state, @m, @lm);
     let target = find_lowest_floor_surrounding(@view, @lm, 76);
     let (s0, _, _) = use_line(state, @m, @lm, 753, 0, player(false));
     let (s1, _) = run_tics(s0, @m, @lm, 0, 500, rng);
     assert(s1.movers.len() == 0, 'all three floors settled');
-    assert(floor_of(@heights(@s1, @m, @lm), 76).enc == target.enc, 'lowered to the lowest');
+    assert(floor_of(@heights_of(@s1, @m, @lm), 76).enc == target.enc, 'lowered to the lowest');
 }
 
 #[test]
 fn test_find_surrounding_queries_agree_with_the_map() {
     let (m, lm, state, _) = setup();
-    let view = heights(@state, @m, @lm);
+    let view = heights_of(@state, @m, @lm);
     // The lowest surrounding floor includes the sector itself...
     let lowest = find_lowest_floor_surrounding(@view, @lm, 98);
     assert(fixed::ge(floor_of(@view, 98), lowest), 'lowest is not above us');
@@ -635,7 +645,7 @@ fn test_find_surrounding_queries_agree_with_the_map() {
 #[test]
 fn test_static_sectors_read_straight_from_doom_map() {
     let (m, lm, state, _) = setup();
-    let view = heights(@state, @m, @lm);
+    let view = heights_of(@state, @m, @lm);
     // Sector 0 carries no special and no tag, so it has no slot at all.
     assert(floor_of(@view, 0).enc == doom_map::sector_floor(@m, 0).enc, 'static floor');
     assert(ceiling_of(@view, 0).enc == doom_map::sector_ceiling(@m, 0).enc, 'static ceiling');
@@ -649,11 +659,14 @@ fn test_blazing_door_is_four_times_faster() {
     // Linedef 1162 is the map's only DR blazing door (back sector 84).
     let (s0, events, _) = use_line(state, @m, @lm, 1162, 0, player(false));
     assert(*(events.at(0)).kind == event::BLAZE_OPEN, 'blazing cue');
-    let speed = *(s0.movers.at(0)).speed;
-    assert(speed.enc == fixed::BIAS + super::thinkers::BLAZESPEED, 'four times VDOORSPEED');
-    let start = ceiling_of(@heights(@s0, @m, @lm), 84);
+    let kind = *(s0.movers.at(0)).kind;
+    assert(
+        super::speed_of(kind).enc == fixed::BIAS + super::thinkers::BLAZESPEED,
+        'four times VDOORSPEED',
+    );
+    let start = ceiling_of(@heights_of(@s0, @m, @lm), 84);
     let (s1, _) = run_tics(s0, @m, @lm, 0, 1, rng);
-    let after = ceiling_of(@heights(@s1, @m, @lm), 84);
+    let after = ceiling_of(@heights_of(@s1, @m, @lm), 84);
     assert(fixed::sub(after, start).enc == fixed::BIAS + super::thinkers::BLAZESPEED, 'one tic');
 }
 
