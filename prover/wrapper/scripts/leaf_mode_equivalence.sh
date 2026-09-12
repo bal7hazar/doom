@@ -127,13 +127,11 @@ sys.exit(0 if ok else 1)
 PY
 
 # ---- the on-chain verifier on the proof-only root -----------------------------------------------
+# The one that matters: whatever the two paths agree on, the contract still has to accept it.
 if [ "${SKIP_VERIFIER:-0}" != 1 ]; then
   echo "== circuit verifier on the from_proof root"
-  ( cd "$PROVING/stwo_cairo_verifier" \
-    && scarb --profile proving execute -p stwo_circuit_verifier --features qm31_opcode \
-         --no-build --output none --print-program-output \
-         --arguments-file "$WORK/from_proof/root.proof" ) > "$WORK/verifier.log" 2>&1 \
-    || { tail -30 "$WORK/verifier.log"; exit 1; }
+  PROVING="$PROVING" bash "$HERE/e2e_verify_root.sh" "$WORK/from_proof/root.proof" \
+    | tee "$WORK/verifier.log"
   python3 - "$WORK/verifier.log" <<'PY'
 import re, sys
 lines = open(sys.argv[1]).read().splitlines()
@@ -147,7 +145,6 @@ for l in lines[start + 1:]:
 assert len(felts) == 8, felts
 print("OK   circuit verifier accepted; VerificationOutput.output_hash =", felts)
 PY
-  grep -E "steps|range_check" "$WORK/verifier.log" | head -3 || true
 fi
 
 # ---- a tampered proof must be rejected while the circuit is built -------------------------------
