@@ -57,11 +57,23 @@ const browser = await chromium.launch(launchOpts);
 const version = browser.version();
 console.error(`browser: ${channel} ${version}`);
 
+// ROADMAP §4: one proof > 2^19 at a time per machine — a mkdir lock shared with the other spikes.
+const lockDir = process.env.PROOF_LOCK_DIR ?? (process.env.SCRATCH ? path.join(process.env.SCRATCH, ".proof-lock") : null);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function withProofLock(k, fn) {
+  if (k < 20 || !lockDir) return fn();
+  for (;;) {
+    try { fs.mkdirSync(lockDir); break; } catch { console.error(`waiting for proof lock ${lockDir}`); await sleep(30_000); }
+  }
+  try { return await fn(); } finally { try { fs.rmdirSync(lockDir); } catch {} }
+}
+
 const results = [];
 const errors = [];
 try {
   for (const k of ks) {
     for (let run = 1; run <= runs; run++) {
+      await withProofLock(k, async () => {
       const context = await browser.newContext();
       const page = await context.newPage();
       const logs = [];
@@ -103,6 +115,7 @@ try {
       } finally {
         await context.close();
       }
+      });
     }
   }
 } finally {

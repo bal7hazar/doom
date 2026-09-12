@@ -25,7 +25,7 @@ prover/wasm/
     ├── bench.mjs                # `npm run bench`: headless Chrome, results/*.json + *.md
     ├── bench-node.mjs           # same module in Node 24+ (Memory64 shipped in V8 13.3)
     ├── bench-native.sh          # native reference loop (all cores and 1 thread)
-    ├── params/{leaf,auto}.json  # prover parameter sets
+    ├── params/{leaf,auto,s0}.json  # prover parameter sets (leaf = built-in defaults, s0 = spikes/s0 reference)
     └── programs/steps_k/        # Scarb 2.16.0 executable, args/k{14,16,18,19,20}.json ≈ 2^k steps
 ```
 
@@ -154,7 +154,7 @@ behaviour instead.
 cd prover/wasm/harness
 npm install && npx playwright install chromium
 npm run dev                                   # http://localhost:5173  (COOP/COEP set by vite.config.js)
-npm run bench -- --k 14,16,18,19 --runs 3     # headless Google Chrome, writes results/bench-<stamp>.{json,md}
+npm run bench -- --k 14,16,18,19,20 --runs 3  # headless Google Chrome, writes results/bench-<stamp>.{json,md}; k>=20 takes $SCRATCH/.proof-lock
 npm run bench -- --channel chromium --k 14 --runs 1 --ci     # CI smoke test (R11-A3), exit 1 on failure
 npm run bench -- --params params/auto.json --k 14,18 --runs 1
 npm run bench:node -- --k 14                  # Node >= 24 (Memory64 shipped; Node 22 rejects the module)
