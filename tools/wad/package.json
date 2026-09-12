@@ -1,0 +1,24 @@
+{
+  "name": "@hellproof/tools-wad",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WAD extraction tool: freedoom1.wad -> client JSON + Cairo level constants (roadmap P0.2)",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "extract": "tsx src/cli.ts",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify:cairo": "bash scripts/verify-cairo.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
