@@ -25,6 +25,20 @@
 | P3.2/P2.5 pipeline de preuve + persistance client | `worktree-agent-a66ef38ca293daffd` | idem ; vérifier la dépendance workspace sur `prover/wasm` |
 | P4.3 orchestration on-chain + écran de coût | `worktree-agent-aa1c0289ae5f550d2` | idem ; devnet uniquement |
 
+Mise à jour après la pause : **les quatre lignes ont terminé** (branches ci-dessus, plus
+`p4.3-submission-orchestrator` pour P4.3). Points saillants à traiter à la reprise :
+
+- `doom_physics` : 30 tests, 94,5 % de couverture, `try_move` 964 steps ✓, mais **56 961 mots de
+  bytecode** (cible D23 : 5 000) — ~20 k statements Sierra viennent de helpers core expansés à chaque usage
+  (`felt_ge` → `u128_try_from_felt252`, `array_at`, `u32 ==`) ; `check_sight` en traversée 7,7–9,7 k steps
+  (budget 2 500) ; `set_thing_position` 1 158. **Décision à prendre** : stratégie de réduction du bytecode
+  (helpers non inlinés, plomberie d'arguments, `slide_move_lite`) avant `doom_player`/`doom_monsters`.
+- `doom_specials` : 30 tests, 99,8 %, budgets tenus ; note : linedef 23 est S1 (switch) et `VDOORWAIT` = 150 tics.
+- P3.2/P2.5 : 138 tests + Playwright ; le wrapper doit ajouter l'upload par segment
+  (`PUT /v1/runs/{id}/segments/{i}`, `POST /v1/runs/{id}/complete`).
+- P4.3 : 73 tests ; estimation à −0,012 % des reçus ; plan 6 tx par défaut (le plan 5 tx ne supporte pas
+  la borne ×1,15) ; l'effet de classe de compte est par écriture storage, pas par calldata.
+
 Les agents terminent seuls et commitent sur leur branche ; rien n'est poussé tant que l'orchestrateur n'a
 pas relu et mergé.
 
