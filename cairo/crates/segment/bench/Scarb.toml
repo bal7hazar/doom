@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Step-budget harness for `segment`. Deliberately NOT a member of the
+# `cairo/` workspace: it is a throwaway executable, built and run on its own
+# by `bench/measure.py`.
+[package]
+name = "segment_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+segment = { path = ".." }
+state_hash = { path = "../../state_hash" }
+ticcmd = { path = "../../ticcmd" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "segment_bench"
+function = "segment_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false

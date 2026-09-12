@@ -1,15 +1,34 @@
-[package]
-name = "doom_contracts"
+# SPDX-License-Identifier: Apache-2.0
+#
+# Workspace of the on-chain verifier packages (P4.0, docs/design/onchain-verifier.md).
+# Not a member of `cairo/Scarb.toml`: contracts need gas enabled while `doom_run` needs
+# it disabled, and Scarb honours one `[cairo]` table per workspace (see README.md).
+#
+# `vendor/stwo_cairo_verifier` (proving@cd7bc5f) is its own Scarb workspace and is pulled in
+# by path; it is compiled under THIS `[cairo]` table (gas enabled, no `qm31_opcode`).
+
+[workspace]
+members = ["crates/stwo_circuit_phases", "crates/doom_contracts"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024_07"
 
-[dependencies]
-starknet = "2.16.0"
+[workspace.dependencies]
+starknet = "2.18.0"
+snforge_std = "0.61.0"
+assert_macros = "2.18.0"
+stwo_circuit_air = { path = "vendor/stwo_cairo_verifier/crates/circuit_air" }
+stwo_verifier_core = { path = "vendor/stwo_cairo_verifier/crates/verifier_core" }
+stwo_constraint_framework = { path = "vendor/stwo_cairo_verifier/crates/constraint_framework" }
+stwo_verifier_utils = { path = "vendor/stwo_cairo_verifier/crates/verifier_utils" }
+bounded_int = { path = "vendor/stwo_cairo_verifier/crates/bounded_int" }
 
-[[target.starknet-contract]]
-
-[dev-dependencies]
-snforge_std = "0.57.0"
-
-[scripts]
+[workspace.scripts]
 test = "snforge test"
+
+[workspace.tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]
+
+[cairo]
+allow-warnings = true

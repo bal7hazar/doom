@@ -62,24 +62,46 @@ describe.skipIf(!hasRealWad)("end-to-end extraction of E1M1 from the real freedo
     expect(map.things.filter((t) => t.type === 1)).toHaveLength(1);
   });
 
-  it("builds JSON output without throwing and with consistent counts", () => {
+  it("builds JSON output without throwing and with consistent counts, keeping SEGS and texture names", () => {
     const json = buildMapJson(map, assets);
     expect(json.counts.linedefs).toBe(map.linedefs.length);
     expect(json.vertexes).toHaveLength(map.vertexes.length);
+    // The client still needs SEGS and texture/flat names for rendering even
+    // though cairoOutput.ts v2 drops both (task item 1).
+    expect(json.segs).toHaveLength(map.segs.length);
+    expect(json.sidedefs.some((s) => s.middleTexture !== "-" && s.middleTexture !== "")).toBe(true);
+    expect(json.derived.subsectorSectors).toHaveLength(map.subsectors.length);
   });
 
-  it("builds Cairo output that stays within the documented packing widths", () => {
-    const cairo = buildMapCairo(map);
-    expect(cairo).toContain("pub const VERTEXES: [u32;");
-    expect(cairo).toContain("pub const LINEDEFS: [felt252;");
-    expect(cairo).toContain("pub const REJECT_ROWS: [felt252;");
+  it("builds Cairo output that stays within the documented packing widths, using the default (recommended) layout", () => {
+    const { source: cairo, arrays } = buildMapCairo(map);
+    // Hot/planar groups (default emit-config.json): struct-of-arrays, one const per field.
+    expect(cairo).toContain("pub const VERTEX_X: [u32;");
+    expect(cairo).toContain("pub const LINEDEF_AB: [felt252;");
+    expect(cairo).toContain("pub const LINEDEF_BB: [felt252;");
+    expect(cairo).toContain("pub const LINEDEF_CB: [felt252;");
+    expect(cairo).toContain("pub const NODE_AB: [felt252;");
     expect(cairo).toContain("pub const BLOCKMAP_WORDS: [u32;");
+    expect(cairo).toContain("pub const ACCEL_START: [u32;");
+    // Cold/packed groups (includes bbox/sides/accelerator - see emitConfig.ts for why).
+    expect(cairo).toContain("pub const REJECT_ROWS: [felt252;");
+    expect(cairo).toContain("pub const THINGS: [felt252;");
+    expect(cairo).toContain("pub const SS_SECTOR_PACKED: [felt252;");
+    expect(cairo).toContain("pub const ACCEL_SUBSECTORS_PACKED: [felt252;");
+    expect(cairo).toContain("pub const LINEDEF_BBOX_LR: [felt252;");
+    expect(cairo).toContain("pub const LINEDEF_SIDES: [u32;");
+    // v2 drops SEGS and texture names from the Cairo output (task item 1);
+    // they stay in the JSON output only (checked below).
+    expect(cairo).not.toContain("pub const SEGS");
+    expect(cairo).not.toContain("TEXTURE");
     // Spot-check: no felt252 hex literal in the file should reach 2^128.
     const hexLiterals = cairo.match(/0x[0-9a-f]+/g) ?? [];
     expect(hexLiterals.length).toBeGreaterThan(1000);
     for (const lit of hexLiterals) {
       expect(BigInt(lit) < (1n << 128n)).toBe(true);
     }
+    // Every array actually written to `source` was accounted for in the budget metadata.
+    expect(arrays.length).toBeGreaterThan(20);
   });
 
   it("builds a non-empty report mentioning the map name and at least one monster", () => {

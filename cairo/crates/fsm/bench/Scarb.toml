@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Step-budget harness for `fsm`. Deliberately NOT a member of the `cairo/`
+# workspace: it is a throwaway executable, built and run on its own by
+# `bench/measure.py`.
+[package]
+name = "fsm_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+fsm = { path = ".." }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "fsm_bench"
+function = "fsm_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false

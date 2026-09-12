@@ -1,2 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 __pycache__/
+
+# Operator-provided material for the wrapper container: compiled Scarb executables and a local
+# configuration override. Never committed.
+wrapper/programs/*
+!wrapper/programs/README.md
+wrapper/wrapper.toml

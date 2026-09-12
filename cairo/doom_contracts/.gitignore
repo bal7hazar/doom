@@ -1,0 +1,9 @@
+# Scarb build output
+target/
+.snfoundry_cache/
+# Decompressed fixtures (regenerate with fixtures/unpack.sh)
+fixtures/*.txt
+!fixtures/selected.txt
+# Backups left by an interrupted tools/check_registry.sh
+*.bak
+__pycache__/

@@ -1,0 +1,49 @@
+{
+ "router": "0x0057c80a9d69c0f28b84657c6877ddea5d24f35710563a88a2647753b05825f2",
+ "classes": {
+  "StwoPhasesBegin": {
+   "class_hash": "0x0668ac803c6e6d14abf1e518f5fbdb7b5a0a0d8789411a6372c87f716b08d84c",
+   "tx_hash": null,
+   "l2_gas": 0,
+   "l1_gas": 0,
+   "l1_data_gas": 0,
+   "fee_fri": 0,
+   "note": "already declared"
+  },
+  "StwoPhasesMerkle": {
+   "class_hash": "0x0382b0774c3b72117bf6747698ab7e15c2c222cbfcf3dee3535455c8fc042d52",
+   "tx_hash": null,
+   "l2_gas": 0,
+   "l1_gas": 0,
+   "l1_data_gas": 0,
+   "fee_fri": 0,
+   "note": "already declared"
+  },
+  "StwoPhasesFri": {
+   "class_hash": "0x06c36ff63241fcb3a598b1afbe857667a046aae4f944b24ea1c9b97c884c459f",
+   "tx_hash": null,
+   "l2_gas": 0,
+   "l1_gas": 0,
+   "l1_data_gas": 0,
+   "fee_fri": 0,
+   "note": "already declared"
+  },
+  "StwoCircuitRouter": {
+   "class_hash": "0x040af0265559e882dc2a9d1ad7c969326fc9cdb5e8b35ca3c29a4b230b293416",
+   "tx_hash": "0x04b9556fc713e8406770229685ebd160b60d044bd66f10437562d9c743ec1b33",
+   "l2_gas": 551975360,
+   "l1_gas": 0,
+   "l1_data_gas": 192,
+   "fee_fri": 16821676480066077632
+  }
+ },
+ "deploy_fee_fri": 83182899185723792,
+ "prices": {
+  "l1_gas_price_fri": 92599658875965,
+  "l1_data_gas_price_fri": 37485578886,
+  "l2_gas_price_fri": 30475398907,
+  "starknet_version": "0.14.4",
+  "block_number": 10
+ },
+ "url": "http://127.0.0.1:5066/rpc"
+}

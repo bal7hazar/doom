@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# The configuration baked into the container image (infra/wrapper/Dockerfile). Paths match the
+# image layout; anything an operator needs to change is an environment variable
+# (WRAPPER_BIND, WRAPPER_DATA_DIR, WRAPPER_REGISTRY_JSON, WRAPPER_MAX_CIRCUIT_PROOFS,
+# WRAPPER_BATCH_MAX_RUNS, WRAPPER_BATCH_MAX_WAIT_SECS, WRAPPER_API_KEY) or a bind-mounted file
+# over /opt/hellproof/wrapper.toml.
+#
+# See prover/wrapper/wrapper.example.toml for the documented reference.
+
+bind = "0.0.0.0:8787"
+data_dir = "/data"
+
+leaf_prover_bin = "/opt/proving/bin/leaf-prover"
+tree_bin = "/opt/proving/bin/stwo_run_and_prove_recursive_tree"
+leaf_verify_bin = "/opt/hellproof/bin/hellproof-leaf-verify"
+leaf_bootloader = "/opt/proving/data/leaf_simple_bootloader_compiled.json"
+leaf_params_json = "/opt/hellproof/params/leaf.json"
+backend = "subprocess"
+
+# `doom` (S4): production padding, multiverifier identical to production.
+# Switch to /opt/hellproof/registry/doom_fold4_min/registry.json (and its hashes) once P4.0 has
+# regenerated the on-chain verifier constants: 21.9 GB instead of 32.5 GB per proof (S4b).
+[registry]
+name = "doom"
+path = "/opt/hellproof/registry/doom/registry.json"
+multiverifier_hash = "a59897152377c07ac6d1e84454f0a04d8be65a7dfd73c2619078e728973f680f"
+leaf_circuit_hash = "2ad52ed04b5464fc0362ff77e47a7cb0adf8f7c8caef9eb38b8774ba9edac7e2"
+circuit_proof_rss_bytes = 32500000000
+
+# Omitted on purpose: derived from the container's memory limit divided by the registry's RSS.
+# max_circuit_proofs = 1
+max_verify_jobs = 4
+
+batch_max_runs = 8
+batch_max_wait_secs = 600
+
+max_segments_per_run = 64
+max_proof_bytes = 8388608
+max_body_bytes = 536870912
+require_verifiable_proof = true
+check_preimage_binding = true
+
+# Mount the compiled Scarb executables at /opt/hellproof/programs and list them here.
+[[programs]]
+id = "segment_stub"
+executable = "/opt/hellproof/programs/segment_stub.executable.json"
+hash_function = "blake"
+
+# API keys: set WRAPPER_API_KEY to add an admin key without editing this file.
+[[api_keys]]
+key = "change-me"
+account = "0x0"
+admin = true
+daily_run_quota = 0

@@ -1,0 +1,11 @@
+{
+  "package": "segment_bench",
+  "baseline": { "n1": 500, "n2": 1000 },
+  "ops": [
+    { "op": 2, "label": "run_segment (per tic)", "n1": 500, "n2": 1000, "budget": 39, "base_op": 1 },
+    { "op": 3, "label": "... loop core, no commitment", "n1": 500, "n2": 1000, "budget": 21, "base_op": 1 },
+    { "op": 4, "label": "... the commitment alone", "n1": 500, "n2": 1000, "budget": 38, "base_op": 1 },
+    { "op": 5, "label": "... span read + engine call only", "n1": 500, "n2": 1000, "budget": 21, "base_op": 1 },
+    { "op": 1, "label": "-- build the command span", "n1": 500, "n2": 1000, "budget": null }
+  ]
+}
