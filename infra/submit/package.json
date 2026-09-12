@@ -1,0 +1,27 @@
+{
+  "name": "@hellproof/submit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "submit-batch: the on-chain submission orchestrator of client/src/chain driven from a terminal (P4.3). Devnet only.",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "submit-batch": "./src/cli.ts"
+  },
+  "scripts": {
+    "submit-batch": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "starknet": "10.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -38,8 +38,8 @@ export interface PrepareArgs {
   replay?: boolean;
   /** Root proof felts, when not already on `batch`. */
   rootProofFelts?: bigint[];
-  /** FRI cut; by default 5 transactions, falling back to 6 when a section is too big. */
-  plan?: PlanOptions & { preferSafeMargin?: boolean };
+  /** FRI cut; 6 transactions by default (the 5-tx plan cannot carry an R7-A1 bound). */
+  plan?: PlanOptions & { preferFewestTransactions?: boolean };
   /** Submit one member instead of the whole batch (the per-player fallback). */
   singleMember?: Member;
 }

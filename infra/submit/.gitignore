@@ -1,0 +1,4 @@
+node_modules/
+# Scratch space of the drives: decompressed proofs, deployment files, receipts.
+.work/
+*.tsbuildinfo

@@ -1,0 +1,235 @@
+{
+ "timestamp_utc": "2026-09-12T17:43:07.143Z",
+ "rpc": "http://127.0.0.1:5081/rpc",
+ "batch": "B2-1_doom",
+ "router": "0x04fd8f0c40a2d711da981c182b193d017b53c434a94967d0b3cb209fdc679f0b",
+ "doom_runs": "0x02e1050457c672bfc2c84b2069ccfa4901d592fc9e08f96673df86a958b68a4d",
+ "proof_id": "0x9",
+ "version_id": 1,
+ "sender": "0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+ "account_class": null,
+ "simulation_flags": [
+  "SKIP_VALIDATE"
+ ],
+ "prices": {
+  "l2_gas_price_fri": "30475398907",
+  "l1_data_gas_price_fri": "37485578886",
+  "l1_gas_price_fri": "92599658875965",
+  "block_number": 29,
+  "starknet_version": "0.14.4"
+ },
+ "strk_price": {
+  "usd": 0.02912155,
+  "eur": 0.02510045,
+  "at": "2026-09-12T17:43:07.130Z",
+  "source": "coingecko"
+ },
+ "price_verdict": {
+  "kind": "unknown",
+  "samples": 2,
+  "reason": "only 2 samples in the last 24 h (need 8)"
+ },
+ "plan": [
+  {
+   "label": "begin",
+   "entrypoint": "begin",
+   "calldata_felts": 4625,
+   "payload_slots": 4613,
+   "meta": {
+    "sections": [
+     "head",
+     "qv0/dec0",
+     "qv1/dec1"
+    ]
+   }
+  },
+  {
+   "label": "merkle",
+   "entrypoint": "merkle",
+   "calldata_felts": 4583,
+   "payload_slots": 4344,
+   "meta": {
+    "sections": [
+     "qv2/dec2",
+     "qv3/dec3"
+    ]
+   }
+  },
+  {
+   "label": "answers",
+   "entrypoint": "answers",
+   "calldata_felts": 3685,
+   "payload_slots": 3448,
+   "meta": {
+    "sections": [
+     "sampled",
+     "qv0",
+     "qv1",
+     "qv2",
+     "qv3"
+    ]
+   }
+  },
+  {
+   "label": "fri1",
+   "entrypoint": "fri",
+   "calldata_felts": 2232,
+   "payload_slots": 1652,
+   "meta": {
+    "layers": [
+     0
+    ]
+   }
+  },
+  {
+   "label": "fri2",
+   "entrypoint": "fri",
+   "calldata_felts": 1912,
+   "payload_slots": 1332,
+   "meta": {
+    "layers": [
+     1
+    ]
+   }
+  },
+  {
+   "label": "fri3",
+   "entrypoint": "fri",
+   "calldata_felts": 2247,
+   "payload_slots": 1667,
+   "meta": {
+    "layers": [
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "label": "fri4",
+   "entrypoint": "fri",
+   "calldata_felts": 693,
+   "payload_slots": 113,
+   "meta": {
+    "layers": [
+     4,
+     5
+    ]
+   }
+  }
+ ],
+ "estimated": [
+  {
+   "label": "begin",
+   "phase": "verifier",
+   "calldata_felts": 4625,
+   "l2_gas": "459145440",
+   "l1_data_gas": "384",
+   "fee_fri": "13992654834792326304",
+   "pct_of_invoke_cap": 37.945904132231405,
+   "l2_gas_bound": "528017256",
+   "l1_data_gas_bound": "500",
+   "naive_x15_l2_gas": "688718160",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "merkle",
+   "phase": "verifier",
+   "calldata_felts": 4583,
+   "l2_gas": "390766400",
+   "l1_data_gas": "256",
+   "fee_fri": "11908771515760519616",
+   "pct_of_invoke_cap": 32.29474380165289,
+   "l2_gas_bound": "449381360",
+   "l1_data_gas_bound": "333",
+   "naive_x15_l2_gas": "586149600",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "answers",
+   "phase": "verifier",
+   "calldata_felts": 3685,
+   "l2_gas": "861288640",
+   "l1_data_gas": "320",
+   "fee_fri": "26248126873452760000",
+   "pct_of_invoke_cap": 71.18087933884297,
+   "l2_gas_bound": "990481936",
+   "l1_data_gas_bound": "416",
+   "naive_x15_l2_gas": "1291932960",
+   "naive_x15_over_cap": true
+  },
+  {
+   "label": "fri1",
+   "phase": "verifier",
+   "calldata_felts": 2232,
+   "l2_gas": "565529280",
+   "l1_data_gas": "256",
+   "fee_fri": "17234739997896691776",
+   "pct_of_invoke_cap": 46.73795702479339,
+   "l2_gas_bound": "650358672",
+   "l1_data_gas_bound": "333",
+   "naive_x15_l2_gas": "848293920",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "fri2",
+   "phase": "verifier",
+   "calldata_felts": 1912,
+   "l2_gas": "539530880",
+   "l1_data_gas": "256",
+   "fee_fri": "16442428386952942976",
+   "pct_of_invoke_cap": 44.58932892561983,
+   "l2_gas_bound": "620460512",
+   "l1_data_gas_bound": "333",
+   "naive_x15_l2_gas": "809296320",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "fri3",
+   "phase": "verifier",
+   "calldata_felts": 2247,
+   "l2_gas": "910606080",
+   "l1_data_gas": "256",
+   "fee_fri": "27751093131447749376",
+   "pct_of_invoke_cap": 75.25670082644628,
+   "l2_gas_bound": "1047196992",
+   "l1_data_gas_bound": "333",
+   "naive_x15_l2_gas": "1365909120",
+   "naive_x15_over_cap": true
+  },
+  {
+   "label": "fri4",
+   "phase": "verifier",
+   "calldata_felts": 663,
+   "l2_gas": "110366720",
+   "l1_data_gas": "320",
+   "fee_fri": "3363481813442418560",
+   "pct_of_invoke_cap": 9.12121652892562,
+   "l2_gas_bound": "126921728",
+   "l1_data_gas_bound": "416",
+   "naive_x15_l2_gas": "165550080",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "submit_batch",
+   "phase": "consumer",
+   "calldata_felts": 111,
+   "l2_gas": "3680960",
+   "l1_data_gas": "128",
+   "fee_fri": "112183522514808128",
+   "pct_of_invoke_cap": 0.3042115702479339,
+   "l2_gas_bound": "4233104",
+   "l1_data_gas_bound": "167",
+   "naive_x15_l2_gas": "5521440",
+   "naive_x15_over_cap": false
+  }
+ ],
+ "total_l2_gas": "3840914400",
+ "total_l1_data_gas": "2176",
+ "total_fee_fri": "117053480076260216736",
+ "total_strk": 117.05348007626021,
+ "total_usd": 3.4087787727148156,
+ "preflight": {
+  "fact": "0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40",
+  "fact_registered": true
+ }
+}

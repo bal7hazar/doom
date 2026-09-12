@@ -79,7 +79,14 @@ export const S5_SNAPSHOT: Omit<FiatQuote, "source"> = {
 /** Caches a quote for `ttlMs` and falls back to the last good one, then to the S5 snapshot. */
 export class CachedPriceSource implements PriceSource {
   private cached: FiatQuote | null = null;
+  /**
+   * When the inner source was last *asked*, which is not when the quote was read: a failed
+   * attempt falls back to a quote stamped months ago, and keying the TTL on that stamp would
+   * re-hit a dead endpoint on every render of the cost screen.
+   */
+  private lastAttempt = -Infinity;
   private readonly ttlMs: number;
+  private readonly now: () => number;
   readonly name: string;
 
   constructor(
@@ -91,16 +98,13 @@ export class CachedPriceSource implements PriceSource {
     this.name = `${inner.name} (cached ${Math.round(this.ttlMs / 1000)} s)`;
   }
 
-  private readonly now: () => number;
-
   async quote(): Promise<FiatQuote> {
-    if (this.cached && this.now() - Date.parse(this.cached.at) < this.ttlMs) return this.cached;
+    if (this.cached && this.now() - this.lastAttempt < this.ttlMs) return this.cached;
+    this.lastAttempt = this.now();
     try {
       this.cached = await this.inner.quote();
     } catch {
-      if (!this.cached) {
-        this.cached = { ...S5_SNAPSHOT, source: `${this.inner.name} unreachable — S5 snapshot` };
-      }
+      this.cached ??= { ...S5_SNAPSHOT, source: `${this.inner.name} unreachable — S5 snapshot` };
     }
     return this.cached;
   }

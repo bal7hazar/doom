@@ -167,16 +167,22 @@ export function planPhases(sec: ProofSections, options: PlanOptions = {}): Phase
 }
 
 /**
- * Tries the 5-transaction plan and falls back to the 6-transaction one when a section grew past
- * the calldata cap — the "a proof whose FRI section is a few percent larger simply gets the
- * 6-tx plan" of `onchain-verifier.md` §3. `preferSafeMargin` starts at 6 directly, which is what
- * respects the internal 90 %-of-cap rule (R7-A5) until the QM31 lever lands.
+ * The default plan: **six** transactions (`friSplit = [1, 3]`), falling back to other cuts when
+ * a section does not fit the calldata cap.
+ *
+ * Why not the five-transaction plan, which is what P4.0 measured and 0.3 % cheaper: its `fri1`
+ * consumes 90.3 % of the 1.21e9 invoke cap, and a *bound* is what the sequencer checks, so the
+ * R7-A1 margin turns it into 1.257e9 — **over the cap, rejected before execution** (measured in
+ * P4.3, `docs/design/submission.md` §4). The 5-tx plan is only sendable with a margin below
+ * ×1.107, which is not a margin. `preferFewestTransactions` selects it anyway, for measurement.
  */
 export function planPhasesAuto(
   sec: ProofSections,
-  options: PlanOptions & { preferSafeMargin?: boolean } = {},
+  options: PlanOptions & { preferFewestTransactions?: boolean } = {},
 ): PhasePlan[] {
-  const candidates = options.preferSafeMargin ? [[1, 3], [2]] : [[2], [1, 3], [1, 2, 4]];
+  const candidates = options.preferFewestTransactions
+    ? [[2], [1, 3], [1, 2, 4]]
+    : [[1, 3], [1, 2, 4], [2]];
   let last: unknown;
   for (const friSplit of candidates) {
     try {
