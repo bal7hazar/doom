@@ -99,8 +99,7 @@ fn three_leaves_carry_topology() {
 fn single_leaf_self_fold() {
     let leaf = leaf_node(golden_leaf_hash(), golden_preimage());
     assert_eq!(
-        fold_tree(array![leaf].span(), golden_mv_hash()),
-        fold_pair(@leaf, @leaf, golden_mv_hash()),
+        fold_tree(array![leaf].span(), golden_mv_hash()), fold_pair(@leaf, @leaf, golden_mv_hash()),
     );
 }
 
@@ -115,8 +114,8 @@ fn root_output_hash_is_deterministic_and_order_sensitive() {
 }
 
 /// D4 (S4b): switching the task's `program_hash_function` from blake to poseidon changes nothing
-/// in this library — the leaf bootloader's preimage keeps its shape, `[program_hash, outputs…]`,
-/// and only `preimage[0]` changes value. Both hashes below are the ones the leaf
+/// in this library — the leaf bootloader's preimage keeps its shape, `[program_hash,
+/// outputs…]`, and only `preimage[0]` changes value. Both hashes below are the ones the leaf
 /// bootloader actually dumped for `segment_stub` (`results/N2_doom/` and
 /// `results/N2_doom_poseidon/`), and the matching root hashes are pinned by
 /// `fixtures::fixture_n2_doom{,_poseidon}`.

@@ -11,7 +11,8 @@
 //! Byte-identity contracts mirrored here (proving @ cd7bc5f):
 //! - leaf output `H1 = blake2s(cairo0_encode(output_preimage))`
 //!   (`stwo_run_and_prove_recursive_tree::leaf_io::LeafInput::output_values`);
-//! - fold output `blake2s(left.circuit_hash ‖ left.output ‖ right.circuit_hash ‖ right.output)`
+//! - fold output `blake2s(left.circuit_hash ‖ left.output ‖ right.circuit_hash ‖
+//! right.output)`
 //!   (`circuit_multiverifier::verify::build_multiverifier_circuit`), words hashed as
 //!   little-endian bytes;
 //! - balanced fold with odd carry; a single leaf is folded with itself
