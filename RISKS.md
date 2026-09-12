@@ -272,7 +272,7 @@ Risque résiduel : un changement upstream incompatible juste avant une saison �
 | Id | Action | Quand | Effort | Critère de sortie |
 |----|--------|-------|--------|-------------------|
 | R9-A1 | Licensing par répertoire : `cairo/doom/*` en **GPL-2.0-or-later** avec en-têtes ; `cairo/crates/*`, `client/`, `prover/`, contrats en Apache-2.0 ; fichier `LICENSES/` et `REUSE.toml`. Les crates génériques sont écrites **sans copier** de code Doom (algorithmes classiques : BSP, blockmap, point fixe) et le journal de provenance le documente. | Avant Phase 1 | 1 jp | `reuse lint` passe ; revue par le juriste/CTO. |
-| R9-A2 | Nom de produit et de dépôt distincts de « Doom » (nom de code interne acceptable) ; pas de logo/assets id ; mention « compatible Freedoom ». | Avant Phase 2 | 0,5 jp | Nom validé. |
+| R9-A2 | Nom de produit distinct de « Doom » : **Hellproof** (retenu le 2026-09-12 ; aucune collision de jeu/projet trouvée), tagline « Knee-deep in proofs » ; `doom` reste le nom de code du dépôt ; pas de logo/assets id ; mention « compatible Freedoom ». | Fait | 0,5 jp | Nom validé. |
 | R9-A3 | Vérifier la licence exacte de la copie de linuxdoom utilisée comme référence (GPL-2.0-only vs or-later) et celle de doomgeneric (GPL-2.0) ; documenter dans `NOTICE`. | Avant Phase 1 | 0,5 jp | `NOTICE` complet. |
 | R9-A4 | Si la GPL est inacceptable pour le cœur : chiffrer la réécriture clean-room (spécifications Doom wiki / Black Book, équipe distincte de celle qui lit les sources) ≈ +30–50 % sur la Phase 1 ; décision à G0. | G0 | — | Décision U7 consignée. |
 

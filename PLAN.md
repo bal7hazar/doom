@@ -1,7 +1,7 @@
-# PLAN — Doom prouvable : plan d'exécution
+# PLAN — Hellproof (Doom prouvable) : plan d'exécution
 
 > Plan de développement, de test et de validation issu de l'étude de faisabilité ([CONTEXT.md](CONTEXT.md)).
-> Version du 2026-09-12. Les identifiants **S*** (spikes), **U*** (inconnues, cf. CONTEXT §10) et
+> Version du 2026-09-12. Roadmap détaillée, Gantt et chemin critique : [ROADMAP.md](ROADMAP.md). Les identifiants **S*** (spikes), **U*** (inconnues, cf. CONTEXT §10) et
 > **C*** (critères) sont stables pour pouvoir être référencés dans les issues et les PR.
 
 ## 0. Objectif du MVP et critères de succès globaux

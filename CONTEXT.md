@@ -1,4 +1,4 @@
-# CONTEXT — Doom prouvable (Cairo + Stwo + Starknet)
+# CONTEXT — Hellproof, un Doom prouvable (Cairo + Stwo + Starknet)
 
 > État de l'art et résultats de l'étude de faisabilité. Document de référence à maintenir :
 > chaque fait daté ici a été vérifié le **2026-09-12** contre les sources listées en fin de document.
