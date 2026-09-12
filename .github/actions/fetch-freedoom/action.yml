@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Downloads (or restores from cache) the Freedoom v0.13.0 IWAD used by
+# tools/wad and client's e2e test, via tools/wad/scripts/fetch-freedoom.sh.
+#
+# The cache key is the EXPECTED_SHA256 pinned in that script, not a version
+# string: if the script's own pin ever changes (a new Freedoom release), the
+# key changes automatically and the old cache entry is never reused. The
+# actual verification still happens inside fetch-freedoom.sh, so a corrupted
+# or tampered cache entry is caught the same way a fresh download would be.
+#
+# Usage: `uses: ./.github/actions/fetch-freedoom` from a job that has already
+# checked out the repository. Sets $FREEDOOM_DIR for later steps in the same
+# job (both as an env var and as this action's `freedoom-dir` output), and
+# leaves freedoom1.wad at "$FREEDOOM_DIR/freedoom1.wad".
+name: Fetch Freedoom WAD (cached)
+description: Downloads and caches freedoom1.wad, keyed on the sha256 pinned in tools/wad/scripts/fetch-freedoom.sh.
+outputs:
+  freedoom-dir:
+    description: Directory containing freedoom1.wad
+    value: ${{ steps.pin.outputs.dir }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve pinned checksum and cache directory
+      id: pin
+      shell: bash
+      run: |
+        set -euo pipefail
+        SHA="$(sed -n 's/^EXPECTED_SHA256="\([0-9a-f]*\)"$/\1/p' tools/wad/scripts/fetch-freedoom.sh)"
+        if [ -z "$SHA" ]; then
+          echo "::error::could not extract EXPECTED_SHA256 from tools/wad/scripts/fetch-freedoom.sh" >&2
+          exit 1
+        fi
+        echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+        echo "dir=${RUNNER_TEMP}/freedoom" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Freedoom download
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.pin.outputs.dir }}
+        key: freedoom-${{ steps.pin.outputs.sha256 }}
+
+    - name: Fetch Freedoom (no-op if the cache already has it)
+      shell: bash
+      env:
+        FREEDOOM_DIR: ${{ steps.pin.outputs.dir }}
+      run: bash tools/wad/scripts/fetch-freedoom.sh
+
+    - name: Export FREEDOOM_DIR for later steps
+      shell: bash
+      run: echo "FREEDOOM_DIR=${{ steps.pin.outputs.dir }}" >> "$GITHUB_ENV"
