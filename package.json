@@ -1,0 +1,9 @@
+{
+  "name": "hellproof",
+  "private": true,
+  "description": "Workspace root: wires client/ to tools/wad (@hellproof/wad) via npm workspaces - see tools/wad/README.md.",
+  "workspaces": [
+    "tools/wad",
+    "client"
+  ]
+}

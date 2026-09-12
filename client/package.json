@@ -18,6 +18,9 @@
     "test:e2e": "playwright test",
     "fixtures": "tsx test/fixtures/generate.ts"
   },
+  "dependencies": {
+    "@hellproof/wad": "*"
+  },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
     "@types/node": "^22.10.1",
