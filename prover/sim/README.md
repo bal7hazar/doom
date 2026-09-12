@@ -81,8 +81,9 @@ is a debugging helper, never for the hot path.
 # toolchain
 rustup target add wasm32-unknown-unknown
 cargo install wasm-pack                 # or use an existing one
-export ASDF_SCARB_VERSION=2.19.4        # must match cairo-lang-* below
 export ASDF_NODEJS_VERSION=22.22.2
+# Scarb 2.19.4 is pinned by bench/step_tic/.tool-versions; with a plain
+# install instead of asdf, make sure `scarb --version` reports 2.19.4.
 
 cd prover/sim/bench
 npm install                             # playwright
