@@ -55,6 +55,7 @@ use stwo::prover::backend::BackendForChannel;
 use stwo::prover::backend::simd::SimdBackend;
 use stwo_cairo_adapter::ProverInput;
 use stwo_cairo_adapter::adapter::adapt;
+use cairo_air::components::memory_address_to_id::MEMORY_ADDRESS_TO_ID_SPLIT as ADDRESS_TO_ID_SPLIT;
 use stwo_cairo_common::preprocessed_columns::preprocessed_trace::PreProcessedTraceVariant;
 use stwo_cairo_prover::prover::{ChannelHash, LiftingSizePolicy, ProverParameters, prove_cairo};
 use stwo_cairo_serialize::CairoSerialize;
@@ -261,6 +262,124 @@ pub fn execute(executable_json: &str, args_json: &str) -> Result<(ProverInput, E
     Ok((prover_input, stats))
 }
 
+/// What the prover would have to build for a given `ProverInput`, derived from the adapter's
+/// `ExecutionResources` — i.e. *without* generating any trace (milliseconds, no extra memory).
+///
+/// The client uses this to size segments: a segment is provable by the recursion leaf as long as
+/// every AIR component stays within `2^20` rows (the registry's `trace_log_size = 20`), which is
+/// **not** the same as "at most 2^20 steps": the steps are spread over one component per opcode.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceSummary {
+    /// VM steps = number of state transitions (sum of the per-opcode counters).
+    pub n_steps: usize,
+    /// Per-opcode instance counts — one AIR component each, `count` rows.
+    pub opcodes: Vec<(String, usize)>,
+    /// Per-builtin instance counts (after the adapter's padding to a power of two).
+    pub builtins: Vec<(String, usize)>,
+    /// Unique aggregator inputs per aggregator-backed builtin (pedersen/poseidon).
+    pub unique_aggregator_inputs: Vec<(String, usize)>,
+    /// Rows of the `memory_address_to_id` component.
+    pub memory_address_to_id: usize,
+    /// Rows of the `memory_id_to_big` table, *before* the `opt_n_id_to_big_components` split.
+    pub memory_id_to_big: usize,
+    /// Rows of the `memory_id_to_small` component.
+    pub memory_id_to_small: usize,
+    /// Rows of the `verify_instruction` component (unique pc values).
+    pub verify_instruction: usize,
+    /// Largest component row count derivable from the counters above, and the name of the
+    /// component that reaches it.
+    pub max_component_rows: usize,
+    pub max_component: String,
+    /// `ceil(log2(max_component_rows))` — the `trace_log_size` the proof will end up with, unless
+    /// a component this summary cannot see (padding, range-check/multiplicity components) is
+    /// taller. Compare with `ProofStats::max_log_size`, which is exact but only known after
+    /// proving.
+    pub log_max_component_size: u32,
+    /// Whether that fits the leaf registry (`trace_log_size <= 20`).
+    pub fits_leaf_registry: bool,
+    /// How many `memory_id_to_big` components the table needs; the parameters allow
+    /// `opt_n_id_to_big_components` (16 for the leaf), and proving panics above that.
+    pub n_memory_id_to_big_components: usize,
+}
+
+fn log2_ceil(n: usize) -> u32 {
+    if n <= 1 { 0 } else { usize::BITS - (n - 1).leading_zeros() }
+}
+
+/// Rows a component with `n` entries actually gets: padded to a power of two, at least one SIMD
+/// lane row (`N_LANES = 16`), which is what every witness generator does.
+fn component_rows(n: usize) -> usize {
+    n.max(16).next_power_of_two()
+}
+
+/// Computes a [`ResourceSummary`] from a `ProverInput`. `opt_n_id_to_big_components` of the
+/// parameters is taken into account (it splits the `memory_id_to_big` table into that many
+/// components).
+pub fn resources(input: &ProverInput, params: &ProverParameters) -> ResourceSummary {
+    let _s = tracing::info_span!("resources").entered();
+    let r = stwo_cairo_adapter::ExecutionResources::from_prover_input(input);
+    let mut opcodes: Vec<(String, usize)> =
+        r.opcodes_instance_counter.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    opcodes.sort();
+    let mut builtins: Vec<(String, usize)> =
+        r.builtin_instance_counter.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    builtins.sort();
+    let mut unique_aggregator_inputs: Vec<(String, usize)> =
+        r.unique_aggregator_inputs.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    unique_aggregator_inputs.sort();
+
+    // How many rows each component ends up with, from the witness generators:
+    //
+    // * one component per opcode, `next_pow2(count)` rows, and the same for `verify_instruction`;
+    // * `memory_address_to_id` splits its table over `MEMORY_ADDRESS_TO_ID_SPLIT` (= 16) column
+    //   groups, so `next_pow2(len / 16)` rows;
+    // * `memory_id_to_small` is a single component of `next_pow2(len)` rows;
+    // * `memory_id_to_big` is cut into chunks of at most the preprocessed max size (2^20 with
+    //   `canonical_small`), at most `opt_n_id_to_big_components` of them;
+    // * builtins: one component per builtin, `next_pow2(instances)` rows (the adapter has already
+    //   padded the segments to powers of two).
+    let big_chunk_rows = 1usize << params.preprocessed_trace.max_log_trace_size();
+    let big_len = r.memory_tables_sizes.memory_id_to_big;
+    let id_to_big_rows = component_rows(big_len.min(big_chunk_rows));
+    let n_id_to_big_components = big_len.div_ceil(big_chunk_rows).max(1);
+
+    let mut candidates: Vec<(String, usize)> =
+        opcodes.iter().map(|(k, v)| (k.clone(), component_rows(*v))).collect();
+    candidates.extend(builtins.iter().map(|(k, v)| (k.clone(), component_rows(*v))));
+    candidates.push((
+        "memory_address_to_id".into(),
+        component_rows(r.memory_tables_sizes.memory_address_to_id.div_ceil(ADDRESS_TO_ID_SPLIT)),
+    ));
+    candidates.push(("memory_id_to_big".into(), id_to_big_rows));
+    candidates.push((
+        "memory_id_to_small".into(),
+        component_rows(r.memory_tables_sizes.memory_id_to_small),
+    ));
+    candidates.push(("verify_instruction".into(), component_rows(r.verify_instruction)));
+    let (max_component, max_component_rows) = candidates
+        .into_iter()
+        .max_by_key(|(_, v)| *v)
+        .unwrap_or_else(|| ("none".to_string(), 0));
+
+    let log_max_component_size = log2_ceil(max_component_rows);
+    ResourceSummary {
+        n_steps: opcodes.iter().map(|(_, v)| *v).sum(),
+        opcodes,
+        builtins,
+        unique_aggregator_inputs,
+        memory_address_to_id: r.memory_tables_sizes.memory_address_to_id,
+        memory_id_to_big: r.memory_tables_sizes.memory_id_to_big,
+        memory_id_to_small: r.memory_tables_sizes.memory_id_to_small,
+        verify_instruction: r.verify_instruction,
+        max_component_rows,
+        max_component,
+        log_max_component_size,
+        fits_leaf_registry: log_max_component_size <= 20
+            && n_id_to_big_components <= params.opt_n_id_to_big_components.unwrap_or(usize::MAX),
+        n_memory_id_to_big_components: n_id_to_big_components,
+    }
+}
+
 pub fn prover_input_to_bytes(input: &ProverInput) -> Result<Vec<u8>> {
     let _s = tracing::info_span!("serialize prover_input").entered();
     bincode::serialize(input).context("bincode(ProverInput)")
@@ -281,8 +400,20 @@ pub struct ProofStats {
     /// `PcsConfig` lifting sizes actually used (trace, preprocessed).
     pub trace_lifting_log_size: u32,
     pub preprocessed_lifting_log_size: u32,
-    /// Max component log size in the claim (log2 of the trace domain before blow-up).
+    /// `trace_lifting_log_size - log_blowup_factor` — **the** `trace_log_size` the recursion leaf
+    /// reads off the proof to pick its verifier circuit (`registry.leaf_verifiers[trace_log_size]`,
+    /// 20 for the `doom` registry).
+    pub trace_log_size: u32,
+    /// Largest *base trace* component of the claim, in log2 rows. This is the quantity a segment
+    /// must keep ≤ 20: above it the whole proof lifts to 2^21 and the registry rejects it. It is
+    /// the exact counterpart of [`ResourceSummary::log_max_component_size`].
+    pub max_trace_component_log_size: u32,
+    /// Max log size over *every* tree of the claim, the preprocessed one included — with
+    /// `canonical_small` this is 20 for any trace, so it says nothing about the segment size.
+    /// Kept because S2 reported it.
     pub max_log_size: u32,
+    /// Log size of every base-trace component, descending.
+    pub component_log_sizes: Vec<u32>,
 }
 
 fn prove_generic<MC>(input: ProverInput, params: ProverParameters) -> Result<(Vec<u8>, ProofStats)>
@@ -301,7 +432,16 @@ where
         felts.len()
     };
     let cfg = proof.extended_stark_proof.proof.config;
-    let max_log_size = proof.claim.log_sizes().iter().flatten().copied().max().unwrap_or(0);
+    // `TreeVec` = [preprocessed columns used, base trace, interaction trace]. Only the base trace
+    // says how big the segment is; the preprocessed entries are the fixed 2^20 of
+    // `canonical_small`, which is why `max_log_size` alone cannot be used to size a segment.
+    let log_sizes = proof.claim.log_sizes();
+    let max_log_size = log_sizes.iter().flatten().copied().max().unwrap_or(0);
+    let mut component_log_sizes: Vec<u32> =
+        log_sizes.get(1).map(|t| t.to_vec()).unwrap_or_default();
+    component_log_sizes.sort_unstable_by(|a, b| b.cmp(a));
+    let max_trace_component_log_size = component_log_sizes.first().copied().unwrap_or(0);
+    let trace_log_size = cfg.trace_lifting_log_size - cfg.fri_config.log_blowup_factor;
     let bytes = {
         let _s = tracing::info_span!("serialize proof").entered();
         bincode::serialize(&proof).context("bincode(CairoProof)")?
@@ -311,7 +451,10 @@ where
         proof_felts: n_felts,
         trace_lifting_log_size: cfg.trace_lifting_log_size,
         preprocessed_lifting_log_size: cfg.preprocessed_lifting_log_size,
+        trace_log_size,
+        max_trace_component_log_size,
         max_log_size,
+        component_log_sizes,
     };
     Ok((bytes, stats))
 }

@@ -342,6 +342,22 @@ mod wasm {
         }
     }
 
+    /// `resources(prover_input_bytes, params_json)` -> info = ResourceSummary (no trace is
+    /// generated: the counters come from the adapter's `ExecutionResources`).
+    #[unsafe(no_mangle)]
+    pub extern "C" fn resources(in_ptr: usize, in_len: usize, params_ptr: usize, params_len: usize) -> usize {
+        init_once();
+        let run = || -> anyhow::Result<core::ResourceSummary> {
+            let params = core::parse_params(unsafe { str_arg(params_ptr, params_len)? })?;
+            let input = core::prover_input_from_bytes(unsafe { slice(in_ptr, in_len) })?;
+            Ok(core::resources(&input, &params))
+        };
+        match run() {
+            Ok(summary) => ok(summary, Vec::new()),
+            Err(e) => err(e),
+        }
+    }
+
     /// `verify(proof_bytes, params_json)` -> status 0 and info = {"ok": true} if valid, else
     /// status 1 with the verification error.
     #[unsafe(no_mangle)]
