@@ -45,6 +45,7 @@ dependencies = [
 name = "doom_map"
 version = "0.1.0"
 dependencies = [
+ "bam",
  "blockmap",
  "bsp",
  "fixed",
@@ -108,6 +109,7 @@ version = "0.1.0"
 dependencies = [
  "fixed",
  "fsm",
+ "prng",
 ]
 
 [[package]]

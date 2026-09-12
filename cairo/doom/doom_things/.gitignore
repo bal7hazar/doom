@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Python bytecode from the generator and the bench scripts.
+__pycache__/
+# Scarb build output of the standalone bench packages.
+target/
+coverage/

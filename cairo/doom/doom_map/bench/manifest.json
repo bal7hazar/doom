@@ -1,0 +1,160 @@
+{
+  "map": "E1M1",
+  "scalars": 19,
+  "total_words": 17904,
+  "arrays": [
+    {
+      "name": "L_AB",
+      "group": "linedefPredicates",
+      "layout": "planar",
+      "words": 1175
+    },
+    {
+      "name": "L_BB",
+      "group": "linedefPredicates",
+      "layout": "planar",
+      "words": 1175
+    },
+    {
+      "name": "L_CB",
+      "group": "linedefPredicates",
+      "layout": "planar",
+      "words": 1175
+    },
+    {
+      "name": "L_BOX_LR",
+      "group": "linedefBox",
+      "layout": "packed",
+      "words": 1175
+    },
+    {
+      "name": "L_BOX_BT",
+      "group": "linedefBox",
+      "layout": "packed",
+      "words": 1175
+    },
+    {
+      "name": "L_PACKED",
+      "group": "linedefMeta",
+      "layout": "packed",
+      "words": 1175
+    },
+    {
+      "name": "N_AB",
+      "group": "nodePredicates",
+      "layout": "planar",
+      "words": 681
+    },
+    {
+      "name": "N_BB",
+      "group": "nodePredicates",
+      "layout": "planar",
+      "words": 681
+    },
+    {
+      "name": "N_CB",
+      "group": "nodePredicates",
+      "layout": "planar",
+      "words": 681
+    },
+    {
+      "name": "N_CHILD0",
+      "group": "nodeChildren",
+      "layout": "planar",
+      "words": 681
+    },
+    {
+      "name": "N_CHILD1",
+      "group": "nodeChildren",
+      "layout": "planar",
+      "words": 681
+    },
+    {
+      "name": "SS_SECTOR",
+      "group": "subsectorSector",
+      "layout": "planar",
+      "words": 682
+    },
+    {
+      "name": "S_FLOOR",
+      "group": "sectorHeights",
+      "layout": "planar",
+      "words": 182
+    },
+    {
+      "name": "S_CEIL",
+      "group": "sectorHeights",
+      "layout": "planar",
+      "words": 182
+    },
+    {
+      "name": "S_META",
+      "group": "sectorMeta",
+      "layout": "packed",
+      "words": 182
+    },
+    {
+      "name": "BM_START",
+      "group": "blockmap",
+      "layout": "planar",
+      "words": 865
+    },
+    {
+      "name": "BM_ITEMS",
+      "group": "blockmap",
+      "layout": "planar",
+      "words": 2064
+    },
+    {
+      "name": "ACCEL_START",
+      "group": "accelerator",
+      "layout": "planar",
+      "words": 865
+    },
+    {
+      "name": "ACCEL_PACKED",
+      "group": "accelerator",
+      "layout": "packed",
+      "words": 713
+    },
+    {
+      "name": "CELL_NODE",
+      "group": "accelerator",
+      "layout": "planar",
+      "words": 864
+    },
+    {
+      "name": "REJECT_ROWS",
+      "group": "reject",
+      "layout": "packed",
+      "words": 546
+    },
+    {
+      "name": "POW2",
+      "group": "reject",
+      "layout": "planar",
+      "words": 64
+    },
+    {
+      "name": "THINGS",
+      "group": "things",
+      "layout": "packed",
+      "words": 221
+    }
+  ],
+  "counts": {
+    "num_linedefs": 1175,
+    "num_nodes": 681,
+    "num_subsectors": 682,
+    "num_sectors": 182,
+    "num_things": 221,
+    "num_cells": 864,
+    "blockmap_entries": 2064,
+    "accel_entries": 3565,
+    "reject_blocked": 23490
+  },
+  "descent_depth": {
+    "from_root": 11.364583333333334,
+    "from_cell_node": 4.153935185185185
+  }
+}

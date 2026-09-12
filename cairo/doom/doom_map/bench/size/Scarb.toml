@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# The "with data" side of the bytecode measurement: the smallest executable
+# that loads the level and references every generated `const` array once.
+# `../baseline` is the same package with the data left out; the difference
+# between the two compiled sizes is what the level data costs (docs/G0.md D4,
+# R2-A12). It is deliberately *not* `../Scarb.toml`: the step benchmark's 23
+# measurement loops each carry a 24-field `LevelMap` and add ~9 500 words of
+# their own, which would drown the number being measured.
+[package]
+name = "doom_map_size"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_map = { path = "../.." }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_map_size"
+function = "doom_map_size::main"
+sierra = true
+
+[cairo]
+enable-gas = false

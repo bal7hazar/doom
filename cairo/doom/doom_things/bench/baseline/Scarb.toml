@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# The "without data" side of the bytecode measurement: the same package as
+# ../size, compiled with the same flags, but referencing no generated `const`
+# table. `../measure.py` subtracts this executable's bytecode from ../size's
+# to get the words the tables contribute (docs/G0.md D4, R2-A12).
+[package]
+name = "doom_things_baseline"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_things = { path = "../.." }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_things_baseline"
+function = "doom_things_baseline::main"
+sierra = true
+
+[cairo]
+enable-gas = false

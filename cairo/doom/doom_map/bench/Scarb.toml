@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Standalone package (NOT a member of the cairo/ workspace, like
+# cairo/crates/*/bench): it owns an executable target so that
+# `scarb execute --print-resource-usage` can measure the step cost of every
+# `doom_map` accessor, and `scarb build` can weigh the compiled bytecode of
+# the level data (docs/G0.md D4, R2-A12). See ../README.md.
+[package]
+name = "doom_map_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_map = { path = ".." }
+fixed = { path = "../../../crates/fixed" }
+geom2d = { path = "../../../crates/geom2d" }
+blockmap = { path = "../../../crates/blockmap" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_map_bench"
+function = "doom_map_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false
