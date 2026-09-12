@@ -1,0 +1,97 @@
+{
+  "crate": "fixed",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; op 0 is the bare loop, op 1 the two-operand pair, op 2 a single operand). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4).",
+  "bytecode_words": 2562,
+  "operations": [
+    {
+      "name": "felt_ge",
+      "op": 3,
+      "base": 1,
+      "budget": 11
+    },
+    {
+      "name": "add",
+      "op": 4,
+      "base": 1,
+      "budget": 1
+    },
+    {
+      "name": "sub",
+      "op": 5,
+      "base": 1,
+      "budget": 1
+    },
+    {
+      "name": "neg",
+      "op": 6,
+      "base": 2,
+      "budget": 2
+    },
+    {
+      "name": "mul",
+      "op": 7,
+      "base": 1,
+      "budget": 18
+    },
+    {
+      "name": "div",
+      "op": 8,
+      "base": 1,
+      "budget": 77
+    },
+    {
+      "name": "abs",
+      "op": 9,
+      "base": 2,
+      "budget": 14
+    },
+    {
+      "name": "magnitude",
+      "op": 10,
+      "base": 2,
+      "budget": 15
+    },
+    {
+      "name": "is_neg",
+      "op": 11,
+      "base": 2,
+      "budget": 15
+    },
+    {
+      "name": "ge",
+      "op": 12,
+      "base": 1,
+      "budget": 11
+    },
+    {
+      "name": "min+max",
+      "op": 13,
+      "base": 1,
+      "budget": 25
+    },
+    {
+      "name": "to_units",
+      "op": 14,
+      "base": 2,
+      "budget": 15
+    },
+    {
+      "name": "from_units",
+      "op": 15,
+      "base": 0,
+      "budget": 3
+    },
+    {
+      "name": "split",
+      "op": 16,
+      "base": 2,
+      "budget": 16
+    },
+    {
+      "name": "momentum step add(x, mul(v, c))",
+      "op": 17,
+      "base": 1,
+      "budget": 21
+    }
+  ]
+}

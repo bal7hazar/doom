@@ -1,140 +1,392 @@
 // SPDX-License-Identifier: Apache-2.0
+//! 16.16 fixed-point arithmetic, felt-first, with offset (biased) encoding.
+//!
+//! # Representation
+//!
+//! A [`Fixed`] wraps a single **non-negative** `felt252`:
+//!
+//! ```text
+//! enc = raw + BIAS,   BIAS = 2^32,   raw = value * 65536
+//! ```
+//!
+//! `raw` is the same 16.16 quantity as Doom's `fixed_t` (16 integer bits,
+//! 16 fractional bits). Doom's `fixed_t` is an `int32`, so `raw` lives in
+//! `[-2^31, 2^31)`; this crate reserves one extra bit of headroom and
+//! guarantees correctness for `raw` in `(-2^32, 2^32)`, i.e. `enc` in
+//! `(0, 2^33)`. Every value written to memory therefore stays **below
+//! 2^72**, the threshold above which S0 measured +33 % on the
+//! `range_check_9_9` component (docs/spikes/S0.md, S1.md §5.2).
+//!
+//! Why an offset instead of a raw (possibly negative) felt: S1 §5.2 measured
+//! the same half-plane predicate at **18 steps** biased against **28 steps**
+//! on raw negative felts, because a felt that may be negative has no cheap
+//! sign test (it needs a `u256` round trip), and because any negative felt is
+//! ~2^251 in memory and so always pays the +33 % penalty.
+//!
+//! # Cost model (S1 §5.1)
+//!
+//! `felt252` add = 1 step, `felt252` mul = 2 steps, a `u128` conversion = 6
+//! steps, a `u128` division ~15 steps, and the signed comparison
+//! ([`felt_ge`]) **11 steps measured here** (S1 §5.1 quotes 17 for the same
+//! shape; the constant comparison bound saves the difference). Every public
+//! function below documents its **measured** cost -- `bench/measure.py`, net
+//! of the baseline that builds the same operands, on Scarb 2.16.0.
+//!
+//! # Forbidden
+//!
+//! `/` on `felt252` is a *field* division, not an integer division, and is
+//! silently wrong (`x / 2` on an odd `x` gives a huge felt). This crate never
+//! uses it: every halving/shift/division goes through `u128`.
 
-/// 16.16 fixed-point number, backed by a signed 64-bit raw value (matches
-/// Doom's `fixed_t`: 16 integer bits, 16 fractional bits).
+/// Number of fractional bits (Doom's `FRACBITS`).
+pub const FRACBITS: u32 = 16;
+
+/// `1.0` as a raw 16.16 value (Doom's `FRACUNIT`).
+pub const FRACUNIT_RAW: felt252 = 65536;
+
+/// Offset applied to every stored value: `enc = raw + BIAS`.
+///
+/// `2^32` is exactly `65536 * 65536`, so `BIAS` is a whole number of map
+/// units, which keeps [`to_units`] a single `u128` division.
+pub const BIAS: felt252 = 0x100000000;
+
+/// Comparison bias used by [`felt_ge`]: `2^71`, the largest power of two that
+/// keeps `a - b + CMP_BIAS` strictly below the 2^72 penalty threshold.
+pub const CMP_BIAS: felt252 = 0x800000000000000000;
+const CMP_BIAS_U128: u128 = 0x800000000000000000;
+
+/// Largest `enc` a well-formed [`Fixed`] may hold, exclusive (`2^33`).
+pub const ENC_MAX: felt252 = 0x200000000;
+
+/// `2^48 - 2^32`, the constant folded back into [`mul`]'s result.
+const MUL_FIXUP: felt252 = 0xFFFF00000000;
+/// `2^64`, the offset that makes [`mul`]'s product non-negative. It is a
+/// multiple of 65536, so shifting the offset product right by 16 bits and
+/// subtracting `2^48` reproduces an arithmetic shift (floor division).
+const MUL_OFFSET: felt252 = 0x10000000000000000;
+
+/// Doom's `MAXINT` as a raw 16.16 value (`FixedDiv` overflow result).
+pub const RAW_MAX: felt252 = 0x7FFFFFFF;
+/// Doom's `MININT` as a raw 16.16 value (`FixedDiv` overflow result).
+pub const RAW_MIN: felt252 = -0x80000000;
+
+/// A 16.16 fixed-point number stored as a non-negative, offset-encoded felt.
+///
+/// The field is public so that consumers can build `const` arrays of encoded
+/// values without a function call, but it must always hold `raw + BIAS`;
+/// use [`from_raw`] / [`from_units`] to build one and [`to_raw`] /
+/// [`to_units`] to leave the encoding.
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub struct Fixed {
-    pub raw: i64,
+    pub enc: felt252,
 }
 
-/// Number of fractional bits.
-pub const FRAC_BITS: u8 = 16;
-/// `1.0` in raw 16.16 representation.
-pub const ONE: i64 = 65536;
+/// `0.0`.
+pub const ZERO: Fixed = Fixed { enc: BIAS };
+/// `1.0` (Doom's `FRACUNIT`).
+pub const FRACUNIT: Fixed = Fixed { enc: BIAS + FRACUNIT_RAW };
+/// `0.5`.
+pub const HALF: Fixed = Fixed { enc: BIAS + 32768 };
 
+// ---------------------------------------------------------------------------
+// The one comparison primitive
+// ---------------------------------------------------------------------------
+
+/// `a >= b` for two felts known to be in `[0, 2^71)`.
+///
+/// This is *the* comparison primitive of the whole geometry stack: one field
+/// subtraction, one `u128` conversion and one `u128` comparison against a
+/// constant. S1 §5.1 called 17 steps the floor for a signed comparison;
+/// comparing against the constant bias instead of a second variable brings it
+/// to 11. Sizing any function starts by counting its calls to this.
+///
+/// Panics (via `try_into`) if either argument is outside `[0, 2^71)`, which
+/// is a caller bug: every encoded quantity in this workspace is bounded by
+/// construction (`Fixed` < 2^33, `geom2d` half-plane sums < 2^54).
+///
+/// **Measured: 11 steps, 2 range checks.**
+pub fn felt_ge(a: felt252, b: felt252) -> bool {
+    let d: u128 = (a - b + CMP_BIAS).try_into().unwrap();
+    d >= CMP_BIAS_U128
+}
+
+// ---------------------------------------------------------------------------
+// Boundary conversions
+// ---------------------------------------------------------------------------
+
+/// Encode a raw 16.16 value (Doom's `fixed_t`), which may be negative.
+///
+/// **Measured: 1 step.**
+pub fn from_raw(raw: felt252) -> Fixed {
+    Fixed { enc: raw + BIAS }
+}
+
+/// Decode to a raw 16.16 value. The result is a *possibly negative* felt and
+/// must not be stored in the state: it is a boundary value only.
+///
+/// **Measured: 1 step.**
+pub fn to_raw(a: Fixed) -> felt252 {
+    a.enc - BIAS
+}
+
+/// Build from an integer number of map units (`n * FRACUNIT`).
+///
+/// **Measured: 3 steps.**
+pub fn from_units(n: felt252) -> Fixed {
+    Fixed { enc: n * FRACUNIT_RAW + BIAS }
+}
+
+/// Build from an integer number of map units given as `i64`.
+///
+/// Convenience for callers that hold a signed machine integer at a boundary
+/// (test fixtures, WAD-derived data). Prefer [`from_units`] inside the
+/// engine: it never leaves the field.
+///
+/// **Boundary helper, not benchmarked** (it is never on a hot path).
 pub fn from_int(n: i64) -> Fixed {
-    Fixed { raw: n * ONE }
+    from_units(n.into())
 }
 
-pub fn to_int(a: Fixed) -> i64 {
-    a.raw / ONE
+/// Integer map units, rounded **down** (like Doom's `x >> FRACBITS`).
+///
+/// **Measured: 15 steps, 5 range checks.**
+pub fn to_units(a: Fixed) -> felt252 {
+    let e: u128 = a.enc.try_into().unwrap();
+    let q: felt252 = (e / 65536).into();
+    // BIAS is exactly 65536 map units, so the shift of the bias is exact.
+    q - 65536
 }
 
+// ---------------------------------------------------------------------------
+// Arithmetic
+// ---------------------------------------------------------------------------
+
+/// `a + b`. No overflow check: the caller keeps the domain (see module docs).
+///
+/// **Measured: 1 step.**
 pub fn add(a: Fixed, b: Fixed) -> Fixed {
-    Fixed { raw: a.raw + b.raw }
+    Fixed { enc: a.enc + b.enc - BIAS }
 }
 
+/// `a - b`.
+///
+/// **Measured: 1 step.**
 pub fn sub(a: Fixed, b: Fixed) -> Fixed {
-    Fixed { raw: a.raw - b.raw }
+    Fixed { enc: a.enc - b.enc + BIAS }
 }
 
+/// `-a`.
+///
+/// **Measured: 2 steps.**
 pub fn neg(a: Fixed) -> Fixed {
-    Fixed { raw: -a.raw }
+    Fixed { enc: BIAS + BIAS - a.enc }
 }
 
-/// Multiply two 16.16 values, rounding toward zero (matches `FixedMul`).
-pub fn mul(a: Fixed, b: Fixed) -> Fixed {
-    let wide: i128 = a.raw.into() * b.raw.into();
-    let shifted: i128 = wide / ONE.into();
-    Fixed { raw: shifted.try_into().unwrap() }
+/// `true` if `a < 0`.
+///
+/// **Measured: 15 steps, 2 range checks.**
+pub fn is_neg(a: Fixed) -> bool {
+    !felt_ge(a.enc, BIAS)
 }
 
-/// Divide two 16.16 values, rounding toward zero (matches `FixedDiv`).
-/// Panics on division by zero, like the reference `FixedDiv` would trap.
-pub fn div(a: Fixed, b: Fixed) -> Fixed {
-    assert(b.raw != 0, 'fixed: div by zero');
-    let wide: i128 = a.raw.into() * ONE.into();
-    let shifted: i128 = wide / b.raw.into();
-    Fixed { raw: shifted.try_into().unwrap() }
+/// `|a|` as a non-negative raw felt (no re-encoding), for callers that need a
+/// magnitude to multiply or divide.
+///
+/// **Measured: 15 steps, 2 range checks.**
+pub fn magnitude(a: Fixed) -> felt252 {
+    if felt_ge(a.enc, BIAS) {
+        a.enc - BIAS
+    } else {
+        BIAS - a.enc
+    }
 }
 
+/// `(a < 0, |a|)` in a single sign test: the shape every caller that needs
+/// both the sign and the magnitude should use (`bam::point_to_angle`,
+/// `blockmap`'s ray walk), instead of calling [`is_neg`] and [`magnitude`]
+/// separately and paying for two.
+///
+/// **Measured: 16 steps, 2 range checks.**
+pub fn split(a: Fixed) -> (bool, felt252) {
+    if felt_ge(a.enc, BIAS) {
+        (false, a.enc - BIAS)
+    } else {
+        (true, BIAS - a.enc)
+    }
+}
+
+/// `|a|`.
+///
+/// **Measured: 14 steps, 2 range checks.**
 pub fn abs(a: Fixed) -> Fixed {
-    if a.raw < 0 {
-        Fixed { raw: -a.raw }
+    if felt_ge(a.enc, BIAS) {
+        a
+    } else {
+        Fixed { enc: BIAS + BIAS - a.enc }
+    }
+}
+
+/// `a * b`, i.e. Doom's `FixedMul`: the exact product shifted right by 16
+/// bits, **rounding toward minus infinity** (an arithmetic shift, exactly
+/// what `((int64_t) a * b) >> FRACBITS` does in C).
+///
+/// No sign test is needed: the product is offset by `2^64` (a multiple of
+/// 65536) before the single `u128` division, and the offset is subtracted
+/// back afterwards. Intermediates stay below 2^65.
+///
+/// **Measured: 18 steps, 5 range checks** -- exactly the 18 S1 §5.1
+/// measured for the same operation on bare magnitudes, sign handling
+/// included here.
+pub fn mul(a: Fixed, b: Fixed) -> Fixed {
+    let p = (a.enc - BIAS) * (b.enc - BIAS) + MUL_OFFSET;
+    let u: u128 = p.try_into().unwrap();
+    let q: felt252 = (u / 65536).into();
+    Fixed { enc: q - MUL_FIXUP }
+}
+
+/// `a / b`, i.e. Doom's `FixedDiv`: `(a << 16) / b` truncated **toward
+/// zero**, with Doom's overflow guard — when `|a| >> 14 >= |b|` (which
+/// includes every division by zero) the result saturates to `MAXINT` or
+/// `MININT` according to the sign of the quotient, exactly like the C
+/// original. It never panics.
+///
+/// `div` is the most expensive primitive of the stack; S1 §7 recommends
+/// using it only where Doom does (intercept fractions, slide slopes) and
+/// comparing cross products instead of dividing whenever two fractions only
+/// have to be *ordered*.
+///
+/// **Measured: 77 steps, 12 range checks.** S1 §5.1 quotes 55 steps for a
+/// division of two bare non-negative magnitudes; the extra 22 are the two
+/// sign tests and Doom's overflow guard, which that figure did not include.
+pub fn div(a: Fixed, b: Fixed) -> Fixed {
+    let a_neg = !felt_ge(a.enc, BIAS);
+    let b_neg = !felt_ge(b.enc, BIAS);
+    let ma_f = if a_neg {
+        BIAS - a.enc
+    } else {
+        a.enc - BIAS
+    };
+    let mb_f = if b_neg {
+        BIAS - b.enc
+    } else {
+        b.enc - BIAS
+    };
+    let negative = a_neg != b_neg;
+    // Doom writes the guard as `(abs(a) >> 14) >= abs(b)`; over integers that
+    // is exactly `abs(a) >= abs(b) << 14`. Kept in the field: measured, the
+    // whole `div` costs 77 steps this way, 86 with a `u128` division and 101
+    // with a checked `u128` multiplication.
+    if felt_ge(ma_f, mb_f * 16384) {
+        // Doom's FixedDiv overflow branch (also catches mb == 0).
+        return if negative {
+            Fixed { enc: RAW_MIN + BIAS }
+        } else {
+            Fixed { enc: RAW_MAX + BIAS }
+        };
+    }
+    // The guard above bounds the quotient by 2^30, so `ma_f << 16 < 2^48`.
+    let num: u128 = (ma_f * 65536).try_into().unwrap();
+    let den: u128 = mb_f.try_into().unwrap();
+    let q: felt252 = (num / den).into();
+    if negative {
+        Fixed { enc: BIAS - q }
+    } else {
+        Fixed { enc: BIAS + q }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Comparisons
+// ---------------------------------------------------------------------------
+
+/// `a >= b`. **Measured: 11 steps, 2 range checks.**
+pub fn ge(a: Fixed, b: Fixed) -> bool {
+    felt_ge(a.enc, b.enc)
+}
+
+/// `a > b`. **Measured: 11 steps, 2 range checks.**
+pub fn gt(a: Fixed, b: Fixed) -> bool {
+    !felt_ge(b.enc, a.enc)
+}
+
+/// `a <= b`. **Measured: 11 steps, 2 range checks.**
+pub fn le(a: Fixed, b: Fixed) -> bool {
+    felt_ge(b.enc, a.enc)
+}
+
+/// `a < b`. **Measured: 11 steps, 2 range checks.**
+pub fn lt(a: Fixed, b: Fixed) -> bool {
+    !felt_ge(a.enc, b.enc)
+}
+
+/// Smaller of the two. **Measured: 13 steps, 2 range checks** (25 for
+/// `min` and `max` together).
+pub fn min(a: Fixed, b: Fixed) -> Fixed {
+    if felt_ge(a.enc, b.enc) {
+        b
     } else {
         a
     }
 }
 
-pub fn lt(a: Fixed, b: Fixed) -> bool {
-    a.raw < b.raw
+/// Larger of the two. **Measured: 13 steps, 2 range checks** (25 for
+/// `min` and `max` together).
+pub fn max(a: Fixed, b: Fixed) -> Fixed {
+    if felt_ge(a.enc, b.enc) {
+        a
+    } else {
+        b
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Operator sugar (one concrete impl each, no generic monomorphisation)
+// ---------------------------------------------------------------------------
+
+pub impl FixedAdd of Add<Fixed> {
+    fn add(lhs: Fixed, rhs: Fixed) -> Fixed {
+        add(lhs, rhs)
+    }
+}
+
+pub impl FixedSub of Sub<Fixed> {
+    fn sub(lhs: Fixed, rhs: Fixed) -> Fixed {
+        sub(lhs, rhs)
+    }
+}
+
+pub impl FixedMul of Mul<Fixed> {
+    fn mul(lhs: Fixed, rhs: Fixed) -> Fixed {
+        mul(lhs, rhs)
+    }
+}
+
+pub impl FixedDiv of Div<Fixed> {
+    fn div(lhs: Fixed, rhs: Fixed) -> Fixed {
+        div(lhs, rhs)
+    }
+}
+
+pub impl FixedNeg of Neg<Fixed> {
+    fn neg(a: Fixed) -> Fixed {
+        neg(a)
+    }
+}
+
+pub impl FixedPartialOrd of PartialOrd<Fixed> {
+    fn lt(lhs: Fixed, rhs: Fixed) -> bool {
+        lt(lhs, rhs)
+    }
+    fn le(lhs: Fixed, rhs: Fixed) -> bool {
+        le(lhs, rhs)
+    }
+    fn gt(lhs: Fixed, rhs: Fixed) -> bool {
+        gt(lhs, rhs)
+    }
+    fn ge(lhs: Fixed, rhs: Fixed) -> bool {
+        ge(lhs, rhs)
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{Fixed, ONE, abs, add, div, from_int, lt, mul, neg, sub, to_int};
-
-    #[test]
-    fn test_from_to_int_roundtrip() {
-        assert(to_int(from_int(0)) == 0, 'zero roundtrip');
-        assert(to_int(from_int(7)) == 7, 'positive roundtrip');
-        assert(to_int(from_int(-7)) == -7, 'negative roundtrip');
-    }
-
-    #[test]
-    fn test_add_sub() {
-        let a = from_int(3);
-        let b = from_int(4);
-        assert(add(a, b) == from_int(7), 'add');
-        assert(sub(b, a) == from_int(1), 'sub');
-    }
-
-    #[test]
-    fn test_mul_reference_values() {
-        // 1.5 * 2.0 == 3.0
-        let one_half = Fixed { raw: ONE + ONE / 2 };
-        let two = from_int(2);
-        assert(mul(one_half, two) == from_int(3), 'mul 1.5*2');
-        // 1.0 * 1.0 == 1.0
-        assert(mul(from_int(1), from_int(1)) == from_int(1), 'mul identity');
-    }
-
-    #[test]
-    fn test_div_reference_values() {
-        // 6.0 / 2.0 == 3.0
-        assert(div(from_int(6), from_int(2)) == from_int(3), 'div');
-    }
-
-    #[test]
-    #[should_panic(expected: 'fixed: div by zero')]
-    fn test_div_by_zero_panics() {
-        div(from_int(1), from_int(0));
-    }
-
-    #[test]
-    fn test_abs_and_neg() {
-        assert(abs(from_int(-5)) == from_int(5), 'abs neg');
-        assert(abs(from_int(5)) == from_int(5), 'abs pos');
-        assert(neg(from_int(5)) == from_int(-5), 'neg');
-    }
-
-    #[test]
-    fn test_ordering_property() {
-        // Property: for any a < b, a + c < b + c (translation invariance).
-        let a = from_int(1);
-        let b = from_int(2);
-        let c = from_int(100);
-        assert(lt(a, b), 'a<b');
-        assert(lt(add(a, c), add(b, c)), 'translation invariance');
-    }
-
-    #[test]
-    fn test_step_budget_mul() {
-        // Budget test: multiplying two representative fixed values must stay
-        // well within a tiny step budget so regressions are caught early.
-        let mut i: u32 = 0;
-        let mut acc = from_int(1);
-        let step = Fixed { raw: ONE + 1 };
-        loop {
-            if i == 16 {
-                break;
-            }
-            acc = mul(acc, step);
-            i += 1;
-        }
-        // No panic and no runaway growth outside i64 range (checked by the
-        // `try_into().unwrap()` inside `mul`/`div` above): reaching here at
-        // all is the pass condition for this budget/regression smoke test.
-        assert(acc.raw != 0, 'non-zero result');
-    }
-}
+mod tests;
