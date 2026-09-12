@@ -143,6 +143,30 @@ exécutables Scarb passent par le chemin **bootloader** (`cairo-program-runner-l
 route récursive. Établir ce pipeline « exécutable Scarb → preuve » avec le monorepo courant est la
 première tâche du spike S0 ; les chiffres de temps/mémoire ci-dessus (Scarb 2.16) sont à refaire avec lui.
 
+### 4.4 Origine du coût mémoire fixe : la trace pré-traitée
+
+`crates/common/src/preprocessed_columns/preprocessed_trace.rs` définit trois variantes :
+
+| Variante | Cellules M31 | Colonnes | Trace max | Usage |
+|---|---|---|---|---|
+| `Canonical` | **543 100 528** (dont tables Pedersen `PedersenPoints::<18>`) | 161 | 2^25 | défaut Scarb / SHARP |
+| `CanonicalWithoutPedersen` | 73 338 480 | 105 | 2^25 | — |
+| `CanonicalSmall` | **10 161 776** | 156 | **2^20** | route récursive « privacy », navigateur |
+
+Le coût fixe de ~17 GB mesuré avec Scarb provient de `Canonical` (2,2 GB de M31 bruts avant blow-up
+et Merkle). WASM64 est plafonné à **16 GB** par la spécification (Chrome 133+) : `Canonical` est
+inutilisable dans un navigateur ; `CanonicalSmall` borne les segments à **2^20 steps** (bootloader compris).
+
+### 4.5 Registres de circuits (route récursive)
+
+`circuit_registry_definitions/` : `production` = feuilles de trace **log 25 à 29** (paramètres SHARP,
+`canonical`) ; `canonical_small` = **log 20 exactement** avec cibles de padding (`eq` 2^20, `qm31_ops` 2^23,
+`m31_to_u32` 2^21, `triple_xor` 2^20, `blake_g_gate` 2^23). `leaf_prover` choisit le circuit selon la
+taille de trace et padde au gabarit commun du registre (condition de l'arbre `recursive_tree`).
+Un registre dédié au projet doit être généré (`circuit_params --registry`). Le vérifieur Cairo on-chain
+est générique : il recalcule `circuit_hash` depuis l'engagement pré-traité et sort
+`blake2s(circuit_hash ‖ outputs)` ; le contrat consommateur épingle le hash du multiverifier du registre.
+
 ## 5. Preuve côté navigateur
 
 ### 5.1 Existant
@@ -306,6 +330,8 @@ permettre le replay par des tiers (pas de coût DA).
 6. **U6** Comportement du prouveur courant face aux felts ≥ 2^128 et au builtin bitwise (S0).
 7. **U7** Décision de licence pour `doom_core` (GPL vs clean-room).
 8. **U8** Hébergement du wrapper (Cartridge ? auto-hébergé ?) et politique de fallback « prouveur distant ».
+
+L'analyse détaillée des risques et les actions associées sont dans [RISKS.md](RISKS.md).
 
 ## 11. Glossaire
 
