@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Self-hosting the wrapper (G0 decision D7, risk R8-A4).
+#
+#   docker compose -f infra/wrapper/docker-compose.yml up --build
+#
+# Resource notes — these are measurements, not guesses (S4, S4b, and the P3.4 end-to-end run):
+#
+#   * every circuit proof, leaf or fold, peaks at **32.1–32.5 GB of RSS** with the `doom` registry
+#     and **21.4–21.9 GB** with `doom_fold4_min`. A 32 GB host cannot run the pipeline at all;
+#     **64 GB is the floor** and is what `mem_limit` below reserves;
+#   * `max_circuit_proofs` is derived from the container's memory and the registry's measured RSS:
+#     one proof at a time on 64 GB with `doom`, two with `doom_fold4_min`. Raising it past what
+#     the memory allows does not fail — it swaps, and a swapping prover is slower than a serial
+#     one by an order of magnitude;
+#   * time: ~24 s per leaf and ~28 s per fold reduction with `doom` on a 12-core M2 Max
+#     (13.3 s / 13.5 s with `doom_fold4_min`). A 25-leaf game is ~10 min of machine time; a batch
+#     of 8 games is ~80 min. Size the CPU reservation for one prover: it saturates all cores.
+#   * disk: a leaf proof is ~550 kB and a root proof ~1.5 MB, so a season of a few thousand games
+#     is tens of GB. The `queue` volume holds SQLite; `proofs` holds the artifacts.
+#
+# The service is bound to localhost by default: put a TLS terminator in front of it before
+# exposing it, and replace the API key (`WRAPPER_API_KEY`) with something generated.
+
+services:
+  wrapper:
+    build:
+      context: ../..
+      dockerfile: infra/wrapper/Dockerfile
+    image: hellproof-wrapper:0.1.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      RUST_LOG: "info"
+      WRAPPER_BIND: "0.0.0.0:8787"
+      WRAPPER_DATA_DIR: "/data"
+      # M runs or T seconds, whichever comes first (G0 D6).
+      WRAPPER_BATCH_MAX_RUNS: "8"
+      WRAPPER_BATCH_MAX_WAIT_SECS: "600"
+      # Leave unset to derive it from the memory limit and the registry (see above).
+      # WRAPPER_MAX_CIRCUIT_PROOFS: "1"
+      # WRAPPER_API_KEY: "generate-me"
+    volumes:
+      # The persistent queue: losing it loses in-flight games (it is the resume log).
+      - queue:/data
+      # The compiled Scarb executables the wrapper is allowed to prove, listed in wrapper.toml.
+      - ./programs:/opt/hellproof/programs:ro
+      # Optional: override the baked-in configuration.
+      # - ./wrapper.toml:/opt/hellproof/wrapper.toml:ro
+    # 64 GB floor: one 32.5 GB circuit proof plus the OS, the queue and verification jobs.
+    mem_limit: 64g
+    memswap_limit: 64g          # no swap: a swapping prover is an order of magnitude slower
+    shm_size: 1g
+    cpus: 12.0
+    stop_grace_period: 60s      # let a running child finish; the queue resumes anything it does not
+
+volumes:
+  queue:
