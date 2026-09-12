@@ -78,7 +78,8 @@ function usage(): never {
     `submit-batch — P4.3 on-chain submission (devnet only)
 
   --rpc <url>            local devnet RPC (default http://127.0.0.1:5081/rpc)
-  --account <addr>:<key> devnet account; ':key' may be omitted for --dry-run
+  --account <addr>[:<key>] devnet account; the key may come from SUBMIT_PRIVATE_KEY
+                         instead, and is not needed at all for --dry-run
   --batch <path>         fixture directory or saved 'GET /v1/batches/{id}' JSON
   --router <addr>        StwoCircuitRouter (P4.0)
   --runs <addr>          DoomRuns (P4.2)
@@ -165,10 +166,14 @@ async function main(): Promise<void> {
   const work = arg("work", join(process.cwd(), ".work"));
   const rpc = new RpcClient(rpcUrl);
 
-  const [address, privateKey] = arg("account").split(":");
+  // The key may also come from SUBMIT_PRIVATE_KEY, which keeps it out of the process list.
+  const [address, inlineKey] = arg("account").split(":");
+  const privateKey = inlineKey ?? process.env["SUBMIT_PRIVATE_KEY"];
   if (!address) throw new Error("--account must be <address>[:<private key>]");
   const send = flag("send");
-  if (send && !privateKey) throw new Error("--send needs --account <address>:<private key>");
+  if (send && !privateKey) {
+    throw new Error("--send needs a key: --account <address>:<key>, or SUBMIT_PRIVATE_KEY");
+  }
 
   const batchPath = arg("batch");
   const loaded = loadBatch(batchPath);

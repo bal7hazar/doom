@@ -13,7 +13,7 @@
 
 | Target | Result |
 |---|---|
-| **C5** — estimate within 20 % of the receipt | **−0.012 %** on the sequence total, **−1.04 %** on the worst transaction |
+| **C5** — estimate within 20 % of the receipt | **−0.012 %** on the sequence total, **−1.04 %** on the worst of the **16 transactions** sent across three plans and two batches |
 | R7-A1 — simulate the ordered sequence, from the signing account, bounds ×1.15 / ×1.30 | done; the whole gap is a **constant 50 240 gas per transaction** (§4.2) |
 | R7-A2 — STRK + timestamped fiat, per transaction, "> 2× the 24 h median" warning | done, with a documented limitation: a fresh client has no history and says so (§5) |
 | R7-A5 — every transaction under 90 % of the invoke cap | **the P4.0 five-transaction plan cannot carry an R7-A1 bound** (§4.3); default is 6 tx, `--fri-split 1,2,4` is fully compliant at +0.3 % |
@@ -199,7 +199,10 @@ the transaction is refused before execution. The 5-tx plan is only sendable with
 `planPhasesAuto` therefore defaults to six transactions, and the CLI **re-plans and re-estimates
 automatically** when a bound comes out over the cap — but only before the first transaction is
 sent, because a started sequence's plan is pinned by its checkpoint. `results/dryrun_B2-1_doom_5tx.json`
-and `_7tx.json` hold the three measurements.
+and `_7tx.json` hold the three estimates; the seven-transaction plan was also **sent** on a fresh
+deployment (`results/devnet_B2-1_doom_7tx.json`): 3 854 361 440 L2 gas, 117.46 STRK, the same
+fact, total gap **−0.014 %**, and the same 50 240-gas constant on all eight transactions — which
+is the cross-check that §4.2's explanation does not depend on the plan.
 
 This is the practical cost of the QM31 lever still being open (`onchain-verifier.md` §10.2): when
 the FRI walk gets cheaper, the 5-tx plan becomes bound-able again and the extra transaction goes

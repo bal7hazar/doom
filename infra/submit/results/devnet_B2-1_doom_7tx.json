@@ -1,0 +1,334 @@
+{
+ "timestamp_utc": "2026-09-12T17:58:10.069Z",
+ "rpc": "http://127.0.0.1:5081/rpc",
+ "batch": "B2-1_doom",
+ "router": "0x03d1b0c2da87d3fda38d04744f9d34e852c7e35f197ea3a92169555212b3940b",
+ "doom_runs": "0x059572f1f33d7505673d607aa9f0bd87e8098d102394542259207d8d2a0068ca",
+ "proof_id": "0x1",
+ "version_id": 1,
+ "sender": "0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+ "account_class": "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+ "simulation_flags": [
+  "SKIP_VALIDATE"
+ ],
+ "prices": {
+  "l2_gas_price_fri": "30475398907",
+  "l1_data_gas_price_fri": "37485578886",
+  "l1_gas_price_fri": "92599658875965",
+  "block_number": 40,
+  "starknet_version": "0.14.4"
+ },
+ "strk_price": {
+  "usd": 0.02916986,
+  "eur": 0.02514208,
+  "at": "2026-09-12T17:58:10.067Z",
+  "source": "coingecko"
+ },
+ "price_verdict": {
+  "kind": "unknown",
+  "samples": 1,
+  "reason": "only 1 samples in the last 24 h (need 8)"
+ },
+ "plan": [
+  {
+   "label": "begin",
+   "entrypoint": "begin",
+   "calldata_felts": 4625,
+   "payload_slots": 4613,
+   "meta": {
+    "sections": [
+     "head",
+     "qv0/dec0",
+     "qv1/dec1"
+    ]
+   }
+  },
+  {
+   "label": "merkle",
+   "entrypoint": "merkle",
+   "calldata_felts": 4583,
+   "payload_slots": 4344,
+   "meta": {
+    "sections": [
+     "qv2/dec2",
+     "qv3/dec3"
+    ]
+   }
+  },
+  {
+   "label": "answers",
+   "entrypoint": "answers",
+   "calldata_felts": 3685,
+   "payload_slots": 3448,
+   "meta": {
+    "sections": [
+     "sampled",
+     "qv0",
+     "qv1",
+     "qv2",
+     "qv3"
+    ]
+   }
+  },
+  {
+   "label": "fri1",
+   "entrypoint": "fri",
+   "calldata_felts": 2232,
+   "payload_slots": 1652,
+   "meta": {
+    "layers": [
+     0
+    ]
+   }
+  },
+  {
+   "label": "fri2",
+   "entrypoint": "fri",
+   "calldata_felts": 1912,
+   "payload_slots": 1332,
+   "meta": {
+    "layers": [
+     1
+    ]
+   }
+  },
+  {
+   "label": "fri3",
+   "entrypoint": "fri",
+   "calldata_felts": 2247,
+   "payload_slots": 1667,
+   "meta": {
+    "layers": [
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "label": "fri4",
+   "entrypoint": "fri",
+   "calldata_felts": 693,
+   "payload_slots": 113,
+   "meta": {
+    "layers": [
+     4,
+     5
+    ]
+   }
+  }
+ ],
+ "estimated": [
+  {
+   "label": "begin",
+   "phase": "verifier",
+   "calldata_felts": 4625,
+   "l2_gas": "459145440",
+   "l1_data_gas": "384",
+   "fee_fri": "13992654834792326304",
+   "pct_of_invoke_cap": 37.945904132231405,
+   "l2_gas_bound": "528017256",
+   "l1_data_gas_bound": "500",
+   "naive_x15_l2_gas": "688718160",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "merkle",
+   "phase": "verifier",
+   "calldata_felts": 4583,
+   "l2_gas": "390766400",
+   "l1_data_gas": "256",
+   "fee_fri": "11908771515760519616",
+   "pct_of_invoke_cap": 32.29474380165289,
+   "l2_gas_bound": "449381360",
+   "l1_data_gas_bound": "333",
+   "naive_x15_l2_gas": "586149600",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "answers",
+   "phase": "verifier",
+   "calldata_felts": 3685,
+   "l2_gas": "861288640",
+   "l1_data_gas": "320",
+   "fee_fri": "26248126873452760000",
+   "pct_of_invoke_cap": 71.18087933884297,
+   "l2_gas_bound": "990481936",
+   "l1_data_gas_bound": "416",
+   "naive_x15_l2_gas": "1291932960",
+   "naive_x15_over_cap": true
+  },
+  {
+   "label": "fri1",
+   "phase": "verifier",
+   "calldata_felts": 2232,
+   "l2_gas": "565529280",
+   "l1_data_gas": "256",
+   "fee_fri": "17234739997896691776",
+   "pct_of_invoke_cap": 46.73795702479339,
+   "l2_gas_bound": "650358672",
+   "l1_data_gas_bound": "333",
+   "naive_x15_l2_gas": "848293920",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "fri2",
+   "phase": "verifier",
+   "calldata_felts": 1912,
+   "l2_gas": "539530880",
+   "l1_data_gas": "256",
+   "fee_fri": "16442428386952942976",
+   "pct_of_invoke_cap": 44.58932892561983,
+   "l2_gas_bound": "620460512",
+   "l1_data_gas_bound": "333",
+   "naive_x15_l2_gas": "809296320",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "fri3",
+   "phase": "verifier",
+   "calldata_felts": 2247,
+   "l2_gas": "910606080",
+   "l1_data_gas": "256",
+   "fee_fri": "27751093131447749376",
+   "pct_of_invoke_cap": 75.25670082644628,
+   "l2_gas_bound": "1047196992",
+   "l1_data_gas_bound": "333",
+   "naive_x15_l2_gas": "1365909120",
+   "naive_x15_over_cap": true
+  },
+  {
+   "label": "fri4",
+   "phase": "verifier",
+   "calldata_felts": 663,
+   "l2_gas": "110808720",
+   "l1_data_gas": "416",
+   "fee_fri": "3376955538374885616",
+   "pct_of_invoke_cap": 9.157745454545454,
+   "l2_gas_bound": "127430028",
+   "l1_data_gas_bound": "541",
+   "naive_x15_l2_gas": "166213080",
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "submit_batch",
+   "phase": "consumer",
+   "calldata_felts": 111,
+   "l2_gas": "16164080",
+   "l1_data_gas": "2400",
+   "fee_fri": "492696751353986960",
+   "pct_of_invoke_cap": 1.3358743801652893,
+   "l2_gas_bound": "18588692",
+   "l1_data_gas_bound": "3120",
+   "naive_x15_l2_gas": "24246120",
+   "naive_x15_over_cap": false
+  }
+ ],
+ "total_l2_gas": "3853839520",
+ "total_l1_data_gas": "4544",
+ "total_fee_fri": "117447467030031862624",
+ "total_strk": 117.44746703003186,
+ "total_usd": 3.425926170620645,
+ "receipts": [
+  {
+   "label": "begin",
+   "transaction_hash": "0x5d2db006216c8263439c112b19156f2ff6c6cf1cc2df1f56aab683709f6fbea",
+   "estimated_l2_gas": 459145440,
+   "actual_l2_gas": 459195680,
+   "gap_l2_pct": -0.010940869478563039,
+   "estimated_l1_data_gas": 384,
+   "actual_l1_data_gas": 320,
+   "estimated_fee_fri": "13992654834792326304",
+   "actual_fee_fri": "13994185918833413984",
+   "pct_of_invoke_cap": 37.950056198347106
+  },
+  {
+   "label": "merkle",
+   "transaction_hash": "0x5536bb1e2c9825dae50348cdf0e33e1711ad1decc305a8b2f68f5f3b8c7da85",
+   "estimated_l2_gas": 390766400,
+   "actual_l2_gas": 390816640,
+   "gap_l2_pct": -0.012855133292175072,
+   "estimated_l1_data_gas": 256,
+   "actual_l1_data_gas": 256,
+   "estimated_fee_fri": "11908771515760519616",
+   "actual_fee_fri": "11910302599801607296",
+   "pct_of_invoke_cap": 32.29889586776859
+  },
+  {
+   "label": "answers",
+   "transaction_hash": "0x3c2ecf315877c8aaab4ef97a2036f9d48ae85abcf05b2663df44d40d5084665",
+   "estimated_l2_gas": 861288640,
+   "actual_l2_gas": 861338880,
+   "gap_l2_pct": -0.0058327797765265164,
+   "estimated_l1_data_gas": 320,
+   "actual_l1_data_gas": 320,
+   "estimated_fee_fri": "26248126873452760000",
+   "actual_fee_fri": "26249657957493847680",
+   "pct_of_invoke_cap": 71.18503140495868
+  },
+  {
+   "label": "fri1",
+   "transaction_hash": "0x3ba0b9f9b532ea68e038509fac42688895b593828979863cc9f378af9842300",
+   "estimated_l2_gas": 565529280,
+   "actual_l2_gas": 565579520,
+   "gap_l2_pct": -0.008882924190748633,
+   "estimated_l1_data_gas": 256,
+   "actual_l1_data_gas": 256,
+   "estimated_fee_fri": "17234739997896691776",
+   "actual_fee_fri": "17236271081937779456",
+   "pct_of_invoke_cap": 46.74210909090909
+  },
+  {
+   "label": "fri2",
+   "transaction_hash": "0x6f780cee5026681a4683970db4eb13131927e90a957fa1baa19464b2ce4b9ca",
+   "estimated_l2_gas": 539530880,
+   "actual_l2_gas": 539581120,
+   "gap_l2_pct": -0.00931092622366031,
+   "estimated_l1_data_gas": 256,
+   "actual_l1_data_gas": 256,
+   "estimated_fee_fri": "16442428386952942976",
+   "actual_fee_fri": "16443959470994030656",
+   "pct_of_invoke_cap": 44.59348099173554
+  },
+  {
+   "label": "fri3",
+   "transaction_hash": "0x61fcdbb4b40735a6df69373056f20864ed7191e6e4a408e89d5780249bf93e7",
+   "estimated_l2_gas": 910606080,
+   "actual_l2_gas": 910656320,
+   "gap_l2_pct": -0.005516900162730985,
+   "estimated_l1_data_gas": 256,
+   "actual_l1_data_gas": 256,
+   "estimated_fee_fri": "27751093131447749376",
+   "actual_fee_fri": "27752624215488837056",
+   "pct_of_invoke_cap": 75.26085289256199
+  },
+  {
+   "label": "fri4",
+   "transaction_hash": "0x7778454df92df6b0f080fc3bbea70d1953e80baba9e09f823692a8af075724",
+   "estimated_l2_gas": 110808720,
+   "actual_l2_gas": 110858960,
+   "gap_l2_pct": -0.04531884477357536,
+   "estimated_l1_data_gas": 416,
+   "actual_l1_data_gas": 384,
+   "estimated_fee_fri": "3376955538374885616",
+   "actual_fee_fri": "3378486622415973296",
+   "pct_of_invoke_cap": 9.161897520661157
+  },
+  {
+   "label": "submit_batch",
+   "transaction_hash": "0x2914d13dd50b05182c4b12cd8998b90998a8c53166f83f9140cbf7d1d4ae40e",
+   "estimated_l2_gas": 16164080,
+   "actual_l2_gas": 16334320,
+   "gap_l2_pct": -1.0422227555233399,
+   "estimated_l1_data_gas": 2400,
+   "actual_l1_data_gas": 1664,
+   "estimated_fee_fri": "492696751353986960",
+   "actual_fee_fri": "497884883263914640",
+   "pct_of_invoke_cap": 1.3499438016528926
+  }
+ ],
+ "resumed_at": 0,
+ "fact": "0x53ae959ad8221763147edc9660adf753b1fa6423cd353914e304a00a98c3c40",
+ "total_actual_l2_gas": 3854361440,
+ "total_actual_fee_fri": "117463372750229404064",
+ "total_gap_l2_pct": -0.013541023801857047
+}

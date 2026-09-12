@@ -88,11 +88,14 @@ which is not a margin. Hence the default is the 6-transaction plan; `--fri-split
 verifier transactions, `results/dryrun_B2-1_doom_7tx.json`) keeps every *bound* under 90 % of the
 cap — the full R7-A5 rule — for +0.3 % total gas.
 
-| plan | verifier tx | worst consumption | worst bound | total L2 gas |
-|---|---:|---:|---:|---:|
-| `--fri-split 2` (P4.0, 5 tx) | 5 | 90.3 % | **103.9 % — refused** | 3.81e9 |
-| `--fri-split 1,3` (default, 6 tx) | 6 | 84.5 % | 97.1 % | 3.83e9 |
-| `--fri-split 1,2,4` (7 tx) | 7 | 75.3 % | **86.5 %** | 3.84e9 |
+| plan | verifier tx | worst consumption | worst bound | total L2 gas | |
+|---|---:|---:|---:|---:|---|
+| `--fri-split 2` (P4.0, 5 tx) | 5 | 90.3 % | **103.9 % — refused** | 3.81e9 | estimated only |
+| `--fri-split 1,3` (default, 6 tx) | 6 | 84.5 % | 97.1 % | 3.843e9 | sent, 117.12 STRK |
+| `--fri-split 1,2,4` (7 tx) | 7 | 75.3 % | **86.5 %** | 3.854e9 | sent, 117.46 STRK |
+
+Both sent plans register the same fact and land within 0.014 % of their estimate
+(`results/devnet_B2-1_doom.json`, `results/devnet_B2-1_doom_7tx.json`).
 
 ## Tests
 

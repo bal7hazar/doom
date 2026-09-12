@@ -51,11 +51,10 @@ declare_class() {
 
 deploy() {
   local class_hash=$1; shift
-  local out
-  out=$(sncast --json --accounts-file "$ACCOUNTS_FILE" --account "$ACCOUNT" \
-        deploy --class-hash "$class_hash" --url "$URL" \
-        ${1:+--constructor-calldata "$@"})
-  echo "$out" | sed -n 's/.*"contract_address":"\(0x[0-9a-f]*\)".*/\1/p' | head -1
+  local args=(--json --accounts-file "$ACCOUNTS_FILE" --account "$ACCOUNT"
+              deploy --class-hash "$class_hash" --url "$URL")
+  [ $# -gt 0 ] && args+=(--constructor-calldata "$@")
+  sncast "${args[@]}" | sed -n 's/.*"contract_address":"\(0x[0-9a-f]*\)".*/\1/p' | head -1
 }
 
 echo "declaring the verifier classes…"
