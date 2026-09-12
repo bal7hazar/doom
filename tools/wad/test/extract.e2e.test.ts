@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMapCairo } from "../src/cairoOutput.js";
+import { DEFAULT_EMIT_CONFIG } from "../src/emitConfig.js";
 import { buildMapJson } from "../src/jsonOutput.js";
 import { extractAssetIndex, extractMap } from "../src/mapExtract.js";
 import { buildReport } from "../src/report.js";
@@ -82,18 +83,22 @@ describeIfRealWad("end-to-end extraction of E1M1 from the real freedoom1.wad", (
     expect(cairo).toContain("pub const LINEDEF_CB: [felt252;");
     expect(cairo).toContain("pub const NODE_AB: [felt252;");
     expect(cairo).toContain("pub const BLOCKMAP_WORDS: [u32;");
-    expect(cairo).toContain("pub const ACCEL_START: [u32;");
-    // Cold/packed groups (includes bbox/sides/accelerator - see emitConfig.ts for why).
+    // CELL_NODE (R2-A9/D22): always emitted, planar by default.
+    expect(cairo).toContain("pub const CELL_NODE: [u32;");
+    // Cold/packed groups (includes bbox/sides - see emitConfig.ts for why).
     expect(cairo).toContain("pub const REJECT_ROWS: [felt252;");
     expect(cairo).toContain("pub const THINGS: [felt252;");
     expect(cairo).toContain("pub const SS_SECTOR_PACKED: [felt252;");
-    expect(cairo).toContain("pub const ACCEL_SUBSECTORS_PACKED: [felt252;");
     expect(cairo).toContain("pub const LINEDEF_BBOX_LR: [felt252;");
     expect(cairo).toContain("pub const LINEDEF_SIDES: [u32;");
     // v2 drops SEGS and texture names from the Cairo output (task item 1);
     // they stay in the JSON output only (checked below).
     expect(cairo).not.toContain("pub const SEGS");
     expect(cairo).not.toContain("TEXTURE");
+    // The R2-A9 candidate-list arrays are off by default (D22: CELL_NODE
+    // alone reproduces a full descent exactly) - not present unless opted in.
+    expect(cairo).not.toContain("pub const ACCEL_START");
+    expect(cairo).not.toContain("pub const ACCEL_SUBSECTORS");
     // Spot-check: no felt252 hex literal in the file should reach 2^128.
     const hexLiterals = cairo.match(/0x[0-9a-f]+/g) ?? [];
     expect(hexLiterals.length).toBeGreaterThan(1000);
@@ -102,6 +107,14 @@ describeIfRealWad("end-to-end extraction of E1M1 from the real freedoom1.wad", (
     }
     // Every array actually written to `source` was accounted for in the budget metadata.
     expect(arrays.length).toBeGreaterThan(20);
+  });
+
+  it("emits the R2-A9 candidate-list arrays when opted in (emitAccelCandidates: true)", () => {
+    const { source: cairo } = buildMapCairo(map, { ...DEFAULT_EMIT_CONFIG, emitAccelCandidates: true });
+    expect(cairo).toContain("pub const ACCEL_START: [u32;");
+    expect(cairo).toContain("pub const ACCEL_COUNT: [u32;");
+    expect(cairo).toContain("pub const ACCEL_SUBSECTORS_PACKED: [felt252;");
+    expect(cairo).toContain("pub const CELL_NODE: [u32;");
   });
 
   it("builds a non-empty report mentioning the map name and at least one monster", () => {
