@@ -1,0 +1,16 @@
+== bench N=1 ==
+	steps: 1,540
+	memory holes: 87
+		range_check_builtin: 191
+== bench N=4 ==
+	steps: 5,645
+	memory holes: 320
+		range_check_builtin: 749
+== bench N=8 ==
+	steps: 11,105
+	memory holes: 634
+		range_check_builtin: 1,494
+== bench N=50 ==
+	steps: 68,315
+	memory holes: 3,916
+		range_check_builtin: 9,309

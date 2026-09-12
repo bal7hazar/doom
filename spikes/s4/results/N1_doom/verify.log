@@ -1,0 +1,12 @@
+   Executing stwo_circuit_verifier
+Resources:
+	steps: 5,281,983
+	max memory address: 4,989,888
+	memory holes: 199,233
+	builtins:
+		range_check_builtin: 508,327
+		output_builtin: 8
+	memory segments:
+		execution: 4,438,541
+		range_check: 508,327
+		output: 8
