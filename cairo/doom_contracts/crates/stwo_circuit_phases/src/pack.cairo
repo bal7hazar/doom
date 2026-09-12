@@ -49,22 +49,13 @@ pub fn unpack(packed: Span<felt252>, n_values: u32) -> Array<felt252> {
     let mut low: felt252 = 0;
     for slot in packed {
         let [l0, l1, l2, l3, l4, l5, l6, _] = deconstruct_f252(*slot).unbox();
-        for limb in [l0, l1, l2, l3, l4, l5, l6].span() {
-            if pending == 0 {
-                if *limb == ESCAPE {
-                    pending = 1;
-                } else {
-                    values.append((*limb).into());
-                }
-            } else if pending == 1 {
-                low = (*limb).into();
-                pending = 2;
-            } else {
-                let high: felt252 = (*limb).into();
-                values.append(low + high * SHIFT_32);
-                pending = 0;
-            }
-        }
+        push_limb(ref values, ref pending, ref low, l0);
+        push_limb(ref values, ref pending, ref low, l1);
+        push_limb(ref values, ref pending, ref low, l2);
+        push_limb(ref values, ref pending, ref low, l3);
+        push_limb(ref values, ref pending, ref low, l4);
+        push_limb(ref values, ref pending, ref low, l5);
+        push_limb(ref values, ref pending, ref low, l6);
     }
     assert!(pending == 0, "unpack: truncated escape");
     assert!(values.len() >= n_values, "unpack: short payload");
@@ -72,6 +63,24 @@ pub fn unpack(packed: Span<felt252>, n_values: u32) -> Array<felt252> {
     let mut out = array![];
     out.append_span(values.span().slice(0, n_values));
     out
+}
+
+#[inline(always)]
+fn push_limb(ref values: Array<felt252>, ref pending: u8, ref low: felt252, limb: u32) {
+    if pending == 0 {
+        if limb == ESCAPE {
+            pending = 1;
+        } else {
+            values.append(limb.into());
+        }
+    } else if pending == 1 {
+        low = limb.into();
+        pending = 2;
+    } else {
+        let high: felt252 = limb.into();
+        values.append(low + high * SHIFT_32);
+        pending = 0;
+    }
 }
 
 /// Escaped encoding (the inverse of `unpack`). Test/tooling helper: the client packs off-chain.

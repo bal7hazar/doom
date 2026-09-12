@@ -5,8 +5,10 @@
 //! The caller echoes the previous state as calldata; the router checks its hash and tag,
 //! library-calls the phase class, stores the new tagged hash and returns the new state.
 //! Proof data itself is never written to storage (calldata only, S5 §8.5). Sections arrive
-//! packed (7 u32 limbs per felt, `stwo_circuit_phases::pack`) as one `payload` plus the
-//! unpacked lengths of its consecutive sections (`lens`).
+//! packed (7 u32 limbs per felt, `stwo_circuit_phases::pack`): the head (the only section with
+//! u64 values) in the escaped encoding, every other section in the fast-path encoding, each
+//! section packed independently and concatenated into one `payload` whose per-section unpacked
+//! lengths are `lens`.
 //!
 //! Facts: `fact = poseidon(circuit_hash words ‖ output_hash words)` (16 felts), registered by
 //! the last FRI transaction; `is_valid(fact)` is the consumer interface (`DoomRuns`).
@@ -28,11 +30,14 @@ pub struct Checkpoint {
 
 #[starknet::interface]
 pub trait IStwoCircuitRouter<TContractState> {
-    /// Tx 1: `payload` = packed `head ‖ (queried_values ‖ decommitment)*`, `lens` = the
-    /// unpacked length of each of those sections, `trees` = the tree index of each pair.
+    /// Tx 1: `head` = the escaped-packed head section of `head_n` felts; `payload` = packed
+    /// `(queried_values ‖ decommitment)*`, `lens` = the unpacked length of each of those
+    /// sections, `trees` = the tree index of each pair (may be empty).
     fn begin(
         ref self: TContractState,
         proof_id: felt252,
+        head: Span<felt252>,
+        head_n: u32,
         payload: Span<felt252>,
         lens: Span<u32>,
         trees: Span<u32>,
@@ -54,7 +59,8 @@ pub trait IStwoCircuitRouter<TContractState> {
         payload: Span<felt252>,
         lens: Span<u32>,
     ) -> Array<felt252>;
-    /// FRI tx: `payload` = packed cairo-serde `Array<FriLayerProof>` of `n_values` felts.
+    /// FRI tx: `payload` = fast-path packed cairo-serde `Array<FriLayerProof>` of `n_values`
+    /// felts.
     /// Registers the fact when the last layer is checked.
     fn fri(
         ref self: TContractState,
@@ -90,7 +96,7 @@ pub mod StwoCircuitRouter {
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
-    use stwo_circuit_phases::pack::unpack;
+    use stwo_circuit_phases::pack::{n_slots, unpack, unpack_u32};
     use crate::phases::{
         IStwoPhasesBeginDispatcherTrait, IStwoPhasesBeginLibraryDispatcher,
         IStwoPhasesFriDispatcherTrait, IStwoPhasesFriLibraryDispatcher,
@@ -149,6 +155,8 @@ pub mod StwoCircuitRouter {
         fn begin(
             ref self: ContractState,
             proof_id: felt252,
+            head: Span<felt252>,
+            head_n: u32,
             payload: Span<felt252>,
             lens: Span<u32>,
             trees: Span<u32>,
@@ -157,8 +165,9 @@ pub mod StwoCircuitRouter {
             let slot = self.checkpoints.entry((caller, proof_id));
             assert(slot.read().tag == TAG_FREE, 'router: proof id in use');
 
+            let head = unpack(head, head_n);
+            let head = head.span();
             let mut sections = split_sections(payload, lens);
-            let head = sections.pop_front().unwrap();
             let tree_sections = tree_sections(ref sections, trees);
             let state = IStwoPhasesBeginLibraryDispatcher { class_hash: self.class_begin.read() }
                 .run_begin(head);
@@ -216,9 +225,9 @@ pub mod StwoCircuitRouter {
         ) -> Array<felt252> {
             let caller = get_caller_address();
             self.check(slot_key(caller, proof_id), TAG_FRI, state);
-            let layers = unpack(payload, n_values);
+            let layers = unpack_u32(payload, n_values);
             let (state, done) = IStwoPhasesFriLibraryDispatcher { class_hash: self.class_fri.read() }
-                .run_fri(state, layers.span());
+                .run_fri(state, layers);
             match done {
                 Some((circuit_hash, output_hash)) => {
                     let fact = compute_fact(circuit_hash, output_hash);
@@ -271,20 +280,16 @@ pub mod StwoCircuitRouter {
         (caller, proof_id)
     }
 
-    /// Unpacks `payload` and cuts it into consecutive sections of `lens` felts.
+    /// Cuts `payload` into its independently fast-path-packed sections of `lens` felts.
     fn split_sections(payload: Span<felt252>, lens: Span<u32>) -> Array<Span<felt252>> {
-        let mut total = 0;
-        for l in lens {
-            total += *l;
-        }
-        let values = unpack(payload, total);
-        let values = values.span();
         let mut sections = array![];
         let mut offset = 0;
         for l in lens {
-            sections.append(values.slice(offset, *l));
-            offset += *l;
+            let slots = n_slots(*l);
+            sections.append(unpack_u32(payload.slice(offset, slots), *l));
+            offset += slots;
         }
+        assert(offset == payload.len(), 'router: payload length');
         sections
     }
 

@@ -5,8 +5,11 @@ written by `stwo_run_and_prove_recursive_tree`, or the one-felt-per-line `.txt` 
 per-transaction calldata of the resumable verifier (`StwoCircuitRouter`, see
 docs/design/onchain-verifier.md §4).
 
-Sections are packed 7 little-endian u32 limbs per felt252 (`stwo_circuit_phases::pack`); a limb
-of 0xFFFFFFFF escapes a (low, high) u64 pair (the two proof-of-work nonces).
+Sections are packed 7 little-endian u32 limbs per felt252 (`stwo_circuit_phases::pack`), each
+section independently (its own zero-padded last slot). The head — the only section carrying u64
+values (the two proof-of-work nonces) — uses the escaped encoding (a limb of 0xFFFFFFFF escapes
+a (low, high) pair; a plain value >= 0xFFFFFFFF is escaped too); every other section uses the
+fast-path encoding (one u32 per limb, no escapes: `unpack_u32`).
 
 Output (`--out calls.json`): the ordered transactions with their entrypoint and arguments. The
 checkpoint state echoed by every transaction after the first is NOT in the file: the driver
@@ -113,14 +116,27 @@ def parse(values: list[int]) -> dict:
 
 
 def pack(values: list[int]) -> list[int]:
+    """Escaped encoding (the head)."""
     limbs: list[int] = []
     for v in values:
-        if v < 1 << 32:
+        if v < ESCAPE:
             limbs.append(v)
         else:
             if v >= 1 << 64:
                 sys.exit(f"value {v:#x} does not fit the u64 escape")
             limbs += [ESCAPE, v & 0xFFFFFFFF, v >> 32]
+    return pack_limbs(limbs)
+
+
+def pack_u32(values: list[int]) -> list[int]:
+    """Fast-path encoding: every value must be a u32."""
+    for v in values:
+        if v >= 1 << 32:
+            sys.exit(f"pack_u32: value {v:#x} is not a u32")
+    return pack_limbs(list(values))
+
+
+def pack_limbs(limbs: list[int]) -> list[int]:
     while len(limbs) % LIMBS_PER_SLOT:
         limbs.append(0)
     slots = []
@@ -159,18 +175,23 @@ def hexs(values: list[int]) -> list[str]:
     return [hex(v) for v in values]
 
 
+def pack_sections(sections: list[list[int]]) -> list[int]:
+    """Concatenation of the independently fast-path-packed sections."""
+    return [slot for s in sections for slot in pack_u32(s)]
+
+
 def tx_begin(sec: dict, trees: list[int], proof_id: int) -> dict:
-    sections = [sec["head"]]
+    head = pack(sec["head"])
+    sections = []
     for t in trees:
         sections += [sec["queried_values"][t], sec["decommitments"][t]]
-    flat = [v for s in sections for v in s]
-    payload = pack(flat)
-    args = {"proof_id": proof_id, "payload": payload, "lens": [len(s) for s in sections],
-            "trees": trees}
-    # proof_id, payload (len + slots), lens (len + n), trees (len + n)
-    felts = 1 + 1 + len(payload) + 1 + len(sections) + 1 + len(trees)
+    payload = pack_sections(sections)
+    args = {"proof_id": proof_id, "head": head, "head_n": len(sec["head"]), "payload": payload,
+            "lens": [len(s) for s in sections], "trees": trees}
+    # proof_id, head (len + slots), head_n, payload (len + slots), lens (len + n), trees (len + n)
+    felts = 1 + 1 + len(head) + 1 + 1 + len(payload) + 1 + len(sections) + 1 + len(trees)
     return {"label": "begin", "entrypoint": "begin", "echo": None, "calldata_felts": felts,
-            "payload_slots": len(payload), "args": args,
+            "payload_slots": len(head) + len(payload), "args": args,
             "meta": {"sections": ["head"] + [f"qv{t}/dec{t}" for t in trees]}}
 
 
@@ -178,8 +199,7 @@ def tx_merkle(sec: dict, trees: list[int], proof_id: int) -> dict:
     sections = []
     for t in trees:
         sections += [sec["queried_values"][t], sec["decommitments"][t]]
-    flat = [v for s in sections for v in s]
-    payload = pack(flat)
+    payload = pack_sections(sections)
     args = {"proof_id": proof_id, "payload": payload, "lens": [len(s) for s in sections],
             "trees": trees}
     felts = 1 + 1 + MERKLE_STATE_FELTS + 1 + len(payload) + 1 + len(sections) + 1 + len(trees)
@@ -190,8 +210,7 @@ def tx_merkle(sec: dict, trees: list[int], proof_id: int) -> dict:
 
 def tx_answers(sec: dict, proof_id: int) -> dict:
     sections = [sec["sampled"]] + sec["queried_values"]
-    flat = [v for s in sections for v in s]
-    payload = pack(flat)
+    payload = pack_sections(sections)
     args = {"proof_id": proof_id, "payload": payload, "lens": [len(s) for s in sections]}
     felts = 1 + 1 + MERKLE_STATE_FELTS + 1 + len(payload) + 1 + len(sections)
     return {"label": "answers", "entrypoint": "answers", "echo": "merkle_state",
@@ -202,7 +221,7 @@ def tx_answers(sec: dict, proof_id: int) -> dict:
 def tx_fri(sec: dict, first: int, last: int, proof_id: int, idx: int) -> dict:
     layers = sec["layers"][first:last]
     flat = [len(layers)] + [v for l in layers for v in l]
-    payload = pack(flat)
+    payload = pack_u32(flat)
     args = {"proof_id": proof_id, "payload": payload, "n_values": len(flat)}
     felts = 1 + 1 + FRI_STATE_FELTS + 1 + len(payload) + 1
     return {"label": f"fri{idx}", "entrypoint": "fri", "echo": "fri_state",
@@ -251,8 +270,9 @@ def main() -> None:
 
     values = load(a.proof)
     sec = parse(values)
-    # Round-trip check of the packing on the whole stream.
+    # Round-trip checks: the escaped encoding on the whole stream, the fast path on a section.
     assert unpack(pack(values), len(values)) == values
+    assert unpack(pack_u32(sec["queried_values"][0]), len(sec["queried_values"][0])) == sec["queried_values"][0]
     txs = plan(sec, a.proof_id, a.fri_split, a.max_calldata)
 
     summary = {
@@ -263,7 +283,7 @@ def main() -> None:
             "decommitments": [len(d) for d in sec["decommitments"]],
             "fri_layers": [len(l) for l in sec["layers"]],
         },
-        "txs": [{**tx, "args": {k: (hexs(v) if isinstance(v, list) and k == "payload" else v)
+        "txs": [{**tx, "args": {k: (hexs(v) if isinstance(v, list) and k in ("payload", "head") else v)
                                 for k, v in tx["args"].items()}} for tx in txs],
     }
     a.out.write_text(json.dumps(summary, indent=1))

@@ -4,11 +4,11 @@
 //! (u256/u128 divmod + a second pass), kept here as the cost reference.
 use stwo_circuit_phases::pack::{ESCAPE, n_slots, pack, pack_u32, unpack, unpack_u32};
 use stwo_circuit_phases::sections::split;
-use super::fixture::load_n4_proof;
+use super::fixture::load_proof;
 
 /// Trees 0 and 1 (queried values + decommitments): escape-free, 4 334 slots.
 fn trees01_values() -> Array<felt252> {
-    let sec = split(load_n4_proof().span());
+    let sec = split(load_proof().span());
     let mut flat = array![];
     flat.append_span(sec.queried_values.at(0).span());
     flat.append_span(sec.decommitments.at(0).span());
@@ -69,7 +69,7 @@ fn first_mismatch(a: Span<felt252>, b: Span<felt252>) -> Option<u32> {
 
 #[test]
 fn pack_roundtrip_whole_proof() {
-    let values = load_n4_proof();
+    let values = load_proof();
     let packed = pack(values.span());
     assert!(packed.len() == 13720, "13720 slots (2 escapes)");
     let back = unpack(packed.span(), values.len());

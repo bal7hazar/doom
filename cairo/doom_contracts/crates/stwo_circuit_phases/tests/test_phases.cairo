@@ -3,7 +3,7 @@
 //! a Serde round-trip of every checkpoint between phases, tamper rejections, and the cumulative
 //! cost probe (`cost_*` tests: read the per-test gas and subtract).
 use stwo_circuit_phases::machine::{FriState, MerkleState, answers, begin, fri_layers, merkle};
-use super::fixture::{load_n4_proof, n4_expected_output_hash};
+use super::fixture::{expected_output_hash, load_proof};
 use stwo_circuit_phases::sections::{Sections, fri_chunk, split};
 
 fn roundtrip_merkle(state: MerkleState) -> MerkleState {
@@ -31,7 +31,7 @@ fn serialized_len<T, +Serde<T>>(v: @T) -> u32 {
 }
 
 fn sections() -> Sections {
-    split(load_n4_proof().span())
+    split(load_proof().span())
 }
 
 /// Every phase in sequence, with a serde round-trip of the checkpoint between transactions,
@@ -66,7 +66,7 @@ fn phases_end_to_end_n4() {
     let mut state = roundtrip_fri(state);
     assert!(state.layers_done == 2, "layers done");
     let r = fri_layers(ref state, fri_chunk(@sec.fri_layers, 2, 6).span());
-    assert!(r.unwrap() == n4_expected_output_hash(), "output hash");
+    assert!(r.unwrap() == expected_output_hash(), "output hash");
 }
 
 /// The FRI walk in a single chunk (the "fits in one tx" variant) and per-layer chunks.
@@ -86,7 +86,7 @@ fn fri_walk_chunkings_n4() {
     // One chunk.
     let mut s1 = roundtrip_fri(state);
     let r = fri_layers(ref s1, fri_chunk(@sec.fri_layers, 0, 6).span());
-    assert!(r.unwrap() == n4_expected_output_hash(), "single chunk");
+    assert!(r.unwrap() == expected_output_hash(), "single chunk");
 
     // Six chunks of one layer, round-tripping between each.
     let mut s6 = s1_reset(@sec);
@@ -95,7 +95,7 @@ fn fri_walk_chunkings_n4() {
         let r = fri_layers(ref s6, fri_chunk(@sec.fri_layers, i, i + 1).span());
         i += 1;
         if i == 6 {
-            assert!(r.unwrap() == n4_expected_output_hash(), "six chunks");
+            assert!(r.unwrap() == expected_output_hash(), "six chunks");
             break;
         }
         assert!(r.is_none(), "not done");

@@ -5,11 +5,11 @@ use stwo_circuit_air::{
     CircuitProof, compute_circuit_hash, get_verification_output, verify_circuit,
 };
 use stwo_verifier_core::Hash;
-use super::fixture::{load_n4_proof, n4_expected_output_hash};
+use super::fixture::{expected_output_hash, load_proof};
 
 #[test]
 fn monolithic_verify_n4() {
-    let values = load_n4_proof();
+    let values = load_proof();
     let mut span = values.span();
     let proof: CircuitProof = Serde::deserialize(ref span).expect('proof deser');
     assert!(span.is_empty(), "trailing data");
@@ -28,5 +28,5 @@ fn monolithic_verify_n4() {
     );
     verify_circuit(:proof, :circuit_hash);
     let out = get_verification_output(:circuit_hash, :output_values);
-    assert!(out.output_hash.hash.unbox() == n4_expected_output_hash(), "output hash");
+    assert!(out.output_hash.hash.unbox() == expected_output_hash(), "output hash");
 }

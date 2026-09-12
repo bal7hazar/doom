@@ -74,17 +74,20 @@ def rpc(url: str, method: str, params):
     return reply["result"]
 
 
-def sncast(args: list[str], cfg, retries: int = 1):
+def sncast(args: list[str], cfg, retries: int = 1, allow_error: str | None = None):
     cmd = ["sncast", "--json", "--accounts-file", str(cfg.accounts_file),
            "--account", cfg.account] + args + ["--url", cfg.url]
     for attempt in range(retries + 1):
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=PACKAGE_DIR)
         if r.returncode == 0:
             break
+        if allow_error and (allow_error in r.stdout or allow_error in r.stderr):
+            break
         if attempt == retries:
             sys.exit(f"sncast failed: {' '.join(cmd[:8])}…\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
         time.sleep(2)
-    objs = [json.loads(l) for l in r.stdout.strip().splitlines() if l.strip().startswith("{")]
+    objs = [json.loads(l) for l in (r.stdout + "\n" + r.stderr).strip().splitlines()
+            if l.strip().startswith("{")]
     for o in objs:
         if o.get("type") == "response":
             return o
@@ -164,7 +167,9 @@ def felts_of_span(values) -> list[str]:
 def calldata_for(tx: dict, echo: list[str] | None) -> list[str]:
     a = tx["args"]
     cd = [hex(a["proof_id"])]
-    if tx["entrypoint"] != "begin":
+    if tx["entrypoint"] == "begin":
+        cd += felts_of_span(a["head"]) + [hex(a["head_n"])]
+    else:
         assert echo is not None, f"{tx['label']}: missing state echo"
         cd += felts_of_span(echo)
     cd += felts_of_span(a["payload"])
@@ -205,7 +210,16 @@ def main() -> None:
     else:
         classes = {}
         for name in CLASSES:
-            res = sncast(["declare", "--contract-name", name, "--package", PACKAGE], cfg)
+            res = sncast(["declare", "--contract-name", name, "--package", PACKAGE], cfg,
+                         allow_error="is already declared")
+            if res.get("type") == "error":
+                # Unchanged class from an earlier run on this devnet: no declare receipt.
+                class_hash = res["error"].split("class hash ")[1].split(" ")[0]
+                classes[name] = {"class_hash": class_hash, "tx_hash": None, "l2_gas": 0,
+                                 "l1_gas": 0, "l1_data_gas": 0, "fee_fri": 0,
+                                 "note": "already declared"}
+                print(f"declared {name:<18} {class_hash}  (already declared)")
+                continue
             rec = wait_receipt(cfg.url, res["transaction_hash"])
             er = rec["execution_resources"]
             classes[name] = {

@@ -1,0 +1,220 @@
+{
+ "network": "starknet-devnet (local)",
+ "url": "http://127.0.0.1:5066/rpc",
+ "timestamp_utc": "2026-09-12T15:37:57Z",
+ "prices": {
+  "l1_gas_price_fri": 92599658875965,
+  "l1_data_gas_price_fri": 37485578886,
+  "l2_gas_price_fri": 30475398907,
+  "starknet_version": "0.14.4",
+  "block_number": 10
+ },
+ "router": "0x0057c80a9d69c0f28b84657c6877ddea5d24f35710563a88a2647753b05825f2",
+ "classes": {
+  "StwoPhasesBegin": {
+   "class_hash": "0x0668ac803c6e6d14abf1e518f5fbdb7b5a0a0d8789411a6372c87f716b08d84c",
+   "tx_hash": null,
+   "l2_gas": 0,
+   "l1_gas": 0,
+   "l1_data_gas": 0,
+   "fee_fri": 0,
+   "note": "already declared"
+  },
+  "StwoPhasesMerkle": {
+   "class_hash": "0x0382b0774c3b72117bf6747698ab7e15c2c222cbfcf3dee3535455c8fc042d52",
+   "tx_hash": null,
+   "l2_gas": 0,
+   "l1_gas": 0,
+   "l1_data_gas": 0,
+   "fee_fri": 0,
+   "note": "already declared"
+  },
+  "StwoPhasesFri": {
+   "class_hash": "0x06c36ff63241fcb3a598b1afbe857667a046aae4f944b24ea1c9b97c884c459f",
+   "tx_hash": null,
+   "l2_gas": 0,
+   "l1_gas": 0,
+   "l1_data_gas": 0,
+   "fee_fri": 0,
+   "note": "already declared"
+  },
+  "StwoCircuitRouter": {
+   "class_hash": "0x040af0265559e882dc2a9d1ad7c969326fc9cdb5e8b35ca3c29a4b230b293416",
+   "tx_hash": "0x04b9556fc713e8406770229685ebd160b60d044bd66f10437562d9c743ec1b33",
+   "l2_gas": 551975360,
+   "l1_gas": 0,
+   "l1_data_gas": 192,
+   "fee_fri": 16821676480066077632
+  }
+ },
+ "deploy_fee_fri": 83182899185723792,
+ "declare_l2_gas_total": 551975360,
+ "declare_fee_strk_total": 16.821676480066078,
+ "fact": "0x6b07de2ada9a0895781fb2479976b344fb184180386c69ccbc73444b57184be",
+ "fact_is_valid": "true",
+ "txs": [
+  {
+   "label": "begin",
+   "entrypoint": "begin",
+   "tx_hash": "0x044e734fada40652e5e0a3478c0fbfa8e8f5bed995c033e1470f491138442cd7",
+   "calldata_felts": 4627,
+   "payload_slots": 4615,
+   "echo_felts": 0,
+   "l2_gas": 459365920,
+   "l1_gas": 0,
+   "l1_data_gas": 320,
+   "fee_fri": 13999374050743341664,
+   "bounds": {
+    "l2_gas": 1150000000,
+    "l1_gas": 100000,
+    "l1_data_gas": 40000
+   },
+   "meta": {
+    "sections": [
+     "head",
+     "qv0/dec0",
+     "qv1/dec1"
+    ]
+   },
+   "storage_writes": 4,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 37.96,
+   "under_90pct_cap": true
+  },
+  {
+   "label": "merkle",
+   "entrypoint": "merkle",
+   "tx_hash": "0x0192b7910c956dd7e9ba9fc4b906b8b3bc98e46928eb57bff55317d1a6658797",
+   "calldata_felts": 4585,
+   "payload_slots": 4346,
+   "echo_felts": 228,
+   "l2_gas": 390986880,
+   "l1_gas": 0,
+   "l1_data_gas": 256,
+   "fee_fri": 11915490731711534976,
+   "bounds": {
+    "l2_gas": 1150000000,
+    "l1_gas": 100000,
+    "l1_data_gas": 40000
+   },
+   "meta": {
+    "sections": [
+     "qv2/dec2",
+     "qv3/dec3"
+    ]
+   },
+   "storage_writes": 3,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 32.31,
+   "under_90pct_cap": true
+  },
+  {
+   "label": "answers",
+   "entrypoint": "answers",
+   "tx_hash": "0x0515d99dfb5930e26c5d55d13c2b9fec6bb69f9ddb043c2cbbdf0116280de710",
+   "calldata_felts": 3685,
+   "payload_slots": 3448,
+   "echo_felts": 228,
+   "l2_gas": 861298880,
+   "l1_gas": 0,
+   "l1_data_gas": 320,
+   "fee_fri": 26248438941537567680,
+   "bounds": {
+    "l2_gas": 1150000000,
+    "l1_gas": 100000,
+    "l1_data_gas": 40000
+   },
+   "meta": {
+    "sections": [
+     "sampled",
+     "qv0",
+     "qv1",
+     "qv2",
+     "qv3"
+    ]
+   },
+   "storage_writes": 4,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 71.18,
+   "under_90pct_cap": true
+  },
+  {
+   "label": "fri1",
+   "entrypoint": "fri",
+   "tx_hash": "0x056d044bc27955da79c1907cf948b4a2248620c7b0d3c8c8702e88f33ff609c3",
+   "calldata_felts": 3566,
+   "payload_slots": 2986,
+   "echo_felts": 576,
+   "l2_gas": 1093329600,
+   "l1_gas": 0,
+   "l1_data_gas": 256,
+   "fee_fri": 33319665293138942016,
+   "bounds": {
+    "l2_gas": 1150000000,
+    "l1_gas": 100000,
+    "l1_data_gas": 40000
+   },
+   "meta": {
+    "layers": [
+     0,
+     1
+    ]
+   },
+   "storage_writes": 3,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 90.36,
+   "under_90pct_cap": false
+  },
+  {
+   "label": "fri2",
+   "entrypoint": "fri",
+   "tx_hash": "0x0665bcac1c03c2e9a7bdcb4f197348523bbf4384546af9e3194c969d50abf005",
+   "calldata_felts": 2365,
+   "payload_slots": 1785,
+   "echo_felts": 576,
+   "l2_gas": 1004813200,
+   "l1_gas": 0,
+   "l1_data_gas": 384,
+   "fee_fri": 30622098691019988976,
+   "bounds": {
+    "l2_gas": 1150000000,
+    "l1_gas": 100000,
+    "l1_data_gas": 40000
+   },
+   "meta": {
+    "layers": [
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "storage_writes": 5,
+   "nonce_updates": 1,
+   "pct_of_invoke_cap": 83.04,
+   "under_90pct_cap": true
+  }
+ ],
+ "n_txs": 5,
+ "total_l2_gas": 3809794480,
+ "total_l1_data_gas": 1536,
+ "total_fee_fri": 116105067708151375312,
+ "total_fee_strk_devnet_prices": 116.10506770815138,
+ "worst_tx_pct_of_cap": 90.36,
+ "priced": [
+  {
+   "label": "mainnet 2026-09-12 (S5 \u00a75 snapshot)",
+   "l2_gas_price_gfri": 30.528,
+   "fee_strk": 116.305464757248,
+   "fee_usd": 3.345006808314774,
+   "fee_eur": 2.883128731397553
+  },
+  {
+   "label": "protocol floor (3 gFri)",
+   "l2_gas_price_gfri": 3.0,
+   "fee_strk": 11.429442311808,
+   "fee_usd": 0.32871681849202333,
+   "fee_eur": 0.2833276457112558
+  }
+ ]
+}
