@@ -32,7 +32,7 @@ Critères de succès (« definition of done » du MVP) :
 
 | # | Décision | Justification (cf. CONTEXT) |
 |---|----------|-----------------------------|
-| A1 | **Cairo est la source de vérité de la simulation, y compris en temps réel** : le client exécute le même programme `step_tic` via cairo-vm WASM à chaque tic (pas de port TypeScript parallèle). Repli : miroir TS + tests de divergence si S3 échoue. | Supprime toute désynchronisation entre ce qui est joué et ce qui est prouvé. |
+| A1 | **Cairo est la source de vérité de la simulation, y compris en temps réel** : le client exécute le même programme `step_tic` via cairo-vm WASM à chaque tic (pas de port TypeScript parallèle). **S3 (2026-09-12) : GO, 2 289 tics/s dans un Worker Chromium ; le repli miroir TS est abandonné.** | Supprime toute désynchronisation entre ce qui est joué et ce qui est prouvé. |
 | A2 | **Preuve par segments** de K tics (`run_segment`) chaînés par hash d'état Poseidon, agrégés par la **route récursive** (`leaf_prover` + `recursive_tree`) en une preuve racine unique. | Mémoire navigateur (R1) ; coût on-chain constant (§6.2). |
 | A3 | **Vérification on-chain via un `StwoFactRegistry`** (code Apache-2.0 de `stwo-starknet-verifier`, ré-épinglé sur le monorepo `proving`) + contrat consommateur `DoomRuns`. | Seule route praticable (§6.1). |
 | A4 | **Service wrapper** Rust auto-hébergé (≥ 32 GB) pour feuilles + arbre récursif ; API « proof-only » (il ne reçoit que des preuves et des sorties publiques). Fallback optionnel « prouveur distant » pour machines < 16 GB. | Wrap non faisable en WASM (13–22 GB) ; il ne peut pas forger. |

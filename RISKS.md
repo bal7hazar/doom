@@ -188,10 +188,10 @@ Risque résiduel : un changement upstream incompatible juste avant une saison �
 
 | Id | Action | Quand | Effort | Critère de sortie |
 |----|--------|-------|--------|-------------------|
-| R5-A1 | Wrapper wasm dédié (`prover/wasm/sim`) : programme parsé une fois, hints pré-résolus, `step_tic(state_bytes, cmd) -> state_bytes` sans JSON (encodage binaire des felts), pas de génération de trace (mode non-proof). | S3 | 4 jp | ≥ 100 tics/s soutenus sur 4 k steps/tic, mesuré dans un Worker. |
+| R5-A1 | Wrapper wasm dédié (`prover/sim`) : programme parsé une fois, hints pré-résolus, `run(args) -> outputs` sans JSON, pas de trace. **Fait (S3) : 2 289 tics/s à 4 k steps dans un Worker Chromium, 179 tics/s avec un état de 1 500 felts ; 9 M steps/s ; zéro fuite.** | Fait (S3) | 4 jp | ≥ 100 tics/s soutenus sur 4 k steps/tic, mesuré dans un Worker. |
 | R5-A2 | État en **mémoire partagée** (`SharedArrayBuffer`) entre Worker sim et thread de rendu ; le renderer lit un snapshot double-buffer, pas de copie par tic. | Phase 2 | 2 jp | Coût de transfert < 1 ms/tic. |
 | R5-A3 | Test d'équivalence continu : le même journal rejoué (a) par `step_tic` en boucle, (b) par `run_segment` natif, (c) par le prouveur (exécution) → hashes identiques. | Phase 2 | 1 jp | Test CI sur les 20 replays. |
-| R5-A4 | Repli si S3 échoue : miroir TypeScript de la sim généré à partir des mêmes tables/constantes, tests de divergence sur le corpus (tolérance zéro), Cairo réservé à la preuve ; coût estimé +15 jp et risque de divergence permanent → à n'activer qu'après échec documenté. | G0 | 15 jp | — |
+| R5-A4 | ~~Repli miroir TypeScript~~ **Abandonné après S3 (GO avec marge ×20)** ; A1 confirmée. Nouveau point de vigilance : `Serde` coûte ~22 steps/felt → l'état vit en structures Cairo pendant le segment et n'est sérialisé qu'aux bornes ; le coût par appel croît avec la taille du bytecode (suivi cairo-vm). | Clos | 0 | — |
 
 ---
 

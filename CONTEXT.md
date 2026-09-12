@@ -215,6 +215,24 @@ Chrome ≥ 133 (sans flag), Firefox ≥ 143 (flag selon version), Safari en reta
 (les inputs d'une partie de Doom ne sont pas secrets : déléguer la preuve ne dégrade pas la
 sécurité, seulement la décentralisation) et/ou un client natif (Tauri/egui) ultérieur.
 
+### 5.3 Résultats du spike S3 : exécution temps réel (2026-09-12, voir `docs/spikes/S3.md`) — GO
+
+- `prover/sim` (`hellproof-sim`, wasm32 + wasm-bindgen, cairo-vm 3.2 / cairo-lang 2.19.4) : programme
+  parsé une fois, `CairoRunner` + VM recréés à chaque appel (3–5 µs), aucune fuite sur 10 000 appels,
+  6,6 MB de mémoire linéaire (pas besoin de Memory64 pour la sim).
+- Débit cairo-vm en wasm : **9,1–9,4 M steps/s** (2,2× plus lent que le natif). Dans un Worker Chromium :
+  **2 289 tics/s** à 4 k steps/tic (p99 0,5 ms), 936 tics/s à 10 k, **179 tics/s** avec un état complet de
+  1 500 felts (52,6 k steps). Empreintes de sortie identiques natif / Node / Chromium.
+- Re-parser l'exécutable à chaque appel (approche du paquet npm `stwo-cairo`) coûte 4× à 18× selon la
+  taille du programme ; même en cache, `CairoRunner::initialize` recopie le bytecode à chaque run
+  (0,22 → 0,83 ms de 4 kB à 778 kB) — suivi cairo-vm.
+- **Coût de sérialisation Cairo** : `Serde` coûte ~22 steps par felt d'état (aller-retour), soit
+  `steps(n) = 35 n + 69` pour un état de n felts : 1 500 felts ≈ 33 k steps. Conséquence pour la preuve :
+  l'état doit rester en structures Cairo pendant tout le segment et n'être (dé)sérialisé qu'aux bornes.
+- Artefact wasm : 12,6 MB (2,0 MB brotli), dominé par `cairo-lang-executable` qui entraîne le compilateur ;
+  plan de réduction dans S3.md §6.1. Architecture Worker proposée : triple buffer `SharedArrayBuffer`
+  sous seqlock, snapshot de rendu réduit, ordonnanceur 35 Hz à rattrapage borné (max 4 tics).
+
 ## 6. Vérification on-chain sur Starknet
 
 ### 6.1 Options comparées
