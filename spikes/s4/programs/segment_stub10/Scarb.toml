@@ -1,0 +1,16 @@
+[package]
+name = "segment_stub10"
+version = "0.1.0"
+edition = "2024_07"
+
+# A stand-in for a game segment (`run_segment`) that returns the **ten-felt** public output of
+# D14 (`cairo/crates/segment`'s `SegmentOutput`) instead of `segment_stub`'s four felts, so a
+# recursive tree built over it carries exactly the leaves `DoomRuns.submit_batch` consumes.
+
+[dependencies]
+cairo_execute = "2.18.0"
+
+[[target.executable]]
+
+[cairo]
+enable-gas = false
