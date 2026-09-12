@@ -1,0 +1,14 @@
+   Executing felt_width
+Program output:
+4483593182942498500
+Resources:
+	steps: 34,054
+	max memory address: 29,393
+	memory holes: 1
+	builtins:
+		range_check_builtin: 1,001
+		output_builtin: 1
+	memory segments:
+		execution: 28,042
+		range_check: 1,001
+		output: 1

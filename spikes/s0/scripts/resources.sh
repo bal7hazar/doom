@@ -24,6 +24,8 @@ run() { # run <pkg> <args-file>
 }
 
 run felt_loop    n1000.json
+run felt_width   n1000_narrow.json
+run felt_width   n1000_wide.json
 run felt_loop    n3.json
 run u32_loop     n1000.json
 run bitwise_loop n1000.json

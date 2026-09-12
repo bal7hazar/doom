@@ -54,6 +54,10 @@ def mb(b):
     return "—" if not b else f"{b/1e6:.2f}"
 
 
+def num(v):
+    return f"{v:,}" if isinstance(v, int) else "—"
+
+
 def why(s):
     if s.get("ok"):
         return "OK"
@@ -69,13 +73,15 @@ def main():
           "| résultat | mur (s) | CPU (s) | RSS max (GiB) | preuve (MB) | preuve (felts) |")
     print("|---|---|---:|---:|---|---|---:|---:|---:|---:|---:|")
     for tag, s in rows.items():
-        if not tag.endswith("_cs_bl") or tag.startswith("steps_k"):
+        if not tag.endswith("_cs_bl") or tag.startswith(("steps_k", "felt_width")):
             continue
-        key = f"{s['program']}_n1000"
-        print(f"| `{s['program']}` | {s['args'][0]} | {sa.get(key,'—'):,} | {s['n_steps']:,} "
+        key = f"{s['program']}_{s.get('args_file', 'n1000')}"
+        alone = sa.get(key)
+        alone = f"{alone:,}" if alone else "—"
+        print(f"| `{s['program']}` | {', '.join(s['args'])} | {alone} | {s['n_steps']:,} "
               f"| {builtins(s)} | {why(s)} | {fmt(s.get('wall_s'))} | {fmt(s.get('cpu_s'))} "
               f"| {fmt(s.get('max_rss_gib'))} | {mb(s.get('proof_bytes'))} "
-              f"| {s.get('proof_felts','—'):,} |")
+              f"| {num(s.get('proof_felts'))} |")
 
     print("\n### B. Route standalone (`run_and_prove --program_type executable`)\n")
     print("| programme | args | steps | résultat |")
@@ -83,7 +89,7 @@ def main():
     for tag, s in rows.items():
         if not tag.endswith("_cs_sa"):
             continue
-        print(f"| `{s['program']}` | {s['args'][0]} | {s['n_steps']:,} | {why(s)} |")
+        print(f"| `{s['program']}` | {', '.join(s['args'])} | {s['n_steps']:,} | {why(s)} |")
 
     print("\n### C. `steps_k` — montée en taille\n")
     print("| k | params | steps (bootloader compris) | mur (s) | CPU (s) | RSS max (GiB) "
@@ -98,6 +104,18 @@ def main():
         print(f"| {kof(tag)} | `{s['params']}` | {s['n_steps']:,} | {fmt(s.get('wall_s'))} "
               f"| {fmt(s.get('cpu_s'))} | {fmt(s.get('max_rss_gib'))} "
               f"| {mb(s.get('proof_bytes'))} | {s.get('proof_felts') or '—'} | {why(s)} |")
+
+    print("\n### C-bis. `felt_width` — largeur des valeurs en mémoire\n")
+    print("| variante | params | steps | mur (s) | CPU (s) | STARK+FRI (s) | RSS max (GiB) "
+          "| preuve (felts) |")
+    print("|---|---|---:|---:|---:|---:|---:|---:|")
+    for tag in sorted(t for t in rows if t.startswith("felt_width")):
+        s = rows[tag]
+        sp = s.get("spans_s") or {}
+        print(f"| {tag.replace('felt_width_','').replace('_bl','')} | `{s['params']}` "
+              f"| {s['n_steps']:,} | {fmt(s.get('wall_s'))} | {fmt(s.get('cpu_s'))} "
+              f"| {fmt(sp.get('Prove STARKs'))} | {fmt(s.get('max_rss_gib'))} "
+              f"| {num(s.get('proof_felts'))} |")
 
     print("\n### D. Leviers mémoire à k = 19 (R1-A5)\n")
     print("| variante | mur (s) | CPU (s) | RSS max (GiB) | Δ RSS vs baseline | preuve (MB) "

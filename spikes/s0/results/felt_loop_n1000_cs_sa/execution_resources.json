@@ -1,0 +1,45 @@
+{
+  "opcodes_instance_counter": {
+    "jump_opcode_rel_imm": 3,
+    "mul_opcode": 978,
+    "add_opcode": 5936,
+    "assert_eq_opcode": 5022,
+    "jnz_opcode_non_taken": 5,
+    "assert_eq_opcode_double_deref": 3003,
+    "jump_opcode_double_deref": 0,
+    "jump_opcode_abs": 0,
+    "blake_compress_opcode": 0,
+    "add_ap_opcode": 4,
+    "assert_eq_opcode_imm": 1008,
+    "mul_opcode_small": 21,
+    "generic_opcode": 0,
+    "call_opcode_abs": 0,
+    "call_opcode_rel_imm": 2004,
+    "jnz_opcode_taken": 5000,
+    "ret_opcode": 2004,
+    "qm_31_add_mul_opcode": 0,
+    "add_opcode_small": 11060,
+    "jump_opcode_rel": 0
+  },
+  "builtin_instance_counter": {
+    "bitwise_builtin": 0,
+    "add_mod_builtin": 0,
+    "pedersen_builtin": 0,
+    "range_check_builtin": 1024,
+    "ec_op_builtin": 0,
+    "poseidon_builtin": 0,
+    "range_check96_builtin": 0,
+    "mul_mod_builtin": 0,
+    "output_builtin": 1
+  },
+  "memory_tables_sizes": {
+    "memory_address_to_id": 32383,
+    "memory_id_to_big": 5912,
+    "memory_id_to_small": 5106
+  },
+  "verify_instruction": 115,
+  "unique_aggregator_inputs": {
+    "pedersen_builtin": 0,
+    "poseidon_builtin": 0
+  }
+}

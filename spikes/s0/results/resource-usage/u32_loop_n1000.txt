@@ -1,0 +1,14 @@
+   Executing u32_loop
+Program output:
+1464895598
+Resources:
+	steps: 43,016
+	max memory address: 40,488
+	memory holes: 1,000
+	builtins:
+		range_check_builtin: 5,997
+		output_builtin: 1
+	memory segments:
+		execution: 32,015
+		range_check: 5,997
+		output: 1

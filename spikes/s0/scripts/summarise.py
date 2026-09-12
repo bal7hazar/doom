@@ -97,6 +97,7 @@ def main():
     s = {
         "program": os.path.basename(executable).replace(".executable.json", ""),
         "args": json.load(open(args)) if os.path.exists(args) else None,
+        "args_file": os.path.basename(args)[:-5],
         "params": os.path.basename(params),
         "route": route,
         "n_steps": int(n_steps),

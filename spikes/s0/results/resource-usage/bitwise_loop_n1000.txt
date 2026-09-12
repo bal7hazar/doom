@@ -1,0 +1,16 @@
+   Executing bitwise_loop
+Program output:
+18373836526966862576
+Resources:
+	steps: 16,052
+	max memory address: 20,512
+	memory holes: 1
+	builtins:
+		bitwise_builtin: 2,001
+		range_check_builtin: 2
+		output_builtin: 1
+	memory segments:
+		execution: 10,042
+		bitwise: 10,005
+		range_check: 2
+		output: 1

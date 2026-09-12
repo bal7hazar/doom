@@ -1,0 +1,293 @@
+2026-09-12T13:28:04.449320Z  INFO run: stwo_run_and_prove: enter
+2026-09-12T13:28:04.449409Z  INFO run:stwo_run_and_prove: stwo_run_and_prove: enter
+2026-09-12T13:28:04.451951Z  INFO run:stwo_run_and_prove:cairo_run_program: cairo_program_runner_lib: enter
+2026-09-12T13:28:04.451963Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::cairo_run: enter
+2026-09-12T13:28:04.451971Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::cairo_run: Initializing Cairo runner. layout=all_cairo_stwo proof_mode=true trace_enabled=true disable_trace_padding=true allow_missing_builtins=true
+2026-09-12T13:28:04.451978Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::vm::runners::cairo_runner: Initializing builtins.
+2026-09-12T13:28:04.451994Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::vm::runners::cairo_runner: Initializing segments.
+2026-09-12T13:28:04.451999Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::vm::runners::cairo_runner: Initializing main entrypoint.
+2026-09-12T13:28:04.452029Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::vm::runners::cairo_runner: Initializing zero segments.
+2026-09-12T13:28:04.452033Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::vm::runners::cairo_runner: Initializing VM.
+2026-09-12T13:28:04.452037Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::cairo_run: Running until PC.
+2026-09-12T13:28:04.464153Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::cairo_run: Ending run. disable_trace_padding=true fill_holes=true
+2026-09-12T13:28:04.464161Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::vm::runners::cairo_runner: Relocating memory.
+2026-09-12T13:28:04.464236Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::vm::runners::cairo_runner: Computing effective sizes of segments.
+2026-09-12T13:28:04.464239Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::cairo_run: Reading return values.
+2026-09-12T13:28:04.464244Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::cairo_run: In proof mode, finalizing segments.
+2026-09-12T13:28:04.464256Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::cairo_run: Relocating. relocate_mem=false relocate_trace=false
+2026-09-12T13:28:04.464262Z  INFO run:stwo_run_and_prove:cairo_run_program:cairo run: cairo_vm::cairo_run: close time.busy=12.3ms time.idle=667ns
+2026-09-12T13:28:04.464269Z  INFO run:stwo_run_and_prove:cairo_run_program: cairo_program_runner_lib: close time.busy=12.3ms time.idle=416ns
+2026-09-12T13:28:04.464274Z  INFO run:stwo_run_and_prove:adapt: stwo_cairo_adapter::adapter: enter
+2026-09-12T13:28:04.464277Z  INFO run:stwo_run_and_prove:adapt: stwo_cairo_adapter::adapter: Num steps: 71955
+2026-09-12T13:28:04.464483Z  INFO run:stwo_run_and_prove:adapt:pad_relocatble_builtin_segments: stwo_cairo_adapter::builtins: enter
+2026-09-12T13:28:04.464489Z  INFO run:stwo_run_and_prove:adapt:pad_relocatble_builtin_segments: stwo_cairo_adapter::builtins: Padded builtin segment 'range_check_builtin' from 324 to 512 instances.
+2026-09-12T13:28:04.464493Z  INFO run:stwo_run_and_prove:adapt:pad_relocatble_builtin_segments: stwo_cairo_adapter::builtins: Padded builtin segment 'bitwise_builtin' from 1 to 16 instances.
+2026-09-12T13:28:04.464496Z  INFO run:stwo_run_and_prove:adapt:pad_relocatble_builtin_segments: stwo_cairo_adapter::builtins: close time.busy=13.3µs time.idle=376ns
+2026-09-12T13:28:04.464502Z  INFO run:stwo_run_and_prove:adapt:Relocator::new: stwo_cairo_adapter::relocator: enter
+2026-09-12T13:28:04.464508Z  INFO run:stwo_run_and_prove:adapt:Relocator::new: stwo_cairo_adapter::relocator: close time.busy=5.71µs time.idle=292ns
+2026-09-12T13:28:04.464512Z  INFO run:stwo_run_and_prove:adapt:get_relocated_memory: stwo_cairo_adapter::relocator: enter
+2026-09-12T13:28:04.464962Z  INFO run:stwo_run_and_prove:adapt:get_relocated_memory: stwo_cairo_adapter::relocator: close time.busy=450µs time.idle=333ns
+2026-09-12T13:28:04.464973Z  INFO run:stwo_run_and_prove:adapt:relocate_trace: stwo_cairo_adapter::relocator: enter
+2026-09-12T13:28:04.465119Z  INFO run:stwo_run_and_prove:adapt:relocate_trace: stwo_cairo_adapter::relocator: close time.busy=146µs time.idle=124ns
+2026-09-12T13:28:04.465124Z  INFO run:stwo_run_and_prove:adapt:get_builtin_segments: stwo_cairo_adapter::relocator: enter
+2026-09-12T13:28:04.465126Z  INFO run:stwo_run_and_prove:adapt:get_builtin_segments: stwo_cairo_adapter::relocator: close time.busy=2.54µs time.idle=168ns
+2026-09-12T13:28:04.465129Z  INFO run:stwo_run_and_prove:adapt: stwo_cairo_adapter::adapter: Builtin segments: BuiltinSegments { add_mod_builtin: None, bitwise_builtin: Some(MemorySegmentAddresses { begin_addr: 62553, stop_ptr: 62633 }), output: Some(MemorySegmentAddresses { begin_addr: 62039, stop_ptr: 62041 }), mul_mod_builtin: None, pedersen_builtin: None, poseidon_builtin: None, range_check96_builtin: None, range_check_builtin: Some(MemorySegmentAddresses { begin_addr: 62041, stop_ptr: 62553 }), ec_op_builtin: None }
+2026-09-12T13:28:04.465137Z  INFO run:stwo_run_and_prove:adapt:relocate_public_addresses: stwo_cairo_adapter::relocator: enter
+2026-09-12T13:28:04.465143Z  INFO run:stwo_run_and_prove:adapt:relocate_public_addresses: stwo_cairo_adapter::relocator: close time.busy=5.67µs time.idle=166ns
+2026-09-12T13:28:04.465146Z  INFO run:stwo_run_and_prove:adapt:MemoryBuilder::from_iter: stwo_cairo_adapter::memory: enter
+2026-09-12T13:28:04.468261Z  INFO run:stwo_run_and_prove:adapt:MemoryBuilder::from_iter: stwo_cairo_adapter::memory: close time.busy=3.12ms time.idle=250ns
+2026-09-12T13:28:04.468268Z  INFO run:stwo_run_and_prove:adapt:StateTransitions::from_slice_parallel: stwo_cairo_adapter::opcodes: enter
+2026-09-12T13:28:04.471921Z  INFO run:stwo_run_and_prove:adapt:StateTransitions::from_slice_parallel: stwo_cairo_adapter::opcodes: close time.busy=3.65ms time.idle=584ns
+2026-09-12T13:28:04.471949Z  INFO run:stwo_run_and_prove:adapt: stwo_cairo_adapter::adapter: Opcode counts: [("generic_opcode", 0), ("add_ap_opcode", 403), ("add_opcode", 11457), ("add_opcode_small", 12586), ("assert_eq_opcode", 336), ("assert_eq_opcode_double_deref", 1511), ("assert_eq_opcode_imm", 349), ("call_opcode_abs", 1), ("call_opcode_rel_imm", 11048), ("jnz_opcode_non_taken", 64), ("jnz_opcode_taken", 11370), ("jump_opcode_rel_imm", 333), ("jump_opcode_rel", 1), ("jump_opcode_double_deref", 2), ("jump_opcode_abs", 2), ("mul_opcode_small", 478), ("mul_opcode", 10920), ("ret_opcode", 11049), ("blake_compress_opcode", 44), ("qm_31_add_mul_opcode", 0)]
+2026-09-12T13:28:04.471975Z  INFO run:stwo_run_and_prove:adapt: stwo_cairo_adapter::adapter: close time.busy=7.70ms time.idle=167ns
+2026-09-12T13:28:04.472160Z  INFO run:stwo_run_and_prove:prove: stwo_run_and_prove: enter
+2026-09-12T13:28:04.472236Z  INFO run:stwo_run_and_prove:prove:prove_cairo: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:04.472243Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Write Preprocessed trace: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:04.472311Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Write Preprocessed trace: stwo_cairo_prover::prover: close time.busy=67.0µs time.idle=1.83µs
+2026-09-12T13:28:05.624015Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Write Base trace: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:05.692066Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Write Base trace: stwo_cairo_prover::prover: close time.busy=68.0ms time.idle=1.75µs
+2026-09-12T13:28:05.692163Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Precompute Twiddles: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:05.781655Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Precompute Twiddles: stwo_cairo_prover::prover: close time.busy=89.5ms time.idle=1.08µs
+2026-09-12T13:28:05.781697Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute preprocessed trace commitment: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:06.625473Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute preprocessed trace commitment:Extension: stwo::prover::pcs: enter
+2026-09-12T13:28:07.745688Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute preprocessed trace commitment:Extension: stwo::prover::pcs: close time.busy=1.12s time.idle=1.62µs
+2026-09-12T13:28:07.745739Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute preprocessed trace commitment:Merkle: stwo::prover::pcs: enter
+2026-09-12T13:28:09.252733Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute preprocessed trace commitment:Merkle: stwo::prover::pcs: close time.busy=1.51s time.idle=3.08µs
+2026-09-12T13:28:09.252780Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute preprocessed trace commitment: stwo_cairo_prover::prover: close time.busy=3.47s time.idle=501ns
+2026-09-12T13:28:09.253472Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:09.253487Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Interpolation for commitment: stwo::prover::pcs: enter
+2026-09-12T13:28:09.278492Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Interpolation for commitment: stwo::prover::pcs: close time.busy=25.0ms time.idle=582ns
+2026-09-12T13:28:09.278524Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Commitment: stwo::prover::pcs: enter
+2026-09-12T13:28:09.278529Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Commitment:Commitment: stwo::prover::pcs: enter
+2026-09-12T13:28:09.278533Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Commitment:Commitment:Extension: stwo::prover::pcs: enter
+2026-09-12T13:28:09.344081Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Commitment:Commitment:Extension: stwo::prover::pcs: close time.busy=65.5ms time.idle=625ns
+2026-09-12T13:28:09.344109Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Commitment:Commitment:Merkle: stwo::prover::pcs: enter
+2026-09-12T13:28:09.417091Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Commitment:Commitment:Merkle: stwo::prover::pcs: close time.busy=73.0ms time.idle=750ns
+2026-09-12T13:28:09.417138Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Commitment:Commitment: stwo::prover::pcs: close time.busy=139ms time.idle=125ns
+2026-09-12T13:28:09.417145Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment:Commitment: stwo::prover::pcs: close time.busy=139ms time.idle=249ns
+2026-09-12T13:28:09.417149Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute base trace commitment: stwo_cairo_prover::prover: close time.busy=164ms time.idle=542ns
+2026-09-12T13:28:09.485961Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Write interaction trace: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:09.578739Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Write interaction trace: stwo_cairo_prover::prover: close time.busy=92.8ms time.idle=1.21µs
+2026-09-12T13:28:09.578810Z  INFO run:stwo_run_and_prove:prove:prove_cairo: stwo_cairo_prover::prover: Witness trace cells: [543100528, 36299744, 63129536]
+2026-09-12T13:28:09.578833Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:09.578838Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Interpolation for commitment: stwo::prover::pcs: enter
+2026-09-12T13:28:09.620728Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Interpolation for commitment: stwo::prover::pcs: close time.busy=41.9ms time.idle=583ns
+2026-09-12T13:28:09.620764Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Commitment: stwo::prover::pcs: enter
+2026-09-12T13:28:09.620776Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Commitment:Commitment: stwo::prover::pcs: enter
+2026-09-12T13:28:09.620780Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Commitment:Commitment:Extension: stwo::prover::pcs: enter
+2026-09-12T13:28:09.721717Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Commitment:Commitment:Extension: stwo::prover::pcs: close time.busy=101ms time.idle=792ns
+2026-09-12T13:28:09.721764Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Commitment:Commitment:Merkle: stwo::prover::pcs: enter
+2026-09-12T13:28:09.806534Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Commitment:Commitment:Merkle: stwo::prover::pcs: close time.busy=84.8ms time.idle=1.50µs
+2026-09-12T13:28:09.806582Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Commitment:Commitment: stwo::prover::pcs: close time.busy=186ms time.idle=167ns
+2026-09-12T13:28:09.806590Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment:Commitment: stwo::prover::pcs: close time.busy=186ms time.idle=250ns
+2026-09-12T13:28:09.806595Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Compute interaction trace commitment: stwo_cairo_prover::prover: close time.busy=228ms time.idle=417ns
+2026-09-12T13:28:09.807283Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs: stwo_cairo_prover::prover: enter
+2026-09-12T13:28:09.807296Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover: enter
+2026-09-12T13:28:09.807306Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}: stwo::prover: enter
+2026-09-12T13:28:09.807310Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}: stwo::prover: enter
+2026-09-12T13:28:09.807393Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.811445Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=4.05ms time.idle=626ns
+2026-09-12T13:28:09.811467Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.815124Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=3.66ms time.idle=458ns
+2026-09-12T13:28:09.815152Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.815346Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=194µs time.idle=501ns
+2026-09-12T13:28:09.815362Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.815463Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=101µs time.idle=291ns
+2026-09-12T13:28:09.815493Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.815624Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=130µs time.idle=417ns
+2026-09-12T13:28:09.815647Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.815959Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=312µs time.idle=374ns
+2026-09-12T13:28:09.815976Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.816258Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=282µs time.idle=334ns
+2026-09-12T13:28:09.816274Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.816347Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=73.7µs time.idle=166ns
+2026-09-12T13:28:09.816361Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.819714Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=3.35ms time.idle=292ns
+2026-09-12T13:28:09.819745Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.819864Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=119µs time.idle=250ns
+2026-09-12T13:28:09.819878Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.822654Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=2.78ms time.idle=250ns
+2026-09-12T13:28:09.822669Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.822725Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=55.2µs time.idle=208ns
+2026-09-12T13:28:09.822733Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.822787Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=53.7µs time.idle=166ns
+2026-09-12T13:28:09.822794Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.822836Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=41.5µs time.idle=167ns
+2026-09-12T13:28:09.822843Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.822991Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=148µs time.idle=209ns
+2026-09-12T13:28:09.823004Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.832507Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=9.50ms time.idle=292ns
+2026-09-12T13:28:09.832526Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.832680Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=154µs time.idle=167ns
+2026-09-12T13:28:09.832702Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.834623Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=1.92ms time.idle=250ns
+2026-09-12T13:28:09.834639Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.834847Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=207µs time.idle=334ns
+2026-09-12T13:28:09.834864Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.835756Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=892µs time.idle=125ns
+2026-09-12T13:28:09.835774Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.836902Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=1.13ms time.idle=124ns
+2026-09-12T13:28:09.836923Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.836958Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=35.8µs time.idle=208ns
+2026-09-12T13:28:09.836970Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:09.837149Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=179µs time.idle=250ns
+2026-09-12T13:28:09.839224Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.039155Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=200ms time.idle=457ns
+2026-09-12T13:28:10.039221Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.039396Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=175µs time.idle=375ns
+2026-09-12T13:28:10.039411Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.039568Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=157µs time.idle=291ns
+2026-09-12T13:28:10.039587Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.040484Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=897µs time.idle=541ns
+2026-09-12T13:28:10.040508Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.046857Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=6.35ms time.idle=292ns
+2026-09-12T13:28:10.046882Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.049507Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=2.63ms time.idle=459ns
+2026-09-12T13:28:10.049529Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.049650Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=120µs time.idle=333ns
+2026-09-12T13:28:10.049669Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.049794Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=125µs time.idle=291ns
+2026-09-12T13:28:10.049805Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.049930Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=124µs time.idle=167ns
+2026-09-12T13:28:10.049941Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.050102Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=161µs time.idle=167ns
+2026-09-12T13:28:10.050288Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.059082Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=8.79ms time.idle=499ns
+2026-09-12T13:28:10.059101Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.147930Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=88.8ms time.idle=292ns
+2026-09-12T13:28:10.147968Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.148092Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=124µs time.idle=334ns
+2026-09-12T13:28:10.148110Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.148159Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=48.5µs time.idle=250ns
+2026-09-12T13:28:10.148183Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.173241Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=25.1ms time.idle=416ns
+2026-09-12T13:28:10.173280Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.173846Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=566µs time.idle=459ns
+2026-09-12T13:28:10.173860Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.181704Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=7.84ms time.idle=458ns
+2026-09-12T13:28:10.181743Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.183823Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=2.08ms time.idle=292ns
+2026-09-12T13:28:10.183839Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.184962Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=1.12ms time.idle=291ns
+2026-09-12T13:28:10.184977Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.185077Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=99.2µs time.idle=333ns
+2026-09-12T13:28:10.185087Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.185875Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=788µs time.idle=250ns
+2026-09-12T13:28:10.185886Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.188339Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=2.45ms time.idle=208ns
+2026-09-12T13:28:10.188350Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: enter
+2026-09-12T13:28:10.195796Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraint point-wise eval{class="ConstraintEval"}: stwo_constraint_framework::prover::component_prover: close time.busy=7.45ms time.idle=333ns
+2026-09-12T13:28:10.195808Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraints interpolation{class="ConstraintInterpolation"}: stwo::prover::air::accumulation: enter
+2026-09-12T13:28:10.207177Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}:Constraints interpolation{class="ConstraintInterpolation"}: stwo::prover::air::accumulation: close time.busy=11.4ms time.idle=291ns
+2026-09-12T13:28:10.207196Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Generation{class="CompositionPolynomialGeneration"}: stwo::prover: close time.busy=400ms time.idle=208ns
+2026-09-12T13:28:10.209390Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Commitment: stwo::prover::pcs: enter
+2026-09-12T13:28:10.209401Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Commitment:Commitment: stwo::prover::pcs: enter
+2026-09-12T13:28:10.209405Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Commitment:Commitment:Extension: stwo::prover::pcs: enter
+2026-09-12T13:28:10.242738Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Commitment:Commitment:Extension: stwo::prover::pcs: close time.busy=33.3ms time.idle=250ns
+2026-09-12T13:28:10.242763Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Commitment:Commitment:Merkle: stwo::prover::pcs: enter
+2026-09-12T13:28:10.274668Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Commitment:Commitment:Merkle: stwo::prover::pcs: close time.busy=31.9ms time.idle=583ns
+2026-09-12T13:28:10.274695Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Commitment:Commitment: stwo::prover::pcs: close time.busy=65.3ms time.idle=125ns
+2026-09-12T13:28:10.274700Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}:Commitment: stwo::prover::pcs: close time.busy=65.3ms time.idle=334ns
+2026-09-12T13:28:10.274704Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Composition{class="Composition"}: stwo::prover: close time.busy=467ms time.idle=166ns
+2026-09-12T13:28:10.274988Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Evaluate columns out of domain{class="EvaluateOutOfDomain"}: stwo::prover::pcs: enter
+2026-09-12T13:28:10.613557Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Evaluate columns out of domain{class="EvaluateOutOfDomain"}: stwo::prover::pcs: close time.busy=339ms time.idle=1.21µs
+2026-09-12T13:28:10.613827Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 15: 544
+2026-09-12T13:28:10.613847Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 7: 379
+2026-09-12T13:28:10.613852Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 18: 1
+2026-09-12T13:28:10.613856Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 10: 559
+2026-09-12T13:28:10.613859Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 16: 93
+2026-09-12T13:28:10.613863Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 20: 1
+2026-09-12T13:28:10.613866Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 23: 1
+2026-09-12T13:28:10.613868Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 26: 1
+2026-09-12T13:28:10.613871Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 14: 1
+2026-09-12T13:28:10.613873Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 11: 30
+2026-09-12T13:28:10.613875Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 13: 159
+2026-09-12T13:28:10.613877Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 5: 323
+2026-09-12T13:28:10.613879Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 9: 21
+2026-09-12T13:28:10.613881Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 17: 19
+2026-09-12T13:28:10.613883Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 21: 84
+2026-09-12T13:28:10.613886Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 6: 1
+2026-09-12T13:28:10.613888Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 8: 8
+2026-09-12T13:28:10.613890Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 12: 41
+2026-09-12T13:28:10.613892Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 24: 57
+2026-09-12T13:28:10.613894Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 25: 1
+2026-09-12T13:28:10.613896Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 19: 50
+2026-09-12T13:28:10.613899Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover::pcs: Log size 22: 1
+2026-09-12T13:28:10.613908Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Compute FRI quotients{class="FRIQuotients"}: stwo::prover::pcs::quotient_ops: enter
+2026-09-12T13:28:10.685898Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Compute FRI quotients{class="FRIQuotients"}: stwo::prover::pcs::quotient_ops: close time.busy=72.0ms time.idle=1.17µs
+2026-09-12T13:28:10.685944Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:commit: stwo::prover::fri: enter
+2026-09-12T13:28:10.761487Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:commit: stwo::prover::fri: close time.busy=75.5ms time.idle=1.46µs
+2026-09-12T13:28:10.761533Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Grind{class="Queries POW"}: stwo::prover::pcs: enter
+2026-09-12T13:28:11.263017Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex:Grind{class="Queries POW"}: stwo::prover::pcs: close time.busy=501ms time.idle=1.88µs
+2026-09-12T13:28:11.271898Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover: proof_size_estimate=1064496
+2026-09-12T13:28:11.272302Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs:prove_ex: stwo::prover: close time.busy=1.46s time.idle=3.17µs
+2026-09-12T13:28:11.272322Z  INFO run:stwo_run_and_prove:prove:prove_cairo:Prove STARKs: stwo_cairo_prover::prover: close time.busy=1.47s time.idle=458ns
+2026-09-12T13:28:11.314838Z  INFO run:stwo_run_and_prove:prove:prove_cairo: stwo_cairo_prover::prover: close time.busy=6.84s time.idle=708ns
+2026-09-12T13:28:11.315497Z  INFO run:stwo_run_and_prove:prove:verify_cairo: cairo_air::verifier: enter
+[INFO  cairo_air::verifier] All relation uses:
+    {
+      "RangeCheck_9_9_D": 98304,
+      "BlakeRoundSigma": 512,
+      "RangeCheck_20_F": 49152,
+      "VerifyBitwiseXor_12": 8192,
+      "MemoryIdToBig": 278016,
+      "RangeCheck_20_G": 49152,
+      "RangeCheck_9_9_E": 65536,
+      "RangeCheck_9_9_F": 65536,
+      "RangeCheck_9_9_B": 98304,
+      "MemoryAddressToId": 284160,
+      "TripleXor32": 512,
+      "RangeCheck_9_9": 98304,
+      "RangeCheck_11": 2048,
+      "RangeCheck_18": 512,
+      "RangeCheck_7_2_5": 10304,
+      "VerifyBitwiseXor_9": 8624,
+      "RangeCheck_20_E": 49152,
+      "RangeCheck_20_H": 49152,
+      "VerifyBitwiseXor_4": 8192,
+      "RangeCheck_20": 65536,
+      "RangeCheck_9_9_C": 98304,
+      "RangeCheck_9_9_H": 32768,
+      "RangeCheck_20_B": 65536,
+      "RangeCheck_4_3": 1024,
+      "BlakeG": 4096,
+      "Opcodes": 103104,
+      "RangeCheck_20_D": 65536,
+      "RangeCheck_9_9_G": 32768,
+      "BlakeRound": 576,
+      "VerifyBitwiseXor_8": 18704,
+      "VerifyBitwiseXor_8_B": 18432,
+      "VerifyBitwiseXor_7": 8192,
+      "RangeCheck_20_C": 65536,
+      "VerifyInstruction": 103104
+    }
+2026-09-12T13:28:11.317497Z  INFO run:stwo_run_and_prove:prove:verify_cairo: stwo::core::verifier: Split composition polynomial log degree bound: 20
+2026-09-12T13:28:11.317737Z  INFO run:stwo_run_and_prove:prove:verify_cairo: stwo::core::verifier: Sampling 2375 columns.
+2026-09-12T13:28:11.317745Z  INFO run:stwo_run_and_prove:prove:verify_cairo: stwo::core::verifier: Total sample points: 2460.
+2026-09-12T13:28:11.324083Z  INFO run:stwo_run_and_prove:prove:verify_cairo: cairo_air::verifier: close time.busy=8.59ms time.idle=833ns
+2026-09-12T13:28:11.324110Z  INFO run:stwo_run_and_prove:prove:Serialize proof: cairo_air::utils: enter
+2026-09-12T13:28:11.383176Z  INFO run:stwo_run_and_prove:prove:Serialize proof: cairo_air::utils: close time.busy=59.1ms time.idle=833ns
+2026-09-12T13:28:11.383484Z  INFO run:stwo_run_and_prove:prove: stwo_run_and_prove: Proof generated and verified successfully.
+2026-09-12T13:28:11.383496Z  INFO run:stwo_run_and_prove:prove: stwo_run_and_prove: close time.busy=6.91s time.idle=375ns
+2026-09-12T13:28:11.383501Z  INFO run:stwo_run_and_prove: stwo_run_and_prove: Saving program output to: "/private/tmp/claude-501/-Users-bal7hazar-git-doom/052c133d-8e48-4871-8024-3d2fd1081b4c/scratchpad/s0-runs/steps_k16_can_bl/program_output.json"
+2026-09-12T13:28:11.384881Z  INFO run:stwo_run_and_prove: stwo_run_and_prove: close time.busy=6.94s time.idle=750ns
+2026-09-12T13:28:11.384897Z  INFO run: stwo_run_and_prove: close time.busy=6.94s time.idle=3.17µs
+[INFO  stwo_cairo_utils::binary_utils] stwo_run_and_prove succeeded
+        6.98 real        58.29 user         4.20 sys
+         17125818368  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             1232934  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+               80156  involuntary context switches
+        529065957314  instructions retired
+        189273965168  cycles elapsed
+         17123881584  peak memory footprint

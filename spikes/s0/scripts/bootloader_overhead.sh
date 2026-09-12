@@ -25,6 +25,7 @@ for pkg in "${PROGRAMS[@]}"; do
   case "$pkg" in
     poseidon_hash) argf="$S0/args/n1000.json" ;;
     steps_k)       argf="$S0/args/k16.json" ;;
+    felt_width)    argf="$S0/args/n1000_narrow.json" ;;   # this one takes two args
     *)             argf="$S0/args/n1.json" ;;
   esac
   words="$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["program"]["bytecode"]))' "$exe")"

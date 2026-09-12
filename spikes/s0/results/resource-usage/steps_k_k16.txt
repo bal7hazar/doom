@@ -1,0 +1,14 @@
+   Executing steps_k
+Program output:
+1103907766540201515249663058697913699013153957619120508374524003919500975184
+Resources:
+	steps: 65,425
+	max memory address: 54,819
+	memory holes: 1
+	builtins:
+		range_check_builtin: 22
+		output_builtin: 1
+	memory segments:
+		execution: 54,507
+		range_check: 22
+		output: 1

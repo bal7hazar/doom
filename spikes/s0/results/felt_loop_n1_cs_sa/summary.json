@@ -1,0 +1,69 @@
+{
+  "program": "felt_loop",
+  "args": [
+    "0x1"
+  ],
+  "params": "canonical_small.json",
+  "route": "standalone",
+  "n_steps": 85,
+  "ok": false,
+  "exit_status": 101,
+  "execution_resources": {
+    "opcodes_instance_counter": {
+      "call_opcode_abs": 0,
+      "add_opcode": 1,
+      "generic_opcode": 0,
+      "jnz_opcode_taken": 5,
+      "jump_opcode_double_deref": 0,
+      "qm_31_add_mul_opcode": 0,
+      "jnz_opcode_non_taken": 5,
+      "ret_opcode": 6,
+      "call_opcode_rel_imm": 6,
+      "assert_eq_opcode_double_deref": 6,
+      "mul_opcode": 0,
+      "add_opcode_small": 12,
+      "assert_eq_opcode": 27,
+      "jump_opcode_rel": 0,
+      "assert_eq_opcode_imm": 9,
+      "add_ap_opcode": 4,
+      "mul_opcode_small": 0,
+      "blake_compress_opcode": 0,
+      "jump_opcode_rel_imm": 3,
+      "jump_opcode_abs": 0
+    },
+    "builtin_instance_counter": {
+      "add_mod_builtin": 0,
+      "poseidon_builtin": 0,
+      "mul_mod_builtin": 0,
+      "pedersen_builtin": 0,
+      "range_check96_builtin": 0,
+      "bitwise_builtin": 0,
+      "output_builtin": 1,
+      "ec_op_builtin": 0,
+      "range_check_builtin": 16
+    },
+    "memory_tables_sizes": {
+      "memory_address_to_id": 406,
+      "memory_id_to_big": 15,
+      "memory_id_to_small": 115
+    },
+    "verify_instruction": 84,
+    "unique_aggregator_inputs": {
+      "poseidon_builtin": 0,
+      "pedersen_builtin": 0
+    }
+  },
+  "wall_s": 0.01,
+  "user_s": 0.03,
+  "sys_s": 0.01,
+  "cpu_s": 0.04,
+  "max_rss_bytes": 20971520,
+  "max_rss_gib": 0.02,
+  "peak_footprint_bytes": 16548296,
+  "peak_footprint_gib": 0.015,
+  "spans_s": {},
+  "proof_file": null,
+  "proof_bytes": 0,
+  "panic_location": "crates/adapter/src/memory.rs:286:17:",
+  "panic_message": "assertion `left == right` failed: Cannot convert F252 to u128"
+}
