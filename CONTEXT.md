@@ -143,6 +143,29 @@ exécutables Scarb passent par le chemin **bootloader** (`cairo-program-runner-l
 route récursive. Établir ce pipeline « exécutable Scarb → preuve » avec le monorepo courant est la
 première tâche du spike S0 ; les chiffres de temps/mémoire ci-dessus (Scarb 2.16) sont à refaire avec lui.
 
+### 4.3 bis Résultats du spike S0 (2026-09-12, `proving@cd7bc5f`, Scarb 2.19.4, voir `docs/spikes/S0.md`) — GO
+
+- **Chemin de preuve d'un exécutable Scarb** : `stwo-run-and-prove --program privacy_simple_bootloader_compiled.json
+  --program_input bl_input.json` avec la tâche `Cairo1Executable` (args = tableau JSON de felts hex,
+  `program_hash_function: blake`, `output_preimage_dump_path` obligatoire, chemins absolus). Le chemin
+  « standalone » (`run_and_prove --program_type executable`, sans bootloader) est **cassé** pour tout
+  exécutable Scarb (`extract_public_segments` lit les valeurs de retour comme pointeurs de builtins).
+- **Mémoire avec `canonical_small`** : RSS ≈ **2,2 GiB + 1,8 GiB par million de steps** → 2^20 steps =
+  **4,05 GiB** (2^21 = 6 GiB) contre 16 GiB avec `canonical` (tout l'écart est dans
+  « Compute preprocessed trace commitment »). Temps : 3–7 s mur, 18–58 s CPU sur 12 cœurs.
+- **Taille de preuve** : plate, ≈ 4,33 MB / **290 k felts** quel que soit k (357 k felts avec les params
+  du registre récursif, `include_all_preprocessed_columns = true`).
+- **Coût du bootloader** : pas un forfait de 30 k steps mais **2 340 + 14,7 × mots de bytecode** (hash
+  blake du programme ; 5,5 × avec poseidon) : un programme de 16 k mots coûte 240 k steps par segment.
+  La taille du bytecode du cœur devient un paramètre de K.
+- `canonical_small` n'est **pas** plafonné à 2^20 par lui-même (2^21 prouve et vérifie) ; le plafond 2^20
+  vient du **lifting fixe du registre récursif** (`fixed(20)`), contrainte portée par S4.
+- **Paniques** : ni les felts ≥ 2^128 en mémoire ni le builtin bitwise ne posent problème sur le chemin
+  bootloader (les paniques de Scarb 2.16 étaient des symptômes du chemin standalone). Seuil de **coût**
+  à **2^72** (`MemoryConfig::small_max`) : au-delà, +33 % sur `range_check_9_9`, rien d'autre.
+- Leviers mémoire (k = 19) : `fold_step = 4` → −0,29 GiB et −12 % de taille de preuve (à valider avec le
+  vérifieur de circuit, S4) ; `store_polynomials_coefficients = true` → +0,36 GiB pour rien.
+
 ### 4.4 Origine du coût mémoire fixe : la trace pré-traitée
 
 `crates/common/src/preprocessed_columns/preprocessed_trace.rs` définit trois variantes :
