@@ -1,0 +1,14 @@
+[package]
+name = "bigcode"
+version = "0.1.0"
+edition = "2024_07"
+
+[[target.executable]]
+name = "bigcode"
+function = "bigcode::main"
+
+[dependencies]
+cairo_execute = "2.19.4"
+
+[cairo]
+enable-gas = false

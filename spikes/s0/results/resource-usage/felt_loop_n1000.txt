@@ -1,0 +1,14 @@
+   Executing felt_loop
+Program output:
+1064436924872440014988704105188843086075555414484640288702426738649626334688
+Resources:
+	steps: 36,049
+	max memory address: 31,378
+	memory holes: 1
+	builtins:
+		range_check_builtin: 1,001
+		output_builtin: 1
+	memory segments:
+		execution: 30,038
+		range_check: 1,001
+		output: 1

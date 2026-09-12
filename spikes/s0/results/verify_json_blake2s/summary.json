@@ -1,0 +1,89 @@
+{
+  "program": "felt_loop",
+  "args": [
+    "0x3"
+  ],
+  "params": "canonical_small.json",
+  "route": "bootloader",
+  "n_steps": 7135,
+  "ok": true,
+  "exit_status": 0,
+  "vm_execution_resources": {
+    "n_steps": 7135,
+    "n_memory_holes": 2,
+    "builtin_instance_counter": {
+      "output_builtin": 2,
+      "range_check_builtin": 342,
+      "pedersen_builtin": 0,
+      "bitwise_builtin": 1,
+      "ec_op_builtin": 0,
+      "poseidon_builtin": 0,
+      "range_check96_builtin": 0,
+      "add_mod_builtin": 0,
+      "mul_mod_builtin": 0
+    }
+  },
+  "execution_resources": {
+    "opcodes_instance_counter": {
+      "mul_opcode": 85,
+      "jnz_opcode_taken": 520,
+      "call_opcode_abs": 1,
+      "jump_opcode_abs": 2,
+      "mul_opcode_small": 461,
+      "blake_compress_opcode": 48,
+      "jump_opcode_rel": 1,
+      "generic_opcode": 0,
+      "qm_31_add_mul_opcode": 0,
+      "add_opcode": 650,
+      "assert_eq_opcode_double_deref": 1615,
+      "assert_eq_opcode_imm": 390,
+      "ret_opcode": 183,
+      "add_opcode_small": 1804,
+      "jnz_opcode_non_taken": 61,
+      "jump_opcode_rel_imm": 366,
+      "call_opcode_rel_imm": 182,
+      "assert_eq_opcode": 323,
+      "add_ap_opcode": 440,
+      "jump_opcode_double_deref": 2
+    },
+    "builtin_instance_counter": {
+      "mul_mod_builtin": 0,
+      "ec_op_builtin": 0,
+      "bitwise_builtin": 16,
+      "range_check_builtin": 512,
+      "pedersen_builtin": 0,
+      "add_mod_builtin": 0,
+      "range_check96_builtin": 0,
+      "poseidon_builtin": 0,
+      "output_builtin": 2
+    },
+    "memory_tables_sizes": {
+      "memory_address_to_id": 10062,
+      "memory_id_to_big": 394,
+      "memory_id_to_small": 3107
+    },
+    "verify_instruction": 709,
+    "unique_aggregator_inputs": {
+      "pedersen_builtin": 0,
+      "poseidon_builtin": 0
+    }
+  },
+  "wall_s": 6.71,
+  "user_s": 21.75,
+  "sys_s": 1.32,
+  "cpu_s": 23.07,
+  "max_rss_bytes": 2436759552,
+  "max_rss_gib": 2.269,
+  "peak_footprint_bytes": 2423376080,
+  "peak_footprint_gib": 2.257,
+  "spans_s": {
+    "cairo run": 0.01,
+    "stwo_run_and_prove": 6.7,
+    "adapt": 0.002,
+    "prove_cairo": 6.65,
+    "Write Preprocessed trace": 0.001,
+    "verify_cairo": 0.01
+  },
+  "proof_file": "proof.json",
+  "proof_bytes": 11435008
+}

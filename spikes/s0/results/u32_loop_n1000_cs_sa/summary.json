@@ -1,0 +1,69 @@
+{
+  "program": "u32_loop",
+  "args": [
+    "0x3e8"
+  ],
+  "params": "canonical_small.json",
+  "route": "standalone",
+  "n_steps": 43016,
+  "ok": false,
+  "exit_status": 101,
+  "execution_resources": {
+    "opcodes_instance_counter": {
+      "jnz_opcode_taken": 5271,
+      "jnz_opcode_non_taken": 730,
+      "blake_compress_opcode": 0,
+      "add_opcode": 8719,
+      "jump_opcode_double_deref": 0,
+      "assert_eq_opcode_imm": 2004,
+      "ret_opcode": 1003,
+      "qm_31_add_mul_opcode": 0,
+      "jump_opcode_rel_imm": 3000,
+      "assert_eq_opcode": 7010,
+      "mul_opcode_small": 1998,
+      "assert_eq_opcode_double_deref": 5999,
+      "call_opcode_rel_imm": 1003,
+      "call_opcode_abs": 0,
+      "generic_opcode": 0,
+      "jump_opcode_rel": 0,
+      "mul_opcode": 0,
+      "add_ap_opcode": 1001,
+      "jump_opcode_abs": 0,
+      "add_opcode_small": 5277
+    },
+    "builtin_instance_counter": {
+      "add_mod_builtin": 0,
+      "bitwise_builtin": 0,
+      "poseidon_builtin": 0,
+      "range_check96_builtin": 0,
+      "pedersen_builtin": 0,
+      "output_builtin": 1,
+      "range_check_builtin": 8192,
+      "mul_mod_builtin": 0,
+      "ec_op_builtin": 0
+    },
+    "memory_tables_sizes": {
+      "memory_address_to_id": 40493,
+      "memory_id_to_big": 3279,
+      "memory_id_to_small": 14778
+    },
+    "verify_instruction": 111,
+    "unique_aggregator_inputs": {
+      "pedersen_builtin": 0,
+      "poseidon_builtin": 0
+    }
+  },
+  "wall_s": 0.01,
+  "user_s": 0.05,
+  "sys_s": 0.01,
+  "cpu_s": 0.06,
+  "max_rss_bytes": 29065216,
+  "max_rss_gib": 0.027,
+  "peak_footprint_bytes": 24625632,
+  "peak_footprint_gib": 0.023,
+  "spans_s": {},
+  "proof_file": null,
+  "proof_bytes": 0,
+  "panic_location": "crates/prover/src/witness/cairo.rs:28:60:",
+  "panic_message": "called `Result::unwrap()` on an `Err` value: TryFromIntError(())"
+}

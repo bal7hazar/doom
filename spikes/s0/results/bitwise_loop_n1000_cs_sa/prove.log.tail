@@ -1,0 +1,66 @@
+[2m2026-09-12T13:27:34.564720Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m [2mrun_and_prove[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.566859Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::cairo_run[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.566870Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::cairo_run[0m[2m:[0m Initializing Cairo runner. [3mlayout[0m[2m=[0mall_cairo_stwo [3mproof_mode[0m[2m=[0mtrue [3mtrace_enabled[0m[2m=[0mtrue [3mdisable_trace_padding[0m[2m=[0mtrue [3mallow_missing_builtins[0m[2m=[0mtrue
+[2m2026-09-12T13:27:34.566878Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::vm::runners::cairo_runner[0m[2m:[0m Initializing builtins.
+[2m2026-09-12T13:27:34.566890Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::vm::runners::cairo_runner[0m[2m:[0m Initializing segments.
+[2m2026-09-12T13:27:34.566894Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::vm::runners::cairo_runner[0m[2m:[0m Initializing main entrypoint.
+[2m2026-09-12T13:27:34.566904Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::vm::runners::cairo_runner[0m[2m:[0m Initializing zero segments.
+[2m2026-09-12T13:27:34.566908Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::vm::runners::cairo_runner[0m[2m:[0m Initializing VM.
+[2m2026-09-12T13:27:34.566911Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::cairo_run[0m[2m:[0m Running until PC.
+[2m2026-09-12T13:27:34.568472Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::cairo_run[0m[2m:[0m Ending run. [3mdisable_trace_padding[0m[2m=[0mtrue [3mfill_holes[0m[2m=[0mtrue
+[2m2026-09-12T13:27:34.568477Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::vm::runners::cairo_runner[0m[2m:[0m Relocating memory.
+[2m2026-09-12T13:27:34.569010Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::vm::runners::cairo_runner[0m[2m:[0m Computing effective sizes of segments.
+[2m2026-09-12T13:27:34.569014Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::cairo_run[0m[2m:[0m Reading return values.
+[2m2026-09-12T13:27:34.569018Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::cairo_run[0m[2m:[0m In proof mode, finalizing segments.
+[2m2026-09-12T13:27:34.569025Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::cairo_run[0m[2m:[0m Relocating. [3mrelocate_mem[0m[2m=[0mfalse [3mrelocate_trace[0m[2m=[0mfalse
+[2m2026-09-12T13:27:34.569029Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mcairo run[0m[2m:[0m [2mcairo_vm::cairo_run[0m[2m:[0m close [3mtime.busy[0m[2m=[0m2.17ms [3mtime.idle[0m[2m=[0m457ns
+[2m2026-09-12T13:27:34.569036Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m [2mstwo_cairo_adapter::adapter[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.569039Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m [2mstwo_cairo_adapter::adapter[0m[2m:[0m Num steps: 16052
+[2m2026-09-12T13:27:34.569082Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mpad_relocatble_builtin_segments[0m[2m:[0m [2mstwo_cairo_adapter::builtins[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.569086Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mpad_relocatble_builtin_segments[0m[2m:[0m [2mstwo_cairo_adapter::builtins[0m[2m:[0m Padded builtin segment 'range_check_builtin' from 2 to 16 instances.
+[2m2026-09-12T13:27:34.569096Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mpad_relocatble_builtin_segments[0m[2m:[0m [2mstwo_cairo_adapter::builtins[0m[2m:[0m Padded builtin segment 'bitwise_builtin' from 2001 to 2048 instances.
+[2m2026-09-12T13:27:34.569104Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mpad_relocatble_builtin_segments[0m[2m:[0m [2mstwo_cairo_adapter::builtins[0m[2m:[0m close [3mtime.busy[0m[2m=[0m21.9µs [3mtime.idle[0m[2m=[0m250ns
+[2m2026-09-12T13:27:34.569109Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mRelocator::new[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.569114Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mRelocator::new[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m close [3mtime.busy[0m[2m=[0m4.42µs [3mtime.idle[0m[2m=[0m166ns
+[2m2026-09-12T13:27:34.569118Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mget_relocated_memory[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.569272Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mget_relocated_memory[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m close [3mtime.busy[0m[2m=[0m154µs [3mtime.idle[0m[2m=[0m83.0ns
+[2m2026-09-12T13:27:34.569277Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mrelocate_trace[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.569330Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mrelocate_trace[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m close [3mtime.busy[0m[2m=[0m53.8µs [3mtime.idle[0m[2m=[0m208ns
+[2m2026-09-12T13:27:34.569334Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mget_builtin_segments[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.569337Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mget_builtin_segments[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m close [3mtime.busy[0m[2m=[0m2.71µs [3mtime.idle[0m[2m=[0m166ns
+[2m2026-09-12T13:27:34.569340Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m [2mstwo_cairo_adapter::adapter[0m[2m:[0m Builtin segments: BuiltinSegments { add_mod_builtin: None, bitwise_builtin: Some(MemorySegmentAddresses { begin_addr: 10272, stop_ptr: 20512 }), output: Some(MemorySegmentAddresses { begin_addr: 10255, stop_ptr: 10256 }), mul_mod_builtin: None, pedersen_builtin: None, poseidon_builtin: None, range_check96_builtin: None, range_check_builtin: Some(MemorySegmentAddresses { begin_addr: 10256, stop_ptr: 10272 }), ec_op_builtin: None }
+[2m2026-09-12T13:27:34.569347Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mrelocate_public_addresses[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.569350Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mrelocate_public_addresses[0m[2m:[0m [2mstwo_cairo_adapter::relocator[0m[2m:[0m close [3mtime.busy[0m[2m=[0m2.92µs [3mtime.idle[0m[2m=[0m168ns
+[2m2026-09-12T13:27:34.569353Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mMemoryBuilder::from_iter[0m[2m:[0m [2mstwo_cairo_adapter::memory[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.569936Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mMemoryBuilder::from_iter[0m[2m:[0m [2mstwo_cairo_adapter::memory[0m[2m:[0m close [3mtime.busy[0m[2m=[0m583µs [3mtime.idle[0m[2m=[0m126ns
+[2m2026-09-12T13:27:34.569941Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mStateTransitions::from_slice_parallel[0m[2m:[0m [2mstwo_cairo_adapter::opcodes[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.570688Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m[1mStateTransitions::from_slice_parallel[0m[2m:[0m [2mstwo_cairo_adapter::opcodes[0m[2m:[0m close [3mtime.busy[0m[2m=[0m744µs [3mtime.idle[0m[2m=[0m334ns
+[2m2026-09-12T13:27:34.570716Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m [2mstwo_cairo_adapter::adapter[0m[2m:[0m Opcode counts: [("generic_opcode", 0), ("add_ap_opcode", 3), ("add_opcode", 1000), ("add_opcode_small", 3005), ("assert_eq_opcode", 1017), ("assert_eq_opcode_double_deref", 6007), ("assert_eq_opcode_imm", 1007), ("call_opcode_abs", 0), ("call_opcode_rel_imm", 1003), ("jnz_opcode_non_taken", 3), ("jnz_opcode_taken", 2001), ("jump_opcode_rel_imm", 2), ("jump_opcode_rel", 0), ("jump_opcode_double_deref", 0), ("jump_opcode_abs", 0), ("mul_opcode_small", 0), ("mul_opcode", 0), ("ret_opcode", 1003), ("blake_compress_opcode", 0), ("qm_31_add_mul_opcode", 0)]
+[2m2026-09-12T13:27:34.570739Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1madapt[0m[2m:[0m [2mstwo_cairo_adapter::adapter[0m[2m:[0m close [3mtime.busy[0m[2m=[0m1.70ms [3mtime.idle[0m[2m=[0m208ns
+[2m2026-09-12T13:27:34.570801Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mprove_cairo[0m[2m:[0m [2mstwo_cairo_prover::prover[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.570806Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mprove_cairo[0m[2m:[0m[1mWrite Preprocessed trace[0m[2m:[0m [2mstwo_cairo_prover::prover[0m[2m:[0m enter
+[2m2026-09-12T13:27:34.570872Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mprove_cairo[0m[2m:[0m[1mWrite Preprocessed trace[0m[2m:[0m [2mstwo_cairo_prover::prover[0m[2m:[0m close [3mtime.busy[0m[2m=[0m61.8µs [3mtime.idle[0m[2m=[0m4.08µs
+
+thread 'main' (513451) panicked at crates/prover/src/witness/cairo.rs:28:60:
+called `Result::unwrap()` on an `Err` value: TryFromIntError(())
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2m2026-09-12T13:27:34.575204Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m[1mprove_cairo[0m[2m:[0m [2mstwo_cairo_prover::prover[0m[2m:[0m close [3mtime.busy[0m[2m=[0m4.40ms [3mtime.idle[0m[2m=[0m333ns
+[2m2026-09-12T13:27:34.575219Z[0m [32m INFO[0m [1mrun_and_prove[0m[2m:[0m [2mrun_and_prove[0m[2m:[0m close [3mtime.busy[0m[2m=[0m10.5ms [3mtime.idle[0m[2m=[0m1.04µs
+        0.01 real         0.04 user         0.01 sys
+            22593536  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                1608  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 479  involuntary context switches
+           513532642  instructions retired
+           171403307  cycles elapsed
+            18153928  peak memory footprint

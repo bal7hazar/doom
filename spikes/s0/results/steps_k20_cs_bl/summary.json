@@ -1,0 +1,97 @@
+{
+  "program": "steps_k",
+  "args": [
+    "0x14"
+  ],
+  "params": "canonical_small.json",
+  "route": "bootloader",
+  "n_steps": 1055051,
+  "ok": true,
+  "exit_status": 0,
+  "vm_execution_resources": {
+    "n_steps": 1055051,
+    "n_memory_holes": 2,
+    "builtin_instance_counter": {
+      "output_builtin": 2,
+      "range_check_builtin": 328,
+      "pedersen_builtin": 0,
+      "bitwise_builtin": 1,
+      "ec_op_builtin": 0,
+      "poseidon_builtin": 0,
+      "range_check96_builtin": 0,
+      "add_mod_builtin": 0,
+      "mul_mod_builtin": 0
+    }
+  },
+  "execution_resources": {
+    "opcodes_instance_counter": {
+      "qm_31_add_mul_opcode": 0,
+      "assert_eq_opcode_imm": 349,
+      "mul_opcode_small": 482,
+      "add_opcode": 175305,
+      "assert_eq_opcode": 344,
+      "assert_eq_opcode_double_deref": 1515,
+      "mul_opcode": 174760,
+      "generic_opcode": 0,
+      "add_opcode_small": 176438,
+      "jnz_opcode_taken": 175222,
+      "jump_opcode_abs": 2,
+      "ret_opcode": 174893,
+      "add_ap_opcode": 403,
+      "jnz_opcode_non_taken": 64,
+      "blake_compress_opcode": 44,
+      "call_opcode_rel_imm": 174892,
+      "jump_opcode_double_deref": 2,
+      "call_opcode_abs": 1,
+      "jump_opcode_rel": 1,
+      "jump_opcode_rel_imm": 333
+    },
+    "builtin_instance_counter": {
+      "output_builtin": 2,
+      "range_check96_builtin": 0,
+      "poseidon_builtin": 0,
+      "add_mod_builtin": 0,
+      "range_check_builtin": 512,
+      "mul_mod_builtin": 0,
+      "pedersen_builtin": 0,
+      "ec_op_builtin": 0,
+      "bitwise_builtin": 16
+    },
+    "memory_tables_sizes": {
+      "memory_address_to_id": 883258,
+      "memory_id_to_big": 349778,
+      "memory_id_to_small": 318558
+    },
+    "verify_instruction": 689,
+    "unique_aggregator_inputs": {
+      "poseidon_builtin": 0,
+      "pedersen_builtin": 0
+    }
+  },
+  "wall_s": 5.56,
+  "user_s": 41.34,
+  "sys_s": 2.35,
+  "cpu_s": 43.69,
+  "max_rss_bytes": 4593418240,
+  "max_rss_gib": 4.278,
+  "peak_footprint_bytes": 4580331288,
+  "peak_footprint_gib": 4.266,
+  "spans_s": {
+    "cairo run": 0.123,
+    "stwo_run_and_prove": 5.55,
+    "adapt": 0.115,
+    "prove_cairo": 5.22,
+    "Write Preprocessed trace": 0.0,
+    "Write Base trace": 0.592,
+    "Precompute Twiddles": 0.002,
+    "Compute preprocessed trace commitment": 0.092,
+    "Compute base trace commitment": 0.596,
+    "Write interaction trace": 0.27,
+    "Compute interaction trace commitment": 0.553,
+    "Prove STARKs": 2.76,
+    "verify_cairo": 0.009
+  },
+  "proof_file": "proof.cairo_serde.json",
+  "proof_bytes": 4343693,
+  "proof_felts": 289899
+}

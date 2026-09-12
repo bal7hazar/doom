@@ -1,0 +1,15 @@
+program	bytecode_words	hash_fn	steps_standalone	steps_with_bootloader	overhead	poseidon_instances	range_check_instances
+felt_loop	312	blake	85	7063	6978	0	340
+felt_loop	312	poseidon	85	3634	3549	159	20
+u32_loop	277	blake	59	6499	6440	0	306
+u32_loop	277	poseidon	59	3398	3339	142	21
+bitwise_loop	210	blake	68	5498	5430	0	239
+bitwise_loop	210	poseidon	68	3066	2998	109	20
+poseidon_hash	268	blake	23565	29825	6260	501	297
+poseidon_hash	268	poseidon	23565	26875	3310	639	20
+steps_k	276	blake	65425	71955	6530	0	324
+steps_k	276	poseidon	65425	68755	3330	141	40
+bigcode	16114	blake	8034	247920	239886	0	16142
+bigcode	16114	poseidon	8034	98501	90467	8060	20
+felt_width	323	blake	34054	41166	7112	0	1350
+felt_width	323	poseidon	34054	37667	3613	165	1019
