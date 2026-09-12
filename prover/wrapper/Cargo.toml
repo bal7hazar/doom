@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Standalone workspace: the service has no dependency on the pinned `proving` monorepo (it drives
+# its binaries as subprocesses), so it builds in seconds and must not be pulled into the
+# leaf-verify workspace next door.
+[workspace]
+
+[package]
+name = "hellproof-wrapper"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = "Hellproof wrapper service (P3.4): verifies browser segment proofs, proves leaves and folds them into one root proof (A4, D6, D7, R8)"
+publish = false
+
+[[bin]]
+name = "hellproof-wrapper"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "process", "sync", "fs"] }
+tower-http = { version = "0.6", features = ["trace", "limit"] }
+
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+sha2 = "0.10"
+blake2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+
+anyhow = "1"
+thiserror = "2"
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+rand = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[profile.release]
+opt-level = 2
+debug = false
