@@ -1,0 +1,14 @@
+[package]
+name = "steps_k"
+version = "0.1.0"
+edition = "2024_07"
+
+[cairo]
+enable-gas = false
+
+[dependencies]
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "main"
+function = "steps_k::main"
