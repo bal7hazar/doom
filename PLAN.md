@@ -303,6 +303,8 @@ et critères de sortie) est dans [RISKS.md](RISKS.md). Résumé :
 
 ## 7. Questions ouvertes (décisions attendues)
 
+**Tranchées le 2026-09-12 — voir [docs/G0.md](docs/G0.md) §3** (D1–D10) : GPL-2.0-only assumée, wrapper auto-hébergé, Sepolia en v1, skill 2 avec plafond de monstres éveillés, Doom-like fidèle sans harnais.
+
 1. **Licence** du cœur Cairo : GPL-2.0-only assumée, ou réécriture clean-room (U7) ?
 2. **Hébergement du wrapper** et du fallback « prouveur distant » (U8) ; sponsoring des frais (paymaster) ?
 3. **Cible réseau v1** : Sepolia uniquement ou mainnet dès le MVP (declares ~180 STRK + frais par fait) ?
