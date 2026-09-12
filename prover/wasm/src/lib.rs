@@ -11,8 +11,22 @@
 //!   and then releases with `free_result(ptr)`;
 //! * `info` is a UTF-8 JSON string (stats on success, message on error); `data` is the payload.
 //!
-//! Imports (module `host`): `log(level, ptr, len)`, `random(ptr, len)`, `now() -> f64` (ms).
+//! Imports (module `host`): `log(level, ptr, len)`, `random(ptr, len)`, `now() -> f64` (ms), and
+//! — in the threaded build only — `spawn_thread(ptr)`.
 //! On wasm64 every pointer/length is an `i64` at the JS boundary (BigInt).
+//!
+//! Two artifacts are built from this source (see `build.sh`):
+//!
+//! * the **single-threaded** one (default): private linear memory, no atomics — the fallback when
+//!   the page is not `crossOriginIsolated`;
+//! * the **threaded** one (`THREADS=1`): `+atomics`, `--shared-memory --import-memory`, memory
+//!   supplied by JS as a shared `WebAssembly.Memory`. `init_thread_pool(n)` builds rayon's global
+//!   pool with a spawn handler that hands each rayon thread body to the host
+//!   (`host.spawn_thread`); the host starts a Worker which instantiates *this same module* on the
+//!   *same* memory, points `__stack_pointer` at a freshly allocated stack, initializes its TLS
+//!   block with `__wasm_init_tls` and calls [`worker_entry`]. Rust statics live in the shared
+//!   linear memory, so all threads see the same allocator, the same tracing subscriber and the
+//!   same rayon registry, exactly as natively.
 
 pub mod core;
 
@@ -36,6 +50,14 @@ mod wasm {
         fn log(level: u32, ptr: *const u8, len: usize);
         fn random(ptr: *mut u8, len: usize);
         fn now() -> f64;
+    }
+
+    /// Threaded build only: asks the host to start a Worker for one rayon thread. The host must
+    /// queue the Worker before returning (the calling thread then blocks until it registers).
+    #[cfg(target_feature = "atomics")]
+    #[link(wasm_import_module = "host")]
+    unsafe extern "C" {
+        fn spawn_thread(ptr: usize);
     }
 
     const LOG_ERROR: u32 = 0;
@@ -187,6 +209,68 @@ mod wasm {
     #[unsafe(no_mangle)]
     pub extern "C" fn init() {
         init_once();
+    }
+
+    // ---- thread pool -------------------------------------------------------------------------------
+
+    /// Builds rayon's global pool with `n_threads` worker threads and returns the number of threads
+    /// the pool ended up with (`0` = the pool could not be built, e.g. it was already initialized).
+    ///
+    /// Single-threaded build: always returns 1 and does nothing (rayon falls back to running work
+    /// on the calling thread).
+    ///
+    /// Must be called **before** any proving work, from the thread that owns the module, and only
+    /// once. Each worker costs `stack_size` bytes of linear memory (16 MiB by default, allocated by
+    /// the host through [`alloc`]) plus its TLS block; that memory is never released — the pool
+    /// lives as long as the instance.
+    #[cfg(target_feature = "atomics")]
+    #[unsafe(no_mangle)]
+    pub extern "C" fn init_thread_pool(n_threads: usize) -> usize {
+        init_once();
+        if n_threads <= 1 {
+            return 1;
+        }
+        let built = rayon::ThreadPoolBuilder::new()
+            .num_threads(n_threads)
+            .spawn_handler(|thread| {
+                // The closure is handed to the host as a raw pointer and reclaimed by
+                // `worker_entry` on the Worker's thread.
+                let boxed: Box<Box<dyn FnOnce() + Send>> = Box::new(Box::new(move || thread.run()));
+                unsafe { spawn_thread(Box::into_raw(boxed) as *mut u8 as usize) };
+                Ok(())
+            })
+            .build_global();
+        match built {
+            Ok(()) => rayon::current_num_threads(),
+            Err(e) => {
+                host_log(LOG_ERROR, &format!("init_thread_pool({n_threads}) failed: {e}"));
+                0
+            }
+        }
+    }
+
+    /// Single-threaded build: no pool to build.
+    #[cfg(not(target_feature = "atomics"))]
+    #[unsafe(no_mangle)]
+    pub extern "C" fn init_thread_pool(_n_threads: usize) -> usize {
+        init_once();
+        1
+    }
+
+    /// Entry point of a spawned Worker: runs the rayon thread body handed to `host.spawn_thread`.
+    /// The Worker must have set `__stack_pointer` and called `__wasm_init_tls` **before** this.
+    #[cfg(target_feature = "atomics")]
+    #[unsafe(no_mangle)]
+    pub extern "C" fn worker_entry(ptr: usize) {
+        let boxed: Box<Box<dyn FnOnce() + Send>> =
+            unsafe { Box::from_raw(ptr as *mut Box<dyn FnOnce() + Send>) };
+        boxed();
+    }
+
+    /// Number of threads rayon will use for the next parallel section.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn thread_count() -> usize {
+        rayon::current_num_threads()
     }
 
     #[unsafe(no_mangle)]

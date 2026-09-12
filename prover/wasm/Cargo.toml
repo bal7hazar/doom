@@ -48,6 +48,11 @@ rayon = "1.10"
 [target.'cfg(target_arch = "wasm64")'.dependencies]
 getrandom_v2 = { package = "getrandom", version = "0.2", features = ["custom"] }
 getrandom_v3 = { package = "getrandom", version = "0.3" }
+# parking_lot (via salsa <- the Cairo compiler crates) only compiles its atomic wasm thread parker
+# with the `nightly` feature; without it every contended lock panics in the threaded build
+# ("Parking not supported on this platform"). The feature is a no-op without `+atomics`.
+# `patches/parking_lot_core-0.9.12-wasm64-atomic-parker.patch` makes that parker build on wasm64.
+parking_lot_core = { version = "0.9.12", features = ["nightly"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 libc = "0.2"
@@ -68,6 +73,7 @@ cairo-program-runner-lib = { path = "vendor/proving/crates/cairo-program-runner-
 
 [patch.crates-io]
 xxhash-rust = { path = "vendor/xxhash-rust" }
+parking_lot_core = { path = "vendor/parking_lot_core" }
 
 [profile.release]
 opt-level = 3

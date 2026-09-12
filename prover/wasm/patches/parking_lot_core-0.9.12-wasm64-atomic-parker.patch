@@ -1,0 +1,71 @@
+Subject: [PATCH] thread_parker: use the atomic wasm parker on wasm64 too
+
+`src/thread_parker/mod.rs` already selects `wasm_atomic.rs` for
+`all(feature = "nightly", target_family = "wasm", target_feature = "atomics")`, but that file
+imports `core::arch::wasm32`, which does not exist on `wasm64-unknown-unknown`
+(`core::arch::wasm64` has the same `memory_atomic_wait32`/`memory_atomic_notify`). Without this,
+wasm64 + atomics builds pick `wasm.rs`, whose parker panics with "Parking not supported on this
+platform" as soon as a `parking_lot` lock is contended between two threads.
+
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -51,6 +51,14 @@
+     ),
+     feature(stdarch_wasm_atomic_wait)
+ )]
++#![cfg_attr(
++    all(
++        feature = "nightly",
++        target_arch = "wasm64",
++        target_feature = "atomics"
++    ),
++    feature(simd_wasm64)
++)]
+ 
+ mod parking_lot;
+ mod spinwait;
+--- a/src/thread_parker/wasm_atomic.rs
++++ b/src/thread_parker/wasm_atomic.rs
+@@ -5,10 +5,11 @@
+ // http://opensource.org/licenses/MIT>, at your option. This file may not be
+ // copied, modified, or distributed except according to those terms.
+ 
+-use core::{
+-    arch::wasm32,
+-    sync::atomic::{AtomicI32, Ordering},
+-};
++#[cfg(target_arch = "wasm32")]
++use core::arch::wasm32 as wasm;
++#[cfg(target_arch = "wasm64")]
++use core::arch::wasm64 as wasm;
++use core::sync::atomic::{AtomicI32, Ordering};
+ use std::time::{Duration, Instant};
+ use std::{convert::TryFrom, thread};
+ 
+@@ -45,7 +46,7 @@
+     #[inline]
+     unsafe fn park(&self) {
+         while self.parked.load(Ordering::Acquire) == PARKED {
+-            let r = wasm32::memory_atomic_wait32(self.ptr(), PARKED, -1);
++            let r = wasm::memory_atomic_wait32(self.ptr(), PARKED, -1);
+             // we should have either woken up (0) or got a not-equal due to a
+             // race (1). We should never time out (2)
+             debug_assert!(r == 0 || r == 1);
+@@ -57,7 +58,7 @@
+         while self.parked.load(Ordering::Acquire) == PARKED {
+             if let Some(left) = timeout.checked_duration_since(Instant::now()) {
+                 let nanos_left = i64::try_from(left.as_nanos()).unwrap_or(i64::max_value());
+-                let r = wasm32::memory_atomic_wait32(self.ptr(), PARKED, nanos_left);
++                let r = wasm::memory_atomic_wait32(self.ptr(), PARKED, nanos_left);
+                 debug_assert!(r == 0 || r == 1 || r == 2);
+             } else {
+                 return false;
+@@ -86,7 +87,7 @@
+ impl super::UnparkHandleT for UnparkHandle {
+     #[inline]
+     unsafe fn unpark(self) {
+-        let num_notified = wasm32::memory_atomic_notify(self.0 as *mut i32, 1);
++        let num_notified = wasm::memory_atomic_notify(self.0 as *mut i32, 1);
+         debug_assert!(num_notified == 0 || num_notified == 1);
+     }
+ }
