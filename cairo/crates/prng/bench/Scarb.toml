@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Step-budget harness for `prng`. Deliberately NOT a member of the `cairo/`
+# workspace: it is a throwaway executable, built and run on its own by
+# `bench/measure.py`, and adding it to the workspace would put a benchmark
+# in the shipped crate graph.
+[package]
+name = "prng_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+prng = { path = ".." }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "prng_bench"
+function = "prng_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false

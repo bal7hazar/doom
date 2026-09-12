@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Step-budget harness for `state_hash`. Deliberately NOT a member of the
+# `cairo/` workspace: it is a throwaway executable, built and run on its own
+# by `bench/measure.py`.
+[package]
+name = "state_hash_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+state_hash = { path = ".." }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "state_hash_bench"
+function = "state_hash_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false

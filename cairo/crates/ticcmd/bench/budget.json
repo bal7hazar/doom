@@ -1,0 +1,13 @@
+{
+  "package": "ticcmd_bench",
+  "baseline": { "n1": 500, "n2": 1000 },
+  "ops": [
+    { "op": 1, "label": "decode(word) -> TicCmd", "n1": 500, "n2": 1000, "budget": 70 },
+    { "op": 2, "label": "decode_offsets(word)", "n1": 500, "n2": 1000, "budget": 34 },
+    { "op": 3, "label": "try_decode(word)", "n1": 500, "n2": 1000, "budget": 77 },
+    { "op": 4, "label": "decode + encode (round trip)", "n1": 500, "n2": 1000, "budget": 248 },
+    { "op": 5, "label": "Packer::push (per tic)", "n1": 500, "n2": 1000, "budget": 14 },
+    { "op": 6, "label": "pack7(7 words) (per group)", "n1": 500, "n2": 1000, "budget": 190 },
+    { "op": 7, "label": "unpack7(felt) (per group)", "n1": 500, "n2": 1000, "budget": 112 }
+  ]
+}

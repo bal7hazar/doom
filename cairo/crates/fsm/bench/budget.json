@@ -1,0 +1,14 @@
+{
+  "package": "fsm_bench",
+  "baseline": { "n1": 1000, "n2": 2000 },
+  "ops": [
+    { "op": 1, "label": "advance: counting down", "n1": 1000, "n2": 2000, "budget": 21 },
+    { "op": 2, "label": "advance: transition every tic", "n1": 1000, "n2": 2000, "budget": 80 },
+    { "op": 3, "label": "advance: realistic cycle (4/4/6)", "n1": 1000, "n2": 2000, "budget": 34 },
+    { "op": 5, "label": "enter(state)", "n1": 1000, "n2": 2000, "budget": 48, "base_op": 9 },
+    { "op": 6, "label": "row(state)", "n1": 1000, "n2": 2000, "budget": 132, "base_op": 9 },
+    { "op": 7, "label": "-- noop call, tables unused", "n1": 1000, "n2": 2000, "budget": null },
+    { "op": 8, "label": "-- countdown branch hand-inlined", "n1": 1000, "n2": 2000, "budget": null },
+    { "op": 9, "label": "-- cursor-step baseline", "n1": 1000, "n2": 2000, "budget": null }
+  ]
+}
