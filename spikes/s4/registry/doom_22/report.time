@@ -1,0 +1,19 @@
+[INFO  stwo_cairo_utils::binary_utils] circuit_params succeeded
+        2.82 real         1.91 user         0.89 sys
+          3285352448  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              266058  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   3  voluntary context switches
+                 440  involuntary context switches
+         43097576984  instructions retired
+          9354951371  cycles elapsed
+          3283996104  peak memory footprint

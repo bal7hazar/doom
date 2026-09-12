@@ -1,0 +1,6 @@
+n_iters	steps	trace_log_size	outcome
+23000	1586951	20	rejected by doom_21 (leaf circuit for log 20 lives in `doom`)
+46000	3173951	20	rejected by doom_21 (leaf circuit for log 20 lives in `doom`)
+64000	4415951	20	rejected by doom_21 (leaf circuit for log 20 lives in `doom`)
+78000	5381951	20	rejected by doom_21 (leaf circuit for log 20 lives in `doom`)
+92000	6347951	21	canonical_small has no seq_21 column: Preprocessed column PreProcessedColumnId { id: "seq_21" } is missing from static allocation

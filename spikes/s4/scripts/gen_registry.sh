@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Generates a circuit registry from one of our definitions (R3-A2).
 #
-# Usage: spikes/s4/scripts/gen_registry.sh <name> [--registry-only]
-#   <name> is a directory under spikes/s4/registry/ (doom, doom_min, doom_19_20).
+# Usage: spikes/s4/scripts/gen_registry.sh <name> [--registry-only|--report-only]
+#   <name> is a directory under spikes/s4/registry/ (doom, doom_min, doom_19_20, and the S4b
+#   variants doom_fold4, doom_noprep, doom_fold4_min, doom_21, doom_22).
+#   --report-only stops after the (cheap, ~2 GB) size report: enough to see whether a definition
+#   is buildable at all and what its padding targets would be, without the 8 GB registry pass.
 #
 # The definition's paths are relative to the monorepo root (like upstream's), so the directory is
 # copied to $PROVING/circuit_registry_definitions/<name>/ and circuit-params runs from $PROVING.
@@ -25,6 +28,7 @@ if [ "$MODE" != "--registry-only" ]; then
   timed "$SRC/report.time" "$BIN/circuit-params" --definition "$DST/definition.json" --output-path "$SRC/report.txt"
   cat "$SRC/report.txt"
 fi
+[ "$MODE" = "--report-only" ] && exit 0
 
 echo "== circuit-params --registry ($NAME) =="
 # Commits the real Cairo preprocessed trace and preprocesses the padded circuits: several GB.

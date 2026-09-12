@@ -1,0 +1,16 @@
+[package]
+name = "segment_stub_big"
+version = "0.1.0"
+edition = "2024_07"
+
+# `segment_stub` with a run long enough to exceed 2^20 steps: the leaf circuit of a 2^21 registry
+# only exists for `trace_log_size = 21`, which `lifting_size_policy = at_least_preprocessed`
+# only produces for a Cairo run of more than 2^20 steps (S4b measurement 3).
+
+[dependencies]
+cairo_execute = "2.18.0"
+
+[[target.executable]]
+
+[cairo]
+enable-gas = false

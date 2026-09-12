@@ -5,6 +5,12 @@
 #
 # Usage: spikes/s4/scripts/run_pipeline.sh <N> [registry_name]   (default registry: doom)
 #
+# Environment (S4b):
+#   HASH_FN=blake|poseidon   the task's `program_hash_function` (D4; default blake)
+#   STUB=segment_stub|segment_stub_big   which segment program to run (default segment_stub;
+#                            `segment_stub_big` exceeds 2^20 steps, for the 2^21 registries)
+#   TAG=<suffix>             extra suffix on the results/work directory names
+#
 # Heavy artifacts stay in $S4_WORK/pipeline_<N>/; small ones (preimages, outputs, packed tree,
 # timings, verifier log) are copied to spikes/s4/results/N<N>/.
 set -euo pipefail
@@ -12,11 +18,14 @@ source "$(dirname "$0")/env.sh"
 
 N="${1:?usage: run_pipeline.sh <N> [registry_name]}"
 REG_NAME="${2:-doom}"
+HASH_FN="${HASH_FN:-blake}"
+STUB="${STUB:-segment_stub}"
+TAG="${TAG:-}"
 REG="$S4_DIR/registry/$REG_NAME/registry.json"
 [ -f "$REG" ] || { echo "missing $REG (run gen_registry.sh $REG_NAME)" >&2; exit 1; }
 
-WORK="$S4_WORK/pipeline_${N}_${REG_NAME}"
-RES="$S4_DIR/results/N${N}_${REG_NAME}"
+WORK="$S4_WORK/pipeline_${N}_${REG_NAME}${TAG}"
+RES="$S4_DIR/results/N${N}_${REG_NAME}${TAG}"
 rm -rf "$WORK" "$RES" && mkdir -p "$WORK" "$RES"
 TIMES="$RES/times.txt"
 : > "$TIMES"
@@ -26,9 +35,10 @@ record_time() { # label timefile
 }
 
 # 1. Build the segment stub (scarb 2.18, executable target).
-STUB_DIR="$S4_DIR/programs/segment_stub"
+STUB_DIR="$S4_DIR/programs/$STUB"
 ( cd "$STUB_DIR" && scarb build >/dev/null )
-EXE="$STUB_DIR/target/dev/segment_stub.executable.json"
+EXE="$STUB_DIR/target/dev/$STUB.executable.json"
+echo "stub: $STUB ($(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["program"]["bytecode"]))' "$EXE") bytecode words), program_hash_function: $HASH_FN" | tee -a "$TIMES"
 
 # 2. Leaves. Genesis h_in = 1; n = 250 + i (K tics); the next h_in is the previous h_out, read from
 #    the dumped preimage [program_hash, h_in, h_out, n, status].
@@ -44,7 +54,7 @@ for ((i = 0; i < N; i++)); do
       "type": "Cairo1Executable",
       "path": "$EXE",
       "user_args_file": "$WORK/args_$i.json",
-      "program_hash_function": "blake"
+      "program_hash_function": "$HASH_FN"
     }
   ],
   "fact_topologies_path": null,
@@ -56,12 +66,12 @@ EOF
   proof_lock
   timed "$WORK/leaf_$i.time" "$BIN/leaf-prover" --program "$LEAF_BOOTLOADER" \
     --program_input "$WORK/bl_input_$i.json" --circuit_registry_json "$REG" \
-    --output_path "$WORK/leaf_$i.raw.json" > "$WORK/leaf_$i.log" 2>&1 || { proof_unlock; tail -30 "$WORK/leaf_$i.log"; exit 1; }
+    --output_path "$WORK/leaf_$i.raw.json" > "$WORK/leaf_$i.log" 2>&1 || { proof_unlock; tail -30 "$WORK/leaf_$i.log" "$WORK/leaf_$i.time"; exit 1; }
   proof_unlock
   record_time "leaf_$i" "$WORK/leaf_$i.time"
   python3 "$S4_DIR/scripts/inject_preimage.py" "$WORK/leaf_$i.raw.json" "$WORK/preimage_$i.json" "$WORK/leaf_$i.json"
   cp "$WORK/preimage_$i.json" "$RES/"
-  grep -E "Verifier config|program: \(|Cairo proving done|Circuit proving done|Circuit hash|trace" "$WORK/leaf_$i.log" | sed 's/^.*INFO //' | head -12 > "$RES/leaf_${i}_info.log" || true
+  grep -E "Program execution done|Adapter done|Verifier config|program: \(|n_outputs|preprocessed trace|Proof pow bits|Proof FRI|Cairo proving done|Circuit proving done|Circuit hash" "$WORK/leaf_$i.log" | sed 's/^.*INFO //' | head -16 > "$RES/leaf_${i}_info.log" || true
   H_IN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[2])' "$WORK/preimage_$i.json")"
   LEAVES+=("\"$WORK/leaf_$i.json\"")
 done
@@ -73,7 +83,7 @@ echo "== recursive tree over $N leaves =="
 proof_lock
 timed "$WORK/tree.time" "$BIN/stwo_run_and_prove_recursive_tree" --program_input "$WORK/leaves.json" \
   --proof_path "$WORK/root.proof" --program_output "$WORK/program_output.json" \
-  --packed_output_path "$WORK/packed_output.json" --circuit_registry_json "$REG" > "$WORK/tree.log" 2>&1 || { proof_unlock; tail -30 "$WORK/tree.log"; exit 1; }
+  --packed_output_path "$WORK/packed_output.json" --circuit_registry_json "$REG" > "$WORK/tree.log" 2>&1 || { proof_unlock; tail -30 "$WORK/tree.log" "$WORK/tree.time"; exit 1; }
 proof_unlock
 record_time "tree" "$WORK/tree.time"
 grep -E "Folding|Reducing|Carrying|Single-leaf|reduction complete|Canonical multiverifier" "$WORK/tree.log" | sed 's/^.*INFO //' | grep -v "close\|enter" | head -20 > "$RES/tree_info.log" || true
