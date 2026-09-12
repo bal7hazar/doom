@@ -1,0 +1,18 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`end-to-end extraction of E1M1 from the real freedoom1.wad > matches the known-good lump counts (snapshot) 1`] = `
+{
+  "blockmapColumns": 32,
+  "blockmapRows": 27,
+  "linedefs": 1175,
+  "nodes": 681,
+  "rejectBytes": 4141,
+  "rejectChunksPerRow": 2,
+  "sectors": 182,
+  "segs": 2057,
+  "sidedefs": 1829,
+  "subsectors": 682,
+  "things": 292,
+  "vertexes": 1196,
+}
+`;
