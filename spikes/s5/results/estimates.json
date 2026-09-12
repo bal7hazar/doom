@@ -1,0 +1,186 @@
+{
+ "timestamp_utc": "2026-09-12T13:20:12.249Z",
+ "rpc": "http://127.0.0.1:5055/rpc",
+ "spec_version": "0.10.2",
+ "starknet_js": "10.8.0",
+ "sender": "0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+ "registry": "0x070b93e05945ced6e5e3fdb193c2493ffe13487977f5eab6c5343e35ba02d09b",
+ "simulation_flags": [
+  "SKIP_VALIDATE"
+ ],
+ "simulated": [
+  {
+   "label": "stage_proof",
+   "calldata_felts": 159,
+   "l1_gas": "0",
+   "l2_gas": "78386560",
+   "l1_data_gas": "15168",
+   "fee_fri": "2389430266208032768"
+  },
+  {
+   "label": "verify_phase1",
+   "calldata_felts": 4995,
+   "l1_gas": "0",
+   "l2_gas": "873706880",
+   "l1_data_gas": "13248",
+   "fee_fri": "26627062304739461888"
+  },
+  {
+   "label": "verify_phase2",
+   "calldata_felts": 1845,
+   "l1_gas": "0",
+   "l2_gas": "815659600",
+   "l1_data_gas": "352",
+   "fee_fri": "24857564877247825072"
+  }
+ ],
+ "estimate_fee": [
+  {
+   "label": "stage_proof",
+   "l2_gas": "78386560",
+   "l1_data_gas": "15168",
+   "fee_fri": "2389430266208032768"
+  },
+  {
+   "label": "verify_phase1",
+   "l2_gas": "873706880",
+   "l1_data_gas": "13248",
+   "fee_fri": "26627062304739461888"
+  },
+  {
+   "label": "verify_phase2",
+   "l2_gas": "815659600",
+   "l1_data_gas": "352",
+   "fee_fri": "24857564877247825072"
+  }
+ ],
+ "total_l2_gas": "1767753040",
+ "total_l1_data_gas": "28768",
+ "total_fee_fri": "53874057448195319728",
+ "strk_price": {
+  "usd": 0.02876053,
+  "eur": 0.02478928,
+  "at": "2026-09-12T13:20:12.249Z"
+ },
+ "priced": [
+  {
+   "label": "devnet (node)",
+   "source": "block 4, starknet 0.14.4, 2026-09-12T13:20:06.000Z",
+   "l2_gas_price_fri": "30475398907",
+   "l1_data_gas_price_fri": "37485578886",
+   "l1_gas_price_fri": "92599658875965",
+   "l2_price_over_floor": 10.158466302333334,
+   "fee_fri": "53874057448195319728",
+   "fee_strk": 53.874057448195316,
+   "fee_usd": 1.5494464454605448,
+   "fee_eur": 1.3354990948193992
+  },
+  {
+   "label": "mainnet",
+   "source": "block 14760289, starknet 0.14.3, 2026-09-12T13:20:05.000Z",
+   "l2_gas_price_fri": "30528419182",
+   "l1_data_gas_price_fri": "38327766800",
+   "l1_gas_price_fri": "93024149955825",
+   "l2_price_over_floor": 10.176139727333334,
+   "fee_fri": "53967808428570115680",
+   "fee_strk": 53.967808428570116,
+   "fee_usd": 1.5521427733441437,
+   "fee_eur": 1.3378231141221846
+  },
+  {
+   "label": "sepolia",
+   "source": "block 14955009, starknet 0.14.3, 2026-09-12T13:20:06.000Z",
+   "l2_gas_price_fri": "30522019377",
+   "l1_data_gas_price_fri": "741451106996",
+   "l1_gas_price_fri": "185188274144915",
+   "l2_price_over_floor": 10.174006459,
+   "fee_fri": "53976722606076717008",
+   "fee_strk": 53.97672260607671,
+   "fee_usd": 1.5523991498137475,
+   "fee_eur": 1.3380440901643653
+  },
+  {
+   "label": "protocol floor",
+   "source": "Starknet v0.14.0 minimum L2 gas price (3 gFri), other prices as the node",
+   "l2_gas_price_fri": "3000000000",
+   "l1_data_gas_price_fri": "37485578886",
+   "l1_gas_price_fri": "92599658875965",
+   "l2_price_over_floor": 1,
+   "fee_fri": "5304337505133392448",
+   "fee_strk": 5.304337505133393,
+   "fee_usd": 0.1525555579465141,
+   "fee_eur": 0.13149070762925313
+  }
+ ],
+ "comparison": [
+  {
+   "label": "stage_proof",
+   "estimated_l2_gas": 78386560,
+   "actual_l2_gas": 78556800,
+   "gap_l2_pct": -0.2167094382663245,
+   "estimated_l1_data_gas": 15168,
+   "actual_l1_data_gas": 10176,
+   "gap_l1_data_pct": 49.056603773584904,
+   "estimated_fee_fri": "2389430266208032768",
+   "actual_fee_fri": 2394618398117960700,
+   "gap_fee_pct": -0.21665798249965523
+  },
+  {
+   "label": "verify_phase1",
+   "estimated_l2_gas": 873706880,
+   "actual_l2_gas": 873757120,
+   "gap_l2_pct": -0.005749881614698602,
+   "estimated_l1_data_gas": 13248,
+   "actual_l1_data_gas": 8896,
+   "gap_l1_data_pct": 48.92086330935252,
+   "estimated_fee_fri": "26627062304739461888",
+   "actual_fee_fri": 26628593388780550000,
+   "gap_fee_pct": -0.00574977438248774
+  },
+  {
+   "label": "verify_phase2",
+   "estimated_l2_gas": 815659600,
+   "actual_l2_gas": 815709840,
+   "gap_l2_pct": -0.006159052831825591,
+   "estimated_l1_data_gas": 352,
+   "actual_l1_data_gas": 320,
+   "gap_l1_data_pct": 10,
+   "estimated_fee_fri": "24857564877247825072",
+   "actual_fee_fri": 24859095961288913000,
+   "gap_fee_pct": -0.006159049562676209
+  }
+ ],
+ "worst_gap_l2_pct": 0.2167094382663245,
+ "bounds": [
+  {
+   "label": "stage_proof",
+   "l2_gas_bound": 90144544,
+   "l1_data_gas_bound": 19719,
+   "pct_of_invoke_cap": 7.4499623140495865,
+   "over_cap": false,
+   "over_90pct_rule": false,
+   "naive_x15_l2_gas": 117579840,
+   "naive_x15_over_cap": false
+  },
+  {
+   "label": "verify_phase1",
+   "l2_gas_bound": 1004762912,
+   "l1_data_gas_bound": 17223,
+   "pct_of_invoke_cap": 83.03825719008265,
+   "over_cap": false,
+   "over_90pct_rule": false,
+   "naive_x15_l2_gas": 1310560320,
+   "naive_x15_over_cap": true
+  },
+  {
+   "label": "verify_phase2",
+   "l2_gas_bound": 938008540,
+   "l1_data_gas_bound": 458,
+   "pct_of_invoke_cap": 77.52136694214876,
+   "over_cap": false,
+   "over_90pct_rule": false,
+   "naive_x15_l2_gas": 1223489400,
+   "naive_x15_over_cap": true
+  }
+ ]
+}

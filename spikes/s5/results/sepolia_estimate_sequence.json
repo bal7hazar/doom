@@ -1,0 +1,56 @@
+{
+ "timestamp_utc": "2026-09-12T13:25:57.504Z",
+ "network": "starknet-sepolia (read-only, estimate only)",
+ "rpc": "https://api.cartridge.gg/x/starknet/sepolia",
+ "registry": "0x0194f44002b4af71e58ba7d30667ed565f1d420d3fb1e7c578de35170309c6aa",
+ "sender": "0xdb31e5e8674a0e46996394f3691a6dcd8ce895747c48c0dd5211ec0a42dd9f",
+ "nonce": "0x375c",
+ "block": 14955214,
+ "starknet_version": "0.14.3",
+ "l2_gas_price_fri": "0x71b410e31",
+ "l1_data_gas_price_fri": "0xac8208cd99",
+ "l1_gas_price_fri": "0xa8123649ad85",
+ "entrypoints": [
+  "stage_proof",
+  "verify_phase1",
+  "verify_phase2"
+ ],
+ "calldata_felts": [
+  159,
+  4995,
+  1845
+ ],
+ "result": [
+  {
+   "l1_data_gas_consumed": "0x3b40",
+   "l1_data_gas_price": "0xac8208cd99",
+   "l1_gas_consumed": "0x0",
+   "l1_gas_price": "0xa8123649ad85",
+   "l2_gas_consumed": "0x48812c0",
+   "l2_gas_price": "0x71b410e31",
+   "overall_fee": "0x205bf11fdb67c000",
+   "unit": "FRI"
+  },
+  {
+   "l1_data_gas_consumed": "0x33c0",
+   "l1_data_gas_price": "0xac8208cd99",
+   "l1_gas_consumed": "0x0",
+   "l1_gas_price": "0xa8123649ad85",
+   "l2_gas_consumed": "0x34131940",
+   "l2_gas_price": "0x71b410e31",
+   "overall_fee": "0x17233cf6f73d90300",
+   "unit": "FRI"
+  },
+  {
+   "l1_data_gas_consumed": "0x100",
+   "l1_data_gas_price": "0xac8208cd99",
+   "l1_gas_consumed": "0x0",
+   "l1_gas_price": "0xa8123649ad85",
+   "l2_gas_consumed": "0x30969f80",
+   "l2_gas_price": "0x71b410e31",
+   "overall_fee": "0x1594b44c491db2080",
+   "unit": "FRI"
+  }
+ ],
+ "error": null
+}
