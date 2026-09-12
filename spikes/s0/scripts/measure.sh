@@ -3,7 +3,8 @@
 #
 #   ./measure.sh [suite ...]
 #
-# Suites: programs | standalone | steps | canonical | levers | all   (default: all)
+# Suites: programs | standalone | steps | canonical | recursion | pow0 | feltwidth | levers | all
+#         (default: all)
 #
 # Proofs are written under $RUNS (scratch, default /tmp/s0-runs) and are NOT copied
 # into results/ — only prove.time, summary.json and the execution-resource JSONs are,
@@ -42,6 +43,8 @@ run() {
 CS="$S0/params/canonical_small.json"
 CSM="$S0/params/canonical_small_m31.json"
 CAN="$S0/params/canonical.json"
+REC="$S0/params/recursion_tree_reference.json"
+POW0="$S0/params/canonical_small_pow0.json"
 
 suite_programs() {
   for p in felt_loop u32_loop bitwise_loop poseidon_hash; do
@@ -77,6 +80,33 @@ suite_canonical() {
   done
 }
 
+# Same scaling run with pow_bits = 0. The PoW grind is a geometric random variable
+# seeded by the trace, so at pow 26 it adds 1-3 s of *reproducible but arbitrary*
+# CPU per trace and swamps the step-count signal. pow 0 gives the clean curve.
+# (Measurement only: pow 0 drops the conjectured security from 96 to 70 bits.)
+suite_pow0() {
+  for k in 16 18 19 20 21; do
+    run "steps_k${k}_pow0_bl" steps_k "k$k.json" PARAMS="$POW0" ROUTE=bootloader KEEP_PROOF=0
+  done
+}
+
+# The params the recursion registry actually pins (pow 16, include_all = true,
+# lifting = at_least_preprocessed) — a hand-off measurement for S4.
+suite_recursion() {
+  for k in 19 20; do
+    run "steps_k${k}_rec_bl" steps_k "k$k.json" PARAMS="$REC" ROUTE=bootloader KEEP_PROOF=0
+  done
+}
+
+# Controlled A/B on memory-value width: identical opcode stream, values below vs
+# above the adapter's 2^72 "small" threshold.
+suite_feltwidth() {
+  for a in narrow wide; do
+    run "felt_width_${a}_cs_bl" felt_width "n1000_$a.json" \
+        PARAMS="$CS" ROUTE=bootloader KEEP_PROOF=0
+  done
+}
+
 # R1-A5: which knob actually moves RSS at k = 19?
 suite_levers() {
   local d="$S0/params/levers"
@@ -90,11 +120,15 @@ suite_levers() {
 suites=("${@:-all}")
 for s in "${suites[@]}"; do
   case "$s" in
-    all)        suite_programs; suite_standalone; suite_steps; suite_canonical; suite_levers ;;
+    all)        suite_programs; suite_standalone; suite_steps; suite_canonical
+                suite_recursion; suite_pow0; suite_feltwidth; suite_levers ;;
     programs)   suite_programs ;;
     standalone) suite_standalone ;;
     steps)      suite_steps ;;
     canonical)  suite_canonical ;;
+    recursion)  suite_recursion ;;
+    pow0)       suite_pow0 ;;
+    feltwidth)  suite_feltwidth ;;
     levers)     suite_levers ;;
     *) echo "unknown suite: $s" >&2; exit 2 ;;
   esac

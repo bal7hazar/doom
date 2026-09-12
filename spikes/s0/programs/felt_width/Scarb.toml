@@ -1,0 +1,14 @@
+[package]
+name = "felt_width"
+version = "0.1.0"
+edition = "2024_07"
+
+[[target.executable]]
+name = "felt_width"
+function = "felt_width::main"
+
+[dependencies]
+cairo_execute = "2.19.4"
+
+[cairo]
+enable-gas = false

@@ -54,9 +54,12 @@ def parse_spans(path):
     if not os.path.exists(path):
         return spans
     want = ("cairo run", "adapt", "prove_cairo", "verify_cairo", "stwo_run_and_prove",
-            "run_and_prove", "Write Preprocessed trace", "Trace commitment",
-            "Interaction commitment", "Composition commitment", "FRI commitment phase",
-            "Proof of work", "FRI decommitment phase")
+            "run_and_prove",
+            # inside prove_cairo (crates/prover/src/prover.rs)
+            "Write Preprocessed trace", "Precompute Twiddles",
+            "Compute preprocessed trace commitment", "Write Base trace",
+            "Compute base trace commitment", "Write interaction trace",
+            "Compute interaction trace commitment", "Prove STARKs")
     for line in open(path, errors="replace"):
         if "close" not in line or "time.busy=" not in line:
             continue
@@ -119,7 +122,7 @@ def main():
         if m:
             s["panic_location"] = m.group(1).strip()
             s["panic_message"] = m.group(2).strip()
-        m = re.search(r"Proving failed: ([^\n]+)", txt)
+        m = re.search(r"Proving failed(?: with error)?:? ([^\n]+)", txt)
         if m:
             s["error"] = m.group(1).strip()[:400]
 
