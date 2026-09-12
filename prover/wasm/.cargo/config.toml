@@ -1,0 +1,14 @@
+# Target-specific flags for the Memory64 build. `cargo build --target wasm64-unknown-unknown`
+# picks these up; build.sh adds `-Z build-std=std,panic_abort` (tier-3 target, no prebuilt std)
+# and the reproducibility flags (--remap-path-prefix).
+[target.wasm64-unknown-unknown]
+rustflags = [
+  # getrandom 0.3/0.4: route to the `__getrandom_v03_custom` symbol defined in src/lib.rs.
+  "--cfg", "getrandom_backend=\"custom\"",
+  # Chrome >= 91 has SIMD128; Memory64 needs Chrome >= 133 anyway, so always enable it.
+  "-C", "target-feature=+simd128,+bulk-memory,+nontrapping-fptoint,+sign-ext,+mutable-globals",
+  # 16 GiB: the implementation limit of Memory64 in V8 (Chrome 133+).
+  "-C", "link-arg=--max-memory=17179869184",
+  # Shadow stack in linear memory; the default 1 MiB is too small for the deepest witness paths.
+  "-C", "link-arg=-zstack-size=16777216",
+]

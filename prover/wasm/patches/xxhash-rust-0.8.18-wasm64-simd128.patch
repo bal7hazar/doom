@@ -1,0 +1,97 @@
+diff -ru a/src/xxh3.rs b/src/xxh3.rs
+--- a/src/xxh3.rs	2006-07-24 03:21:28
++++ b/src/xxh3.rs	2026-09-12 15:21:41
+@@ -13,7 +13,7 @@
+ // Code is as close to original C implementation as possible
+ // It does make it look ugly, but it is fast and easy to update once xxhash gets new version.
+ 
+-#[cfg(all(any(target_feature = "sse2", target_feature = "neon", all(target_family = "wasm", target_feature = "simd128")), not(any(target_feature = "avx2", target_feature = "avx512f"))))]
++#[cfg(all(any(target_feature = "sse2", target_feature = "neon", all(target_arch = "wasm32", target_feature = "simd128")), not(any(target_feature = "avx2", target_feature = "avx512f"))))]
+ #[repr(align(16))]
+ #[derive(Clone)]
+ struct Acc([u64; ACC_NB]);
+@@ -25,7 +25,7 @@
+ #[repr(align(64))]
+ #[derive(Clone)]
+ struct Acc([u64; ACC_NB]);
+-#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon", all(target_family = "wasm", target_feature = "simd128"), target_feature = "sse2")))]
++#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon", all(target_arch = "wasm32", target_feature = "simd128"), target_feature = "sse2")))]
+ #[repr(align(8))]
+ #[derive(Clone)]
+ struct Acc([u64; ACC_NB]);
+@@ -38,7 +38,7 @@
+ type LongHashFn = fn(&[u8], u64, &[u8]) -> u64;
+ type LongHashFn128 = fn(&[u8], u64, &[u8]) -> u128;
+ 
+-#[cfg(all(target_family = "wasm", target_feature = "simd128"))]
++#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+ type StripeLanes = [[u8; mem::size_of::<core::arch::wasm32::v128>()]; STRIPE_LEN / mem::size_of::<core::arch::wasm32::v128>()];
+ #[cfg(all(target_arch = "x86", target_feature = "avx512f"))]
+ type StripeLanes = [[u8; mem::size_of::<core::arch::x86::__m512i>()]; STRIPE_LEN / mem::size_of::<core::arch::x86::__m512i>()];
+@@ -209,7 +209,7 @@
+     }
+ }
+ 
+-#[cfg(all(target_family = "wasm", target_feature = "simd128"))]
++#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+ fn accumulate_512_wasm(acc: &mut Acc, input: &StripeLanes, secret: &StripeLanes) {
+     const LANES: usize = ACC_NB;
+ 
+@@ -392,7 +392,7 @@
+     }
+ }
+ 
+-#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2", target_feature = "neon", all(target_family = "wasm", target_feature = "simd128"))))]
++#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2", target_feature = "neon", all(target_arch = "wasm32", target_feature = "simd128"))))]
+ fn accumulate_512_scalar(acc: &mut Acc, input: &[[u8; 8]; ACC_NB], secret: &[[u8; 8]; ACC_NB]) {
+     for idx in 0..ACC_NB {
+         let data_val = u64::from_ne_bytes(input[idx]).to_le();
+@@ -403,7 +403,7 @@
+     }
+ }
+ 
+-#[cfg(all(target_family = "wasm", target_feature = "simd128"))]
++#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+ use accumulate_512_wasm as accumulate_512;
+ #[cfg(target_feature = "neon")]
+ use accumulate_512_neon as accumulate_512;
+@@ -413,10 +413,10 @@
+ use accumulate_512_avx2 as accumulate_512;
+ #[cfg(target_feature = "avx512f")]
+ use accumulate_512_avx512 as accumulate_512;
+-#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2", target_feature = "neon", all(target_family = "wasm", target_feature = "simd128"))))]
++#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2", target_feature = "neon", all(target_arch = "wasm32", target_feature = "simd128"))))]
+ use accumulate_512_scalar as accumulate_512;
+ 
+-#[cfg(all(target_family = "wasm", target_feature = "simd128"))]
++#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+ fn scramble_acc_wasm(acc: &mut Acc, secret: &StripeLanes) {
+     use core::arch::wasm32::*;
+ 
+@@ -548,7 +548,7 @@
+     }
+ }
+ 
+-#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2", target_feature = "neon", all(target_family = "wasm", target_feature = "simd128"))))]
++#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2", target_feature = "neon", all(target_arch = "wasm32", target_feature = "simd128"))))]
+ fn scramble_acc_scalar(acc: &mut Acc, secret: &[[u8; 8]; ACC_NB]) {
+     for idx in 0..secret.len() {
+         let key = u64::from_ne_bytes(secret[idx]).to_le();
+@@ -558,7 +558,7 @@
+     }
+ }
+ 
+-#[cfg(all(target_family = "wasm", target_feature = "simd128"))]
++#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+ use scramble_acc_wasm as scramble_acc;
+ 
+ #[cfg(target_feature = "neon")]
+@@ -573,7 +573,7 @@
+ #[cfg(target_feature = "avx512f")]
+ use scramble_acc_avx512 as scramble_acc;
+ 
+-#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2", target_feature = "neon", all(target_family = "wasm", target_feature = "simd128"))))]
++#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2", target_feature = "neon", all(target_arch = "wasm32", target_feature = "simd128"))))]
+ use scramble_acc_scalar as scramble_acc;
+ 
+ #[inline(always)]

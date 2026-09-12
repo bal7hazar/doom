@@ -1,0 +1,17 @@
+# Build artifacts (the .wasm is > 1 MB; its hash is tracked in SHA256SUMS instead).
+/target/
+/dist/
+/vendor/
+/patch.toml
+*.wasm
+*.wasm.gz
+# Harness
+/harness/node_modules/
+/harness/dist/
+/harness/results/
+/harness/programs/*/target/
+/harness/programs/*/.snfoundry_cache/
+/harness/test-results/
+/harness/playwright-report/
+# Native reference outputs
+/out/

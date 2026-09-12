@@ -1,0 +1,29 @@
+Subject: stwo-cairo-prover: enable the wasm-bindgen getrandom backends (`js` / `wasm_js`) for wasm32 only
+
+Why (Hellproof S2, wasm64): the prover crate turns on `getrandom/js` (0.2) and
+`getrandom/wasm_js` (0.3) for every wasm target. In getrandom 0.2.17 the `js` feature also
+covers wasm64 and takes precedence over the `custom` feature, so a wasm64 module built from the
+monorepo imports wasm-bindgen glue (`__wbindgen_placeholder__::__wbg_getRandomValues_*`,
+`__wbg_crypto_*`, `__wbindgen_object_drop_ref`, ...) that a host without the wasm-bindgen JS
+runtime cannot satisfy; instantiation fails in Node and Chrome. wasm-bindgen's wasm64 support is
+recent and its JS runtime is generated per module, so on wasm64 the embedder must provide a
+`custom` backend (`register_custom_getrandom!` for 0.2, `--cfg getrandom_backend="custom"` for
+0.3/0.4) instead. The CI wasm64 `cargo check` is unaffected either way.
+
+Upstream: to be submitted as a PR against starkware-libs/proving (base cd7bc5f).
+
+--- a/crates/prover/Cargo.toml
++++ b/crates/prover/Cargo.toml
+@@ -42,8 +42,10 @@
+ [target.'cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))'.dependencies]
+ sonic-rs.workspace = true
+ 
+-# Override getrandom feature flags for indirect dependencies.
+-[target.'cfg(any(target_arch = "wasm32", target_arch = "wasm64"))'.dependencies]
++# Override getrandom feature flags for indirect dependencies. The `js` / `wasm_js` backends are
++# wasm-bindgen based: wasm32 only. On wasm64 the embedder supplies a `custom` backend
++# (`register_custom_getrandom!` for getrandom 0.2, `--cfg getrandom_backend="custom"` for 0.3).
++[target.'cfg(target_arch = "wasm32")'.dependencies]
+ getrandom_v2.workspace = true
+ getrandom_v3.workspace = true
+ 
