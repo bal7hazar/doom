@@ -215,6 +215,31 @@ Chrome ≥ 133 (sans flag), Firefox ≥ 143 (flag selon version), Safari en reta
 (les inputs d'une partie de Doom ne sont pas secrets : déléguer la preuve ne dégrade pas la
 sécurité, seulement la décentralisation) et/ou un client natif (Tauri/egui) ultérieur.
 
+### 5.2 bis Résultats du spike S2 : prouveur WASM64 (2026-09-12, voir `docs/spikes/S2.md`) — GO mesuré
+
+- `prover/wasm/` : cdylib compilant le prouveur du monorepo (`cd7bc5f`) + runner Cairo 1 + bootloader de
+  feuille en `wasm64-unknown-unknown` (nightly-2026-01-15, `build-std`, `+simd128`, 16 GiB max) ; ABI
+  manuelle sans wasm-bindgen (`execute` → `ProverInput` bincode, `prove`, `verify`, `proof_to_felts`).
+  Build reproductible **bit à bit** depuis un clone frais (`build.sh` + `SHA256SUMS`) ; 4 patches ≤ 12 lignes
+  (`prover/wasm/patches/`) : dump de préimage sans fs, feature getrandom sur wasm32 seulement, pools rayon
+  privés exécutés inline sans threads, `xxhash-rust` SIMD sur wasm32 seulement. Artefact 43 MB (8,1 MB gz).
+  Node 22 ne charge pas Memory64 (Node ≥ 24 requis).
+- **Mesures Chrome 152 headless, mono-thread, params de feuille** :
+
+  | steps | preuve (s) | mémoire wasm | vérif |
+  |---:|---:|---:|---|
+  | 2^16 | 27,0 | 1,87 GiB | 3/3 |
+  | 2^18 | 26,7 | 2,15 GiB | 3/3 |
+  | 2^19 | 29,2 | 2,43 GiB | 3/3 |
+  | **2^20** | **35,6** | **3,05 GiB** | 3/3 |
+
+  Natif même chemin : 26,6 s mono-thread (wasm ≈ 1,3× natif), 4,2 s sur 12 threads. Execute 0,45 s,
+  verify 55 ms. Aucune panique (le bug `invalid degree` du paquet npm ne se reproduit pas).
+- Coût dominé par la part fixe (~27 s / 1,85 GiB pour toute trace ≤ 2^18) → dimensionner les segments
+  près du plafond 2^20. Machines 16 GB non mesurées (attendu 60–80 s). Threads (`SharedArrayBuffer`) :
+  ~6× de marge à aller chercher. Écart de convention de comptage des felts avec S0 (688 k vs 290 k, même
+  taille en MB) à trancher.
+
 ### 5.3 Résultats du spike S3 : exécution temps réel (2026-09-12, voir `docs/spikes/S3.md`) — GO
 
 - `prover/sim` (`hellproof-sim`, wasm32 + wasm-bindgen, cairo-vm 3.2 / cairo-lang 2.19.4) : programme
@@ -388,6 +413,32 @@ index RNG, compteur de tics). Le contrat `DoomRuns` exige `h_in[0] = genesis(niv
 continuité `h_out[i] = h_in[i+1]`, et `status = EXIT` sur le dernier segment. Le journal d'inputs
 (4 octets/tic, packé 7 tics/felt → ~900 felts pour 3 min) peut être publié en **événement** pour
 permettre le replay par des tiers (pas de coût DA).
+
+### 9 bis Résultats du spike S1 : coût par tic (2026-09-12, Freedoom E1M1, voir `docs/spikes/S1.md`) — GO avec repli
+
+| Scénario (350 tics scriptés) | base | optimisé | p99 |
+|---|---:|---:|---:|
+| joueur seul | 4 078 | **3 439** | 5 252 |
+| + 5 monstres dormants | 19 179 | **4 232** | 6 109 |
+| + 5 monstres en chasse | 27 845 | **18 432** | 20 346 |
+| + 1 hitscan / 10 tics | 28 627 | **19 215** | 27 838 |
+
+Coûts marginaux : **2 999 steps/tic par monstre éveillé**, 159 par monstre dormant, 7 829 par hitscan.
+`try_move` = 72 % du tic (dont localisation de secteur par descente BSP 35 %). R2-A2 (REJECT d'abord) vaut
+×24,7 sur un test de vue ; R2-A4 ×1,15 ; **R2-A5 (dédup inter-cellules) est une pessimisation** (×4,6 sur un
+hitscan) → remplacée. Primitives : add 1, mul 2, comparaison entière 10, felt→u128 6, index de span 11,
+poseidon 10,5/felt, `fixed_mul` 18, `fixed_div` 55 ; dépaquetage de 5 champs 16 bits 106 contre 55 en
+planaire ; état ≈ 19–24 felts/mobj. Encodage par offset (18) bat les felts négatifs (28) ; rester < 2^72 est gratuit.
+
+**Mur de taille de programme** : le prototype compile en **98 585 mots de bytecode** ; le bootloader
+hache le programme à 2 340 + 14,7 × mots → **1,45 M steps par segment, au-delà du plafond 2^20 : le
+prototype tel quel n'est pas prouvable.** Mesures : 1 mot par felt de constante, 18 mots par entrée
+d'arbre de `if`, +54 mots par site d'appel `#[inline(always)]`, +60–77 par monomorphisation générique.
+Prérequis : **programme < ~32 000 mots** (R2-A12), packing des données froides, jamais d'arbres de `if`
+comme tables, `cairo-profiler ≥ 0.17` sans `--show-inlined-functions`. Avec R2-A9…A11 (accélérateur
+cellule → sous-secteurs, itération blockmap sans tableau, cellule mémorisée dans le mobj) le tic complet
+est projeté à ~11 900 steps ; **K ≈ 81–162 tics par segment** (et non 250) ; atteindre 4 000 exige R2-A6
+(moins de monstres éveillés) et R2-A7 (17,5 Hz).
 
 ## 10. Inconnues à lever (référencées par le PLAN)
 
