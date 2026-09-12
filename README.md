@@ -19,5 +19,5 @@ Assets : [Freedoom](https://freedoom.github.io/) (BSD). Nom de code interne du d
 ## Licences
 
 Apache-2.0 pour l'infrastructure, les crates génériques, le client et les contrats ;
-GPL-2.0-or-later pour les crates dérivées de linuxdoom (`cairo/doom/*`) ; BSD pour les assets Freedoom.
+GPL-2.0-only pour les crates dérivées de linuxdoom (`cairo/doom/*`) ; BSD pour les assets Freedoom.
 Voir [PLAN.md](PLAN.md) A9 et [RISKS.md](RISKS.md) R9.

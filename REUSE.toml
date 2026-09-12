@@ -14,14 +14,14 @@ SPDX-License-Identifier = "Apache-2.0"
 
 # cairo/doom/** contains the Doom-specific gameplay crates, which reimplement
 # rules and data derived from linuxdoom-1.10 / doomgeneric. They are licensed
-# GPL-2.0-or-later (RISKS.md R9-A1/A9). This does not cover cairo/crates/**
+# GPL-2.0-only (RISKS.md R9-A1/A9). This does not cover cairo/crates/**
 # (generic, reusable primitives with zero Doom dependency) nor
 # cairo/doom_contracts/** (Starknet contracts, Apache-2.0).
 [[annotations]]
 path = "cairo/doom/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Bal7hazar"
-SPDX-License-Identifier = "GPL-2.0-or-later"
+SPDX-License-Identifier = "GPL-2.0-only"
 
 # NOTE: Freedoom assets (BSD-3-Clause, https://freedoom.github.io/) are never
 # committed to this repository. They are downloaded at build/runtime by

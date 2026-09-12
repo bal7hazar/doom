@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-2.0-only
 
 use doom_map::{Level, sector_at};
 use doom_monsters::{MonsterState, spawn as spawn_monster};

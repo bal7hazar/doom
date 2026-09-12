@@ -40,7 +40,7 @@ Critères de succès (« definition of done » du MVP) :
 | A6 | **Renderer WebGL en TypeScript** (murs/sols/plafonds depuis les secteurs, sprites billboard, textures Freedoom), découplé de la sim via l'état sérialisé. | Le renderer n'a pas besoin d'être prouvé ; approche « map viewer » bien maîtrisée. |
 | A7 | **Arithmétique felt-first** en Cairo : add/mul sur felt252, réductions et comparaisons explicites aux frontières ; pas de felts négatifs en mémoire ; pas de builtin bitwise (jusqu'à S0). | Mesures §4.3 (14 vs 57–61 steps/itération). |
 | A8 | **Wallet Cartridge Controller** (sessions) + `starknet.js` ; estimation par `starknet_simulateTransactions` ; paymaster possible mais le coût est toujours affiché. | Écosystème de l'équipe ; exigence produit. |
-| A9 | Licences : les crates Cairo dérivées de linuxdoom sous **GPL-2.0-or-later**, reste du dépôt Apache-2.0 ; assets Freedoom (BSD). | CONTEXT §8.2 — à confirmer (U7). |
+| A9 | Licences : les crates Cairo dérivées de linuxdoom sous **GPL-2.0-only**, reste du dépôt Apache-2.0 ; assets Freedoom (BSD). | CONTEXT §8.2 — à confirmer (U7). |
 | A10 | **Côté Cairo, tout est bibliothèque générique d'abord** : le workspace Scarb est découpé en **crates à périmètre étroit** (un domaine précis par crate, API publique minimale, zéro dépendance vers le jeu pour les crates génériques), chacune livrée avec une **suite de tests unitaires exhaustive** (valeurs de référence, propriétés, cas limites, tests de budget de steps) qui verrouille l'intégrité et la non-régression. Les crates spécifiques à Doom (règles, IA, niveau) ne font qu'assembler ces briques. Voir §2 et §3.1. | Réutilisabilité dans d'autres jeux prouvables ; changements localisés ; régressions détectées au niveau de la brique fautive. |
 
 ## 2. Organisation du dépôt (cible)
@@ -60,7 +60,7 @@ doom/
 │   │   ├── ticcmd/           #   encodage/décodage des inputs (packing 7 tics / felt)
 │   │   ├── state_hash/       #   sérialisation canonique + hash Poseidon d'un état, chaînage
 │   │   └── segment/          #   moteur run_segment générique : boucle de tics, sorties publiques
-│   ├── doom/                 # crates spécifiques Doom (GPL-2.0-or-later)
+│   ├── doom/                 # crates spécifiques Doom (GPL-2.0-only)
 │   │   ├── doom_map/         #   données de niveau générées (E1M1 Freedoom) + accès typés
 │   │   ├── doom_things/      #   mobjinfo, états, sprites indexés (données `info.c` réduites)
 │   │   ├── doom_physics/     #   P_TryMove, P_SlideMove, hauteurs, P_PathTraverse, P_CheckSight
@@ -303,7 +303,7 @@ et critères de sortie) est dans [RISKS.md](RISKS.md). Résumé :
 
 ## 7. Questions ouvertes (décisions attendues)
 
-1. **Licence** du cœur Cairo : GPL-2.0-or-later assumée, ou réécriture clean-room (U7) ?
+1. **Licence** du cœur Cairo : GPL-2.0-only assumée, ou réécriture clean-room (U7) ?
 2. **Hébergement du wrapper** et du fallback « prouveur distant » (U8) ; sponsoring des frais (paymaster) ?
 3. **Cible réseau v1** : Sepolia uniquement ou mainnet dès le MVP (declares ~180 STRK + frais par fait) ?
 4. **Portée gameplay** : skill par défaut (nombre de monstres) et liste exacte des spécials retenus après

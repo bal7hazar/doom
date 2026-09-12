@@ -3,7 +3,8 @@ Hellproof — third-party notices
 
 This repository is licensed under Apache-2.0 by default, except for the
 Doom-specific gameplay crates under `cairo/doom/**`, which are licensed
-GPL-2.0-or-later. See REUSE.toml and RISKS.md (R9) for the full licensing
+GPL-2.0-only (linuxdoom-1.10, the primary upstream, carries no "or later"
+grant, so derivatives cannot be relicensed as GPL-2.0-or-later). See REUSE.toml and RISKS.md (R9) for the full licensing
 policy and rationale, and the LICENSES/ directory for the complete license
 texts.
 
@@ -17,9 +18,8 @@ game rules and data whose *design* (state machines, formulas, data layout)
 is derived from the public-domain-adjacent knowledge of the original Doom
 engine and its GPL-licensed descendants; because that derivation is close
 enough to constitute a derivative work in the sense of copyright law, those
-crates are released under the same family of license (GPL-2.0-or-later) as
-their most permissive-compatible upstream source, as decided in RISKS.md
-R9-A1.
+crates are released under GPL-2.0-only, the license of their primary
+upstream (linuxdoom-1.10), as decided in RISKS.md R9-A1.
 
 The sections below list the upstream projects that informed this work, and
 the exact license under which each is distributed upstream, verified against
@@ -93,5 +93,5 @@ the GitHub API and the projects' own license files/headers on 2026-09-12.
    `StwoFactRegistry` design is re-pinned on the current `proving` monorepo
    per PLAN.md A3.
 
-See LICENSES/Apache-2.0.txt, LICENSES/GPL-2.0-or-later.txt and
+See LICENSES/Apache-2.0.txt, LICENSES/GPL-2.0-only.txt and
 LICENSES/BSD-3-Clause.txt for the full license texts.

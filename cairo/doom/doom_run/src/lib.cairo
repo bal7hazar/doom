@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-2.0-only
 
 use doom_game::{genesis, step_tic};
 use doom_map::sample_level;
