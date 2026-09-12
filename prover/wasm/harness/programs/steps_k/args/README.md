@@ -16,5 +16,15 @@ under 2^K steps:
 | k19.json | 47205 | 519 293 | 524 174 |
 | k20.json | 94867 | 1 043 575 | 1 048 456 |
 
-`n_steps` reported by the harness is the total. 2^20 (bootloader included) is the ceiling of the
-`canonical_small` preprocessed trace; k20 runs take the shared proof lock (ROADMAP §4).
+`m<N>.json` = the same thing for round **millions** of total steps, used to size the game's
+segments (S4b: a segment is not capped at 2^20 *steps*, only at 2^20 rows for the largest AIR
+component — see `prover/wasm/README.md` §Segment sizing):
+
+| file | n | program steps | total steps (with bootloader) |
+|---|---|---|---|
+| m2.json | 181 371 | 1 995 119 | 2 000 000 |
+| m3.json | 272 280 | 2 995 118 | 2 999 999 |
+| m4.json | 363 189 | 3 995 117 | 3 999 998 |
+
+`n_steps` reported by the harness is the total. Runs above 2^19 total steps take the shared proof
+lock (ROADMAP §4).

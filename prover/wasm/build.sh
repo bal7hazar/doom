@@ -4,12 +4,13 @@
 #   ./build.sh                 # vendor + wasm64 build (monorepo fetched from GitHub at the pinned commit)
 #   ./build.sh vendor          # only fetch/patch the vendored sources (needed before any plain `cargo` command)
 #   PROVING_SRC=/path/to/proving ./build.sh   # take the monorepo from a local clone instead of GitHub
-#   NO_WASM_OPT=1 ./build.sh   # skip the wasm-opt -O3 pass (raw linker output)
+#   WASM_OPT=1 ./build.sh      # extra wasm-opt -O3 pass (binaryen >= 119; off by default, see README)
 #   VARIANTS="st" ./build.sh   # build only one variant (st = single-thread, mt = threads)
 #   NATIVE=1 ./build.sh        # also build the native reference binary
 #   NO_SIMD=1 ./build.sh       # build without +simd128 (comparison build)
 #
-# Outputs: dist/hellproof_prover_wasm.wasm, SHA256SUMS, harness/public/hellproof_prover_wasm.wasm
+# Outputs: dist/hellproof_prover_wasm{,.threads}.wasm + SHA256SUMS, copied to harness/public/ and
+# pkg/wasm/ (the npm package's artifact directory).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
@@ -127,7 +128,7 @@ SIMD=",+simd128"; [[ "${NO_SIMD:-0}" == "1" ]] && SIMD=""
 MAX_MEMORY=17179869184   # 16 GiB — V8's Memory64 implementation limit
 STACK_SIZE=16777216      # main-thread shadow stack; worker stacks are allocated by the host
 
-mkdir -p dist harness/public
+mkdir -p dist harness/public pkg/wasm
 
 build_variant() {
   local variant="$1" out="$2" extra=""
@@ -159,7 +160,7 @@ build_variant() {
   cp "$tdir/$TARGET/release/hellproof_prover_wasm.wasm" "dist/$out"
   local raw_size; raw_size="$(wc -c < "dist/$out" | tr -d ' ')"
 
-  if [[ "${NO_WASM_OPT:-0}" != "1" ]]; then
+  if [[ "${WASM_OPT:-0}" == "1" ]]; then
     command -v wasm-opt >/dev/null || { echo "wasm-opt not found (binaryen >= 119)" >&2; exit 1; }
     local feats=(--enable-memory64 --enable-simd --enable-bulk-memory
                  --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals)
@@ -171,6 +172,7 @@ build_variant() {
   echo "  $out: $(numfmt --to=iec "$raw_size" 2>/dev/null || echo "$raw_size B") raw -> \
 $(wc -c < "dist/$out" | tr -d ' ') B ($(gzip -9 -c "dist/$out" | wc -c | tr -d ' ') B gzipped)" >&2
   cp "dist/$out" "harness/public/$out"
+  cp "dist/$out" "pkg/wasm/$out"
 }
 
 for variant in ${VARIANTS:-st mt}; do

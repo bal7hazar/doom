@@ -8,9 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "bench": "node bench.mjs",
-    "bench:node": "node --stack-size=8192 bench-node.mjs",
     "bench:native": "bash bench-native.sh",
-    "test": "node bench.mjs --k 14 --runs 1 --ci"
+    "test": "node bench.mjs --sizes k14 --runs 1 --ci"
   },
   "devDependencies": {
     "playwright": "^1.55.0",
