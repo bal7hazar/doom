@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# Standalone package (NOT a member of the cairo/ workspace, like
+# cairo/doom_contracts): it owns an executable target so that
+# `scarb execute --print-resource-usage` can measure the step cost of the
+# `bsp` crate. See ../README.md ("Measured step costs").
+[package]
+name = "bsp_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+bsp = { path = ".." }
+geom2d = { path = "../../geom2d" }
+fixed = { path = "../../fixed" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "bsp_bench"
+function = "bsp_bench::main"
+sierra = true
+
+[cairo]
+enable-gas = false
