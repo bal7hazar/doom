@@ -19,6 +19,17 @@ leaf_params_json = "/opt/hellproof/params/leaf.json"
 
 backend = "subprocess"               # "stub" disables proving entirely (tests, load runs)
 
+# What a leaf does with the proof the client submitted (D19).
+#   "from_proof" (default) — fold it: `leaf-prover --cairo_proof`, the segment is never run nor
+#                            proven again. Needs `leaf_prover_bin` built with
+#                            prover/wrapper/patches (scripts/apply_patches.sh); the service
+#                            refuses to start otherwise, naming the fix. Submissions then need
+#                            no `args`, and every proof must be `bincode_b64`.
+#   "rerun"                 — replay the segment from its `args` and prove it again, using the
+#                            submitted proof only as the admission gate. Works with a stock
+#                            upstream leaf-prover; costs one extra Cairo proof per leaf.
+leaf_mode = "from_proof"             # env: WRAPPER_LEAF_MODE
+
 # ---- the circuit registry (R3-A2) ------------------------------------------------------------
 # Everything downstream follows from it: the leaf circuit hash the contract pins, the
 # multiverifier hash the on-chain verifier constants are generated from, and the memory and time
@@ -68,7 +79,9 @@ max_body_bytes = 536870912
 job_max_attempts = 3
 scheduler_tick_ms = 250
 require_verifiable_proof = true      # refuse felt-only proofs: they cannot be verified (cd7bc5f)
-check_preimage_binding = true
+check_preimage_binding = true        # `leaf_mode = "rerun"` only: with "from_proof" nothing is
+                                     # replayed, and the verify stage already bound the submitted
+                                     # preimage to the proof's own output cells
 
 # ---- programs the wrapper will prove leaves for ----------------------------------------------
 # Clients never upload code: they name one of these ids.

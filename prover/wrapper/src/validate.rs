@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use base64::Engine;
 use sha2::{Digest, Sha256};
 
-use crate::config::{Config, ProgramEntry};
+use crate::config::{Config, LeafMode, ProgramEntry};
 use crate::felt::{leaf_output_words, output_cells_from_words, Felt};
 use crate::model::{HashFunction, ProofFormat, RunSubmission, SegmentSubmission};
 
@@ -37,15 +37,32 @@ pub struct ValidSegment {
     pub leaf_key: String,
 }
 
-/// Identity of a leaf: the same registry, program and arguments always yield the same leaf proof,
-/// so this is the cache key (R8-A3, idempotence by content hash).
+/// What makes two segments the same leaf, which depends on how the leaf is produced.
+#[derive(Debug, Clone, Copy)]
+pub enum LeafIdentity<'a> {
+    /// `leaf_mode = "rerun"`: the server replays the segment, so the same registry, program and
+    /// **arguments** always yield the same leaf proof.
+    Args(&'a [Felt]),
+    /// `leaf_mode = "from_proof"`: the server folds whatever proof was submitted, and there is no
+    /// canonical proof for a segment (two runs of the same code give two different, equally valid
+    /// proofs). What a leaf contributes to the root is its **output preimage** — the tree hashes
+    /// exactly that, and the fold re-verifies the leaf proof in circuit — so two leaves with the
+    /// same preimage are interchangeable, and that is the cache key.
+    Preimage(&'a [Felt]),
+}
+
+/// Identity of a leaf, and therefore its cache key (R8-A3, idempotence by content hash).
 pub fn leaf_key(
     registry_hash: &str,
     program_id: &str,
     program_hash: Option<&str>,
     hash_function: HashFunction,
-    args: &[Felt],
+    identity: LeafIdentity<'_>,
 ) -> String {
+    let (tag, felts) = match identity {
+        LeafIdentity::Args(a) => ("args", a),
+        LeafIdentity::Preimage(p) => ("preimage", p),
+    };
     let mut h = Sha256::new();
     h.update(b"hellproof-leaf-v1\0");
     h.update(registry_hash.as_bytes());
@@ -56,7 +73,9 @@ pub fn leaf_key(
     h.update(b"\0");
     h.update(hash_function.as_str().as_bytes());
     h.update(b"\0");
-    for a in args {
+    h.update(tag.as_bytes());
+    h.update(b"\0");
+    for a in felts {
         h.update(a.to_hex().as_bytes());
         h.update(b",");
     }
@@ -163,8 +182,13 @@ fn validate_segment(
     hash_function: HashFunction,
     registry_hash: &str,
 ) -> Result<ValidSegment> {
-    if seg.args.is_empty() {
-        bail!("segment {}: no args", seg.index);
+    // `args` are what the server replays in `rerun` mode; in `from_proof` mode it folds the
+    // submitted proof and never needs them (D19).
+    if seg.args.is_empty() && cfg.leaf_mode == LeafMode::Rerun {
+        bail!(
+            "segment {}: no args (required with leaf_mode = \"rerun\")",
+            seg.index
+        );
     }
     let args: Vec<Felt> = seg
         .args
@@ -233,6 +257,16 @@ fn validate_segment(
             seg.proof.format.as_str()
         );
     }
+    // In `from_proof` mode the proof is not merely checked, it is folded — and only the bincode
+    // form can be read back into a `CairoProof` at all, whatever `require_verifiable_proof` says.
+    if cfg.leaf_mode == LeafMode::FromProof && !seg.proof.format.verifiable() {
+        bail!(
+            "segment {}: proof format `{}` cannot be folded (leaf_mode = \"from_proof\" needs the \
+             bincode CairoProof); set leaf_mode = \"rerun\" to accept it",
+            seg.index,
+            seg.proof.format.as_str()
+        );
+    }
 
     let proof_bytes =
         match seg.proof.format {
@@ -277,7 +311,10 @@ fn validate_segment(
         &program.id,
         program.program_hash.as_deref(),
         hash_function,
-        &args,
+        match cfg.leaf_mode {
+            LeafMode::Rerun => LeafIdentity::Args(&args),
+            LeafMode::FromProof => LeafIdentity::Preimage(&preimage),
+        },
     );
 
     Ok(ValidSegment {
@@ -383,9 +420,29 @@ mod tests {
         let err = validate(&sub, &cfg(), "reg").unwrap_err().to_string();
         assert!(err.contains("cannot be verified"), "{err}");
 
+        // Waiving verification is not enough to *fold* a felt stream: it cannot be deserialized.
         let mut c = cfg();
         c.require_verifiable_proof = false;
+        let err = validate(&sub, &c, "reg").unwrap_err().to_string();
+        assert!(err.contains("cannot be folded"), "{err}");
+
+        c.leaf_mode = LeafMode::Rerun;
         assert!(validate(&sub, &c, "reg").is_ok());
+    }
+
+    #[test]
+    fn args_are_optional_in_from_proof_mode_and_required_in_rerun() {
+        let mut sub = run(vec![seg(0, "0x1", "0x2")]);
+        sub.segments[0].args.clear();
+        assert!(
+            validate(&sub, &cfg(), "reg").is_ok(),
+            "from_proof folds the submitted proof, it never replays the segment"
+        );
+
+        let mut c = cfg();
+        c.leaf_mode = LeafMode::Rerun;
+        let err = validate(&sub, &c, "reg").unwrap_err().to_string();
+        assert!(err.contains("no args"), "{err}");
     }
 
     #[test]
@@ -436,22 +493,31 @@ mod tests {
     #[test]
     fn leaf_key_is_content_addressed() {
         let one = [Felt::parse("0x1").unwrap()];
-        let a = leaf_key("reg", "p", None, HashFunction::Blake, &one);
+        let args = LeafIdentity::Args(&one);
+        let a = leaf_key("reg", "p", None, HashFunction::Blake, args);
         let b = leaf_key(
             "reg",
             "p",
             None,
             HashFunction::Blake,
-            &[Felt::parse("1").unwrap()],
+            LeafIdentity::Args(&[Felt::parse("1").unwrap()]),
         );
-        let c = leaf_key("reg2", "p", None, HashFunction::Blake, &one);
-        let d = leaf_key("reg", "p", None, HashFunction::Poseidon, &one);
+        let c = leaf_key("reg2", "p", None, HashFunction::Blake, args);
+        let d = leaf_key("reg", "p", None, HashFunction::Poseidon, args);
+        let e = leaf_key(
+            "reg",
+            "p",
+            None,
+            HashFunction::Blake,
+            LeafIdentity::Preimage(&one),
+        );
         assert_eq!(a, b, "the same args in any notation are the same leaf");
         assert_ne!(a, c, "a different registry is a different circuit");
         assert_ne!(
             a, d,
             "a different program hash function is a different leaf output"
         );
+        assert_ne!(a, e, "the two leaf modes never share a cache entry");
     }
 
     #[test]

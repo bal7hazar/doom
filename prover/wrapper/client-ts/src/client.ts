@@ -143,14 +143,15 @@ export class WrapperClient {
  */
 export function toSegmentSubmission(segment: {
   index: number;
-  args: string[];
+  /** Optional: only a `leaf_mode = "rerun"` server replays the segment from them. */
+  args?: string[];
   outputPreimage: string[];
   proofBytes: Uint8Array;
   publicOutputs?: string[];
 }): SegmentSubmission {
   return {
     index: segment.index,
-    args: segment.args,
+    ...(segment.args ? { args: segment.args } : {}),
     output_preimage: segment.outputPreimage,
     ...(segment.publicOutputs ? { public_outputs: segment.publicOutputs } : {}),
     proof: { format: "bincode_b64", data: toBase64(segment.proofBytes) },
