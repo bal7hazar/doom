@@ -311,6 +311,25 @@ Mesures modeofO (fixture `poseidon_chain(100)`, Sepolia) :
 | Recomposition Cairo des sorties (`spikes/s4/recursion_outputs`) | 14 tests verts ; N = 4 : 5 645 steps ; N = 50 : 68 315 steps (≈ 7,5 M gas) |
 | Extrapolation wrap séquentiel | N = 8 ≈ 6,5 min ; N = 50 ≈ 43 min ; serveur ≥ 48–64 GB requis |
 
+**Résultats du spike S4b (2026-09-12, voir `docs/spikes/S4b.md`) :**
+
+- **Le plafond n'est pas 2^20 steps par segment.** La taille de trace du registre vient du **plus gros
+  composant AIR** (`prover.rs:134`), pas du nombre de steps : un segment de **1,59 M steps** passe de bout
+  en bout avec le registre `doom` inchangé (feuille 22,5 s / 33,5 GB, racine 96 k felts, vérifieur 5,37 M
+  steps) et des exécutions de 3,2 / 4,4 / **5,4 M steps** gardent `trace_log_size = 20`. Les contraintes
+  réelles : RSS du prouveur navigateur (≈ 4–5 M steps sous 12 GB d'après S0) et la règle du plus gros
+  composant (à mesurer sur `doom_run`). Un registre à lifting 2^21/2^22 est accepté par `circuit-params`
+  mais **inatteignable** (`canonical_small` s'arrête à `seq_20` ; `canonical` ne démarre qu'à log 23).
+- **Hachage poseidon du programme : GO.** Bootloader de feuille : blake = 2 340 + 14,75 × mots ;
+  **poseidon = 1 969 + 5,5 × mots** (32 k mots : 177 k steps au lieu de 471 k). Route complète inchangée
+  (même circuit, même hash), seul `preimage[0]` change : `DoomRuns` doit épingler la *fonction* de hachage
+  avec le hash du programme.
+- **`fold_step = 4`** : accepté de bout en bout mais sans gain sous le padding production ; avec un
+  padding minimal (`doom_fold4_min`) : **feuille 21,9 GB / 13,3 s (−33 % RSS, −41 % temps)**, repli
+  21,4 GB / 13,5 s — au prix d'un **hash de multiverifier différent de production** (`02b34360…`) qui
+  exige de régénérer les constantes du vérifieur on-chain. `include_all_preprocessed_columns = false`
+  est **refusé** par `leaf_prover` (le registre l'accepte silencieusement : piège).
+
 Le bootloader de feuille (`leaf_simple_bootloader_compiled.json`) n'est fourni que compilé (source interne
 StarkWare) : il est épinglé par hash. Plage 19–20 impossible (`canonical_small` est en colonnes log 20).
 
