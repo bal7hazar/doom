@@ -1,0 +1,400 @@
+From 8e459f19e77aef4986e2b9b56535e8409cd2a264 Mon Sep 17 00:00:00 2001
+From: Hellproof contributors <noreply@hellproof.invalid>
+Date: Sat, 12 Sep 2026 17:52:28 +0200
+Subject: [PATCH] leaf_prover: wrap an already-made Cairo proof
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`leaf_prover` today only has one entry point: give it a program and an
+input, it runs the program, proves the run, verifies that proof inside
+the cairo-verifier circuit and proves the circuit.
+
+A caller that already holds the Cairo proof — it was produced on another
+machine, by another front end (a wasm prover in a browser, say), or
+simply earlier — has no way in, and has to re-run and re-prove the
+program just to get back to the point where the interesting work starts.
+
+Split the existing function at `prove_cairo`:
+
+* `prove_leaf_from_proof(&CairoProof<Blake2sMerkleHasher>, &Program,
+  &CircuitRegistry)` is everything after it. `prove_leaf` is now the run,
+  the Cairo proof, and a call to it, so both paths build the same circuit
+  and come out with the same circuit hash by construction.
+* the binary grows `--cairo_proof <path> [--proof_format ...]`, which
+  takes that path instead of running the program. `--program` stays: the
+  program is what the circuit pins (it is baked in as constants and thus
+  fixed by the registry's circuit hash), so it must come from the caller
+  and not from the proof.
+
+The output hash no longer comes from the runner. Both paths now read the
+output cells from the proof's own public memory with the existing
+`output_hash_from_output_cells` (made `pub`), which `verify_cairo_with_
+component_set` already used for exactly this. That is not a weakening:
+`CairoStatement::new` binds the digest to the proven public memory
+through the public logup sum, so a proof and an output hash that do not
+belong together make the circuit invalid.
+
+Only the *extended* proof can be wrapped — the circuit is filled from
+`ExtendedStarkProof::aux`, which `CairoProofForRustVerifier` drops — so
+`--proof_format` names extended serializations only: `extended-binary`
+(bincode, bzip2-wrapped or not, i.e. what `--proof-format extended-binary`
+writes and what a raw `bincode::serialize(&CairoProof)` gives) and
+`extended-json`. `ProofFormat::CairoSerde` is not offered: `CairoProof`
+derives `CairoSerialize` but not `CairoDeserialize`, and the felt stream
+carries neither `aux` nor `preprocessed_trace_variant`.
+
+Two checks replace the ones the run path no longer implies: the proof's
+`preprocessed_trace_variant` must be the registry's, and its column
+counts must match the verifier config (the latter was already there).
+---
+ Cargo.lock                           |   2 +
+ crates/cairo_verifier/src/verify.rs  |   2 +-
+ crates/leaf_prover/Cargo.toml        |   2 +
+ crates/leaf_prover/src/main.rs       |  42 +++++++-
+ crates/leaf_prover/src/prove_leaf.rs | 151 +++++++++++++++++++++------
+ 5 files changed, 162 insertions(+), 37 deletions(-)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index c38b4b4..70ca446 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -3109,6 +3109,8 @@ dependencies = [
+ name = "leaf-prover"
+ version = "2.4.0"
+ dependencies = [
++ "bincode 1.3.3",
++ "bzip2",
+  "cairo-air",
+  "cairo-program-runner-lib",
+  "cairo-vm",
+diff --git a/crates/cairo_verifier/src/verify.rs b/crates/cairo_verifier/src/verify.rs
+index d11b3f2..c8e8c75 100644
+--- a/crates/cairo_verifier/src/verify.rs
++++ b/crates/cairo_verifier/src/verify.rs
+@@ -239,7 +239,7 @@ pub fn prepare_cairo_proof_for_circuit_verifier(
+ ///
+ /// Returns an error if the output isn't exactly `N_OUTPUTS` cells or if any cell doesn't fit in
+ /// 128 bits.
+-fn output_hash_from_output_cells(output: &[PubMemoryValue]) -> Result<Blake2sHash, String> {
++pub fn output_hash_from_output_cells(output: &[PubMemoryValue]) -> Result<Blake2sHash, String> {
+     if output.len() != N_OUTPUTS {
+         return Err(format!(
+             "The circuit verifier requires exactly {N_OUTPUTS} output cells, got {}.",
+diff --git a/crates/leaf_prover/Cargo.toml b/crates/leaf_prover/Cargo.toml
+index 0452ee9..68a013a 100644
+--- a/crates/leaf_prover/Cargo.toml
++++ b/crates/leaf_prover/Cargo.toml
+@@ -9,6 +9,8 @@ description = "Run Cairo programs, prove their runs, verify that proof with a ci
+ slow-tests = []
+ 
+ [dependencies]
++bincode.workspace = true
++bzip2.workspace = true
+ cairo-program-runner-lib.workspace = true
+ cairo-vm.workspace = true
+ clap.workspace = true
+diff --git a/crates/leaf_prover/src/main.rs b/crates/leaf_prover/src/main.rs
+index 9e3e7a9..b3cfd76 100644
+--- a/crates/leaf_prover/src/main.rs
++++ b/crates/leaf_prover/src/main.rs
+@@ -5,6 +5,10 @@
+ //!     2. Uses a circuit to verify the proof from (1)
+ //!     3. Proves the execution of the circuit from (2)
+ //!
++//! Step (1) can be skipped: with `--cairo_proof` the binary wraps an already-made *extended* Cairo
++//! proof of that program's run, whoever produced it, and starts at (2). The two modes share every
++//! step from (2) on, so they build the same circuit and yield the same circuit hash.
++//!
+ //! Outputs a file with the final proof, the preprocessed root of the verifier circuit,
+ //! and the circuit hash identifying that circuit together with the config its root is
+ //! interpreted under. It is assumed that the user knows the output of the program
+@@ -15,15 +19,36 @@ use std::path::PathBuf;
+ use std::process::ExitCode;
+ 
+ use clap::Parser;
+-use leaf_prover::prove_leaf::prove_leaf_from_files;
++use leaf_prover::prove_leaf::{
++    CairoProofInputFormat, prove_leaf_from_files, prove_leaf_from_proof_files,
++};
+ use stwo_cairo_utils::binary_utils::run_binary;
+ 
+ #[derive(Parser)]
+ struct Args {
+     #[clap(long = "program", help = "Absolute path to the compiled program.")]
+     program: PathBuf,
+-    #[clap(long = "program_input", help = "Absolute path to the program input file.")]
++    #[clap(
++        long = "program_input",
++        conflicts_with = "cairo_proof",
++        help = "Absolute path to the program input file. Only used when the program is run here, \
++                i.e. without --cairo_proof."
++    )]
+     program_input: Option<PathBuf>,
++    #[clap(
++        long = "cairo_proof",
++        help = "Absolute path to an already-made extended Cairo proof of a run of --program. \
++                Given, the program is not run and not proven here: the proof is wrapped as is. \
++                Its public memory supplies the output cells, so no program input is needed."
++    )]
++    cairo_proof: Option<PathBuf>,
++    #[clap(
++        long = "proof_format",
++        default_value = "extended-binary",
++        requires = "cairo_proof",
++        help = "How --cairo_proof is serialized."
++    )]
++    proof_format: CairoProofInputFormat,
+     #[clap(
+         long = "circuit_registry_json",
+         help = "JSON file containing the circuit registry this leaf's circuit belongs to. \
+@@ -41,8 +66,17 @@ fn main() -> ExitCode {
+ 
+ fn run() -> Result<(), String> {
+     let args = Args::parse();
+-    let output =
+-        prove_leaf_from_files(&args.program, &args.program_input, &args.circuit_registry_json);
++    let output = match &args.cairo_proof {
++        Some(cairo_proof) => prove_leaf_from_proof_files(
++            &args.program,
++            cairo_proof,
++            args.proof_format,
++            &args.circuit_registry_json,
++        ),
++        None => {
++            prove_leaf_from_files(&args.program, &args.program_input, &args.circuit_registry_json)
++        }
++    };
+ 
+     fs::write(&args.output_path, serde_json::to_string_pretty(&output).unwrap()).unwrap_or_else(
+         |err| panic!("Cannot write output to {}: {err}", args.output_path.display()),
+diff --git a/crates/leaf_prover/src/prove_leaf.rs b/crates/leaf_prover/src/prove_leaf.rs
+index 7276e89..a066060 100644
+--- a/crates/leaf_prover/src/prove_leaf.rs
++++ b/crates/leaf_prover/src/prove_leaf.rs
+@@ -1,6 +1,8 @@
++use std::io::Read;
+ use std::path::{Path, PathBuf};
+ use std::sync::Arc;
+ 
++use cairo_air::CairoProof;
+ use cairo_air::verifier::INTERACTION_POW_BITS;
+ use cairo_program_runner_lib::utils::{
+     get_cairo_run_config, get_program, get_program_input_from_path,
+@@ -9,9 +11,9 @@ use cairo_program_runner_lib::{ProgramInput, cairo_run_program};
+ use cairo_vm::types::layout_name::LayoutName;
+ use cairo_vm::types::program::Program;
+ use circuit_cairo_verifier::all_components::all_components;
+-use circuit_cairo_verifier::statement::{MEMORY_VALUES_LIMBS, N_OUTPUTS, N_WORDS_PER_OUTPUT_CELL};
++use circuit_cairo_verifier::statement::MEMORY_VALUES_LIMBS;
+ use circuit_cairo_verifier::verify::{
+-    CairoVerifierConfig, build_and_fill_cairo_verifier_circuit,
++    CairoVerifierConfig, build_and_fill_cairo_verifier_circuit, output_hash_from_output_cells,
+     prepare_cairo_proof_for_circuit_verifier,
+ };
+ use circuit_common::finalize::pad_to_targets;
+@@ -24,11 +26,11 @@ use circuit_serialize::serialize::CircuitSerialize;
+ use circuits::blake::HashValue;
+ use circuits_stark_verifier::constraint_eval::CircuitEval;
+ use circuits_stark_verifier::proof::ProofConfig;
++use clap::ValueEnum;
+ use indexmap::IndexMap;
+ use leaf_proof_format::{DigestHex, SerializedLeafProof};
+ use stwo::core::pcs::PcsConfig;
+-use stwo::core::vcs::blake2_hash::Blake2sHash;
+-use stwo::core::vcs_lifted::blake2_merkle::Blake2sM31MerkleChannel;
++use stwo::core::vcs_lifted::blake2_merkle::{Blake2sM31MerkleChannel, Blake2sMerkleHasher};
+ use stwo::core::verifier::PREPROCESSED_TRACE_IDX;
+ use stwo_cairo_adapter::adapter::adapt;
+ use stwo_cairo_common::preprocessed_columns::preprocessed_trace::PreProcessedTraceVariant;
+@@ -57,6 +59,79 @@ pub fn prove_leaf_from_files(
+     prove_leaf(&program, program_input, &circuit_registry)
+ }
+ 
++/// The serializations of a whole [`CairoProof`] this crate can read back.
++///
++/// Only the **extended** proof can be wrapped into a leaf: the verifier circuit is filled from
++/// [`stwo::core::proof::ExtendedStarkProof::aux`], which the Rust-verifier forms
++/// (`cairo_air::utils::ProofFormat::{Json, Binary}`, i.e. `CairoProofForRustVerifier`) drop, and
++/// `ProofFormat::CairoSerde` is write-only (`CairoProof` derives `CairoSerialize` but not
++/// `CairoDeserialize`).
++#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
++pub enum CairoProofInputFormat {
++    /// `bincode` of a [`CairoProof`], optionally bzip2-compressed. Covers both what
++    /// `stwo_run_and_prove` writes with the `extended-binary` proof format (bzip2-wrapped) and
++    /// the raw `bincode::serialize(&CairoProof)` bytes another front end - a wasm prover, say -
++    /// hands over.
++    ExtendedBinary,
++    /// `serde_json` of a [`CairoProof`]. Note this is *not* `ProofFormat::Json`, which writes the
++    /// smaller `CairoProofForRustVerifier`.
++    #[clap(alias = "json")]
++    ExtendedJson,
++}
++
++/// Reads a whole [`CairoProof`] from `cairo_proof_path`.
++pub fn read_cairo_proof(
++    cairo_proof_path: &Path,
++    cairo_proof_format: CairoProofInputFormat,
++) -> CairoProof<Blake2sMerkleHasher> {
++    let bytes = std::fs::read(cairo_proof_path).unwrap_or_else(|err| {
++        panic!("Cannot read Cairo proof from {}: {err}", cairo_proof_path.display())
++    });
++    let fail = |err: &dyn std::fmt::Display| -> ! {
++        panic!(
++            "{} does not hold a {cairo_proof_format:?} extended CairoProof: {err}",
++            cairo_proof_path.display()
++        )
++    };
++    match cairo_proof_format {
++        CairoProofInputFormat::ExtendedBinary => {
++            bincode::deserialize(&decompress_if_needed(&bytes)).unwrap_or_else(|err| fail(&err))
++        }
++        CairoProofInputFormat::ExtendedJson => {
++            serde_json::from_slice(&bytes).unwrap_or_else(|err| fail(&err))
++        }
++    }
++}
++
++/// bzip2-decompresses `bytes` if they carry the bzip2 magic, and passes them through otherwise.
++fn decompress_if_needed(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
++    const BZIP2_MAGIC: &[u8] = b"BZh";
++    if !bytes.starts_with(BZIP2_MAGIC) {
++        return std::borrow::Cow::Borrowed(bytes);
++    }
++    let mut decompressed = Vec::new();
++    bzip2::read::BzDecoder::new(bytes)
++        .read_to_end(&mut decompressed)
++        .unwrap_or_else(|err| panic!("bzip2 decompression of the Cairo proof failed: {err}"));
++    std::borrow::Cow::Owned(decompressed)
++}
++
++/// File-path front end of [`prove_leaf_from_proof`]: loads the program, the Cairo proof to wrap
++/// and the circuit registry from disk.
++pub fn prove_leaf_from_proof_files(
++    program_path: &Path,
++    cairo_proof_path: &Path,
++    cairo_proof_format: CairoProofInputFormat,
++    circuit_registry_json: &Path,
++) -> SerializedLeafProof {
++    let program = get_program(program_path)
++        .unwrap_or_else(|err| panic!("Cannot get program from {}: {err}", program_path.display()));
++    let proof = read_cairo_proof(cairo_proof_path, cairo_proof_format);
++    let circuit_registry =
++        CircuitRegistry::from_path(circuit_registry_json).unwrap_or_else(|err| panic!("{err}"));
++    prove_leaf_from_proof(&proof, &program, &circuit_registry)
++}
++
+ /// Proves `program`'s run, verifies that proof with the cairo-verifier circuit, and proves that
+ /// circuit's execution.
+ ///
+@@ -103,40 +178,54 @@ pub fn prove_leaf(
+     info!("Program execution done");
+ 
+     let prover_input = adapt(&runner).unwrap();
+-    let output_addresses = prover_input.builtin_segments.output.unwrap();
++    info!("Adapter done");
+ 
+-    let program_output_u256s: Vec<[u32; 8]> = (output_addresses.begin_addr
+-        ..output_addresses.stop_ptr)
+-        .map(|addr| prover_input.memory.get(addr.try_into().unwrap()).as_u256())
+-        .collect();
+-    let n_outputs = program_output_u256s.len();
+-    info!("Adapter done. Program created {n_outputs} outputs.");
++    let proof =
++        prove_cairo::<Blake2sM31MerkleChannel>(prover_input, cairo_prover_parameters).unwrap();
++    info!("Cairo proving done");
++
++    prove_leaf_from_proof(&proof, program, circuit_registry)
++}
+ 
++/// Verifies an already-made Cairo `proof` of `program`'s run with the cairo-verifier circuit, and
++/// proves that circuit's execution.
++///
++/// This is [`prove_leaf`] minus the run and the Cairo proof: the caller brings the proof, produced
++/// anywhere - by `stwo_run_and_prove`, by a wasm prover in a browser - as long as it is the
++/// *extended* proof (the verifier circuit is filled from its `aux`) of a run of `program` under
++/// `circuit_registry`'s prover parameters. Everything from here on is shared with [`prove_leaf`],
++/// so both paths produce the same leaf circuit, and therefore the same circuit hash.
++///
++/// The leaf's public output is the digest the run wrote into its output cells, taken from the
++/// proof's own public memory: [`build_and_fill_cairo_verifier_circuit`] binds it to the proven
++/// public memory through the public logup sum, so a proof and an output hash that do not belong
++/// together make the circuit invalid.
++///
++/// A Cairo proof whose trace size the registry does not cover is rejected.
++pub fn prove_leaf_from_proof(
++    proof: &CairoProof<Blake2sMerkleHasher>,
++    program: &Program,
++    circuit_registry: &CircuitRegistry,
++) -> SerializedLeafProof {
++    let cairo_prover_parameters = circuit_registry.cairo_prover_params;
++    let preprocessed_trace_variant = proof.preprocessed_trace_variant;
+     assert_eq!(
+-        n_outputs, N_OUTPUTS,
+-        "The circuit cairo verifier expects exactly {N_OUTPUTS} output cells but the program \
+-         produced {n_outputs}."
++        preprocessed_trace_variant, cairo_prover_parameters.preprocessed_trace,
++        "The proof was produced with a preprocessed trace the registry's leaf verifiers do not \
++         verify"
+     );
++
+     // The program emits its output as the raw 256-bit Blake2s digest, one 128-bit half per output
+-    // cell. Concatenate the low `N_WORDS_PER_OUTPUT_CELL` words of each cell into the 8-word
+-    // digest.
+-    let mut digest_words = [0u32; N_OUTPUTS * N_WORDS_PER_OUTPUT_CELL];
+-    for (chunk, cell) in
+-        digest_words.chunks_exact_mut(N_WORDS_PER_OUTPUT_CELL).zip(program_output_u256s.iter())
+-    {
+-        chunk.copy_from_slice(&cell[..N_WORDS_PER_OUTPUT_CELL]);
+-    }
+-    let output_hash = Blake2sHash::from(digest_words);
+-    let proof =
+-        prove_cairo::<Blake2sM31MerkleChannel>(prover_input, cairo_prover_parameters).unwrap();
+-    info!("Cairo proving done");
++    // cell; the public memory of the proof carries those cells.
++    let output_hash = output_hash_from_output_cells(&proof.claim.public_data.public_memory.output)
++        .unwrap_or_else(|err| panic!("{err}"));
+ 
+     let preprocessed_root = proof.extended_stark_proof.proof.commitments[PREPROCESSED_TRACE_IDX];
+ 
+     let pcs_config = proof.extended_stark_proof.proof.config;
+ 
+-    // `AtLeastPreprocessed`, asserted above, lifts every tree to a single, shared height, which the
+-    // circuit verifier requires and which the trace size is then read off of.
++    // A `lifting_size_policy` of `AtLeastPreprocessed` lifts every tree to a single, shared
++    // height, which the circuit verifier requires and which the trace size is then read off of.
+     assert_eq!(
+         pcs_config.trace_lifting_log_size, pcs_config.preprocessed_lifting_log_size,
+         "The verifier circuit expects every tree, the preprocessed one included, lifted to the \
+@@ -150,7 +239,7 @@ pub fn prove_leaf(
+         circuit_registry.config(&registry_entry.config).unwrap_or_else(|err| panic!("{err}"));
+ 
+     let verifier_config = leaf_verifier_config(
+-        cairo_prover_parameters.preprocessed_trace,
++        preprocessed_trace_variant,
+         &pcs_config,
+         Arc::from(program_felts(program)),
+         preprocessed_root.into(),
+@@ -169,7 +258,7 @@ pub fn prove_leaf(
+     }
+ 
+     let (proof_for_circuit, serialized_aux_data) =
+-        prepare_cairo_proof_for_circuit_verifier(&proof, &verifier_config.enabled_bits);
++        prepare_cairo_proof_for_circuit_verifier(proof, &verifier_config.enabled_bits);
+ 
+     let mut context = build_and_fill_cairo_verifier_circuit(
+         &verifier_config,
+@@ -185,13 +274,11 @@ pub fn prove_leaf(
+     info!(
+         "Verifier config:
+     program: ({} felts)
+-    n_outputs: {}
+     Cairo preprocessed trace: {:?}
+     Cairo preprocessed trace root: {:?}
+     Proof pow bits: {}
+     Proof FRI config: {:?}",
+         verifier_config.program.len(),
+-        n_outputs,
+         verifier_config.preprocessed_trace_variant,
+         verifier_config.preprocessed_root,
+         verifier_config.proof_config.fri.pow_bits,

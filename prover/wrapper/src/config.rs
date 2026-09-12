@@ -139,6 +139,9 @@ pub struct Config {
     /// `subprocess` (the real pipeline) or `stub` (deterministic fake, for tests and load runs).
     #[serde(default)]
     pub backend: Backend,
+    /// Whether a leaf folds the submitted proof or re-proves the segment (D19).
+    #[serde(default)]
+    pub leaf_mode: LeafMode,
 
     // ---- resources ----
     /// Circuit proofs (leaf or fold) allowed to run at once. Omitted = derived from the
@@ -187,6 +190,34 @@ pub struct Config {
     pub api_keys: Vec<ApiKey>,
 }
 
+/// What a leaf job does with the segment proof the client submitted (G0 **D19**).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LeafMode {
+    /// **Fold the submitted proof.** `leaf-prover --cairo_proof`: the segment is neither run nor
+    /// proven again, the client's Cairo proof goes straight into the verifier circuit. Needs
+    /// `patches/proving-0001-leaf-prover-from-proof.patch` on the pinned monorepo (applied by
+    /// `scripts/apply_patches.sh`, which `infra/wrapper/Dockerfile` runs); `check_runnable`
+    /// verifies the binary has the entry point before accepting the configuration. A submission
+    /// then needs no `args`, and the proof must be `bincode_b64` — a felt stream cannot be
+    /// deserialized back into a `CairoProof`.
+    #[default]
+    FromProof,
+    /// **Re-run and re-prove the segment** from its `args`, using the submitted proof only as the
+    /// admission gate (R8-A1). Works with a stock upstream `leaf-prover`, and costs one extra
+    /// Cairo proof per leaf.
+    Rerun,
+}
+
+impl LeafMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LeafMode::FromProof => "from_proof",
+            LeafMode::Rerun => "rerun",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Backend {
@@ -209,6 +240,7 @@ impl Default for Config {
             leaf_bootloader: None,
             leaf_params_json: None,
             backend: Backend::default(),
+            leaf_mode: LeafMode::default(),
             max_circuit_proofs: None,
             machine_memory_bytes: None,
             max_verify_jobs: d_max_verify_jobs(),
@@ -261,6 +293,13 @@ impl Config {
         if let Ok(v) = std::env::var("WRAPPER_BATCH_MAX_WAIT_SECS") {
             if let Ok(n) = v.parse() {
                 self.batch_max_wait_secs = n;
+            }
+        }
+        if let Ok(v) = std::env::var("WRAPPER_LEAF_MODE") {
+            match v.as_str() {
+                "from_proof" => self.leaf_mode = LeafMode::FromProof,
+                "rerun" => self.leaf_mode = LeafMode::Rerun,
+                other => tracing::warn!(value = other, "ignoring unknown WRAPPER_LEAF_MODE"),
             }
         }
         if let Ok(v) = std::env::var("WRAPPER_API_KEY") {
@@ -395,7 +434,35 @@ impl Config {
                  leaf-prover requires true"
             );
         }
+        self.check_leaf_mode()?;
         self.check_registry_hashes()?;
+        Ok(())
+    }
+
+    /// `leaf_mode = "from_proof"` needs the patched `leaf-prover` (D19). Probing `--help` costs
+    /// milliseconds and turns "every leaf job fails with an unknown argument" into one startup
+    /// error naming the fix.
+    pub fn check_leaf_mode(&self) -> anyhow::Result<()> {
+        if self.backend == Backend::Stub || self.leaf_mode != LeafMode::FromProof {
+            return Ok(());
+        }
+        let bin = self
+            .leaf_prover_bin
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("config: `leaf_prover_bin` is not configured"))?;
+        let help = std::process::Command::new(bin)
+            .arg("--help")
+            .output()
+            .map_err(|e| anyhow::anyhow!("config: cannot run {}: {e}", bin.display()))?;
+        let text = String::from_utf8_lossy(&help.stdout);
+        if !text.contains("--cairo_proof") {
+            anyhow::bail!(
+                "config: leaf_mode = \"from_proof\" needs a `leaf-prover` with `--cairo_proof`, \
+                 but {} has none. Apply prover/wrapper/patches (scripts/apply_patches.sh) and \
+                 rebuild it, or set leaf_mode = \"rerun\".",
+                bin.display()
+            );
+        }
         Ok(())
     }
 }

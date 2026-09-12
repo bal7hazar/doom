@@ -33,8 +33,14 @@ export interface ProofBlob {
 export interface SegmentSubmission {
   /** 0-based position in the game. Indices must be contiguous and in order. */
   index: number;
-  /** The segment program's user arguments (what `run_segment` was called with). */
-  args: Felt[];
+  /**
+   * The segment program's user arguments (what `run_segment` was called with).
+   *
+   * Required only against a server configured with `leaf_mode = "rerun"`, which replays the
+   * segment from them. With the default `"from_proof"` the submitted proof is what gets folded
+   * and they are optional.
+   */
+  args?: Felt[];
   /**
    * `[task_program_hash, task_output…]` — the preimage the leaf simple bootloader dumps
    * (`output_preimage_dump_path`, returned by the wasm prover as `output_preimage`). The wrapper

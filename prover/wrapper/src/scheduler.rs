@@ -383,22 +383,46 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
             .map(|h| crate::felt::Felt::parse(h))
             .collect::<Result<_>>()?
     };
+    let preimage: Vec<crate::felt::Felt> = {
+        let hexes: Vec<String> = serde_json::from_str(&seg.preimage_json)?;
+        hexes
+            .iter()
+            .map(|h| crate::felt::Felt::parse(h))
+            .collect::<Result<_>>()?
+    };
+    // `from_proof` folds this very file instead of re-proving the segment (D19).
+    let segment_proof = seg.proof_path.clone();
+    if state.cfg.leaf_mode == crate::config::LeafMode::FromProof
+        && state.cfg.backend != crate::config::Backend::Stub
+        && segment_proof.is_none()
+    {
+        anyhow::bail!("segment {run_id}/{idx} has no stored proof to fold");
+    }
 
     state
         .db
         .set_leaf_status(&leaf_key, "running", None, None, None, None)?;
     let out = pipeline::prove_leaf(
         &state.cfg,
-        &program.executable,
-        program.hash_function,
-        &args,
+        &pipeline::LeafJobInput {
+            program_executable: &program.executable,
+            hash_function: program.hash_function,
+            args: &args,
+            preimage: &preimage,
+            segment_proof: segment_proof.as_deref().map(std::path::Path::new),
+        },
         &state.leaf_work_dir(&leaf_key),
         &state.leaf_path(&leaf_key),
     )?;
 
-    // The bootloader's own preimage must be the one the client submitted, or the leaf would fold
-    // into a different digest than the client (and the contract) expects.
-    if state.cfg.check_preimage_binding && state.cfg.backend != crate::config::Backend::Stub {
+    // `rerun` only: the bootloader's own preimage must be the one the client submitted, or the
+    // leaf would fold into a different digest than the client (and the contract) expects. In
+    // `from_proof` there is no second preimage to compare — the verify stage already bound the
+    // submitted one to the proof's output cells, which is the same guarantee one step earlier.
+    if state.cfg.leaf_mode == crate::config::LeafMode::Rerun
+        && state.cfg.check_preimage_binding
+        && state.cfg.backend != crate::config::Backend::Stub
+    {
         let claimed: Vec<String> = serde_json::from_str(&seg.preimage_json)?;
         if claimed != out.preimage {
             anyhow::bail!(

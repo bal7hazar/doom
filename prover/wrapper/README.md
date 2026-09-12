@@ -7,7 +7,8 @@ step (S4) and is not feasible in a browser — hence this service (PLAN §1 **A4
 G0 decisions **D6** and **D7**; risk **R8**).
 
 It owns no proving code. It drives the pinned `starkware-libs/proving` binaries
-(**`cd7bc5f`**, R3-A1) as subprocesses with a configured circuit registry (S4, S4b):
+(**`cd7bc5f`**, R3-A1, plus [`patches/`](patches/README.md)) as subprocesses with a configured
+circuit registry (S4, S4b):
 
 ```
 segment proofs (browser)
@@ -15,8 +16,8 @@ segment proofs (browser)
    ▼
 verify      hellproof-leaf-verify     ~0.02 s/segment   ← reject invalid submissions here (R8-A1)
    ▼
-leaf        leaf-prover               ~24 s / 32.1 GB per leaf
-   ▼
+leaf        leaf-prover --cairo_proof          ~24 s / 32.1 GB per leaf
+   ▼                    ↑ the browser's proof goes straight into the leaf circuit (D19)
 fold        stwo_run_and_prove_recursive_tree   ~28 s / 31.3 GB per reduction
    ▼
 root proof felts + packed_output + program_output   → GET /v1/batches/{id}
@@ -32,7 +33,10 @@ number of games in it.
 | `src/` | the service (axum + tokio + rusqlite) |
 | `leaf-verify/` | `hellproof-leaf-verify`, the Rust verifier front end (its own workspace: it pulls the monorepo's `cairo-air`) |
 | `client-ts/` | the TypeScript client the browser will use |
+| `patches/` | the diff carried on top of the pinned monorepo, one commit per file, written for upstream (D19) |
+| `scripts/apply_patches.sh` | applies them to a clone; the Dockerfile runs it after the checkout |
 | `scripts/e2e_fixtures.sh` | produces browser-equivalent segment proofs for the end-to-end test |
+| `scripts/leaf_mode_equivalence.sh` | proves the same segments both ways and checks the roots are identical |
 | `wrapper.example.toml` | a complete configuration |
 | `../../infra/wrapper/` | `Dockerfile` and `docker-compose.yml` |
 
@@ -56,7 +60,7 @@ submission comes back as `422` instead of surfacing later in the run status.
   "segments": [
     {
       "index": 0,                          // 0-based, contiguous, in fold order
-      "args": ["0x1", "0xfa"],             // the segment program's user arguments
+      "args": ["0x1", "0xfa"],             // optional; only `leaf_mode = "rerun"` needs them
       "output_preimage": [                 // [task_program_hash, task_output…]
         "0x6281af8c…", "0x1", "0x4cd2be…", "0xfa", "0x1"
       ],
@@ -79,14 +83,17 @@ Response `202` (or `422` when `wait_verify_ms` caught a rejection):
 Errors: `400` validation, `401` auth, `409` same `run_id` with different content, `422` rejected
 proof, `429` quota, `413` body over `max_body_bytes`.
 
-**Proof formats.** `bincode_b64` is what `prover/wasm`'s `prove()` returns and the **only form the
-Rust verifier can read**. The cairo-serde felt stream (`proof_to_felts`) is one-way at `cd7bc5f`:
-`CairoProof` derives `CairoSerialize` but not `CairoDeserialize`, and the monorepo's own loader
-panics with *"Deserialization from a Cairo-serialized proof is not supported"*
-(`cairo_air::utils::deserialize_proof_from_file`). `cairo_serde_felts` is therefore accepted only
-when the operator sets `require_verifiable_proof = false`, and such a run skips the R8-A1 gate.
-`hellproof-leaf-verify` accepts both the raw bincode the browser sends and the bzip2-wrapped
-`--proof-format extended-binary` files the monorepo writes.
+**Proof formats.** `bincode_b64` is what `prover/wasm`'s `prove()` returns, the **only form the
+Rust verifier can read**, and — since P3.4b — the only form that can be *folded*. The cairo-serde
+felt stream (`proof_to_felts`) is one-way at `cd7bc5f`: `CairoProof` derives `CairoSerialize` but
+not `CairoDeserialize`, the monorepo's own loader panics with *"Deserialization from a
+Cairo-serialized proof is not supported"* (`cairo_air::utils::deserialize_proof_from_file`), and
+the stream is lossy besides — it carries neither `ExtendedStarkProof.aux` nor
+`preprocessed_trace_variant`, and it transposes the queried values. `cairo_serde_felts` is
+therefore accepted only with `leaf_mode = "rerun"` **and** `require_verifiable_proof = false`, and
+such a run skips the R8-A1 gate. `hellproof-leaf-verify` and `leaf-prover --cairo_proof` both
+accept the raw bincode the browser sends *and* the bzip2-wrapped `--proof-format extended-binary`
+files the monorepo writes; nothing else is needed on the browser side.
 
 **What the server checks before spending anything** (all of it in well under a second):
 
@@ -99,7 +106,11 @@ when the operator sets `require_verifiable_proof = false`, and such a run skips 
    leaf circuit will publish;
 5. then, per segment, the **Rust verifier** on the proof itself, and that the proof's own output
    cells are exactly those from (4). This is what binds the submitted preimage — and therefore the
-   leaf's contribution to the root digest — to the proof.
+   leaf's contribution to the root digest — to the proof. With `leaf_mode = "from_proof"` it is
+   also the *only* place that binding is made, since nothing is replayed afterwards; the leaf
+   circuit then re-derives the same cells from the proof's public memory and constrains them
+   through the public logup sum, so a leaf cannot be built around a preimage that is not the
+   proof's own.
 
 ### `GET /v1/runs/{id}` — status, progress, per-stage timings
 
@@ -153,6 +164,60 @@ Closes the open batch now rather than waiting for M runs or T minutes. Returns `
 
 Prometheus text and a liveness probe that echoes the effective policy and registry hash.
 
+## What the browser has to produce
+
+Since P3.4b the submitted proof is not checked and discarded, it is **folded**. That makes the
+browser's output format part of the protocol, so here it is in full — and the answer is that
+`prover/wasm` needs no change at all (S2's `prove()` already returns exactly this).
+
+**The bytes.** `bincode::serialize(&proof)` where `proof: CairoProof<Blake2sMerkleHasher>` — the
+whole struct, not `CairoProofForRustVerifier`. That is byte-for-byte what
+`stwo_run_and_prove --proof-format extended-binary` writes, modulo the bzip2 wrapper that tool
+adds and the wrapper accepts either way (it sniffs the `BZh` magic). Base64 it into
+`proof.data` with `"format": "bincode_b64"`. **Confirmed**, as S2 said. The other three
+`ProofFormat`s are unusable here:
+
+| Format | What is missing |
+|---|---|
+| `json`, `binary` | `CairoProofForRustVerifier` — `StarkProof` instead of `ExtendedStarkProof`, so no `aux` |
+| `cairo-serde` (`proof_to_felts`) | no `aux`, no `preprocessed_trace_variant`, queried values transposed, and no `CairoDeserialize` to read it back |
+
+**Why `aux` is the whole point.** The leaf circuit is filled by
+`prepare_cairo_proof_for_circuit_verifier`, which needs `extended_stark_proof.aux`:
+`unsorted_query_locations` (the query indices in sampling order, before sorting and
+deduplication), `trace_decommitment` (per-tree Merkle decommitment aux) and `fri` (FRI aux). The
+Rust verifier can re-derive what it needs; the in-circuit verifier cannot, and a proof without
+`aux` simply cannot be wrapped. This is the one hard requirement the browser side has.
+
+**The public data.** Everything else the leaf needs is already in `claim.public_data`, and the
+wrapper reads it from there rather than asking for it:
+
+* `public_memory.output` — exactly **2 cells**, each a 128-bit half of the run's Blake2s digest.
+  They become the leaf circuit's public output, and the circuit constrains them against the proven
+  public memory through the public logup sum. A run producing any other number of output cells is
+  rejected while the circuit is built.
+* `public_memory.program` — the bootloader's bytecode as proven. The wrapper does **not** take the
+  program from here: the circuit bakes it in as constants, so it comes from the configured
+  `leaf_bootloader` and the registry's leaf circuit hash is what pins it (see
+  [`patches/README.md`](patches/README.md)).
+* `preprocessed_trace_variant` must be the registry's (`canonical_small`), and the proof's per-tree
+  column counts must match the verifier config — both checked before any proving.
+
+**The prover parameters** are still `prover/wasm/harness/params/leaf.json` and must stay exactly
+that: `blake2s_m31` channel, `canonical_small` preprocessed trace, `include_all_preprocessed_columns
+= true`, `lifting_size_policy = at_least_preprocessed`, FRI pow 26 / blowup 1 / 70 queries. Those
+are what make every segment up to 2^20 steps land on the log-20 leaf circuit the registry lists.
+
+**The preimage.** `output_preimage` (the felts the bootloader dumps to `output_preimage_dump_path`)
+is still submitted alongside the proof — not because the leaf needs it, but because
+`stwo_run_and_prove_recursive_tree` hashes it into the leaf's node output. It cannot be faked: the
+wrapper checks `blake2s(cairo0_encode(preimage))` against the proof's own output cells at
+submission, and the fold re-verifies the leaf proof in circuit against the output it derives from
+the preimage, so a mismatched pair fails there too.
+
+Nothing else. In particular the browser does **not** need to send `args` any more, and does not
+need to run the bootloader twice or produce any second artefact.
+
 ## Batching policy (D6)
 
 A batch closes when **either**:
@@ -204,11 +269,12 @@ circuit and costs the same leaf proof (S4b measurement 3) — about 25 leaves fo
 | `batch_max_runs` / `batch_max_wait_secs` | `8` / `600` | D6 |
 | `max_segments_per_run` | `64` | ~25 leaves per 3-minute game (S4b); raise it for longer sessions |
 | `max_proof_bytes` | `8 MiB` | a 2^20-step segment proof is ~3 MB bincode |
-| `require_verifiable_proof` | `true` | refuse felt-only submissions (they cannot be verified) |
-| `check_preimage_binding` | `true` | the bootloader's dumped preimage must equal the submitted one |
+| `require_verifiable_proof` | `true` | refuse felt-only submissions (they cannot be verified). `leaf_mode = "from_proof"` refuses them regardless: they cannot be folded either |
+| `check_preimage_binding` | `true` | `rerun` only: the bootloader's dumped preimage must equal the submitted one. `from_proof` replays nothing, and the verify stage already made that binding |
 | `job_max_attempts` | `3` | leaf and fold jobs are retried; a verification verdict is never retried |
 | `programs[].hash_function` | `blake` | `poseidon` in production (G0 D4); passed to the bootloader task input |
 | `backend` | `subprocess` | `stub` disables proving entirely (tests, load runs) |
+| `leaf_mode` | `from_proof` | `from_proof` folds the submitted proof (`leaf-prover --cairo_proof`, needs `patches/`); `rerun` replays the segment from its `args`. Checked at startup |
 
 ## Authentication
 
@@ -243,8 +309,17 @@ loses no game. Proof files live under `data_dir/proofs/` (`leaves/<leaf_key>.jso
 `batches/<id>/root.proof`).
 
 Leaves are **content addressed**: `leaf_key = sha256(registry_hash, program_id, program_hash,
-args)`. The same segment submitted twice — by the same player or by two players — is proven once,
-and a registry change invalidates the whole cache instead of silently mixing circuits (R8-A3).
+hash_function, identity)`. The same segment submitted twice — by the same player or by two players
+— is proven once, and a registry change invalidates the whole cache instead of silently mixing
+circuits (R8-A3).
+
+What `identity` is depends on `leaf_mode`, and the two are domain-separated so they never share an
+entry. In `rerun` it is the segment's **arguments**: the server replays them, so they determine the
+leaf proof. In `from_proof` there is no canonical proof for a segment — two runs of the same code
+produce two different, equally valid proofs — so keying on the proof bytes would destroy the cache.
+It keys on the **output preimage** instead: that is precisely what a leaf contributes to the root
+(the tree hashes it, and the fold re-verifies the leaf proof in circuit), so two leaves with the
+same preimage are interchangeable for every consumer.
 
 ## Metrics
 
@@ -274,14 +349,21 @@ cp wrapper.example.toml wrapper.toml        # then edit the paths
 ./target/release/hellproof-wrapper --config wrapper.toml
 ```
 
-The pinned `leaf-prover` and `stwo_run_and_prove_recursive_tree` come from the monorepo
-(`cargo build --release -p leaf-prover -p stwo-run-and-prove-recursive-tree` at `cd7bc5f`); the
-container image in `infra/wrapper/` builds them for you.
+The pinned `leaf-prover` and `stwo_run_and_prove_recursive_tree` come from the monorepo at
+`cd7bc5f`, with [`patches/`](patches/README.md) applied:
+
+```bash
+git clone https://github.com/starkware-libs/proving.git && cd proving && git checkout cd7bc5f
+prover/wrapper/scripts/apply_patches.sh .          # `leaf-prover --cairo_proof`; skip for "rerun"
+cargo build --release -p leaf-prover -p stwo-run-and-prove-recursive-tree
+```
+
+The container image in `infra/wrapper/` does all of that for you.
 
 ## Tests
 
 ```bash
-cargo test                       # 51 tests, no proving
+cargo test                       # 53 tests, no proving
 cargo test --test load           # 20 concurrent runs on the stub backend
 ```
 
@@ -292,7 +374,13 @@ cargo test --test load           # 20 concurrent runs on the stub backend
   on its own output and fails the batch on a mismatch.
 * `tests/service.rs` — submission, batching, fold order, cache, idempotency, auth, validation,
   metrics, and two restart tests.
-* `tests/pipeline_e2e.rs` — the **real** pipeline (ignored by default), see its module docs.
+* `tests/pipeline_e2e.rs` — the **real** pipeline (ignored by default), see its module docs. One
+  test per `leaf_mode`: `folds_the_submitted_proofs_without_reproving_them` submits with **no**
+  `args` at all and checks the root is the recomposition of the submitted preimages;
+  `wraps_two_real_segment_proofs_into_one_root` does the same in `"rerun"`.
+* `scripts/leaf_mode_equivalence.sh` — the two modes on the same segment proofs, folded, compared
+  leaf by leaf and at the root, then the circuit verifier on the proof-only root and a tampered
+  proof that must be rejected. Not a `cargo test`: it needs 32 GB and the pinned binaries.
 
 ## Measured end to end
 
@@ -316,16 +404,46 @@ count, and the same `VerificationOutput.output_hash` the on-chain verifier print
 an invalid leaf in < 5 s" is met by an order of magnitude, and no expensive job is ever scheduled
 for a rejected run.
 
+### `from_proof` against `rerun` (P3.4b)
+
+`tests/pipeline_e2e.rs`, same machine, same fixtures, N = 2, back to back with the proof lock held
+so nothing else ran:
+
+| | `from_proof` | `rerun` |
+|---|---|---|
+| leaf 0 / leaf 1 | **19.1 s / 18.9 s** | 21.7 s / 22.1 s |
+| leaf peak RSS | **31.4 GB** | 31.9 GB |
+| fold | 25.0 s / 31.4 GB | 27.3 s / 31.4 GB |
+| **end to end** | **65.0 s** | 73.0 s |
+| root proof | 93 797 felts | 93 797 felts |
+
+**2.6–3.2 s and ~0.5 GB less per leaf**, about 13 %. The accounting, from `leaf-prover`'s own log
+timestamps: `rerun` spends 2.07 s (segment 0) and 3.05 s (segment 1) running the segment under the
+bootloader, adapting and proving it, while `from_proof` spends 0.7–1.0 s reading and deserializing
+the 4.2 MB bincode proof. On `segment_stub` (155 k steps) that is all there is to win; a real
+3-minute DOOM segment is ~20× longer, and its Cairo proof is the 5–10 s per segment D19 is about,
+against a proof that grows far more slowly — so the margin widens with segment size, not shrinks.
+
+The two are **interchangeable, not merely comparable**. `scripts/leaf_mode_equivalence.sh` proves
+the same two segment proofs both ways and compares:
+
+* per leaf: `circuit_hash`, `circuit_preprocessed_root` and `output_preimage` — identical;
+* at the root: `program_output`, the whole `packed_output` tree and the felt count — identical;
+* the on-chain circuit verifier on the **proof-only** root: accepted, 5 260 345 steps and 506 312
+  `range_check` — the same figures as the golden run above — and the same
+  `VerificationOutput.output_hash` (`[2757233259, 2334429728, …, 618877963]`) that `rerun`,
+  `recompose::root_from_preimages` and the S4 golden all produce;
+* a proof with **one felt flipped** (a single bit in the queried-values/FRI region): rejected by
+  `assert!(context.is_circuit_valid())` while the circuit is being *built*, i.e. before the 24 s /
+  32 GB circuit proof is started, not silently absorbed.
+
 ## Known gaps
 
-* **The wrapper re-proves the segment.** `leaf-prover` takes a *program and its input*, runs it and
-  proves it, then proves the verifier circuit around that proof. It has no entry point that accepts
-  an already-made Cairo proof, so the browser's proof is used as the admission gate and the server
-  redoes the Cairo proof (~2 s of the ~24 s leaf) before the circuit proof. A genuinely "proof-only"
-  API (A4) needs a small upstream addition — everything in `prove_leaf` after `prove_cairo` only
-  needs `(proof, program_felts, output_hash, registry)` — tracked as an open question for P3.5.
-  Until then the submission carries the segment's `args` as well as its proof, and the wrapper
-  rejects the run if the bootloader's own dumped preimage differs from the submitted one.
+* **The patch is not upstream yet.** `leaf_mode = "from_proof"` — the default — needs
+  `patches/proving-0001-leaf-prover-from-proof.patch` on the pinned monorepo. It is one commit,
+  written for an upstream PR, applied by `scripts/apply_patches.sh` and by the container image, and
+  the service checks for it at startup rather than failing per job. Until it lands upstream,
+  anybody building the binaries by hand has to run that script (or set `leaf_mode = "rerun"`).
 * **No CI job yet.** `cargo test`, `cargo clippy`, `cargo fmt --check` and the client's `tsc` all
   pass locally but nothing runs them on push; a `wrapper` job in `.github/workflows/ci.yml` is a
   one-screen addition the orchestrator should make (the e2e test stays `--ignored` there: it needs

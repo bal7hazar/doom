@@ -70,6 +70,12 @@ pub struct SegmentSubmission {
     /// Position of the segment in the game, 0-based and contiguous. Also the fold order.
     pub index: u32,
     /// The segment program's user arguments, as felts (hex `0x…` or decimal strings).
+    ///
+    /// Required only with `leaf_mode = "rerun"`, where the server replays the segment from them.
+    /// With the default `"from_proof"` the submitted proof is what gets folded, so they are
+    /// optional — send them and they are recorded (and still part of the leaf cache key in
+    /// `"rerun"`), omit them and nothing is lost.
+    #[serde(default)]
     pub args: Vec<String>,
     /// `[task_program_hash, task_output…]` — what the leaf simple bootloader dumps
     /// (`output_preimage_dump_path`). The tree hashes this into the leaf's public output.

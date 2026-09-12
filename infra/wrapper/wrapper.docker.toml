@@ -18,6 +18,9 @@ leaf_verify_bin = "/opt/hellproof/bin/hellproof-leaf-verify"
 leaf_bootloader = "/opt/proving/data/leaf_simple_bootloader_compiled.json"
 leaf_params_json = "/opt/hellproof/params/leaf.json"
 backend = "subprocess"
+# The image's leaf-prover carries prover/wrapper/patches, so the browser's proof is folded rather
+# than the segment re-proven (D19). Set WRAPPER_LEAF_MODE=rerun to fall back.
+leaf_mode = "from_proof"
 
 # `doom` (S4): production padding, multiverifier identical to production.
 # Switch to /opt/hellproof/registry/doom_fold4_min/registry.json (and its hashes) once P4.0 has

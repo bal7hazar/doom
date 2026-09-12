@@ -235,19 +235,46 @@ pub struct LeafOutcome {
     pub resources: Resources,
 }
 
-/// `leaf-prover`: runs the segment program under the leaf simple bootloader, proves it, verifies
-/// that proof inside the leaf circuit and proves the circuit. 22 s / 32.5 GB (S4).
+/// Everything a leaf job knows about the segment it is proving. Which fields matter depends on
+/// [`crate::config::LeafMode`]: `from_proof` reads `segment_proof` and `preimage`, `rerun` reads
+/// `program_executable`, `hash_function` and `args`.
+pub struct LeafJobInput<'a> {
+    /// The segment program's Scarb executable (`rerun`).
+    pub program_executable: &'a Path,
+    /// Which hash the bootloader computes the task's program hash with (`rerun`).
+    pub hash_function: crate::model::HashFunction,
+    /// The segment program's user arguments (`rerun`).
+    pub args: &'a [Felt],
+    /// `[task_program_hash, task_output…]` as submitted (`from_proof`).
+    pub preimage: &'a [Felt],
+    /// The submitted bincode `CairoProof` on disk (`from_proof`).
+    pub segment_proof: Option<&'a Path>,
+}
+
+/// `leaf-prover` on one segment: verifies the segment's Cairo proof inside the leaf circuit and
+/// proves that circuit. 22 s / 32.5 GB (S4).
 ///
-/// The written file is a `LeafInput`: the `SerializedLeafProof` with the dumped
-/// `output_preimage` injected (decimal felts), which is what the tree consumes.
+/// With `leaf_mode = "from_proof"` (D19) the submitted proof is what goes into the circuit and
+/// `segment_proof` is its path; the segment is not run and not proven again, and the caller's
+/// `preimage` — already bound to that proof by the verify stage — is what the leaf carries. With
+/// `"rerun"` the segment is replayed under the leaf simple bootloader from `args`, and the
+/// bootloader's own dumped preimage is returned instead.
+///
+/// The written file is a `LeafInput`: the `SerializedLeafProof` with `output_preimage` injected
+/// (decimal felts), which is what the tree consumes.
 pub fn prove_leaf(
     cfg: &Config,
-    program_executable: &Path,
-    hash_function: crate::model::HashFunction,
-    args: &[Felt],
+    input: &LeafJobInput<'_>,
     work_dir: &Path,
     out_path: &Path,
 ) -> Result<LeafOutcome> {
+    let &LeafJobInput {
+        program_executable,
+        hash_function,
+        args,
+        preimage,
+        segment_proof,
+    } = input;
     fs::create_dir_all(work_dir)?;
     let args_path = work_dir.join("args.json");
     let hexes: Vec<String> = args.iter().map(|a| a.to_hex()).collect();
@@ -256,11 +283,13 @@ pub fn prove_leaf(
     let raw_path = work_dir.join("leaf.raw.json");
 
     if cfg.backend == Backend::Stub {
-        // Deterministic placeholder: enough for the queue, batching and API tests.
-        let preimage: Vec<String> = hexes
-            .iter()
-            .map(|h| Felt::parse(h).unwrap().to_hex())
-            .collect();
+        // Deterministic placeholder: enough for the queue, batching and API tests. It stands in
+        // for what the real run would report: the bootloader's dump in `rerun`, the submission's
+        // own preimage in `from_proof` (where nothing is run).
+        let preimage: Vec<String> = match cfg.leaf_mode {
+            crate::config::LeafMode::Rerun => hexes.clone(),
+            crate::config::LeafMode::FromProof => preimage.iter().map(|f| f.to_hex()).collect(),
+        };
         let leaf = serde_json::json!({
             "circuit_preprocessed_root": vec!["0x0"; 8],
             "circuit_hash": vec!["0x0"; 8],
@@ -296,36 +325,53 @@ pub fn prove_leaf(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("leaf_prover_bin is not configured"))?;
 
-    // `PrivacySimpleBootloaderInput` (S0 §"bootloader task input", S4 §1).
-    let bl_input = serde_json::json!({
-        "tasks": [{
-            "type": "Cairo1Executable",
-            "path": program_executable,
-            "user_args_file": args_path,
-            "program_hash_function": hash_function.as_str(),
-        }],
-        "fact_topologies_path": serde_json::Value::Null,
-        "single_page": true,
-        "output_preimage_dump_path": preimage_path,
-    });
-    let bl_path = work_dir.join("bl_input.json");
-    fs::write(&bl_path, serde_json::to_vec_pretty(&bl_input)?)?;
-
     let mut cmd = Command::new(leaf_prover);
-    cmd.arg("--program")
-        .arg(bootloader)
-        .arg("--program_input")
-        .arg(&bl_path)
-        .arg("--circuit_registry_json")
+    cmd.arg("--program").arg(bootloader);
+    match cfg.leaf_mode {
+        crate::config::LeafMode::FromProof => {
+            // The circuit reads the output cells from the proof's own public memory, so there is
+            // no bootloader input, no run and no Cairo proof here (D19, patches/README.md).
+            let proof = segment_proof.ok_or_else(|| {
+                anyhow::anyhow!("leaf_mode = \"from_proof\" but the segment has no stored proof")
+            })?;
+            cmd.arg("--cairo_proof")
+                .arg(proof)
+                .arg("--proof_format")
+                .arg("extended-binary");
+        }
+        crate::config::LeafMode::Rerun => {
+            // `PrivacySimpleBootloaderInput` (S0 §"bootloader task input", S4 §1).
+            let bl_input = serde_json::json!({
+                "tasks": [{
+                    "type": "Cairo1Executable",
+                    "path": program_executable,
+                    "user_args_file": args_path,
+                    "program_hash_function": hash_function.as_str(),
+                }],
+                "fact_topologies_path": serde_json::Value::Null,
+                "single_page": true,
+                "output_preimage_dump_path": preimage_path,
+            });
+            let bl_path = work_dir.join("bl_input.json");
+            fs::write(&bl_path, serde_json::to_vec_pretty(&bl_input)?)?;
+            cmd.arg("--program_input").arg(&bl_path);
+        }
+    }
+    cmd.arg("--circuit_registry_json")
         .arg(registry)
         .arg("--output_path")
         .arg(&raw_path);
     let (_, _, resources) = run_child(cmd, cfg.proof_lock_dir.as_deref())?;
 
-    // Inject the dumped preimage, as `spikes/s4/scripts/inject_preimage.py` does: the tree wants
-    // decimal felts under `output_preimage`.
-    let preimage_hex: Vec<String> = serde_json::from_slice(&fs::read(&preimage_path)?)
-        .context("cannot read the dumped output preimage")?;
+    // Inject the preimage, as `spikes/s4/scripts/inject_preimage.py` does: the tree wants decimal
+    // felts under `output_preimage`. In `rerun` it is the one the bootloader dumped; in
+    // `from_proof` nothing ran, and it is the submitted one — bound to the proof by the verify
+    // stage, which checked `blake2s(cairo0_encode(preimage))` against the proof's output cells.
+    let preimage_hex: Vec<String> = match cfg.leaf_mode {
+        crate::config::LeafMode::FromProof => preimage.iter().map(|f| f.to_hex()).collect(),
+        crate::config::LeafMode::Rerun => serde_json::from_slice(&fs::read(&preimage_path)?)
+            .context("cannot read the dumped output preimage")?,
+    };
     let mut leaf: serde_json::Value = serde_json::from_slice(&fs::read(&raw_path)?)?;
     let decimals: Vec<String> = preimage_hex
         .iter()

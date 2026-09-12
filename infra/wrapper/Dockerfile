@@ -5,8 +5,9 @@
 #
 # Three build stages so the two expensive ones are cached independently:
 #   1. `proving`  — the pinned monorepo's `leaf-prover` and
-#                   `stwo_run_and_prove_recursive_tree` (starkware-libs/proving @ cd7bc5f, R3-A1).
-#                   ~6 min and several GB of RAM on 12 cores.
+#                   `stwo_run_and_prove_recursive_tree` (starkware-libs/proving @ cd7bc5f, R3-A1),
+#                   plus `prover/wrapper/patches/` on top (D19: the proof-only leaf entry point
+#                   `leaf_mode = "from_proof"` needs). ~6 min and several GB of RAM on 12 cores.
 #   2. `verifier` — `hellproof-leaf-verify`, the Rust verifier front end (~1 min: it only pulls
 #                   `cairo-air`, not the prover).
 #   3. `service`  — the wrapper itself (seconds: no monorepo dependency at all).
@@ -39,6 +40,11 @@ WORKDIR /src
 RUN git clone --filter=blob:none https://github.com/starkware-libs/proving.git proving \
  && cd proving \
  && git checkout "$PROVING_REV"
+# Upstream + an auditable diff, never a fork: see prover/wrapper/patches/README.md. Copied in its
+# own layer so editing a patch does not re-clone the monorepo.
+COPY prover/wrapper/patches   /src/patches/patches
+COPY prover/wrapper/scripts/apply_patches.sh /src/patches/scripts/apply_patches.sh
+RUN /src/patches/scripts/apply_patches.sh /src/proving
 WORKDIR /src/proving
 # `-C target-cpu=native` is deliberately NOT set: the image must run on the host it was built for
 # *and* on its neighbours. Add it in a private build if you pin the CPU.

@@ -18,13 +18,19 @@
 //! WRAPPER_E2E_LOCK=$SCRATCH/.proof-lock \
 //!   cargo test --test pipeline_e2e -- --ignored --nocapture
 //! ```
+//!
+//! `folds_the_submitted_proofs_without_reproving_them` covers the default
+//! `leaf_mode = "from_proof"` (D19) and needs `WRAPPER_E2E_BIN_DIR` to hold a `leaf-prover`
+//! built with `patches/proving-0001-leaf-prover-from-proof.patch`; it is skipped, loudly, when
+//! that binary has no `--cairo_proof`. `wraps_two_real_segment_proofs_into_one_root` covers
+//! `"rerun"` and runs against a stock upstream build.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use hellproof_wrapper::config::{ApiKey, Backend, Config, ProgramEntry};
+use hellproof_wrapper::config::{ApiKey, Backend, Config, LeafMode, ProgramEntry};
 use hellproof_wrapper::db::Db;
 use hellproof_wrapper::scheduler::Scheduler;
 use hellproof_wrapper::{api, AppState};
@@ -59,10 +65,11 @@ fn env() -> Option<Env> {
     })
 }
 
-fn config(e: &Env, data_dir: PathBuf) -> Config {
+fn config(e: &Env, data_dir: PathBuf, leaf_mode: LeafMode) -> Config {
     let mut cfg = Config::default();
     cfg.data_dir = data_dir;
     cfg.backend = Backend::Subprocess;
+    cfg.leaf_mode = leaf_mode;
     cfg.registry.path = Some(e.repo.join("spikes/s4/registry/doom/registry.json"));
     cfg.leaf_prover_bin = Some(e.bin_dir.join("leaf-prover"));
     cfg.tree_bin = Some(e.bin_dir.join("stwo_run_and_prove_recursive_tree"));
@@ -91,8 +98,9 @@ fn config(e: &Env, data_dir: PathBuf) -> Config {
     cfg
 }
 
-/// Turns the fixture manifest into a submission body.
-fn submission(fixtures: &std::path::Path, solo: bool) -> Value {
+/// Turns the fixture manifest into a submission body. `with_args` mirrors what a client sends:
+/// `rerun` needs the segment arguments, `from_proof` does not (D19).
+fn submission(fixtures: &std::path::Path, solo: bool, with_args: bool) -> Value {
     use base64::Engine;
     let manifest: Value =
         serde_json::from_slice(&std::fs::read(fixtures.join("manifest.json")).unwrap()).unwrap();
@@ -102,18 +110,30 @@ fn submission(fixtures: &std::path::Path, solo: bool) -> Value {
         .iter()
         .map(|s| {
             let proof = std::fs::read(s["proof_path"].as_str().unwrap()).unwrap();
-            json!({
+            let mut seg = json!({
                 "index": s["index"],
-                "args": s["args"],
                 "output_preimage": s["output_preimage"],
                 "proof": {
                     "format": "bincode_b64",
                     "data": base64::engine::general_purpose::STANDARD.encode(&proof),
                 }
-            })
+            });
+            if with_args {
+                seg["args"] = s["args"].clone();
+            }
+            seg
         })
         .collect();
     json!({ "program": "segment_stub", "solo": solo, "segments": segments })
+}
+
+/// Whether `leaf-prover` carries `patches/proving-0001-leaf-prover-from-proof.patch`.
+fn leaf_prover_can_fold_a_proof(bin: &std::path::Path) -> bool {
+    std::process::Command::new(bin)
+        .arg("--help")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("--cairo_proof"))
+        .unwrap_or(false)
 }
 
 async fn call(router: &axum::Router, req: Request<Body>) -> (StatusCode, Value) {
@@ -146,12 +166,35 @@ async fn get(router: &axum::Router, uri: &str) -> (StatusCode, Value) {
     call(router, req).await
 }
 
+/// `leaf_mode = "rerun"`: the server replays and re-proves every segment (the pre-D19 behaviour,
+/// and what a stock upstream `leaf-prover` supports).
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "runs the real prover: 32.5 GB per circuit proof, minutes per run"]
 async fn wraps_two_real_segment_proofs_into_one_root() {
     let e = env().expect("set WRAPPER_E2E_* (see the module docs)");
+    wrap_a_run(&e, LeafMode::Rerun).await;
+}
+
+/// `leaf_mode = "from_proof"` (the default, D19): the browser's proof goes straight into the leaf
+/// circuit. The segment is never run and never proven again, so the submission carries no `args`
+/// at all — and the root must still be the recomposition of the submitted preimages.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "runs the real prover: 32.5 GB per circuit proof, minutes per run"]
+async fn folds_the_submitted_proofs_without_reproving_them() {
+    let e = env().expect("set WRAPPER_E2E_* (see the module docs)");
+    let leaf_prover = e.bin_dir.join("leaf-prover");
+    assert!(
+        leaf_prover_can_fold_a_proof(&leaf_prover),
+        "{} has no --cairo_proof: apply prover/wrapper/patches (scripts/apply_patches.sh) and \
+         rebuild it",
+        leaf_prover.display()
+    );
+    wrap_a_run(&e, LeafMode::FromProof).await;
+}
+
+async fn wrap_a_run(e: &Env, leaf_mode: LeafMode) {
     let dir = tempfile::tempdir().unwrap();
-    let cfg = config(&e, dir.path().to_path_buf());
+    let cfg = config(e, dir.path().to_path_buf(), leaf_mode);
     cfg.check_runnable()
         .expect("pipeline binaries and fixtures must exist");
 
@@ -160,7 +203,8 @@ async fn wraps_two_real_segment_proofs_into_one_root() {
     tokio::spawn(Scheduler::new(Arc::clone(&state)).run());
     let router = api::router(Arc::clone(&state));
 
-    let body = submission(&e.fixtures, true);
+    // `from_proof` needs no arguments; leaving them out is the point of the mode.
+    let body = submission(&e.fixtures, true, leaf_mode == LeafMode::Rerun);
     let n = body["segments"].as_array().unwrap().len();
     let started = std::time::Instant::now();
 
@@ -193,6 +237,7 @@ async fn wraps_two_real_segment_proofs_into_one_root() {
     let total = started.elapsed();
 
     // Per-stage numbers, for the record.
+    eprintln!("leaf_mode = {:?}", leaf_mode);
     for seg in run["segments"].as_array().unwrap() {
         eprintln!(
             "leaf {}: {:.1} s, peak RSS {:.1} GB, verify {:.0} ms",
@@ -259,14 +304,14 @@ async fn wraps_two_real_segment_proofs_into_one_root() {
 async fn a_tampered_proof_is_rejected_in_seconds() {
     let e = env().expect("set WRAPPER_E2E_* (see the module docs)");
     let dir = tempfile::tempdir().unwrap();
-    let cfg = config(&e, dir.path().to_path_buf());
+    let cfg = config(&e, dir.path().to_path_buf(), LeafMode::FromProof);
     let db = Db::open(&dir.path().join("queue.sqlite3")).unwrap();
     let state = Arc::new(AppState::new(cfg, db));
     tokio::spawn(Scheduler::new(Arc::clone(&state)).run());
     let router = api::router(Arc::clone(&state));
 
     // Flip bytes in the middle of the first segment's proof.
-    let mut body = submission(&e.fixtures, true);
+    let mut body = submission(&e.fixtures, true, false);
     {
         use base64::Engine;
         let data = body["segments"][0]["proof"]["data"].as_str().unwrap();
