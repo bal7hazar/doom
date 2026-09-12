@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hellproof — renderer preview</title>
+    <link rel="stylesheet" href="/src/ui/style.css" />
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="view"></canvas>
+      <canvas id="overlay"></canvas>
+      <div id="loading" class="panel">
+        <h1>Hellproof</h1>
+        <p id="loading-status">Booting…</p>
+        <progress id="loading-progress" max="100" value="0"></progress>
+      </div>
+      <div id="diagnostics" class="panel diagnostics" hidden></div>
+      <div id="stats" class="stats"></div>
+      <div id="help" class="help">
+        <b>F1</b> diagnostics · <b>Tab</b> automap · <b>F2</b> HUD · <b>F3</b> wireframe ·
+        <b>Space</b> pause · <b>[</b>/<b>]</b> sim rate
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

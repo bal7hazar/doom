@@ -1,0 +1,154 @@
+:root {
+  color-scheme: dark;
+  --fg: #d8d2c4;
+  --dim: #8d8578;
+  --accent: #c0392b;
+  --ok: #6ab04c;
+  --bad: #eb4d4b;
+  --panel: rgba(12, 10, 9, 0.92);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  color: var(--fg);
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden;
+}
+
+#stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#view,
+#overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#overlay {
+  pointer-events: none;
+}
+
+.panel {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid #3a332c;
+  padding: 14px 18px;
+  border-radius: 4px;
+}
+
+#loading {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 340px;
+  text-align: center;
+}
+
+#loading h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+#loading-status {
+  margin: 0 0 10px;
+  color: var(--dim);
+  min-height: 1.4em;
+}
+
+#loading progress {
+  width: 100%;
+  height: 6px;
+}
+
+#loading.error {
+  border-color: var(--bad);
+}
+
+#loading.error #loading-status {
+  color: var(--bad);
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+.diagnostics {
+  top: 12px;
+  left: 12px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  min-width: 380px;
+}
+
+.diagnostics h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.diagnostics table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.diagnostics td {
+  padding: 1px 10px 1px 0;
+  vertical-align: top;
+}
+
+.diagnostics td:first-child {
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.diagnostics .yes {
+  color: var(--ok);
+}
+
+.diagnostics .no {
+  color: var(--bad);
+}
+
+.diagnostics .note {
+  color: var(--dim);
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
+.stats {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  text-align: right;
+  color: var(--dim);
+  text-shadow: 0 1px 2px #000;
+  white-space: pre;
+}
+
+.help {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  color: var(--dim);
+  font-size: 11px;
+  text-shadow: 0 1px 2px #000;
+}
+
+.help b {
+  color: var(--fg);
+}
