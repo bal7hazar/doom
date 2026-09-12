@@ -286,10 +286,8 @@ impl SimProgram {
         // No trace, no hole filling, no memory relocation and no segment
         // finalization: none of it is needed to obtain the outputs.
         if let Err(e) = runner.end_run(
-            /* disable_trace_padding */ true,
-            /* disable_finalize_all */ false,
-            processor,
-            /* fill_holes */ false,
+            /* disable_trace_padding */ true, /* disable_finalize_all */ false,
+            processor, /* fill_holes */ false,
         ) {
             return Err(run_error(e.to_string(), processor));
         }

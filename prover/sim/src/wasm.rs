@@ -64,8 +64,9 @@ impl JsSimProgram {
 
     /// Same, but running the proof-mode entrypoint (trace still disabled).
     pub fn load_proof_shape(executable_json: &str) -> Result<JsSimProgram, JsError> {
-        let inner = core::SimProgram::load_with_mode(executable_json, core::RunMode::ProofShapeNoTrace)
-            .map_err(to_js)?;
+        let inner =
+            core::SimProgram::load_with_mode(executable_json, core::RunMode::ProofShapeNoTrace)
+                .map_err(to_js)?;
         Ok(JsSimProgram {
             inner,
             input: Vec::new(),

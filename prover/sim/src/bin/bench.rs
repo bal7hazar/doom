@@ -18,8 +18,8 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use hellproof_sim::core::{self, RunMode, SimProgram};
 use cairo_vm::Felt252;
+use hellproof_sim::core::{self, RunMode, SimProgram};
 
 /// Tracks the number of bytes currently handed out by the allocator, so the
 /// native run can answer the same "does it leak?" question as the browser run.
