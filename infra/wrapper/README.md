@@ -13,7 +13,7 @@ curl -s localhost:8787/healthz
 
 | Path | From |
 |---|---|
-| `/opt/proving/bin/{leaf-prover,stwo_run_and_prove_recursive_tree,circuit-params}` | `starkware-libs/proving` @ `cd7bc5f`, built in the image (R3-A1) |
+| `/opt/proving/bin/{leaf-prover,stwo_run_and_prove_recursive_tree,circuit-params}` | `starkware-libs/proving` @ `cd7bc5f` + `prover/wrapper/patches/` (D19: `leaf-prover --cairo_proof`), built in the image (R3-A1) |
 | `/opt/proving/data/leaf_simple_bootloader_compiled.json` | the same commit |
 | `/opt/hellproof/bin/{hellproof-wrapper,hellproof-leaf-verify}` | this repository |
 | `/opt/hellproof/registry/{doom,doom_fold4_min}/registry.json` | `spikes/s4/registry` (S4, S4b) |
