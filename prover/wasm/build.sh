@@ -48,18 +48,27 @@ vendor_proving() {
 }
 
 # ---- vendor: crates.io crates + patches/<crate>-<version>-*.patch --------------------------------
-# The exact crates.io tarball is fetched and checked against the checksum recorded in Cargo.lock.
+# The exact crates.io tarball is fetched and checked against a recorded checksum. Our own
+# Cargo.lock records the *patched* (path) source once it has been regenerated, so the checksum is
+# looked up in the upstream monorepo's Cargo.lock as well — it pins the same version.
+lock_checksum() {
+  local crate="$1" version="$2" lock="$3"
+  [[ -f "$lock" ]] || return 0
+  awk -v n="$crate" -v v="$version" '
+    $0=="[[package]]"{name="";ver=""}
+    /^name = /{gsub(/"/,"",$3);name=$3}
+    /^version = /{gsub(/"/,"",$3);ver=$3}
+    /^checksum = / && name==n && ver==v {gsub(/"/,"",$3);print $3}' "$lock"
+}
+
 vendor_crate() {
   local crate="$1" version="$2"
   local dir="$HERE/vendor/$crate"
   [[ -f "$dir/.patched" ]] && return 0
   local sum
-  sum="$(awk -v n="$crate" -v v="$version" '
-    $0=="[[package]]"{name="";ver=""}
-    /^name = /{gsub(/"/,"",$3);name=$3}
-    /^version = /{gsub(/"/,"",$3);ver=$3}
-    /^checksum = / && name==n && ver==v {gsub(/"/,"",$3);print $3}' Cargo.lock)"
-  [[ -n "$sum" ]] || { echo "no checksum for $crate $version in Cargo.lock" >&2; exit 1; }
+  sum="$(lock_checksum "$crate" "$version" "$HERE/Cargo.lock")"
+  [[ -n "$sum" ]] || sum="$(lock_checksum "$crate" "$version" "$HERE/vendor/proving/Cargo.lock")"
+  [[ -n "$sum" ]] || { echo "no checksum for $crate $version in Cargo.lock nor vendor/proving/Cargo.lock" >&2; exit 1; }
   mkdir -p "$HERE/vendor"
   local tgz="$HERE/vendor/$crate-$version.crate"
   [[ -f "$tgz" ]] || curl -fsSL -o "$tgz" "https://static.crates.io/crates/$crate/$crate-$version.crate"
