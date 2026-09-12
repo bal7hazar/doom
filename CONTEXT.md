@@ -389,6 +389,13 @@ Constantes du multiverifier **générées depuis le registre** (`tools/gen_multi
 avec `doom_fold4_min`). Calibrage : blockifier 0.14.4 facture steps VM + builtins ; snforge en mode
 sierra-gas sous-estime de 1,4–3,5× → `tracked_resource = "cairo-steps"`. Outils : Foundry 0.61.0.
 
+**Chaîne on-chain complète validée (P4.2b, 2026-09-12)** : deux racines réelles à sorties de 10 felts
+(2 parties / 3 segments et 1 partie / 2 segments) vérifiées sur devnet par le routeur P4.0 (5 tx,
+3,81e9 gas) puis consommées par `DoomRuns` (`submit_batch` 16,7 M gas = 0,44 % du fait, replay inclus) :
+**116,96 STRK ≈ 3,35 $ pour un lot complet** au prix du jour ; classement et rejeu peuplés ; un kill
+altéré → `fact not registered` ; les mêmes inputs sous un autre fait → `already registered`. Aucun écart
+entre la sérialisation de `cairo/crates/segment` et le contrat.
+
 Les classes déployées par modeofO sont inutilisables pour nous (vérifieur vendu plus ancien, hashes de
 phases figés dans le constructeur) : le registry sera redéployé depuis nos sources épinglées.
 
