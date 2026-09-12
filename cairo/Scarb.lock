@@ -101,6 +101,10 @@ name = "doom_specials"
 version = "0.1.0"
 dependencies = [
  "doom_map",
+ "doom_things",
+ "fixed",
+ "prng",
+ "state_hash",
 ]
 
 [[package]]

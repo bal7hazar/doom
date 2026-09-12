@@ -1,0 +1,91 @@
+{
+  "level": "E1M1",
+  "array_count": 14,
+  "total_words": 1064,
+  "arrays": [
+    {
+      "name": "ADJ_START",
+      "group": "adjacency",
+      "layout": "planar",
+      "words": 183
+    },
+    {
+      "name": "ADJ_PACKED",
+      "group": "adjacency",
+      "layout": "packed",
+      "words": 67
+    },
+    {
+      "name": "TAG_KEYS",
+      "group": "tags",
+      "layout": "planar",
+      "words": 6
+    },
+    {
+      "name": "TAG_START",
+      "group": "tags",
+      "layout": "planar",
+      "words": 7
+    },
+    {
+      "name": "TAG_PACKED",
+      "group": "tags",
+      "layout": "packed",
+      "words": 23
+    },
+    {
+      "name": "CEIL_SLOT",
+      "group": "slots",
+      "layout": "planar",
+      "words": 182
+    },
+    {
+      "name": "FLOOR_SLOT",
+      "group": "slots",
+      "layout": "planar",
+      "words": 182
+    },
+    {
+      "name": "LIGHT_SLOT",
+      "group": "slots",
+      "layout": "planar",
+      "words": 182
+    },
+    {
+      "name": "SPECIAL_SLOT",
+      "group": "slots",
+      "layout": "planar",
+      "words": 182
+    },
+    {
+      "name": "CEIL_SECTORS",
+      "group": "slots",
+      "layout": "planar",
+      "words": 15
+    },
+    {
+      "name": "FLOOR_SECTORS",
+      "group": "slots",
+      "layout": "planar",
+      "words": 5
+    },
+    {
+      "name": "LIGHT_SECTORS",
+      "group": "slots",
+      "layout": "planar",
+      "words": 9
+    },
+    {
+      "name": "SPECIAL_SECTORS",
+      "group": "slots",
+      "layout": "planar",
+      "words": 13
+    },
+    {
+      "name": "SHIFT8",
+      "group": "scalar",
+      "layout": "planar",
+      "words": 8
+    }
+  ]
+}
