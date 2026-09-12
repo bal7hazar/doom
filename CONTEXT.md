@@ -319,7 +319,7 @@ phases figés dans le constructeur) : le registry sera redéployé depuis nos so
 ### 8.2 Licences et assets
 
 - Code source Doom : **GPL-2.0** (id Software, 1999). Un port de la logique de jeu en Cairo qui s'en
-  inspire ligne à ligne est un **dérivé → GPL-2.0-only** pour le crate `doom_core`. Le dépôt est
+  inspire ligne à ligne est un **dérivé → GPL-2.0-only** pour les crates `cairo/doom/*` (linuxdoom-1.10 est GPL-2.0-only, sans clause « or later » ; vérifié en P0.1). Le dépôt est
   aujourd'hui **Apache-2.0** : prévoir un **licensing par répertoire** (core GPL, infra/contrats/client
   Apache) ou une réécriture « clean-room » à partir des specs (Doom wiki, Black Book) — décision à prendre.
 - **Assets : Freedoom** (décision utilisateur) — `freedoom1.wad` (Phase 1), licence BSD 3 clauses,
