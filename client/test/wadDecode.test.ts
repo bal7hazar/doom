@@ -1,10 +1,18 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { lightColormapRow, fakeContrast, parseColormap } from "../src/wad/colormap.js";
-import { blit, decodeFlat, decodePicture, emptyPicture } from "../src/wad/picture.js";
-import { parsePlaypal, selectPalette } from "../src/wad/playpal.js";
-import { spriteRotation } from "../src/wad/sprites.js";
-import { Wad } from "../src/wad/wad.js";
+import {
+  blitPicture as blit,
+  decodeFlat,
+  decodePatch as decodePicture,
+  emptyPicture,
+  fakeContrast,
+  lightColormapRow,
+  parseColormap,
+  parsePlaypal,
+  selectPalette,
+  spriteRotation,
+  Wad,
+} from "@hellproof/wad";
 import { firstDifference, fromBase64, loadFixture } from "./fixture.js";
 
 const fixture = loadFixture();
@@ -13,9 +21,11 @@ describe.skipIf(!fixture)("picture decoding against the tools/wad reference", ()
   const f = fixture!;
 
   it("decodes a patch to exactly the same pixels and mask", () => {
-    // The expected values come from `tools/wad/src/assets/pictures.ts`, an
-    // independently written Buffer-based decoder; this is the cross-check that
-    // keeps the two copies (client/src/wad/README.md) from drifting.
+    // The expected values come from the fixture generator
+    // (test/fixtures/generate.ts), which decodes with this same
+    // `@hellproof/wad` package; this is a regression check against the
+    // committed fixture, not a cross-check between two implementations
+    // (there is only one now - see tools/wad/README.md's "Library" section).
     const decoded = decodePicture(fromBase64(f.patch.raw));
     expect({
       width: decoded.width,
@@ -110,7 +120,7 @@ describe.skipIf(!fixture)("PLAYPAL and COLORMAP", () => {
 
   it("parses every palette as 256 RGBA colours", () => {
     const wad = Wad.fromBytes(new Uint8Array(readFileSync(f.wad.path)));
-    const playpal = parsePlaypal(wad.dataByName("PLAYPAL"));
+    const playpal = parsePlaypal(wad.lumpDataByName("PLAYPAL"));
     expect(playpal.paletteCount).toBe(f.palette.count);
     for (const p of playpal.rgba) {
       expect(p.length).toBe(256 * 4);
@@ -123,7 +133,7 @@ describe.skipIf(!fixture)("PLAYPAL and COLORMAP", () => {
 
   it("parses COLORMAP as a flat block one row can be indexed out of", () => {
     const wad = Wad.fromBytes(new Uint8Array(readFileSync(f.wad.path)));
-    const colormap = parseColormap(wad.dataByName("COLORMAP"));
+    const colormap = parseColormap(wad.lumpDataByName("COLORMAP"));
     expect(colormap.mapCount).toBe(f.colormap.mapCount);
     expect(Array.from(colormap.data.subarray(0, 16))).toEqual(f.colormap.row0);
     expect(Array.from(colormap.data.subarray(16 * 256, 16 * 256 + 16))).toEqual(f.colormap.row16);
@@ -135,8 +145,8 @@ describe.skipIf(!fixture)("PLAYPAL and COLORMAP", () => {
     // vanilla's identity map. What the shader relies on is the *ordering*:
     // higher rows must be uniformly darker, ending near black.
     const wad = Wad.fromBytes(new Uint8Array(readFileSync(f.wad.path)));
-    const colormap = parseColormap(wad.dataByName("COLORMAP"));
-    const playpal = parsePlaypal(wad.dataByName("PLAYPAL"));
+    const colormap = parseColormap(wad.lumpDataByName("COLORMAP"));
+    const playpal = parsePlaypal(wad.lumpDataByName("PLAYPAL"));
     const palette = playpal.rgba[0]!;
     const luminance = (row: number): number => {
       let sum = 0;

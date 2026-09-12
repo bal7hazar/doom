@@ -1,4 +1,4 @@
-import type { Picture } from "../wad/picture.js";
+import type { Picture } from "@hellproof/wad";
 
 export interface AtlasRect {
   x: number;

@@ -1,3 +1,4 @@
+import { selectSpriteLump } from "@hellproof/wad";
 import {
   flatKey,
   spriteKey,
@@ -11,7 +12,6 @@ import { findDynamicSectors, SKY_FLAT, type LevelJson } from "../map/level.js";
 import { mobjInfoFor } from "../map/mobjInfo.js";
 import { buildWallQuads, quadCorners, type WallQuad } from "../map/walls.js";
 import { MobjRenderFlag, pointToAngle, type InterpolatedView } from "../sim/snapshot.js";
-import { selectSpriteLump } from "../wad/sprites.js";
 import { cameraBasis, multiply, perspective, pitchRadians, viewMatrix } from "./camera.js";
 import {
   bindInterleaved,

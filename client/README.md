@@ -39,7 +39,10 @@ zoom and rotation.
 
 ## Dependencies
 
-None at run time. Dev dependencies are Vite, TypeScript, vitest, tsx and
+`@hellproof/wad` (`tools/wad`, an npm workspace) at run time: the browser-safe
+WAD directory reader and asset decoders (`Wad`, `parsePlaypal`,
+`decodePatch`, ...) - see `tools/wad/README.md`'s "Library" section. No other
+runtime dependency. Dev dependencies are Vite, TypeScript, vitest, tsx and
 Playwright.
 
 There is no WebGL library and no framework. The renderer is four shader
@@ -53,8 +56,8 @@ triangulation needs no earcut either: see "BSP clipping" below.
 ## Architecture
 
 ```
-  freedoom1.wad ──► src/wad/       decode: PLAYPAL, COLORMAP, PNAMES+TEXTUREn,
-        │                          patches, flats, sprite frame tables
+  freedoom1.wad ──► @hellproof/wad decode: PLAYPAL, COLORMAP, PNAMES+TEXTUREn,
+        │            (tools/wad)   patches, flats, sprite frame tables
         ▼
   src/assets/      ──► RG8 atlases (R = palette index, G = coverage)
         │               + palette / colormap textures

@@ -1,3 +1,4 @@
+import { selectPalette } from "@hellproof/wad";
 import { buildAssetStore, type AssetStore } from "./assets/assetStore.js";
 import { atlasOccupancy } from "./assets/atlas.js";
 import { chooseProfile, probeCapabilities, probeStorage } from "./caps/capabilities.js";
@@ -9,7 +10,6 @@ import { createStubSim } from "./sim/stubSim.js";
 import { DEFAULT_AUTOMAP, drawAutomap, type AutomapOptions } from "./ui/automap.js";
 import { renderDiagnostics } from "./ui/diagnostics.js";
 import { Hud } from "./ui/hud.js";
-import { selectPalette } from "./wad/playpal.js";
 
 /**
  * Application entry point.
