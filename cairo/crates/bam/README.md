@@ -139,10 +139,37 @@ python3 scripts/gen_tables.py --write --tables-c /tmp/tables.c
 scarb fmt -p bam
 ```
 
-`cairo-coverage` (0.5.0, installed via asdf) was **not** run: it consumes
-trace files produced by `snforge test --save-trace-data`, and this workspace's
-runner is `scarb cairo-test`. Coverage is argued instead: every public
-function is exercised, and every branch of the fold (`idx >= 4096`,
-`half >= 2048`), of the wrap (`add`, `sub`, `neg`), of `slope_div`
-(`den < 512`, clamp, normal) and all **eight** octant branches of
-`point_to_angle` are reached by the vectors and the cardinal/diagonal tests.
+## Coverage
+
+`python3 bench/coverage.py` measures line coverage with `cairo-coverage`
+0.5.0. The script copies the crate and its siblings to a temporary
+directory and patches the manifests there (`snforge_std` instead of
+`cairo_test`, gas back on, the three debug-info/inlining flags coverage
+requires), because `cairo-coverage` only reads `snforge` traces and
+`snforge` cannot compile this workspace as it stands -- `cairo/Scarb.toml`
+sets `enable-gas = false` for `doom_run`'s executable target. Lines at or
+below a file's `#[cfg(test)]` marker are excluded, so the figure is the
+coverage of the code that ships. `cairo-coverage` 0.5.0 emits no `BRF`/`BRH`
+records, so **branch** coverage cannot be reported by the tool; line
+coverage is the proxy, and since `scarb fmt` puts every branch arm on its
+own line a missed arm shows up as a missed line. The script exits non-zero
+below 90 % (C7).
+
+`bench/coverage.py` **cannot run for this crate**: coverage requires
+`inlining-strategy = "avoid"`, and with it the 4 097 felts of `const` tables
+make `universal-sierra-compiler` fail with
+
+```
+[ERROR] #2384->#2385: Got 'Offset overflow' error while moving [3] ...
+```
+
+The script is kept so that the failure is reproducible and so that the crate
+picks coverage up as soon as the compiler handles it (the other four crates
+of the geometry stack report 95 % to 100 %).
+
+Coverage is therefore argued here: every public function is exercised, and
+every branch of the fold (`idx >= 4096`, `half >= 2048`), of the wrap
+(`add`, `sub`, `neg`), of `slope_div` (`den < 512`, clamp, normal) and all
+**eight** octant branches of `point_to_angle` are reached by the vectors and
+the cardinal/diagonal tests.
+

@@ -116,12 +116,29 @@ unexpected cycle during cost computation" (the same Scarb 2.16 quirk S1 §2
 hit with `cairo-profiler` 0.9). Everything that iterates belongs in the
 unit-test target.
 
-`cairo-coverage` (0.5.0, installed via asdf) was **not** run: it consumes
-`.json` trace files produced by `snforge test --save-trace-data`, and this
-workspace's test runner is `scarb cairo-test` (snforge is only wired up for
-the standalone `doom_contracts` package, and switching the runner would mean
-editing the workspace manifest and every crate). Branch coverage is instead
-argued file-by-file: every public function is
-called by at least one unit test and every `if` branch in `div`, `abs`,
-`magnitude`, `min`/`max` is reached by an explicit edge case (positive,
-negative, zero, and both saturation signs).
+## Coverage
+
+`python3 bench/coverage.py` measures line coverage with `cairo-coverage`
+0.5.0. The script copies the crate and its siblings to a temporary
+directory and patches the manifests there (`snforge_std` instead of
+`cairo_test`, gas back on, the three debug-info/inlining flags coverage
+requires), because `cairo-coverage` only reads `snforge` traces and
+`snforge` cannot compile this workspace as it stands -- `cairo/Scarb.toml`
+sets `enable-gas = false` for `doom_run`'s executable target. Lines at or
+below a file's `#[cfg(test)]` marker are excluded, so the figure is the
+coverage of the code that ships. `cairo-coverage` 0.5.0 emits no `BRF`/`BRH`
+records, so **branch** coverage cannot be reported by the tool; line
+coverage is the proxy, and since `scarb fmt` puts every branch arm on its
+own line a missed arm shows up as a missed line. The script exits non-zero
+below 90 % (C7).
+
+Measured: **28 tests, 350/354 production lines = 98.9 %**. The four
+misses are inside `div`'s saturation branch, which the tests do reach
+(`test_div_overflow_guard_matches_doom`); with `inlining-strategy = "avoid"`
+the tool attributes those instructions to the caller.
+
+Coverage is argued on top of the figure: every public function is called by
+at least one test, and every `if` branch in `div`, `abs`, `magnitude`,
+`split`, `min`/`max` is reached by an explicit edge case (positive, negative,
+zero, and both saturation signs).
+

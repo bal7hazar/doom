@@ -144,10 +144,26 @@ tests:
 
 Regenerate with `python3 scripts/gen_vectors.py --write && scarb fmt -p geom2d`.
 
-`cairo-coverage` (0.5.0, installed via asdf) was **not** run: it consumes
-`snforge test --save-trace-data` traces and this workspace's runner is
-`scarb cairo-test`. Coverage is argued instead: every public function is
-exercised, and the vectors reach both outcomes of `point_side`, all three of
-`divline_side` and `box_on_line_side`, both `diagonal` values, each of the
-four comparisons of `bbox_reject` in isolation, and both branches of
+## Coverage
+
+`python3 bench/coverage.py` measures line coverage with `cairo-coverage`
+0.5.0. The script copies the crate and its siblings to a temporary
+directory and patches the manifests there (`snforge_std` instead of
+`cairo_test`, gas back on, the three debug-info/inlining flags coverage
+requires), because `cairo-coverage` only reads `snforge` traces and
+`snforge` cannot compile this workspace as it stands -- `cairo/Scarb.toml`
+sets `enable-gas = false` for `doom_run`'s executable target. Lines at or
+below a file's `#[cfg(test)]` marker are excluded, so the figure is the
+coverage of the code that ships. `cairo-coverage` 0.5.0 emits no `BRF`/`BRH`
+records, so **branch** coverage cannot be reported by the tool; line
+coverage is the proxy, and since `scarb fmt` puts every branch arm on its
+own line a missed arm shows up as a missed line. The script exits non-zero
+below 90 % (C7).
+
+Measured: **20 tests, 401/405 production lines = 99.0 %**.
+
+On top of the figure: the vectors reach both outcomes of `point_side`, all
+three of `divline_side` and `box_on_line_side`, both `diagonal` values, each
+of the four comparisons of `bbox_reject` in isolation, and both branches of
 `intercept_fraction` (parallel and not).
+

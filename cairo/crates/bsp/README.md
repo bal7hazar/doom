@@ -107,9 +107,25 @@ disables gas, and both the descent (a `while`) and the traversal (a
 recursion) are lowered to recursive functions, whose cost computation then
 fails. The unit-test target has no such restriction.
 
-`cairo-coverage` (0.5.0, installed via asdf) was **not** run: it consumes
-`snforge test --save-trace-data` traces and this workspace's runner is
-`scarb cairo-test`. Coverage is argued instead: the 1 000 points and 200
-traces reach both children at every level, both outcomes of the
-`SIDE_CROSS` fold, the early-stop and run-to-completion paths of
-`cross_bsp`, and the panic guard.
+## Coverage
+
+`python3 bench/coverage.py` measures line coverage with `cairo-coverage`
+0.5.0. The script copies the crate and its siblings to a temporary
+directory and patches the manifests there (`snforge_std` instead of
+`cairo_test`, gas back on, the three debug-info/inlining flags coverage
+requires), because `cairo-coverage` only reads `snforge` traces and
+`snforge` cannot compile this workspace as it stands -- `cairo/Scarb.toml`
+sets `enable-gas = false` for `doom_run`'s executable target. Lines at or
+below a file's `#[cfg(test)]` marker are excluded, so the figure is the
+coverage of the code that ships. `cairo-coverage` 0.5.0 emits no `BRF`/`BRH`
+records, so **branch** coverage cannot be reported by the tool; line
+coverage is the proxy, and since `scarb fmt` puts every branch arm on its
+own line a missed arm shows up as a missed line. The script exits non-zero
+below 90 % (C7).
+
+Measured: **12 tests, 216/216 production lines = 100 %**.
+
+On top of the figure: the 1 000 points and 200 traces reach both children at
+every level, both outcomes of the `SIDE_CROSS` fold, the early-stop and
+run-to-completion paths of `cross_bsp`, and the panic guard.
+
