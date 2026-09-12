@@ -1,0 +1,31 @@
+Main binary filename not available.
+Type: steps
+Showing nodes accounting for 1474598 steps, 93.87% of 1570917 steps total
+Dropped 7 nodes (cum <= 7854 steps)
+Showing top 25 nodes out of 40
+      flat  flat%   sum%        cum   cum%
+342053 steps 21.77% 21.77% 342053 steps 21.77%  proto::geom::node_side_six
+169559 steps 10.79% 32.57% 479212 steps 30.51%  proto::bsp::point_in_subsector[364-817]{NotSpecialized, 0, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, }
+127971 steps  8.15% 40.71% 127971 steps  8.15%  proto::blockmap::push_cell[512-1020]
+81711 steps  5.20% 45.92% 218594 steps 13.92%  proto::physics::try_move[683-2214]
+78023 steps  4.97% 50.88% 78023 steps  4.97%  proto::geom::bbox_reject
+72902 steps  4.64% 55.52% 1296689 steps 82.54%  proto::ai::monster_think
+68915 steps  4.39% 59.91% 223596 steps 14.23%  proto::blockmap::push_cell
+65290 steps  4.16% 64.07% 95963 steps  6.11%  proto::physics::seg_crosses_line
+50478 steps  3.21% 67.28% 50478 steps  3.21%  proto::geom::line_side_six
+50424 steps  3.21% 70.49% 149152 steps  9.49%  proto::blockmap::collect_ray[812-1228]
+38520 steps  2.45% 72.94% 986400 steps 62.79%  proto::physics::try_move
+34040 steps  2.17% 75.11% 34040 steps  2.17%  proto::blockmap::cell_x
+34040 steps  2.17% 77.27% 34040 steps  2.17%  proto::blockmap::cell_y
+31598 steps  2.01% 79.29% 31598 steps  2.01%  proto::bam::point_to_angle
+30673 steps  1.95% 81.24% 30673 steps  1.95%  proto::physics::ray_side
+28878 steps  1.84% 83.08% 1325567 steps 84.38%  proto::game::step_tic[830-1146]
+26710 steps  1.70% 84.78% 154681 steps  9.85%  proto::blockmap::push_cell[512-1020]{NotSpecialized, NotSpecialized, 0, NotSpecialized, NotSpecialized, NotSpecialized, }
+26523 steps  1.69% 86.47% 111937 steps  7.13%  proto::ai::check_sight[351-700]
+18119 steps  1.15% 87.62% 18119 steps  1.15%  proto::bam::cosine
+17594 steps  1.12% 88.74% 119298 steps  7.59%  proto::blockmap::collect_bbox[321-424]
+16668 steps  1.06% 89.80% 16668 steps  1.06%  proto::bam::sine
+16231 steps  1.03% 90.83% 26780 steps  1.70%  proto::physics::path_traverse[416-822]
+16099 steps  1.02% 91.86% 43601 steps  2.78%  proto::ai::dir_delta
+16099 steps  1.02% 92.88% 898330 steps 57.19%  proto::ai::p_move
+15480 steps  0.99% 93.87% 527092 steps 33.55%  proto::bsp::point_in_subsector[364-817]{680, 0, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, }

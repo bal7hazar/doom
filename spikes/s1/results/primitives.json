@@ -1,0 +1,305 @@
+{
+  "loop_overhead": 8.0,
+  "ops": {
+    "bare loop iteration": {
+      "op": 0,
+      "steps_per_iter": 8.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        8092,
+        24092
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 0.0
+    },
+    "felt252 add": {
+      "op": 1,
+      "steps_per_iter": 9.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        9094,
+        27094
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 1.0
+    },
+    "felt252 mul+add": {
+      "op": 2,
+      "steps_per_iter": 10.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        10096,
+        30096
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 2.0
+    },
+    "u32 comparison": {
+      "op": 3,
+      "steps_per_iter": 18.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        18094,
+        54094
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 10.0
+    },
+    "felt252 -> u128": {
+      "op": 4,
+      "steps_per_iter": 14.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        14104,
+        42104
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 6.0
+    },
+    "felt252 -> u32": {
+      "op": 5,
+      "steps_per_iter": 15.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        15103,
+        45103
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 7.0
+    },
+    "const span index (10240)": {
+      "op": 6,
+      "steps_per_iter": 19.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        19111,
+        57111
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 11.0
+    },
+    "const span index (256)": {
+      "op": 7,
+      "steps_per_iter": 19.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        2014,
+        3914
+      ],
+      "n": [
+        100,
+        200
+      ],
+      "steps_net_of_loop": 11.0
+    },
+    "const span index (2049)": {
+      "op": 8,
+      "steps_per_iter": 19.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        19117,
+        38117
+      ],
+      "n": [
+        1000,
+        2000
+      ],
+      "steps_net_of_loop": 11.0
+    },
+    "dyn array span index (4096)": {
+      "op": 9,
+      "steps_per_iter": 19.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        60085,
+        98085
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 11.0
+    },
+    "point_on_side": {
+      "op": 10,
+      "steps_per_iter": 26.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        26117,
+        78117
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 18.0
+    },
+    "fixed_mul": {
+      "op": 11,
+      "steps_per_iter": 26.0,
+      "range_check_per_iter": 5.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        26131,
+        78131
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 18.0
+    },
+    "fixed_div": {
+      "op": 12,
+      "steps_per_iter": 63.0,
+      "range_check_per_iter": 15.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        63128,
+        189128
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 55.0
+    },
+    "hades_permutation": {
+      "op": 13,
+      "steps_per_iter": 15.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 1.0,
+      "raw": [
+        15137,
+        45137
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 7.0
+    },
+    "poseidon_hash_span(1 felt)": {
+      "op": 14,
+      "steps_per_iter": 40.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 1.0,
+      "raw": [
+        40135,
+        120135
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 32.0
+    },
+    "u128 comparison": {
+      "op": 15,
+      "steps_per_iter": 18.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        18135,
+        54135
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 10.0
+    },
+    "felt_ge": {
+      "op": 16,
+      "steps_per_iter": 25.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        25153,
+        75153
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 17.0
+    },
+    "unpack 5x16b packed felt": {
+      "op": 17,
+      "steps_per_iter": 114.0,
+      "range_check_per_iter": 37.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        114155,
+        342155
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 106.0
+    },
+    "u32 division": {
+      "op": 18,
+      "steps_per_iter": 23.0,
+      "range_check_per_iter": 4.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        23139,
+        69139
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 15.0
+    },
+    "Felt252Dict insert+get": {
+      "op": 19,
+      "steps_per_iter": 59.0,
+      "range_check_per_iter": 4.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        59231,
+        177231
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 51.0
+    }
+  }
+}

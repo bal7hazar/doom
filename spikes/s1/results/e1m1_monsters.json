@@ -1,0 +1,110 @@
+[
+  {
+    "x": -352,
+    "y": 1280,
+    "angle": 45,
+    "type": 9,
+    "flags": 14,
+    "name": "sergeant",
+    "dist": 1025
+  },
+  {
+    "x": 256,
+    "y": 1072,
+    "angle": 0,
+    "type": 3004,
+    "flags": 4,
+    "name": "trooper",
+    "dist": 1057
+  },
+  {
+    "x": -96,
+    "y": 1280,
+    "angle": 135,
+    "type": 9,
+    "flags": 12,
+    "name": "sergeant",
+    "dist": 1072
+  },
+  {
+    "x": -224,
+    "y": 1312,
+    "angle": 90,
+    "type": 3002,
+    "flags": 12,
+    "name": "demon",
+    "dist": 1073
+  },
+  {
+    "x": 544,
+    "y": 804,
+    "angle": 0,
+    "type": 3001,
+    "flags": 6,
+    "name": "imp",
+    "dist": 1105
+  },
+  {
+    "x": 704,
+    "y": 288,
+    "angle": 45,
+    "type": 3004,
+    "flags": 9,
+    "name": "trooper",
+    "dist": 1120
+  },
+  {
+    "x": 752,
+    "y": 336,
+    "angle": 180,
+    "type": 3004,
+    "flags": 14,
+    "name": "trooper",
+    "dist": 1170
+  },
+  {
+    "x": 800,
+    "y": 400,
+    "angle": 180,
+    "type": 3001,
+    "flags": 12,
+    "name": "imp",
+    "dist": 1224
+  },
+  {
+    "x": -240,
+    "y": 1472,
+    "angle": 0,
+    "type": 3004,
+    "flags": 9,
+    "name": "trooper",
+    "dist": 1228
+  },
+  {
+    "x": 816,
+    "y": 448,
+    "angle": 225,
+    "type": 3004,
+    "flags": 14,
+    "name": "trooper",
+    "dist": 1246
+  },
+  {
+    "x": -128,
+    "y": 1520,
+    "angle": 0,
+    "type": 3002,
+    "flags": 12,
+    "name": "demon",
+    "dist": 1296
+  },
+  {
+    "x": 352,
+    "y": 1392,
+    "angle": 270,
+    "type": 3004,
+    "flags": 15,
+    "name": "trooper",
+    "dist": 1371
+  }
+]

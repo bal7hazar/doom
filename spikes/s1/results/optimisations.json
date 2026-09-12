@@ -1,0 +1,638 @@
+{
+  "1": [
+    {
+      "mean": 19174.9,
+      "rc_mean": 1900.6,
+      "total_steps": 6712792,
+      "base_steps": 1577,
+      "label": "baseline (no optimisation)",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 5131.5,
+      "rc_mean": 398.5,
+      "total_steps": 1797618,
+      "base_steps": 1576,
+      "label": "cumulative: + R2-A2 REJECT",
+      "opts": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 4869.2,
+      "rc_mean": 403.5,
+      "total_steps": 1705785,
+      "base_steps": 1575,
+      "label": "cumulative: + R2-A3 AI cadencing",
+      "opts": [
+        1,
+        1,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 4231.7,
+      "rc_mean": 356.5,
+      "total_steps": 1482685,
+      "base_steps": 1574,
+      "label": "cumulative: + R2-A4 3-array half-plane",
+      "opts": [
+        1,
+        1,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 4701.8,
+      "rc_mean": 367.2,
+      "total_steps": 1647209,
+      "base_steps": 1573,
+      "label": "cumulative: + R2-A5 blockmap dedup",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 4824.0,
+      "rc_mean": 375.3,
+      "total_steps": 1689991,
+      "base_steps": 1574,
+      "label": "cumulative: + reject reorder",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "mean": 4876.6,
+      "rc_mean": 391.7,
+      "total_steps": 1708382,
+      "base_steps": 1573,
+      "label": "cumulative: + uniform-cell sector",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "mean": 4410.7,
+      "rc_mean": 380.7,
+      "total_steps": 1545309,
+      "base_steps": 1574,
+      "label": "best (dedup off)",
+      "opts": [
+        1,
+        1,
+        1,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "mean": 5131.5,
+      "rc_mean": 398.5,
+      "total_steps": 1797618,
+      "base_steps": 1576,
+      "label": "alone: R2-A2 REJECT",
+      "opts": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 9244.5,
+      "rc_mean": 869.2,
+      "total_steps": 3237161,
+      "base_steps": 1576,
+      "label": "alone: R2-A3 cadencing",
+      "opts": [
+        0,
+        1,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 18322.4,
+      "rc_mean": 1837.9,
+      "total_steps": 6414422,
+      "base_steps": 1576,
+      "label": "alone: R2-A4 3-array",
+      "opts": [
+        0,
+        0,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 33530.8,
+      "rc_mean": 2456.0,
+      "total_steps": 11737341,
+      "base_steps": 1576,
+      "label": "alone: R2-A5 dedup",
+      "opts": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 19912.3,
+      "rc_mean": 1948.6,
+      "total_steps": 6970866,
+      "base_steps": 1578,
+      "label": "alone: reject reorder",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "mean": 19227.7,
+      "rc_mean": 1921.8,
+      "total_steps": 6731282,
+      "base_steps": 1576,
+      "label": "alone: uniform-cell sector",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1
+      ]
+    }
+  ],
+  "2": [
+    {
+      "mean": 27840.1,
+      "rc_mean": 2719.8,
+      "total_steps": 9745620,
+      "base_steps": 1577,
+      "label": "baseline (no optimisation)",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 21894.9,
+      "rc_mean": 2144.7,
+      "total_steps": 7664805,
+      "base_steps": 1576,
+      "label": "cumulative: + R2-A2 REJECT",
+      "opts": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 21902.8,
+      "rc_mean": 2144.7,
+      "total_steps": 7667540,
+      "base_steps": 1575,
+      "label": "cumulative: + R2-A3 AI cadencing",
+      "opts": [
+        1,
+        1,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 18432.0,
+      "rc_mean": 1891.1,
+      "total_steps": 6452780,
+      "base_steps": 1574,
+      "label": "cumulative: + R2-A4 3-array half-plane",
+      "opts": [
+        1,
+        1,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 22588.7,
+      "rc_mean": 2028.0,
+      "total_steps": 7907608,
+      "base_steps": 1573,
+      "label": "cumulative: + R2-A5 blockmap dedup",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 22931.3,
+      "rc_mean": 2045.5,
+      "total_steps": 8027544,
+      "base_steps": 1574,
+      "label": "cumulative: + reject reorder",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "mean": 23454.2,
+      "rc_mean": 2162.9,
+      "total_steps": 8210547,
+      "base_steps": 1573,
+      "label": "cumulative: + uniform-cell sector",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "mean": 19301.2,
+      "rc_mean": 2025.6,
+      "total_steps": 6757010,
+      "base_steps": 1574,
+      "label": "best (dedup off)",
+      "opts": [
+        1,
+        1,
+        1,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "mean": 21894.9,
+      "rc_mean": 2144.7,
+      "total_steps": 7664805,
+      "base_steps": 1576,
+      "label": "alone: R2-A2 REJECT",
+      "opts": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 27847.9,
+      "rc_mean": 2719.8,
+      "total_steps": 9748355,
+      "base_steps": 1576,
+      "label": "alone: R2-A3 cadencing",
+      "opts": [
+        0,
+        1,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 24369.4,
+      "rc_mean": 2466.3,
+      "total_steps": 8530860,
+      "base_steps": 1576,
+      "label": "alone: R2-A4 3-array",
+      "opts": [
+        0,
+        0,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 39568.3,
+      "rc_mean": 3158.7,
+      "total_steps": 13850496,
+      "base_steps": 1576,
+      "label": "alone: R2-A5 dedup",
+      "opts": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 30119.3,
+      "rc_mean": 2864.7,
+      "total_steps": 10543344,
+      "base_steps": 1578,
+      "label": "alone: reject reorder",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "mean": 28325.5,
+      "rc_mean": 2834.4,
+      "total_steps": 9915503,
+      "base_steps": 1576,
+      "label": "alone: uniform-cell sector",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1
+      ]
+    }
+  ],
+  "3": [
+    {
+      "mean": 28623.0,
+      "rc_mean": 2799.6,
+      "total_steps": 10019637,
+      "base_steps": 1577,
+      "label": "baseline (no optimisation)",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 22677.8,
+      "rc_mean": 2224.4,
+      "total_steps": 7938822,
+      "base_steps": 1576,
+      "label": "cumulative: + R2-A2 REJECT",
+      "opts": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 22685.7,
+      "rc_mean": 2224.4,
+      "total_steps": 7941557,
+      "base_steps": 1575,
+      "label": "cumulative: + R2-A3 AI cadencing",
+      "opts": [
+        1,
+        1,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 19214.9,
+      "rc_mean": 1970.8,
+      "total_steps": 6726797,
+      "base_steps": 1574,
+      "label": "cumulative: + R2-A4 3-array half-plane",
+      "opts": [
+        1,
+        1,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 26361.1,
+      "rc_mean": 2240.2,
+      "total_steps": 9227950,
+      "base_steps": 1573,
+      "label": "cumulative: + R2-A5 blockmap dedup",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 26703.7,
+      "rc_mean": 2257.7,
+      "total_steps": 9347886,
+      "base_steps": 1574,
+      "label": "cumulative: + reject reorder",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "mean": 27226.6,
+      "rc_mean": 2375.1,
+      "total_steps": 9530889,
+      "base_steps": 1573,
+      "label": "cumulative: + uniform-cell sector",
+      "opts": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "mean": 20084.2,
+      "rc_mean": 2105.4,
+      "total_steps": 7031027,
+      "base_steps": 1574,
+      "label": "best (dedup off)",
+      "opts": [
+        1,
+        1,
+        1,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "mean": 22677.8,
+      "rc_mean": 2224.4,
+      "total_steps": 7938822,
+      "base_steps": 1576,
+      "label": "alone: R2-A2 REJECT",
+      "opts": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 28630.8,
+      "rc_mean": 2799.6,
+      "total_steps": 10022372,
+      "base_steps": 1576,
+      "label": "alone: R2-A3 cadencing",
+      "opts": [
+        0,
+        1,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 25152.3,
+      "rc_mean": 2546.0,
+      "total_steps": 8804877,
+      "base_steps": 1576,
+      "label": "alone: R2-A4 3-array",
+      "opts": [
+        0,
+        0,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 43340.7,
+      "rc_mean": 3370.9,
+      "total_steps": 15170838,
+      "base_steps": 1576,
+      "label": "alone: R2-A5 dedup",
+      "opts": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "mean": 30902.2,
+      "rc_mean": 2944.4,
+      "total_steps": 10817361,
+      "base_steps": 1578,
+      "label": "alone: reject reorder",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "mean": 29108.4,
+      "rc_mean": 2914.1,
+      "total_steps": 10189520,
+      "base_steps": 1576,
+      "label": "alone: uniform-cell sector",
+      "opts": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1
+      ]
+    }
+  ]
+}

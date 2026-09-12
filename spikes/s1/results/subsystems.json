@@ -1,0 +1,266 @@
+{
+  "empty loop": {
+    "opt": {
+      "op": 0,
+      "steps_per_call": 8.0,
+      "rc_per_call": 0.0
+    },
+    "base": {
+      "op": 0,
+      "steps_per_call": 8.0,
+      "rc_per_call": 0.0
+    }
+  },
+  "point_in_subsector (BSP descent)": {
+    "opt": {
+      "op": 1,
+      "steps_per_call": 1014.0,
+      "rc_per_call": 91.0
+    },
+    "base": {
+      "op": 1,
+      "steps_per_call": 1414.0,
+      "rc_per_call": 121.0
+    }
+  },
+  "collect_bbox (player radius)": {
+    "opt": {
+      "op": 2,
+      "steps_per_call": 325.0,
+      "rc_per_call": 48.0
+    },
+    "base": {
+      "op": 2,
+      "steps_per_call": 325.0,
+      "rc_per_call": 48.0
+    }
+  },
+  "box_crosses_three (1 line)": {
+    "opt": {
+      "op": 3,
+      "steps_per_call": 122.3,
+      "rc_per_call": 11.0
+    },
+    "base": {
+      "op": 3,
+      "steps_per_call": 122.3,
+      "rc_per_call": 11.0
+    }
+  },
+  "box_crosses_six (1 line)": {
+    "opt": {
+      "op": 4,
+      "steps_per_call": 239.9,
+      "rc_per_call": 20.0
+    },
+    "base": {
+      "op": 4,
+      "steps_per_call": 239.9,
+      "rc_per_call": 20.0
+    }
+  },
+  "  baseline for the two above": {
+    "opt": {
+      "op": 5,
+      "steps_per_call": 30.0,
+      "rc_per_call": 4.0
+    },
+    "base": {
+      "op": 5,
+      "steps_per_call": 30.0,
+      "rc_per_call": 4.0
+    }
+  },
+  "try_move (player)": {
+    "opt": {
+      "op": 6,
+      "steps_per_call": 1454.0,
+      "rc_per_call": 143.0
+    },
+    "base": {
+      "op": 6,
+      "steps_per_call": 1854.0,
+      "rc_per_call": 173.0
+    }
+  },
+  "check_sight (monster -> player)": {
+    "opt": {
+      "op": 7,
+      "steps_per_call": 107.0,
+      "rc_per_call": 4.0
+    },
+    "base": {
+      "op": 7,
+      "steps_per_call": 2642.0,
+      "rc_per_call": 295.0
+    }
+  },
+  "reject_blocks lookup": {
+    "opt": {
+      "op": 8,
+      "steps_per_call": 49.9,
+      "rc_per_call": 7.0
+    },
+    "base": {
+      "op": 8,
+      "steps_per_call": 49.9,
+      "rc_per_call": 7.0
+    }
+  },
+  "path_traverse (hitscan, 2048u)": {
+    "opt": {
+      "op": 9,
+      "steps_per_call": 8781.0,
+      "rc_per_call": 844.0
+    },
+    "base": {
+      "op": 9,
+      "steps_per_call": 8781.0,
+      "rc_per_call": 844.0
+    }
+  },
+  "monster_think (awake, chasing)": {
+    "opt": {
+      "op": 10,
+      "steps_per_call": 2788.0,
+      "rc_per_call": 297.0
+    },
+    "base": {
+      "op": 10,
+      "steps_per_call": 3365.0,
+      "rc_per_call": 339.0
+    }
+  },
+  "step_tic scenario 2": {
+    "opt": {
+      "op": 11,
+      "steps_per_call": 17555.5,
+      "rc_per_call": 1823.5
+    },
+    "base": {
+      "op": 11,
+      "steps_per_call": 26371.8,
+      "rc_per_call": 2661.9
+    }
+  },
+  "step_tic scenario 0 (player only)": {
+    "opt": {
+      "op": 12,
+      "steps_per_call": 2801.8,
+      "rc_per_call": 261.6
+    },
+    "base": {
+      "op": 12,
+      "steps_per_call": 3175.2,
+      "rc_per_call": 289.5
+    }
+  },
+  "collect_ray (sight distance)": {
+    "opt": {
+      "op": 13,
+      "steps_per_call": 2081.0,
+      "rc_per_call": 255.0
+    },
+    "base": {
+      "op": 13,
+      "steps_per_call": 2081.0,
+      "rc_per_call": 255.0
+    }
+  },
+  "sine + cosine": {
+    "opt": {
+      "op": 14,
+      "steps_per_call": 118.0,
+      "rc_per_call": 21.0
+    },
+    "base": {
+      "op": 14,
+      "steps_per_call": 118.0,
+      "rc_per_call": 21.0
+    }
+  },
+  "point_to_angle": {
+    "opt": {
+      "op": 15,
+      "steps_per_call": 138.0,
+      "rc_per_call": 25.0
+    },
+    "base": {
+      "op": 15,
+      "steps_per_call": 138.0,
+      "rc_per_call": 25.0
+    }
+  },
+  "genesis + checksum (5 mobjs)": {
+    "opt": {
+      "op": 16,
+      "steps_per_call": 1382.0,
+      "rc_per_call": 38.0
+    },
+    "base": {
+      "op": 16,
+      "steps_per_call": 1382.0,
+      "rc_per_call": 38.0
+    }
+  },
+  "line_side_three (coeffs in hand)": {
+    "opt": {
+      "op": 17,
+      "steps_per_call": 33.0,
+      "rc_per_call": 2.0
+    },
+    "base": {
+      "op": 17,
+      "steps_per_call": 33.0,
+      "rc_per_call": 2.0
+    }
+  },
+  "line_side_six (6 array reads)": {
+    "opt": {
+      "op": 18,
+      "steps_per_call": 119.5,
+      "rc_per_call": 11.0
+    },
+    "base": {
+      "op": 18,
+      "steps_per_call": 119.5,
+      "rc_per_call": 11.0
+    }
+  },
+  "try_move (monster radius)": {
+    "opt": {
+      "op": 19,
+      "steps_per_call": 2863.4,
+      "rc_per_call": 262.5
+    },
+    "base": {
+      "op": 19,
+      "steps_per_call": 3441.4,
+      "rc_per_call": 304.5
+    }
+  },
+  "sector_at_fast (uniform cell)": {
+    "opt": {
+      "op": 20,
+      "steps_per_call": 1045.0,
+      "rc_per_call": 94.0
+    },
+    "base": {
+      "op": 20,
+      "steps_per_call": 1445.0,
+      "rc_per_call": 124.0
+    }
+  },
+  "tic loop overhead (empty tics)": {
+    "opt": {
+      "op": 21,
+      "steps_per_call": 3755.9,
+      "rc_per_call": 355.7
+    },
+    "base": {
+      "op": 21,
+      "steps_per_call": 4448.4,
+      "rc_per_call": 406.9
+    }
+  }
+}

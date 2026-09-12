@@ -1,0 +1,10 @@
+[
+ {"name":"bare loop iteration","op":0,"n1":1000,"n2":3000},
+ {"name":"felt_ge, bias 2^104","op":16,"n1":1000,"n2":3000},
+ {"name":"felt_ge, bias 2^64 (all values < 2^72)","op":34,"n1":1000,"n2":3000},
+ {"name":"point_on_side, offset bias 2^104","op":10,"n1":1000,"n2":3000},
+ {"name":"point_on_side, offset < 2^72","op":32,"n1":1000,"n2":3000},
+ {"name":"point_on_side, raw negative felts","op":31,"n1":1000,"n2":3000},
+ {"name":"sign test on a raw felt (u256)","op":30,"n1":1000,"n2":3000},
+ {"name":"felt252 -> u256","op":33,"n1":1000,"n2":3000}
+]

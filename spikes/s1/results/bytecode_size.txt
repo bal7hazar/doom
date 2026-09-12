@@ -1,0 +1,26 @@
+const array, 0 felts         112 words
+const array, 256 felts       413 words
+const array, 1024 felts      1181 words
+const array, 4096 felts      4253 words
+const array, 16384 felts     16541 words
+const array, 32000 felts     32157 words
+if-tree, 256 values          4696 words
+if-tree, 1024 values         18516 words
+  const array, 256 felts     1.18 words per value
+  const array, 1024 felts    1.04 words per value
+  const array, 4096 felts    1.01 words per value
+  const array, 16384 felts   1.00 words per value
+  const array, 32000 felts   1.00 words per value
+  if-tree, 256 values        17.91 words per value
+  if-tree, 1024 values       17.97 words per value
+
+inline(never)                209 words (1 call sites)
+inline(never)                936 words (20 call sites)
+  -> 38.3 words per extra call site
+inline(always)               186 words (1 call sites)
+inline(always)               1937 words (20 call sites)
+  -> 92.2 words per extra call site
+
+generic helper over 1 type(s)  221 words
+generic helper over 2 type(s)  345 words
+generic helper over 3 type(s)  486 words

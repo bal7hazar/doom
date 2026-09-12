@@ -1,0 +1,35 @@
+{
+  "loop_overhead": 0.0,
+  "ops": {
+    "poseidon_hash_span(3000 felts)": {
+      "op": 28,
+      "steps_per_iter": 31533.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 1501.0,
+      "raw": [
+        96259,
+        222391
+      ],
+      "n": [
+        2,
+        6
+      ],
+      "steps_net_of_loop": 31533.0
+    },
+    "build 3000-felt array": {
+      "op": 29,
+      "steps_per_iter": 36017.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        66221,
+        210289
+      ],
+      "n": [
+        2,
+        6
+      ],
+      "steps_net_of_loop": 36017.0
+    }
+  }
+}

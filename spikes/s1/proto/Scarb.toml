@@ -1,0 +1,26 @@
+[package]
+name = "proto"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+cairo_execute = "2.16.0"
+
+[dev-dependencies]
+cairo_test = "2.16.0"
+
+[lib]
+
+[[target.executable]]
+name = "proto"
+function = "proto::main"
+sierra = true
+
+[[target.executable]]
+name = "probe"
+function = "proto::probe_main"
+sierra = true
+
+[cairo]
+enable-gas = false
+unstable-add-statements-functions-debug-info = true

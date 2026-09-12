@@ -1,0 +1,140 @@
+{
+  "loop_overhead": 8.0,
+  "ops": {
+    "bare loop iteration": {
+      "op": 0,
+      "steps_per_iter": 8.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        8092,
+        24092
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 0.0
+    },
+    "u64 comparison": {
+      "op": 20,
+      "steps_per_iter": 18.0,
+      "range_check_per_iter": 1.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        18153,
+        54153
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 10.0
+    },
+    "felt252 -> u64": {
+      "op": 21,
+      "steps_per_iter": 15.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        15159,
+        45159
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 7.0
+    },
+    "if-tree lookup (16 entries)": {
+      "op": 22,
+      "steps_per_iter": 41.938,
+      "range_check_per_iter": 6.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        42075,
+        125950
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 33.938
+    },
+    "  baseline: i % 16": {
+      "op": 23,
+      "steps_per_iter": 18.0,
+      "range_check_per_iter": 3.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        18161,
+        54161
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 10.0
+    },
+    ".span() inside loop + index": {
+      "op": 24,
+      "steps_per_iter": 17.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        17170,
+        51170
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 9.0
+    },
+    "two span indexes, same span": {
+      "op": 25,
+      "steps_per_iter": 30.0,
+      "range_check_per_iter": 2.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        30174,
+        90174
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 22.0
+    },
+    "Array append": {
+      "op": 26,
+      "steps_per_iter": 11.0,
+      "range_check_per_iter": 0.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        11180,
+        33180
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 3.0
+    },
+    "planar 5-field record read": {
+      "op": 27,
+      "steps_per_iter": 69.0,
+      "range_check_per_iter": 8.0,
+      "poseidon_per_iter": 0.0,
+      "raw": [
+        69172,
+        207172
+      ],
+      "n": [
+        1000,
+        3000
+      ],
+      "steps_net_of_loop": 61.0
+    }
+  }
+}

@@ -1,0 +1,31 @@
+Main binary filename not available.
+Type: steps
+Showing nodes accounting for 1044575 steps, 95.01% of 1099410 steps total
+Dropped 9 nodes (cum <= 5497 steps)
+Showing top 25 nodes out of 37
+      flat  flat%   sum%        cum   cum%
+201194 steps 18.30% 18.30% 201194 steps 18.30%  proto::geom::node_side_three
+159218 steps 14.48% 32.78% 341332 steps 31.05%  proto::bsp::point_in_subsector[364-817]{NotSpecialized, 0, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, }
+81993 steps  7.46% 40.24% 180263 steps 16.40%  proto::physics::try_move[683-2214]
+78023 steps  7.10% 47.34% 78023 steps  7.10%  proto::geom::bbox_reject
+73372 steps  6.67% 54.01% 849153 steps 77.24%  proto::ai::monster_think
+73173 steps  6.66% 60.67% 73173 steps  6.66%  proto::blockmap::push_cell[512-1020]
+38520 steps  3.50% 64.17% 795789 steps 72.38%  proto::physics::try_move
+33330 steps  3.03% 67.20% 120639 steps 10.97%  proto::blockmap::push_cell
+31598 steps  2.87% 70.08% 31598 steps  2.87%  proto::bam::point_to_angle
+28878 steps  2.63% 72.70% 878031 steps 79.86%  proto::game::step_tic[830-1146]
+27084 steps  2.46% 75.17% 27084 steps  2.46%  proto::blockmap::cell_x
+27084 steps  2.46% 77.63% 27084 steps  2.46%  proto::blockmap::cell_y
+18119 steps  1.65% 79.28% 18119 steps  1.65%  proto::bam::cosine
+17594 steps  1.60% 80.88% 119298 steps 10.85%  proto::blockmap::collect_bbox[321-424]
+16668 steps  1.52% 82.39% 16668 steps  1.52%  proto::bam::sine
+16231 steps  1.48% 83.87% 26780 steps  2.44%  proto::physics::path_traverse[416-822]
+16099 steps  1.46% 85.33% 43601 steps  3.97%  proto::ai::dir_delta
+16099 steps  1.46% 86.80% 731687 steps 66.55%  proto::ai::p_move
+14856 steps  1.35% 88.15% 134154 steps 12.20%  proto::blockmap::collect_bbox[275-447]
+14760 steps  1.34% 89.49% 389572 steps 35.43%  proto::bsp::sector_at_fast
+14400 steps  1.31% 90.80% 374812 steps 34.09%  proto::bsp::point_in_subsector[364-817]{680, 0, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, NotSpecialized, }
+14136 steps  1.29% 92.09% 87309 steps  7.94%  proto::blockmap::push_cell[512-1020]{NotSpecialized, NotSpecialized, 0, NotSpecialized, NotSpecialized, NotSpecialized, }
+11865 steps  1.08% 93.17% 11865 steps  1.08%  proto::geom::box_crosses_three
+10981 steps     1% 94.17% 151032 steps 13.74%  proto::game::player_think
+9300 steps  0.85% 95.01% 9300 steps  0.85%  proto::fixed::approx_dist
