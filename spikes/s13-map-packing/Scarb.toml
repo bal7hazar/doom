@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: GPL-2.0-only
+[package]
+name = "s13_map_packing"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+cairo_execute = "2.16.0"
+
+[cairo]
+enable-gas = false
+
+[profile.proving]
+inherits = "release"
+
+[profile.proving.cairo]
+unsafe-panic = true
+unstable-add-statements-functions-debug-info = true
+
+[[target.executable]]
+name = "reference"
+function = "s13_map_packing::reference"
+sierra = true
+
+[[target.executable]]
+name = "candidate"
+function = "s13_map_packing::candidate"
+sierra = true
+
+[[target.executable]]
+name = "inspect_decode"
+function = "s13_map_packing::inspect_decode"
+sierra = true
