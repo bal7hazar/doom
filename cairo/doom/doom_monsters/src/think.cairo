@@ -302,19 +302,39 @@ pub fn mobj_thinker(
             explode_missile(ctx.w, ref rng, ref mo);
         }
     }
+    // The state machine, with `A_Look` held back (see below).
     think_state(
-        ctx,
-        mobjs,
-        ref g,
-        ref rng,
-        ref mo,
-        me,
-        may_look,
-        may_chase,
-        ref patches,
-        ref ev,
-        ref spawn_at,
+        ctx, mobjs, ref g, ref rng, ref mo, me, false, may_chase, ref patches, ref ev, ref spawn_at,
     );
+    // **`A_Look` runs on the cadence, not on the frame.** Vanilla only
+    // reaches `A_Look` when the two-frame idle loop turns over, which on
+    // E1M1's roster is one tic in ten; gating *that* on `tic % 4 == id % 4`
+    // as well would be worse than useless, because ten and four share a
+    // factor — the transitions of a given monster only ever land on two of
+    // the four phases, and half the roster would never look at all. D3 and
+    // R2-A3 describe the S1 prototype's shape instead (`A_Look` attempted
+    // every tic, run one tic in four, phased by id), so that is what the
+    // cadence means here: a dormant monster looks on its own phase whatever
+    // frame it is showing, and never twice on one tic. It is *more*
+    // responsive than vanilla (every 4 tics rather than every 10) for a
+    // quarter of the cost of looking every tic, and it draws no `P_Random`
+    // unless it actually wakes, so the RNG stream is untouched.
+    if may_look && is_dormant(ctx.w, @mo) {
+        run_chain(
+            ctx,
+            mobjs,
+            ref g,
+            ref rng,
+            ref mo,
+            me,
+            A_LOOK,
+            true,
+            may_chase,
+            ref patches,
+            ref ev,
+            ref spawn_at,
+        );
+    }
     // `S_NULL` with `FOREVER` is Doom's "remove me".
     if mo.state == 0 && mo.tics == fsm::FOREVER {
         unset_thing_position(ref g, @mo, me);

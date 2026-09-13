@@ -102,7 +102,7 @@ fn sound_of(column: Span<u32>, kind: u32) -> u32 {
 /// `doom_specials::use_line` with a non-player `Actor`, and the move counts
 /// as refused — the monster therefore also picks a new chase direction on
 /// the tic it bumps into a door, one tic earlier than vanilla.
-fn p_move(
+pub fn p_move(
     ctx: Ctx,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
@@ -155,7 +155,7 @@ fn try_walk(
 }
 
 /// `P_NewChaseDir`: Doom's direction search, in Doom's order.
-fn new_chase_dir(
+pub fn new_chase_dir(
     ctx: Ctx,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
