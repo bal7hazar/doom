@@ -42,3 +42,32 @@ test("production client renders Cairo frames and never opens the stub proof path
   expect(reset.frame.distinct).toBeGreaterThan(20);
   expect(errors).toEqual([]);
 });
+
+test("persisted page lifecycle preserves the real Worker journal and pause choice (synthetic events)", async ({ page }) => {
+  await page.goto("/?sim=cairo");
+  await page.waitForFunction(() => Boolean((window as any).hellproof?.cairo?.journal?.length));
+  await page.evaluate(() => {
+    const app = (window as any).hellproof;
+    (window as any).savedJournal = app.cairo.journal;
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+  });
+  await page.waitForFunction(() => !(window as any).hellproof.cairo.busy);
+  const tic = await page.evaluate(() => (window as any).hellproof.cairo.latest.snapshot.tic);
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => (window as any).hellproof.cairo.latest.snapshot.tic)).toBe(tic);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+  await page.waitForFunction(before => (window as any).hellproof.cairo.latest.snapshot.tic > before, tic);
+  expect(await page.evaluate(() => (window as any).hellproof.cairo.journal === (window as any).savedJournal)).toBe(true);
+  await page.evaluate(() => (window as any).hellproof.scheduler.stop());
+  await page.waitForFunction(() => !(window as any).hellproof.cairo.busy);
+  const paused = await page.evaluate(() => {
+    const app = (window as any).hellproof;
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    return app.cairo.latest.snapshot.tic;
+  });
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => ({ running: (window as any).hellproof.scheduler.isRunning,
+    tic: (window as any).hellproof.cairo.latest.snapshot.tic }))).toEqual({ running: false, tic: paused });
+  await page.evaluate(async () => { await (window as any).hellproof.cairo.checkpoint(); });
+});

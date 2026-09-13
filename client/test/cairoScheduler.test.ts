@@ -1,8 +1,38 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { CairoScheduler } from "../src/sim/cairoScheduler.js";
+import { bindCairoPageLifecycle } from "../src/sim/cairoPageLifecycle.js";
 import type { CairoClient } from "../src/sim/cairoClient.js";
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it("keeps cached sessions alive, preserves manual pause and cleans up on actual exit", () => {
+  const surface = new EventTarget();
+  vi.stubGlobal("window", surface);
+  const scheduler = {
+    isRunning: true,
+    start: vi.fn(() => { scheduler.isRunning = true; }),
+    stop: vi.fn(() => { scheduler.isRunning = false; }),
+    dispose: vi.fn(),
+  };
+  const client = { dispose: vi.fn() };
+  bindCairoPageLifecycle(scheduler, client);
+  const send = (type: string, persisted: boolean) => surface.dispatchEvent(Object.assign(new Event(type), { persisted }));
+  send("pagehide", true);
+  expect(scheduler.isRunning).toBe(false);
+  expect(client.dispose).not.toHaveBeenCalled();
+  send("pageshow", true);
+  expect(scheduler.start).toHaveBeenCalledTimes(1);
+  scheduler.stop();
+  send("pagehide", true); send("pageshow", true);
+  expect(scheduler.start).toHaveBeenCalledTimes(1);
+  expect(scheduler.isRunning).toBe(false);
+  send("pagehide", false);
+  expect(scheduler.dispose).toHaveBeenCalledTimes(1);
+  expect(client.dispose).toHaveBeenCalledTimes(1);
+  send("pageshow", true); send("pagehide", false);
+  expect(scheduler.start).toHaveBeenCalledTimes(1);
+  expect(client.dispose).toHaveBeenCalledTimes(1);
+});
 
 it("samples only one input in flight and discards paused wall time instead of accumulating inputs", async () => {
   vi.useFakeTimers();

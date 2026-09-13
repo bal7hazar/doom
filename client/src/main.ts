@@ -9,6 +9,7 @@ import { interpolate, SnapshotRing, type InterpolatedView } from "./sim/snapshot
 import { createStubSim } from "./sim/stubSim.js";
 import { CairoClient } from "./sim/cairoClient.js";
 import { CairoScheduler } from "./sim/cairoScheduler.js";
+import { bindCairoPageLifecycle } from "./sim/cairoPageLifecycle.js";
 import { encodeCmd } from "./prove/ticcmd.js";
 import { DEFAULT_AUTOMAP, drawAutomap, type AutomapOptions } from "./ui/automap.js";
 import { renderDiagnostics } from "./ui/diagnostics.js";
@@ -263,10 +264,7 @@ async function main(): Promise<void> {
   });
 
   scheduler.start();
-  if (cairo) window.addEventListener("pagehide", () => {
-    if (scheduler instanceof CairoScheduler) scheduler.dispose();
-    cairo.dispose();
-  }, { once: true });
+  if (cairo && scheduler instanceof CairoScheduler) bindCairoPageLifecycle(scheduler, cairo);
   loading.hidden = true;
 
   let lastFrameTime = performance.now();
