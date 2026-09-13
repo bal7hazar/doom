@@ -3,7 +3,7 @@
 > Mis à jour le 2026-09-13 : monstres `8471b7e`, contrôles CI `375f092`, joueur `06058b1` intégrés.
 > CI : oracle Python installé explicitement ; reproductibilité WASM ARM64 réparée (`30f8d77`).
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
-> P1.9 en intégration : 554 tests verts, mais budgets D2/D29 non atteints ; aucune clôture MVP.
+> P1.9 en intégration : workspace 554 tests verts, puis suite game portée à 57 tests verts ; budgets D2/D29 non atteints.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -54,7 +54,7 @@ aucun déploiement Sepolia/mainnet n'a été lancé. Logs initiaux : `/tmp/hellp
   pas une cotation actuelle. **C3 : critère PLAN ≤ 10 min, objectif opérationnel D2 ≤ 5 min** après partie.
 - R1/R5 : mesures favorables sur M2 Max 64 GB et programmes de référence ; le vrai jeu, la contention
   jeu/preuve et le matériel 16 GB restent à valider en P3.7. Pas de nouveau changement de gameplay
-  avant le profil S8. D30 clarifie seulement les métriques de bytecode.
+  avant les leviers du profil S8. D30 clarifie seulement les métriques de bytecode.
 
 Branches récupérées :
 
@@ -64,9 +64,12 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : finalisation P1.9/profil, optimisation du parcours des monstres (`codex/monster-loop-perf`)
-et correction des compteurs AIR/planificateur (`codex/air-sizing`). Les passes frontière et armure
-sont relues et assemblées sur la branche d’intégration ; `main` conserve encore les squelettes.
+Vague active : nouvelle passe frontière/bytecode (`codex/game-boundary-sizing`), optimisation du
+parcours des monstres (`codex/monster-loop-perf`) et livraison des compteurs AIR/planificateur
+(`codex/air-sizing`). Les passes frontière et armure sont relues et assemblées sur la branche
+d’intégration ; `main` conserve encore les squelettes. Le complément P1.9 `50e3c2f` ajoute six
+régressions de frontières : **57 tests game verts** après intégration, smoke CI `genesis 0`,
+codec et actionlint verts ; aucun changement de code de production après `b11fd7f`.
 L'orchestrateur tranche les leviers R2 à partir du programme complet. Ensuite : P1.10 et Worker/contrôles/écrans client,
 puis P3.7. Sepolia nécessite toujours une décision explicite du sponsor.
 
@@ -143,6 +146,17 @@ garde haute horloge D3, absorption avant douleur/mort à chaque impact. Les test
 attaquants, épuisement, arrondis, attaques suivantes et RNG. Deux pins du replay porte corrigent
 un défaut distinct : un puff de mur attribuait à tort le dernier attaquant au joueur. Comparaison
 indépendante : un seul felt d’état change (attaquant 132 → 64), les quatre autres replays sont stables.
+
+**Chromium réel (S9)** : trois preuves à quatre threads vérifiées **40,167–48,128 s / 11,524 GiB**,
+préimages exacts. Mono : premier essai arrêté à 150 s ; second vérifié **136,425 s / 11,449 GiB**
+avec échéance plus longue. Hôte 64 GiB, aucun jeu concurrent ; les plafonds ne changent pas.
+
+**Correction AIR en livraison** (`4309399`, `5ed01d0`) : 43 hauteurs variables confrontées aux
+claims de preuve, 11 tests Rust dont VM réelle. `blake_g` est correctement annoncé à log21,
+`fits_leaf_registry=false`, prétraitement admissible. Planificateur corrigé pour utiliser les
+compteurs auxiliaires bruts et rester conservateur sur un maximum inconnu. **187 tests client
+verts, sans saut**, après préparation des assets. Rebuild Docker ARM64 en cours avant merge et
+mise à jour des seuls hashes Linux correspondant au changement de source intentionnel.
 
 **Taxe fixe encore bloquante** : sur cet exécutable intégré, le WASM Blake exécute **2 224 712 /
 2 297 659 / 2 505 814 steps pour 0 / 1 / 4 tics**. Même sans tic, il dépasse le plafond threads

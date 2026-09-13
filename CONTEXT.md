@@ -57,6 +57,10 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   `run_segment` **116 287 mots proving**. Validation root : **554 tests Cairo / 23 cibles**, format,
   build, graphe et REUSE verts. Profil VM exact 2 946 tics : moyenne **83 003**, p99 **168 038**,
   frontière exclue ; D2 et D29 demeurent hors cible. Les budgets historiques hash/serde restent rouges.
+- Confirmation Chromium 153 sur le programme réel de référence : **3/3 preuves à quatre threads**
+  en **40,167–48,128 s / 11,524 GiB**. Mono : un essai interrompu à 150 s, puis une preuve vérifiée
+  en **136,425 s / 11,449 GiB**. Préimages identiques, machine 64 GiB, sans partie concurrente.
+  Cette campagne isolée ne justifie pas de relever les plafonds de précaution ([S9](docs/spikes/S9-proof-sizing.md)).
 - Programme intégré, bootloader Blake : **2 224 712 / 2 297 659 / 2 505 814 steps pour 0 / 1 / 4 tics**.
   La taxe fixe dépasse à elle seule 1,5 M steps. `blake_g` atteint log21 (16 137 × 80 lignes),
   donc registre candidat et correction du planificateur sont nécessaires, sans suffire à lever R2/R5.

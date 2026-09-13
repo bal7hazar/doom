@@ -13,6 +13,8 @@ Les quatre premières commandes du replay `fight` sont des commandes de marche.
 | Preuve native, hash programme Poseidon | timeout 180 s | ~32 GiB RSS observés | aucune preuve produite |
 | Preuve native, hash programme Blake | 53,50 s | 11,73 GiB RSS max | vérifiée, 765 202 felts |
 | Même preuve WASM, Node 24.16, 4 threads | 42,225 s + 1,453 s exécution | 11,524 GiB linéaires | vérifiée, 4 343 870 octets bincode |
+| Chromium 153, 4 threads, trois workers frais | 40,167–48,128 s | 11,524 GiB linéaires | 3/3 preuves vérifiées |
+| Chromium 153, mono, deuxième essai | 136,425 s | 11,449 GiB linéaires | vérifiée ; premier essai arrêté à 150 s |
 | Circuit feuille `doom_21`, consommant ce bincode | 75,83 s | 17,90 GiB RSS max / 25,99 GiB empreinte macOS | circuit valide, hash conforme au registre |
 | Repli d’une feuille vers le multivérifieur canonique | ~60 s | ~30,1 GiB RSS échantillonnés | racine 95 325 felts |
 | Vérifieur Cairo existant, sur cette racine | 5 333 257 steps | 5 032 262 adresse mémoire maximale | exécution réussie, huit sorties |
@@ -74,6 +76,27 @@ capacité de chaque composant à utiliser le préprocessing, budget mémoire ré
 planificateur et version de jeu/registre cohérents, fiabilité Chromium en concurrence
 avec le jeu. Les plafonds de précaution 1,5 M steps avec threads et 2,3 M mono ne
 sont pas relevés sur la base d’un seul essai Node. D2/D29 restent hors cible.
+
+## Confirmation Chromium sur le programme réel
+
+Chromium headless **153.0.8010.12**, page COOP/COEP isolée, instance et worker
+neufs à chaque essai, artefacts Linux ARM64 de `30f8d77`. À quatre threads,
+les trois preuves passent en **48,128 / 40,653 / 40,167 s**, avec vérification
+locale et les onze felts du préimage exactement identiques à la référence.
+Mémoire linéaire **12 374 245 376 octets** ; la valeur est un maximum WASM,
+pas une mesure de toute la consommation de la machine.
+
+Le premier essai mono est arrêté à l’échéance d’audit de **150 s** pendant
+`prove`, sans résultat vérifié. Une répétition avec une échéance de 240 s
+aboutit en **136,425 s**, vérifiée, **12 292 849 664 octets** linéaires.
+L’essai interrompu reste dans les résultats : cette campagne courte ne
+prouve pas l’absence de blocages intermittents. La machine hôte possède
+64 GiB ; ni le matériel 16 GiB ni la concurrence avec une partie Cairo ne
+sont couverts. Les plafonds produit sont inchangés.
+
+Traces : `chromium-real-t4-{1,2,3}.json`, `chromium-real-t1-{1,2}.json` et
+leurs superviseurs dans le même répertoire d’audit. Timeout externe par
+groupe de descendants, limite RSS échantillonnée 24 GiB, verrou partagé.
 
 ## Effet de la passe de frontière
 

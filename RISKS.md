@@ -47,7 +47,9 @@
   11,524 GiB mais **log21 réel (`blake_g`) contre log20 annoncé**, donc registre `doom` incompatible.
   `doom_21` expérimental construit le circuit et le repli : racine **95 325 felts**, vérifieur Cairo
   existant **5 333 257 steps**, recomposition indépendante exacte. D32 ouvre ce candidat ;
-  correction du dimensionnement et campagne Chromium réelle restent nécessaires ([S9](docs/spikes/S9-proof-sizing.md)).
+  correction du dimensionnement en livraison. Chromium réel isolé : **3/3 preuves à quatre threads**
+  vérifiées 40,167–48,128 s / 11,524 GiB ; mono interrompu une fois à 150 s, puis vérifié à 136,425 s.
+  Restent matériel 16 GiB et jeu concurrent ([S9](docs/spikes/S9-proof-sizing.md)).
   S4b généralisait à tort le manque de `seq_21` à tout composant : le cas réel invalide ce NO-GO.
 - **R4 / armure** : absorption après somme des dégâts des monstres, avec arrondis incorrects et
   effets de mort possibles avant réduction par l’armure. Correction par impact avant douleur/mort
