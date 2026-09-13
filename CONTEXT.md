@@ -139,6 +139,12 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   linéaires, **4 375 790 B**, log21. Vérifications native/bzip2 et négatifs verts ;
   dix sorties D14 exactes. Ce succès isolé ne ferme ni D2/D29 ni C3/16 GiB.
 
+- Client assemblé `5cf5474` : rendu v1 exact des acteurs/effets et HUD compact,
+  adaptateur réel depuis genesis avec identité et D14 vérifiés. **243 tests + dix
+  smokes Chromium**, zéro skip dans cette sélection ; EXIT677 rendu sans erreur.
+  L’admission AIR échoue comme attendu, conserve l’export et libère les Workers.
+  Le raccord F4 et les psprites animés restent à terminer ; pas de GO C3.
+
 ## 1. Vision et périmètre
 
 Objectif : une version de Doom dont le **cœur de jeu (simulation) est réécrit en Cairo**, jouable
