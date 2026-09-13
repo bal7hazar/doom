@@ -98,6 +98,7 @@ fn config(e: &Env, data_dir: PathBuf, leaf_mode: LeafMode) -> Config {
                 .to_string()
         }),
         hash_function: Default::default(),
+        output_layout: hellproof_wrapper::config::OutputLayout::LegacyStub,
     });
     cfg.api_keys.push(ApiKey {
         key: KEY.into(),

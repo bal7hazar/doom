@@ -54,16 +54,19 @@ submission comes back as `422` instead of surfacing later in the run status.
 {
   "run_id": "optional-client-id",          // idempotency key; [A-Za-z0-9_-]{1,64}
   "player": "0x04a3…",                     // Starknet account address (informational for now)
-  "program": "segment_stub",               // a program id the server has pinned
+  "program": "segment_stub10",             // a program id the server has pinned
   "program_hash_function": "blake",     // optional; must match the program's configuration
   "solo": false,                           // true = wrap this game alone, immediately
   "expected_segments": 40,                 // optional; resumable uploads only, see below
   "segments": [                            // empty (or omitted) creates a `collecting` run
     {
       "index": 0,                          // 0-based, contiguous, in fold order
-      "args": ["0x1", "0xfa"],             // optional; only `leaf_mode = "rerun"` needs them
+      "args": ["0x1","0x0","0x1","0x0","0x0","0x0","0x0","0x0"], // rerun only
       "output_preimage": [                 // [task_program_hash, task_output…]
-        "0x6281af8c…", "0x1", "0x4cd2be…", "0xfa", "0x1"
+        "0x6715c525…",                    // measured task hash
+        "0x1", "0x1", "0x32185493…",        // version, h_in, h_out
+        "0x0", "0x1", "0x0",              // tic_start, tic_end, status
+        "0x4ac69ffd…", "0x0", "0x0", "0x0" // commitment, kills, items, secrets
       ],
       "public_outputs": ["0xde5c…", "0x44bf…"],   // optional, the 2 output cells
       "proof": {
@@ -405,8 +408,24 @@ circuit and costs the same leaf proof (S4b measurement 3) — about 25 leaves fo
 | `job_max_attempts` | `3` | leaf and fold jobs are retried; a verification verdict is never retried |
 | `programs[].hash_function` | `blake` | D31: matches the browser runtime; passed to bootloader task input in rerun mode |
 | `programs[].program_hash` | required for subprocess/from_proof | Task hash at `output_preimage[0]`, measured from the exact executable; parsed as a felt at startup |
+| `programs[].output_layout` | `d14` | Eleven felts including task hash and version 1; `legacy_stub` explicitly selects the old five-felt spike fixture |
 | `backend` | `subprocess` | `stub` disables proving entirely (tests, load runs) |
 | `leaf_mode` | `from_proof` | `from_proof` folds the submitted proof (`leaf-prover --cairo_proof`, needs `patches/`); `rerun` replays the segment from its `args`. Checked at startup |
+
+### Output layout and chain (D14)
+
+The product layout is exactly eleven preimage felts:
+`[task_hash, version=1, h_in, h_out, tic_start, tic_end, status, commitment, kills, items, secrets]`.
+Both whole-run admission and resumable completion use the same decoder and compare
+`previous[3] == next[2]`. The version is not a state hash. Unknown versions and
+wrong lengths are rejected before any circuit work. A bare PUT does not yet know
+the program/layout; its program-specific validation happens at `/complete`.
+
+The historical S4 `segment_stub` fixtures have five felts
+`[task_hash, h_in, h_out, n, status]`. They require an explicit
+`output_layout = "legacy_stub"` on that program configuration; no layout is guessed
+from client data. Existing tests select that layout explicitly. The client and
+Docker examples use `segment_stub10` with `output_layout = "d14"`.
 
 ### Task identity at admission (D19 / D31)
 

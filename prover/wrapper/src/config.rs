@@ -92,6 +92,19 @@ pub struct ProgramEntry {
     /// the browser runtime). A submission may not choose another one.
     #[serde(default)]
     pub hash_function: crate::model::HashFunction,
+    /// Task output layout. D14 is the product default; only old spike fixtures use legacy_stub.
+    #[serde(default)]
+    pub output_layout: OutputLayout,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OutputLayout {
+    /// [task_hash, version=1, h_in, h_out, tic_start, tic_end, status, commitment, kills, items, secrets].
+    #[default]
+    D14,
+    /// Historical S4 segment_stub only: [task_hash, h_in, h_out, n, status].
+    LegacyStub,
 }
 
 /// One API key (R8-A2). The Controller session-signature scheme that will replace this is
@@ -585,6 +598,22 @@ mod tests {
     }
 
     #[test]
+    fn d14_is_the_default_and_legacy_layout_is_explicit() {
+        let program: ProgramEntry =
+            serde_json::from_str(r#"{"id":"p","executable":"p.json"}"#).unwrap();
+        assert_eq!(program.output_layout, OutputLayout::D14);
+        let legacy: ProgramEntry = serde_json::from_str(
+            r#"{"id":"p","executable":"p.json","output_layout":"legacy_stub"}"#,
+        )
+        .unwrap();
+        assert_eq!(legacy.output_layout, OutputLayout::LegacyStub);
+        assert!(serde_json::from_str::<ProgramEntry>(
+            r#"{"id":"p","executable":"p.json","output_layout":"unknown"}"#
+        )
+        .is_err());
+    }
+
+    #[test]
     fn task_pin_is_required_before_subprocess_startup() {
         let mut cfg = Config::default();
         cfg.programs.push(ProgramEntry {
@@ -592,6 +621,7 @@ mod tests {
             executable: "/dev/null".into(),
             program_hash: None,
             hash_function: Default::default(),
+            output_layout: OutputLayout::D14,
         });
         let error = cfg.check_runnable().unwrap_err().to_string();
         assert!(error.contains("requires program_hash"), "{error}");
@@ -613,6 +643,7 @@ mod tests {
             executable: "/dev/null".into(),
             program_hash: None,
             hash_function: Default::default(),
+            output_layout: OutputLayout::D14,
         });
         for invalid in [
             "0x",

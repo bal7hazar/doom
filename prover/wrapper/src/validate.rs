@@ -135,21 +135,12 @@ pub fn validate(sub: &RunSubmission, cfg: &Config, registry_hash: &str) -> Resul
         }
         let valid = validate_segment(seg, cfg, &program, hash_function, registry_hash)?;
 
-        // Chain check: `h_in[i+1] == h_out[i]` (PLAN Phase 3 task 3). The preimage is
-        // `[program_hash, h_in, h_out, …]` for our segment programs; only enforced when the
-        // preimage is long enough to carry the chain.
-        if valid.preimage.len() >= 3 {
-            if let Some(prev) = prev_h_out {
-                if valid.preimage[1] != prev {
-                    bail!(
-                        "segment {i}: h_in {} does not continue the previous segment's h_out {}",
-                        valid.preimage[1].to_hex(),
-                        prev.to_hex()
-                    );
-                }
-            }
-            prev_h_out = Some(valid.preimage[2]);
-        }
+        prev_h_out = Some(continue_chain(
+            i as u32,
+            &valid.preimage,
+            &program,
+            prev_h_out,
+        )?);
         segments.push(valid);
     }
 
@@ -340,6 +331,50 @@ pub fn shape_segment(
     })
 }
 
+/// Decode only the configured layout: never guess a schema from client-controlled values.
+fn segment_link(index: u32, preimage: &[Felt], program: &ProgramEntry) -> Result<(Felt, Felt)> {
+    let (length, h_in, h_out) = match program.output_layout {
+        crate::config::OutputLayout::D14 => (11, 2, 3),
+        crate::config::OutputLayout::LegacyStub => (5, 1, 2),
+    };
+    if preimage.len() != length {
+        bail!(
+            "segment {index}: output_preimage for {:?} requires {length} felts, got {}",
+            program.output_layout,
+            preimage.len()
+        );
+    }
+    if program.output_layout == crate::config::OutputLayout::D14
+        && preimage[1] != Felt([1, 0, 0, 0, 0, 0, 0, 0])
+    {
+        bail!(
+            "segment {index}: unknown D14 output version {} (expected 1)",
+            preimage[1].to_hex()
+        );
+    }
+    Ok((preimage[h_in], preimage[h_out]))
+}
+
+/// Shared chain validation for whole submissions and resumable completion.
+pub fn continue_chain(
+    index: u32,
+    preimage: &[Felt],
+    program: &ProgramEntry,
+    previous_h_out: Option<Felt>,
+) -> Result<Felt> {
+    let (h_in, h_out) = segment_link(index, preimage, program)?;
+    if let Some(previous) = previous_h_out {
+        if h_in != previous {
+            bail!(
+                "segment {index}: h_in {} does not continue the previous segment's h_out {}",
+                h_in.to_hex(),
+                previous.to_hex()
+            );
+        }
+    }
+    Ok(h_out)
+}
+
 /// The other half of [`validate_segment`]: what needs the program (pinned program hash and the
 /// leaf cache key). Applied immediately for a whole-run `POST`; deferred to `/complete` for a
 /// resumable upload, where the program is not known until then.
@@ -367,6 +402,8 @@ pub fn bind_segment_to_program(
             );
         }
     }
+    // Also covers recovered jobs before their cache/prover path; malformed layouts cannot fold.
+    segment_link(index, preimage, program)?;
     Ok(leaf_key(
         registry_hash,
         &program.id,
@@ -391,6 +428,7 @@ mod tests {
             executable: "/dev/null".into(),
             program_hash: Some("0x5".into()),
             hash_function: HashFunction::Blake,
+            output_layout: crate::config::OutputLayout::LegacyStub,
         });
         c
     }

@@ -581,6 +581,7 @@ mod tests {
                 executable: "/not-executed".into(),
                 program_hash: Some(pin.into()),
                 hash_function: Default::default(),
+                output_layout: crate::config::OutputLayout::LegacyStub,
             });
             let db = Db::open_memory().unwrap();
             db.insert_run("old", "test", None, "task", false, "old-submission", 1)

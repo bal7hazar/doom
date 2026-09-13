@@ -88,6 +88,7 @@ check_preimage_binding = true        # `leaf_mode = "rerun"` only: with "from_pr
 
 [[programs]]
 id = "segment_stub10"
+output_layout = "d14"
 executable = "/opt/hellproof/programs/segment_stub10.executable.json"
 hash_function = "blake"              # D31: same as the browser WASM runtime
 # Measured from client/public/programs/segment_stub10.executable.json (see README).

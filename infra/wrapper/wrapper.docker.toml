@@ -48,6 +48,7 @@ check_preimage_binding = true
 # Mount the compiled Scarb executables at /opt/hellproof/programs and list them here.
 [[programs]]
 id = "segment_stub10"
+output_layout = "d14"
 executable = "/opt/hellproof/programs/segment_stub10.executable.json"
 hash_function = "blake"
 # Exact committed client/public/programs/segment_stub10.executable.json, SHA-256
