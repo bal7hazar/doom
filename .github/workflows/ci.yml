@@ -291,6 +291,14 @@ jobs:
         if: steps.check.outputs.present == 'true'
         run: npm run build --workspace client
 
+      - name: Set up Python for the independent submit oracle
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the submit oracle dependency
+        run: python3 -m pip install poseidon-py==0.1.5
+
       - name: infra submit and indexer (typecheck, test)
         run: |
           for package in infra/submit infra/indexer; do
