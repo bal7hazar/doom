@@ -215,3 +215,21 @@ fn test_rng_consumption_is_deterministic() {
     }
     assert(a == b, 'same draws both times');
 }
+
+#[test]
+fn test_window_uses_full_product_near_clock_limit() {
+    // Independent integer reference: multiplying before modulo must retain
+    // bits above u32 at t >= 2^29. D14 still permits these tics.
+    let times = array![0x1fffffff_u64, 0x20000000, 0x20000001, 0x3fffffff, 0x40000000];
+    let mut ts = times.span();
+    while let Option::Some(t) = ts.pop_front() {
+        let mut rank: u32 = 0;
+        while rank < 9 {
+            let wide_rank: u64 = rank.into();
+            let start = (8 * *t) % 9;
+            let expected = (wide_rank + 9 - start) % 9 < 8;
+            assert(in_window(rank, (*t).try_into().unwrap(), 9) == expected, 'full clock product');
+            rank += 1;
+        }
+    }
+}

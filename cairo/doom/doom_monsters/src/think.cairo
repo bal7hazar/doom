@@ -113,13 +113,15 @@ pub fn in_window(rank: u32, tic: u32, n: u32) -> bool {
     // `match` is what keeps the function without a panic site, and `8 t` is
     // folded in the field rather than through `u32`'s overflow-checked
     // multiplication (S7 §8 rule 1).
-    let nz: NonZero<u32> = match n.try_into() {
+    let wide_n: u128 = n.into();
+    let nz: NonZero<u128> = match wide_n.try_into() {
         Option::Some(v) => v,
         Option::None => 1,
     };
-    let (_, start) = DivRem::div_rem(maputl::low32(fixed::to_u128(WINDOW.into() * tic.into())), nz);
-    let (_, k) = DivRem::div_rem(maputl::add32(maputl::sub32(rank, start), n), nz);
-    k < WINDOW
+    let (_, start) = DivRem::div_rem(fixed::to_u128(WINDOW.into() * tic.into()), nz);
+    let distance = fixed::to_u128(rank.into() + n.into() - start.into());
+    let (_, k) = DivRem::div_rem(distance, nz);
+    k < WINDOW.into()
 }
 
 /// Run one action id on `mo`, and return the action of the state it entered
