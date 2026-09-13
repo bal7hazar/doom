@@ -184,25 +184,34 @@ pub fn snapshot(s: @GameState) -> Array<felt252> {
         Option::Some(b) => *b.unbox(),
         Option::None => doom_physics::removed_mobj(),
     };
-    let mut body: Array<felt252> = array![];
-    push_player(ref body, p, @mo);
-    body.append((*p.killcount).into());
-    body.append((*p.itemcount).into());
-    body.append((*p.secretcount).into());
-    body.append(TOTAL_KILLS.into());
-    body.append(TOTAL_ITEMS.into());
-    body.append(TOTAL_SECRETS.into());
-    body.append((*s.leveltime).into());
-    let n_mobjs = push_mobjs(ref body, mobjs, doom_things::states());
-    let n_sectors = push_sectors(ref body, s.specials, @m, @lm);
-
+    // The header counts need only a narrow roster scan and three lengths.
+    // Write the final array directly; copying the entire body cost 24k
+    // steps on E1M1's 210 slots.
+    let n_mobjs = count_live(mobjs);
+    let n_sectors = lm.ceil_sectors.len() + lm.floor_sectors.len() + lm.light_sectors.len();
     let mut out: Array<felt252> = array![
         SNAPSHOT_VERSION, (*s.leveltime).into(), status_felt(*s.status), n_mobjs.into(),
         n_sectors.into(),
     ];
-    let mut b = body.span();
-    while let Option::Some(f) = b.pop_front() {
-        out.append(*f);
-    }
+    push_player(ref out, p, @mo);
+    out.append((*p.killcount).into());
+    out.append((*p.itemcount).into());
+    out.append((*p.secretcount).into());
+    out.append(TOTAL_KILLS.into());
+    out.append(TOTAL_ITEMS.into());
+    out.append(TOTAL_SECRETS.into());
+    out.append((*s.leveltime).into());
+    push_mobjs(ref out, mobjs, doom_things::states());
+    push_sectors(ref out, s.specials, @m, @lm);
     out
+}
+
+fn count_live(mut mobjs: Span<Mobj>) -> u32 {
+    let mut n = 0;
+    while let Option::Some(m) = mobjs.pop_front() {
+        if !is_removed(m) {
+            n += 1;
+        }
+    }
+    n
 }

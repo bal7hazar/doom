@@ -27,7 +27,7 @@ use fixed::{BIAS, Fixed};
 use geom2d::{Box, Point, box_of_segment, diagonal, half_plane};
 use prng::from_index;
 use crate::damage::{damage_mobj, kill_mobj};
-use crate::grid::{link, new_grid, rebuild, things_in, unlink};
+use crate::grid::{canonical_order, link, new_grid, rebuild, restore_cell, things_in, unlink};
 use crate::hitscan::{Hit, aim_line_attack, bleeds, line_attack, path_traverse};
 use crate::maputl::{line_meta, line_opening};
 use crate::mobj::{
@@ -963,3 +963,24 @@ fn test_world_helpers_and_line_meta() {
     assert(without(MF_SPECIAL + MF_SOLID, MF_SOLID) == MF_SPECIAL, 'without');
 }
 
+
+#[test]
+fn test_restored_grid_keeps_lists_and_rejects_duplicate_cells() {
+    let s = strip();
+    let w = world(@s);
+    let mut a = player(w, 100, 128);
+    a.cell = 11;
+    let mut b = monster(w, 100, 128);
+    b.cell = 11;
+    let mobjs = array![a, b].span();
+    let mut g = new_grid();
+    assert(restore_cell(ref g, 11, array![1, 0].span()), 'first restore');
+    assert(!restore_cell(ref g, 11, array![0].span()), 'duplicate cell');
+    assert(things_in(ref g, 11) == array![1, 0].span(), 'no overwrite');
+    assert(canonical_order(@g, mobjs) == array![1, 11, 2, 1, 0], 'ordered once');
+    unlink(ref g, 11, 1);
+    link(ref g, 11, 1);
+    assert(canonical_order(@g, mobjs) == array![1, 11, 2, 0, 1], 'latest journal entry');
+    let empty = new_grid();
+    assert(canonical_order(@empty, mobjs) == array![1, 11, 0], 'missing cell listed once');
+}

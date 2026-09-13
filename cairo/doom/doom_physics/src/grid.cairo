@@ -63,6 +63,26 @@ pub fn link(ref g: ThingGrid, cell: u32, idx: u32) {
     g.journal.append((cell, list));
 }
 
+/// Restore an already validated complete cell list at a serialization
+/// boundary. The visitation order is unchanged; the journal needs only one
+/// final entry rather than every intermediate prefix made by `link`.
+/// Returns false without changing an existing cell, so the reader can
+/// reject duplicate cells using this dictionary instead of a second one.
+pub fn restore_cell(ref g: ThingGrid, cell: u32, members: Span<u32>) -> bool {
+    let (entry, previous) = g.cells.entry(cell.into());
+    match match_nullable(previous) {
+        FromNullableResult::Null => {
+            g.cells = entry.finalize(NullableTrait::new(members));
+            g.journal.append((cell, members));
+            true
+        },
+        FromNullableResult::NotNull(_) => {
+            g.cells = entry.finalize(previous);
+            false
+        },
+    }
+}
+
 /// Unlink mobj `idx` from `cell` (`P_UnsetThingPosition`'s blockmap half).
 /// A no-op if it is not there.
 #[inline(never)]
@@ -107,8 +127,8 @@ pub fn relink(ref g: ThingGrid, cell: u32, idx: u32) {
     g.journal.append((cell, list));
 }
 
-/// Rebuild the grid from the mobjs' own `cell` fields — what `doom_game`
-/// does once at the start of a segment, after deserializing the state.
+/// Rebuild membership from the mobjs' own `cell` fields for a fresh grid.
+/// Saved states restore their committed visitation order with `restore_cell`.
 pub fn rebuild(mut mobjs: Span<Mobj>) -> ThingGrid {
     let mut g = new_grid();
     let mut i: u32 = opaque_zero(mobjs.len());
@@ -125,29 +145,27 @@ pub fn rebuild(mut mobjs: Span<Mobj>) -> ThingGrid {
 /// *members* retain their exact historical visitation order. Replaying the
 /// journal into a temporary dict makes this O(history + roster + members),
 /// only at a hash/serialization boundary, and permits an immutable snapshot.
+/// Its per-cell visited bit also replaces a separate seen-cell dictionary.
 /// Format: [n_cells, cell, n_members, member_indices..., ...].
 pub fn canonical_order(g: @ThingGrid, mut mobjs: Span<Mobj>) -> Array<felt252> {
-    let mut latest: Felt252Dict<Nullable<Span<u32>>> = Default::default();
+    let mut latest: Felt252Dict<Nullable<(bool, Span<u32>)>> = Default::default();
     let mut history = g.journal.span();
     while let Option::Some(record) = history.pop_front() {
         let (cell, list) = *record;
-        latest.insert(cell.into(), NullableTrait::new(list));
+        latest.insert(cell.into(), NullableTrait::new((false, list)));
     }
-    let mut seen: Felt252Dict<bool> = Default::default();
     let mut body: Array<felt252> = array![];
     let mut count: u32 = 0;
     while let Option::Some(m) = mobjs.pop_front() {
         if in_blockmap(m) {
             let cell = *m.cell;
-            let (entry, done) = seen.entry(cell.into());
-            seen = entry.finalize(true);
+            let (entry, value) = latest.entry(cell.into());
+            let (done, mut list) = match match_nullable(value) {
+                FromNullableResult::Null => (false, array![].span()),
+                FromNullableResult::NotNull(v) => v.unbox(),
+            };
+            latest = entry.finalize(NullableTrait::new((true, list)));
             if !done {
-                let (entry, value) = latest.entry(cell.into());
-                latest = entry.finalize(value);
-                let mut list = match match_nullable(value) {
-                    FromNullableResult::Null => array![].span(),
-                    FromNullableResult::NotNull(v) => v.unbox(),
-                };
                 body.append(cell.into());
                 body.append(list.len().into());
                 while let Option::Some(idx) = list.pop_front() {
