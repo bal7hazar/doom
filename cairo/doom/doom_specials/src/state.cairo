@@ -401,22 +401,16 @@ pub fn mover_index(s: @SpecialsState, sector: u32) -> Option<u32> {
 // Small persistent-array writes
 // ---------------------------------------------------------------------------
 
-/// `values` with `values[index] = value`, copied. The slot arrays are 5 to
-/// 15 felts long, so this is 40 to 130 steps — paid once when a thinker
-/// latches its final height, never per tic.
+/// `values` with `values[index] = value`, copied in original order.
+/// Two spans keep the copying loops narrow and avoid per-element indexed
+/// bounds checks. Besides the small slot arrays, doom_game uses this for
+/// the 182-sector derived height arrays (bench_refresh/README.md).
 pub fn set_felt(values: Span<felt252>, index: u32, value: felt252) -> Span<felt252> {
     let mut out: Array<felt252> = array![];
-    let mut i: u32 = 0;
-    while i != index {
-        out.append(*values.at(i));
-        i += 1;
-    }
+    out.append_span(values.slice(0, index));
     out.append(value);
-    i += 1;
-    while i != values.len() {
-        out.append(*values.at(i));
-        i += 1;
-    }
+    let after = index + 1;
+    out.append_span(values.slice(after, values.len() - after));
     out.span()
 }
 
