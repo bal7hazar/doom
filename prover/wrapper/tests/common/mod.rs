@@ -46,6 +46,7 @@ pub fn config(dir: &std::path::Path, batch_max_runs: usize, batch_max_wait_secs:
         executable: dir.join("segment_stub.executable.json"),
         program_hash: None,
         hash_function: Default::default(),
+        output_layout: hellproof_wrapper::config::OutputLayout::LegacyStub,
     });
     cfg.api_keys.push(ApiKey {
         key: KEY.into(),

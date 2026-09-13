@@ -367,11 +367,6 @@ fn verify_job(state: &Shared, job: &Job) -> Result<()> {
 /// `leaf-prover` on one segment: 22 s / 32.5 GB (S4).
 fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
     let leaf_key = leaf_key_of(state, job)?;
-    if let Some(leaf) = state.db.leaf(&leaf_key)? {
-        if leaf.status == "done" {
-            return Ok(());
-        }
-    }
     let run_id = job.run_id.clone().unwrap_or_default();
     let idx = job.seg_index.unwrap_or(0);
     let seg = state
@@ -405,13 +400,50 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
             .map(|h| crate::felt::Felt::parse(h))
             .collect::<Result<_>>()?
     };
+    // Recovered work may have been admitted under an older program configuration.
+    // Rebind before either reusing a cached leaf or starting a circuit prover.
+    let bound_key = crate::validate::bind_segment_to_program(
+        idx,
+        &args,
+        &preimage,
+        &state.cfg,
+        program,
+        program.hash_function,
+        &state.registry_hash,
+    )?;
+    if bound_key != leaf_key {
+        anyhow::bail!(
+            "segment {run_id}/{idx} was admitted under a different program configuration"
+        );
+    }
+    if let Some(leaf) = state.db.leaf(&leaf_key)? {
+        if leaf.status == "done" {
+            return Ok(());
+        }
+    }
     // `from_proof` folds this very file instead of re-proving the segment (D19).
     let segment_proof = seg.proof_path.clone();
     if state.cfg.leaf_mode == crate::config::LeafMode::FromProof
         && state.cfg.backend != crate::config::Backend::Stub
-        && segment_proof.is_none()
     {
-        anyhow::bail!("segment {run_id}/{idx} has no stored proof to fold");
+        // A recovered segment's `verified` flag may predate this admission policy.
+        // Recheck the actual file passed below, including its bootloader and output
+        // binding, before a new circuit proof. Cached successful leaves returned above.
+        let cells =
+            crate::felt::output_cells_from_words(&crate::felt::leaf_output_words(&preimage));
+        let report = pipeline::verify_segment_proof(
+            &state.cfg,
+            std::path::Path::new(segment_proof.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("segment {run_id}/{idx} has no stored proof to fold")
+            })?),
+            &cells,
+        )?;
+        if !report.ok {
+            anyhow::bail!(
+                "segment {run_id}/{idx}: stored proof rejected before leaf: {}",
+                report.error.unwrap_or_else(|| "invalid proof".into())
+            );
+        }
     }
 
     state
@@ -544,4 +576,137 @@ fn fold_job(state: &Shared, job: &Job) -> Result<()> {
         "batch folded"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Config, ProgramEntry};
+    use crate::db::Db;
+    use crate::AppState;
+
+    #[test]
+    fn recovered_leaf_rebinds_before_cache_or_prover_use() {
+        for (pin, message) in [
+            ("0x6", "pinned program hash"),
+            ("0x5", "different program configuration"),
+        ] {
+            let mut cfg = Config::default();
+            cfg.programs.push(ProgramEntry {
+                id: "task".into(),
+                executable: "/not-executed".into(),
+                program_hash: Some(pin.into()),
+                hash_function: Default::default(),
+                output_layout: crate::config::OutputLayout::LegacyStub,
+            });
+            let db = Db::open_memory().unwrap();
+            db.insert_run("old", "test", None, "task", false, "old-submission", 1)
+                .unwrap();
+            db.insert_segment(
+                "old",
+                0,
+                "old-key",
+                "[]",
+                r#"["0x5","0x1","0x2","0xfa","0x0"]"#,
+                r#"["0x1","0x2"]"#,
+                None,
+                "bincode_b64",
+            )
+            .unwrap();
+            db.ensure_leaf("old-key").unwrap();
+            db.set_leaf_status("old-key", "done", None, None, None, None)
+                .unwrap();
+            db.enqueue_leaf("old-key", "old", 0).unwrap();
+            let job = db.claim(&[JobKind::Leaf], 1).unwrap().remove(0);
+            let state = Arc::new(AppState::new(cfg, db));
+            let error = leaf_job(&state, &job).unwrap_err().to_string();
+            assert!(error.contains(message), "{error}");
+            // No proving binaries are configured: reaching either one would fail differently.
+        }
+    }
+    #[cfg(unix)]
+    #[test]
+    fn old_verified_marker_does_not_skip_the_pre_circuit_gate() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let proof = dir.path().join("the-proof-sent-to-the-circuit.bin");
+        std::fs::write(&proof, "old proof").unwrap();
+        let called = dir.path().join("called");
+        let verifier = dir.path().join("verify");
+        std::fs::write(&verifier, format!(
+            "#!/bin/sh\n[ \"$1\" = --proof ] && [ \"$2\" = '{}' ] || exit 3\ntouch '{}'\nprintf '%s\\n' '{{\"ok\":false,\"error\":\"bootloader rejected after upgrade\"}}'\nexit 2\n",
+            proof.display(), called.display()
+        )).unwrap();
+        std::fs::set_permissions(&verifier, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut cfg = Config {
+            leaf_verify_bin: Some(verifier),
+            leaf_bootloader: Some(dir.path().join("bootloader.json")),
+            ..Default::default()
+        };
+        cfg.programs.push(ProgramEntry {
+            id: "task".into(),
+            executable: "/not-executed".into(),
+            program_hash: Some("0x5".into()),
+            hash_function: Default::default(),
+            output_layout: crate::config::OutputLayout::LegacyStub,
+        });
+        let db = Db::open_memory().unwrap();
+        let state = Arc::new(AppState::new(cfg, db));
+        let preimage: Vec<crate::felt::Felt> = ["0x5", "0x1", "0x2", "0xfa", "0x0"]
+            .iter()
+            .map(|f| crate::felt::Felt::parse(f).unwrap())
+            .collect();
+        let key = crate::validate::bind_segment_to_program(
+            0,
+            &[],
+            &preimage,
+            &state.cfg,
+            &state.cfg.programs[0],
+            Default::default(),
+            &state.registry_hash,
+        )
+        .unwrap();
+        state
+            .db
+            .insert_run("old", "test", None, "task", false, "old-submission", 1)
+            .unwrap();
+        state
+            .db
+            .insert_segment(
+                "old",
+                0,
+                &key,
+                "[]",
+                r#"["0x5","0x1","0x2","0xfa","0x0"]"#,
+                r#"["0x1","0x2"]"#,
+                Some(proof.to_str().unwrap()),
+                "bincode_b64",
+            )
+            .unwrap();
+        state.db.mark_segment_verified("old", 0, 1.0).unwrap();
+        state.db.ensure_leaf(&key).unwrap();
+        state.db.enqueue_leaf(&key, "old", 0).unwrap();
+        let job = state.db.claim(&[JobKind::Leaf], 1).unwrap().remove(0);
+        let error = leaf_job(&state, &job).unwrap_err().to_string();
+        assert!(
+            error.contains("stored proof rejected before leaf: bootloader rejected after upgrade"),
+            "{error}"
+        );
+        assert!(
+            called.exists(),
+            "the actual stored proof reached the gate despite verified=true"
+        );
+        assert_eq!(state.db.leaf(&key).unwrap().unwrap().status, "queued");
+        // A completed circuit proof may still be reused after task/key rebinding.
+        std::fs::remove_file(&called).unwrap();
+        state
+            .db
+            .set_leaf_status(&key, "done", None, None, None, None)
+            .unwrap();
+        leaf_job(&state, &job).unwrap();
+        assert!(
+            !called.exists(),
+            "a valid cached leaf needs no new verification/proving"
+        );
+    }
 }

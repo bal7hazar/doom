@@ -87,8 +87,18 @@ fn config(e: &Env, data_dir: PathBuf, leaf_mode: LeafMode) -> Config {
         executable: e
             .repo
             .join("spikes/s4/programs/segment_stub/target/dev/segment_stub.executable.json"),
-        program_hash: None,
+        // This local fixture manifest records the bootloader's measured task hash.
+        program_hash: Some({
+            let manifest: Value =
+                serde_json::from_slice(&std::fs::read(e.fixtures.join("manifest.json")).unwrap())
+                    .unwrap();
+            manifest["segments"][0]["output_preimage"][0]
+                .as_str()
+                .unwrap()
+                .to_string()
+        }),
         hash_function: Default::default(),
+        output_layout: hellproof_wrapper::config::OutputLayout::LegacyStub,
     });
     cfg.api_keys.push(ApiKey {
         key: KEY.into(),
