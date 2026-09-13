@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Bytecode attribution helper (docs/spikes/S7.md): compiles a Scarb
+# `*.sierra.json` to CASM exactly as `cairo-execute` does with
+# `enable-gas = false` and prints, for every Sierra statement, the bytecode
+# offset range it occupies. `cairo/doom/*/bench/attribute.py` joins that with
+# Scarb's statement -> function debug info to attribute words to functions.
+[package]
+name = "sierra_words"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cairo-lang-sierra = "=2.16.0"
+cairo-lang-sierra-to-casm = "=2.16.0"
+cairo-lang-sierra-type-size = "=2.16.0"
+serde_json = "1"
+
+[profile.release]
+debug = false
