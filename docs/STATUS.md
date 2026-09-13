@@ -1,6 +1,6 @@
 # STATUS — point d'avancement
 
-> Mis à jour le 2026-09-13 : audit de reprise Codex ; monstres intégrés sur `main` @ `8471b7e`.
+> Mis à jour le 2026-09-13 : reprise Codex ; monstres `8471b7e`, contrôles CI `375f092` intégrés.
 > La CI générale est verte ; le dernier workflow **prover-wasm est rouge** (comparaison des hashes).
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
@@ -71,6 +71,15 @@ Mesures monstres intégrées : API complète **21 220 mots dev / 17 963 proving*
 **16 241 dev / 14 209 proving**. Les 55 tests et leurs références n'ont pas été modifiés par la passe
 de style. Moyennes des micro-scénarios : 13 359 steps/tic à 5 éveillés, 30 711 à 8 et 61 425 à 20 ;
 29 dormants sans cible : 10 183. Ces mesures ne représentent pas un tic complet du jeu.
+
+Corrections d'audit intégrées par **`375f092`** : Clippy Rust devient bloquant après correction du
+MSRV et d'un formatage redondant ; les métriques wrapper sont attendues jusqu'à publication avec
+une échéance bornée. Revalidation sur `main` : format/Clippy verts, sim **7 tests**, wrapper **65
+tests** (5 pipelines lourds ignorés). `actionlint` vert. La CI ajoute `doom_runs`,
+`recursion_outputs`, submit et indexeur, et prépare les assets/fixtures avant les tests client.
+Trois générateurs SPDX sont corrigés sans changer leur AST ni leurs sorties : REUSE 6.2.0 ne
+signale plus que le générateur joueur, corrigé dans sa branche en attente d'intégration.
+Le rebuild WASM arm64 et sa vérification de hashes restent en cours dans la ligne CI.
 
 ## Terminé (mergé sur `main`)
 
