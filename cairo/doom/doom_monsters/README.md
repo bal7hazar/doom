@@ -619,3 +619,62 @@ profile across all five logs, 118 serialized cuts and 47 raw probe events;
 every output digest also matched between dev and proving. The existing
 56 monster tests, including their 700-tic checksum, remain unchanged; `bench/measure.py` continues to enforce every
 recorded operation and code-size budget.
+
+### Passive runs outside the actor loop (D29 integration base 3e210317)
+
+`next_actor` copies consecutive passive slots in a separate small loop and
+returns the next monster or missile to the ticker. The passive loop carries
+only the input cursor and output array, rather than the ticker's environment,
+pass record, scheduling state and other live values. Every record remains in
+its original position. The actor's D3 index is the output length before that
+actor is appended; no additional index advances through passive slots.
+
+The predicate is unchanged, including its short-circuit for `KIND_NONE` even
+when a direct caller supplies inconsistent flags. `awake_count` still reads
+the complete initial roster before any actor runs. Ranks, look cadence, RNG,
+patch application, spawned-slot selection and dictionary visitation order
+remain unchanged. No persistent cache, schema field or public interface is
+introduced. Two edge-case tests cover interleaved passive/actor runs, original
+indices, removed slots with flags, and empty or fully passive lists.
+
+Validation: 567 Cairo tests across 23 targets; 35 native ABI cases plus four
+malformed envelopes rejected per profile; 70 exact comparisons of five full
+replays, serialized cuts, D14 and terminal boundaries per profile. Physics,
+player and monster benchmarks retain their existing limits. The measured
+ledger is `bench/passive-runs.json`.
+
+| Complete executable | dev before → after | proving before → after |
+|---|---:|---:|
+| run_segment | 125854 → 125836 | 106878 → 106855 |
+| step_tic | 125981 → 125963 | 108365 → 108342 |
+| genesis | 50746 → 50746 | 46434 → 46434 |
+
+| Proving frame | before → after steps | boundary before → after | Mobj allocations |
+|---|---:|---:|---:|
+| idle300 | 30012 → 26298 | 266508 → 266508 | 48 → 48 |
+| fight493 | 170333 → 166596 | 267743 → 267743 | 120 → 120 |
+
+These are two exact frame measurements, not the mean or p99 across all
+2946 replay tics. The complete proving program remains **106855 words**, so
+the unchanged 100000-word D29 guard still fails by **6855**. No proof, AIR,
+RAM or browser-throughput improvement is inferred from this VM experiment.
+
+Reproduce with the existing game `bench_sizing/compare.py` (immutable base
+executables via `--reference`, each profile), `bench_boundary/measure.py`,
+then `doom_monsters/bench/profile_loop.py --arguments ... --keep-trace` and
+`doom_game/bench_boxed/inspect.py` on the two fixed pre-tic arguments. Keep
+Scarb 2.16.0 and the existing profiles, and check the executable/input SHA
+recorded by every report. No expected values or thresholds are regenerated.
+
+Small rosters with few passive slots pay the extra helper return per actor.
+These dev benchmark tradeoffs remain inside the existing limits. Raw steps
+are per iteration before subtracting the operand baseline:
+
+| Scene | raw steps before → after | differential net before → after |
+|---|---:|---:|
+| monsters_ticker, 29 dormant monsters | 12854.95 → 13249.95 | 12400.95 → 12806.95 |
+| monsters_ticker, 8 awake monsters (D3's cap) | 29976.1 → 30077.1 | 29968.1 → 30069.1 |
+| 29 dormant monsters, nobody to look for | 9845.7 → 10240.7 | 9391.7 → 9797.7 |
+
+The 29-dormant raw cost rises 3.07%; eight-awake raw cost rises 0.34%. The
+full-roster improvement is not a universal ticker speedup.

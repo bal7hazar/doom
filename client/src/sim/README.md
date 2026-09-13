@@ -1,12 +1,15 @@
 # Worker Cairo réel — P2.3
 
-Le mode `/?sim=cairo` utilise le véritable `SimContinuation` R5 et les fonctions
-`doom_game` compilées depuis le checkout courant. `/` conserve la démonstration
-du renderer ; `/prove.html` et `/leaderboard.html` conservent leurs interfaces.
-Le mode Cairo est explicite tant que la capture P2.4 et les adaptations de rendu
-ci-dessous ne sont pas livrées. Son scheduler envoie actuellement la commande
-neutre annoncée à l'écran. `CairoScheduler` accepte un fournisseur d'inputs ;
-`CairoClient.advanceCmd` quantifie avec le codec D12 existant.
+Le jeu réel (`/`, alias `/?sim=cairo`) utilise `SimContinuation` R5 et les fonctions
+`doom_game` compilées depuis le checkout courant. La démonstration du renderer
+reste accessible via `/?sim=demo` ; les pages preuve et classement sont distinctes.
+Les contrôles, écrans et sauvegardes de [la session de jeu](../game/README.md)
+sont maintenant branchés. Le scheduler attend Start et reçoit les commandes
+quantifiées D12 ; il n'envoie plus automatiquement des inputs neutres au chargement.
+
+Les mesures et étapes P2.3 ci-dessous conservent leur provenance historique.
+Les adaptations de sprites/psprites et le branchement du vrai programme de preuve
+restent à livrer ; la présence du Worker ne clôt pas ces sujets.
 
 ## Préparation locale
 
