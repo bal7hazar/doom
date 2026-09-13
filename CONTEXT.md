@@ -13,6 +13,15 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   ses 55 tests et son replay de 700 tics. Le ticker compile à **14 209 mots proving / 16 241 dev** ;
   l'API complète à **17 963 / 21 220**. À 5, 8 et 20 éveillés, les micro-scénarios mesurent
   respectivement **13 359, 30 711 et 61 425 steps/tic**. Le programme réel reste à mesurer en P1.9.
+- Joueur intégré par `06058b1` : **132 tests** et checksum 350 tics inchangés, source **18 830 mots
+  proving / 20 671 dev** ; différence historique entre harnais **20 354 / 23 591**, qui inclut du
+  code du harnais et des écarts de dépendances (D30). Tir avec cible 9 309 steps, manqué 98 944.
+  Le total du programme consommateur demeure le garde final ; ces chiffres ne s'additionnent pas.
+- Mesure provisoire P1.9 `df1888d` après C2 : `run_segment` **117 531 mots proving** (cible 100 k
+  manquée). Le passage état/rendu sans tic coûte **528 143 steps** dans le runner réel natif,
+  confirmés à 14 steps d'enveloppe près par Scarb. ABI Scarb 2.16 / cairo-lang 2.19.4 compatible sur
+  ces exécutables ; la recommandation générale de version identique du README sim est conservatrice.
+  R2/R5 nécessitent une optimisation des frontières avant validation navigateur à 35 Hz.
 - D29 : programme prouvé cible **100 k mots**, plafond dur 120 k, profil `proving`, bootloader
   poseidon (1 969 + 5,5 × mots). Les coûts par crate partagent des dépendances et ne s'additionnent pas.
 - D26 : découpage selon le plus gros composant AIR (≤ 2^20 lignes, cible 80 %), avec plafonds de

@@ -1,7 +1,8 @@
 # STATUS — point d'avancement
 
-> Mis à jour le 2026-09-13 : reprise Codex ; monstres `8471b7e`, contrôles CI `375f092` intégrés.
-> La CI générale est verte ; le dernier workflow **prover-wasm est rouge** (comparaison des hashes).
+> Mis à jour le 2026-09-13 : monstres `8471b7e`, contrôles CI `375f092`, joueur `06058b1` intégrés.
+> CI : le nouveau contrôle submit révèle `poseidon_py` absent du runner ; correction en cours.
+> Le dernier workflow **prover-wasm reste rouge** ; rebuild arm64 et smoke en cours.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -27,7 +28,7 @@ Les premières erreurs de cache Scarb et de serveurs locaux provenaient du sandb
 avec les accès nécessaires passent. Les preuves lourdes, le build WASM et les drives de déploiement
 n'ont pas été relancés pendant cet audit. Les logs locaux sont dans `/tmp/hellproof-audit-20260913/`.
 
-Écarts à traiter :
+Écarts relevés sur la base d'audit (corrections intégrées détaillées plus bas) :
 
 - [CI générale](https://github.com/bal7hazar/doom/actions/runs/34745984783) verte sur `82e52db`, mais
   [CI WASM](https://github.com/bal7hazar/doom/actions/runs/34707523047) en échec : build Docker réussi,
@@ -59,12 +60,11 @@ Branches récupérées :
 | Branche / worktree Claude | État | Suite |
 |---|---|---|
 | `s7-monsters-bytecode` / `agent-a6ac67f3ed7fc7f8f` | **intégrée par `8471b7e`** ; 55 tests et replay 700 tics inchangé validés ; ticker 14 209 mots sous `proving` | format/build/511 tests/graphe verts après merge ; limite de domaine D3 à `tic ≥ 2^29` confiée à P1.9 |
-| `s8-player-bytecode` / `agent-ae639d60352cb6412` | `70df603` + README et harnais de taille non commités ; 132 tests annoncés, visée à arbitrer | agent Codex : terminer les mesures, vérifier les fixtures et finaliser la passe sans changer le gameplay |
-| `worktree-agent-a3f0a4e676dba3186` | `79f2180` + tic, instrumentation et script de preuve non commités ; cinq replays annoncés | agent Codex : terminer P1.9, profil S8 et preuve native ; remesurer après intégration joueur/monstres |
+| `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
+| `worktree-agent-a3f0a4e676dba3186` | `df1888d` contient C2, les deux styles et garde D3 ; profil/preuve encore en cours | nouvel agent frontière/performance sur `codex/state-boundary-perf` ; agent P1.9 conserve tic, profil et preuve |
 
-Vague de reprise : finalisation joueur et P1.9 en parallèle ; réparation des contrôles CI dans un
-troisième worktree. L'orchestrateur valide et intègre les monstres, puis les autres branches, et
-tranche les leviers R2 à partir du programme complet. Ensuite : P1.10 et Worker/contrôles/écrans client,
+Vague de reprise : P1.9/profil/preuve, frontière état/rendu et reproductibilité CI en parallèle.
+L'orchestrateur tranche les leviers R2 à partir du programme complet. Ensuite : P1.10 et Worker/contrôles/écrans client,
 puis P3.7. Sepolia nécessite toujours une décision explicite du sponsor.
 
 Mesures monstres intégrées : API complète **21 220 mots dev / 17 963 proving** ; chemin ticker
@@ -78,8 +78,24 @@ une échéance bornée. Revalidation sur `main` : format/Clippy verts, sim **7 t
 tests** (5 pipelines lourds ignorés). `actionlint` vert. La CI ajoute `doom_runs`,
 `recursion_outputs`, submit et indexeur, et prépare les assets/fixtures avant les tests client.
 Trois générateurs SPDX sont corrigés sans changer leur AST ni leurs sorties : REUSE 6.2.0 ne
-signale plus que le générateur joueur, corrigé dans sa branche en attente d'intégration.
+signalait plus que le générateur joueur ; **REUSE est entièrement vert après `06058b1`** (1 578 fichiers).
 Le rebuild WASM arm64 et sa vérification de hashes restent en cours dans la ligne CI.
+
+Joueur intégré par **`06058b1`** : 132 tests inchangés, checksum **4760390154965462** sur 350 tics,
+couverture agent **93,7 %** (hors adaptateur `player_tic`, dont les tests ordinaires passent),
+11 benchmarks et 4 tests du garde. Revalidation workspace après merge : format/build/511 tests/graphe
+verts. Idle 1 303,5 steps, marche 1 671,5, tir cible 9 309, tir manqué 98 944. La visée est inchangée.
+La contribution réelle du joueur dans `doom_run` reste à mesurer ; l'attribution du harnais
+n'établit pas à elle seule la conformité du programme complet.
+
+**S8 provisoire, avant optimisation des frontières** (`df1888d`) : `run_segment` proving **117 531
+mots**, cible 100 k manquée, seulement 2 469 mots sous le plafond dur. État genesis **6 362 felts**
+(+533 pour préserver la grille). L'ABI Scarb 2.16 → SimProgram cairo-lang 2.19.4 est exécutée en natif.
+Avant intégration du dernier joueur : appel `step_tic(state,[])` **528 143 steps**, un idle **585 777**,
+marche **601 998** ; huit idle en `run_segment` ajoutent **53 725 steps/tic**, taxe bootloader exclue.
+Ces chiffres ne sont pas un p99 ni une mesure navigateur. Le coût fixe place **R5** sur le chemin
+critique : une ligne dédiée optimise sérialisation, parseur et snapshot sans réduire la validation,
+changer les hashes ou le gameplay. C2 : cas 101/101 et replay de combat avec 28 frontières passent.
 
 ## Terminé (mergé sur `main`)
 

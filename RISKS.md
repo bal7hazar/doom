@@ -13,7 +13,7 @@
 | R2 | Budget de steps par tic | Fort | Élevée, dépassement mesuré | **P0** | S8, Phase 1 |
 | R3 | Route on-chain : dimensionnement des circuits, couplage de versions | Fort | Élevée | **P0** | S4, Phase 4 |
 | R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | Défaut C2 confirmé dans P1.9 | **P0** | P1.9, P1.10 |
-| R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Moyen | Moyenne | P1 | S3 |
+| R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Fort | Élevée au coût réel mesuré | **P0** | P1.9, P2.3 |
 | R6 | UX de la preuve : durée, contention CPU, perte de travail | Moyen | Élevée | P1 | Phase 2–3 |
 | R7 | Coûts on-chain et limites protocolaires mouvants | Moyen | Moyenne | P1 | S5, Phase 4 |
 | R8 | Service wrapper : disponibilité, abus, coût d'exploitation | Moyen | Moyenne | P2 | Phase 3 |
@@ -40,6 +40,10 @@
 - **R1/R5/R6** : il manque la partie réelle avec jeu et preuve concurrents sur matériel 16 GB.
   C3 PLAN ≤ 10 min après partie ; objectif opérationnel D2 ≤ 5 min. Aucun succès sur les seules
   micro-mesures ne ferme ces risques.
+- **S8 provisoire** : `run_segment` proving 117 531 mots (cible 100 k, plafond dur 120 k) après C2
+  et styles. L'appel natif `step_tic` sans tic coûte 528 143 steps pour lire/rendre/réémettre l'état ;
+  un tic idle atteint 585 777 avant dernier style joueur. R5 devient P0. Optimiser cette frontière
+  en préservant toutes les validations et les hashes avant tout changement de cadence ou de gameplay.
 
 Les constats datés ci-dessous conservent l'historique des spikes ; les décisions D26–D29 et cette
 requalification priment sur leurs anciens budgets. Voir [STATUS](docs/STATUS.md) pour les suites.
