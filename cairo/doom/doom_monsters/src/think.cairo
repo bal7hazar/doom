@@ -540,6 +540,25 @@ fn tick_actor(
     mo
 }
 
+// Copy a passive run with only its cursor and output live.
+// Return the next actor without changing its slot index or record.
+#[inline(never)]
+fn next_actor(ref remaining: Span<Box<Mobj>>, ref out: Array<Box<Mobj>>) -> Option<@Box<Mobj>> {
+    loop {
+        match remaining.pop_front() {
+            Option::Some(boxed) => {
+                if boxed.kind == KIND_NONE
+                    || !doom_physics::has(boxed.flags, MF_COUNTKILL + MF_MISSILE) {
+                    out.append(*boxed);
+                } else {
+                    break Option::Some(boxed);
+                }
+            },
+            Option::None => { break Option::None; },
+        }
+    }
+}
+
 /// One tic of every monster and missile in `mobjs`, under the D3 schedule.
 ///
 /// Returns the rebuilt list, the advanced RNG and the tic's events. The
@@ -579,18 +598,14 @@ fn monsters_ticker_in(
     // its action column in the loop's live set, and a loop is a function
     // whose live set is pushed and returned on every iteration (S7 §8
     // rule 4). A read through the box is free.
-    let mut i: u32 = opaque_zero(n);
     let mut rank: u32 = opaque_zero(n);
     let mut remaining = mobjs;
     // Keep the one-felt box live across branches and calls. A named @Mobj
     // snapshot here makes Cairo preserve 27 felts even on unchanged slots.
-    while let Option::Some(boxed) = remaining.pop_front() {
+    while let Option::Some(boxed) = next_actor(ref remaining, ref out) {
+        // Exactly one output record precedes each original slot.
+        let i = out.len();
         let flags = boxed.flags;
-        if boxed.kind == KIND_NONE || !doom_physics::has(flags, MF_COUNTKILL + MF_MISSILE) {
-            out.append(*boxed);
-            i = inc(i);
-            continue;
-        }
         let countkill = doom_physics::has(flags, MF_COUNTKILL);
         let dormant = countkill && rd32(e.w.unbox().states.action_id, boxed.state) == A_LOOK;
         let mut may_chase = true;
@@ -631,7 +646,6 @@ fn monsters_ticker_in(
                             BoxTrait::new(Mobj { state: st, tics: tc, ..boxed.unbox() })
                         },
                     );
-                i = inc(i);
                 continue;
             }
             let b = tick_actor(
@@ -645,12 +659,10 @@ fn monsters_ticker_in(
                 true,
             );
             out.append(b);
-            i = inc(i);
             continue;
         }
         let b = tick_actor(e, mobjs, ref pass, *boxed, i, may_look, may_chase, false);
         out.append(b);
-        i = inc(i);
     }
     let Pass { grid, rng, patches, events, spawn_at: _, defense: final_defense } = pass.unbox();
     g = grid;
@@ -733,4 +745,51 @@ pub fn monsters_ticker_with_defense(
     let out = monsters_ticker_in(w, mobjs, ref g, players, noise, tic, rng, ref boxed);
     defense = boxed.unbox();
     out
+}
+
+#[cfg(test)]
+mod passive_run_tests {
+    use super::{KIND_NONE, MF_COUNTKILL, MF_MISSILE, Mobj, next_actor, removed_mobj};
+
+    #[test]
+    fn interleaved_runs_keep_original_actor_slots_and_all_records() {
+        let passive = BoxTrait::new(Mobj { kind: 17, flags: 0, ..removed_mobj() });
+        // Removed slots must stay passive even for a direct, noncanonical caller.
+        let removed = BoxTrait::new(Mobj { flags: MF_COUNTKILL, ..removed_mobj() });
+        let missile = BoxTrait::new(Mobj { kind: 1, flags: MF_MISSILE, ..removed_mobj() });
+        let monster = BoxTrait::new(Mobj { kind: 2, flags: MF_COUNTKILL, ..removed_mobj() });
+        let original = array![passive, removed, missile, passive, monster, passive];
+        let mut remaining = original.span();
+        let mut out = array![];
+        let first = next_actor(ref remaining, ref out).unwrap();
+        assert_eq!(out.len(), 2);
+        assert_eq!(first.unbox(), missile.unbox());
+        out.append(*first);
+        let second = next_actor(ref remaining, ref out).unwrap();
+        assert_eq!(out.len(), 4);
+        assert_eq!(second.unbox(), monster.unbox());
+        out.append(*second);
+        assert!(next_actor(ref remaining, ref out).is_none());
+        assert_eq!(out.len(), original.len());
+        let mut expected = original.span();
+        let mut actual = out.span();
+        while let Option::Some(e) = expected.pop_front() {
+            assert_eq!(actual.pop_front().unwrap().unbox(), e.unbox());
+        }
+        assert!(actual.is_empty());
+    }
+
+    #[test]
+    fn empty_and_fully_passive_rosters_are_copied_without_an_actor() {
+        let mut remaining = array![].span();
+        let mut out: Array<Box<Mobj>> = array![];
+        assert!(next_actor(ref remaining, ref out).is_none());
+        assert!(out.is_empty());
+        let removed = BoxTrait::new(removed_mobj());
+        remaining = array![removed, removed].span();
+        assert!(next_actor(ref remaining, ref out).is_none());
+        assert_eq!(out.len(), 2);
+        assert_eq!(out.at(0).kind, KIND_NONE);
+        assert_eq!(out.at(1).kind, KIND_NONE);
+    }
 }
