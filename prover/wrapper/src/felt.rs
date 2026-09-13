@@ -19,7 +19,7 @@ pub struct Felt(pub [u32; 8]);
 const MSB_U32: u32 = 0x8000_0000;
 
 impl Felt {
-    /// Parses `0x…` hex or a decimal string. Rejects anything that does not fit in 252 bits.
+    /// Parses a canonical Cairo field element, strictly below 2^251 + 17·2^192 + 1.
     pub fn parse(s: &str) -> Result<Felt> {
         let s = s.trim();
         if s.is_empty() {
@@ -30,12 +30,12 @@ impl Felt {
         } else {
             parse_dec(s)?
         };
-        let f = Felt(limbs);
-        // The Starknet prime is 2^251 + 17·2^192 + 1; anything with bit 252 set is not a felt.
-        if limbs[7] >> 28 != 0 {
+        // 252-bit width alone also admits p..2^252-1, which are not field elements.
+        const PRIME: [u32; 8] = [1, 0, 0, 0, 0, 0, 17, 0x0800_0000];
+        if limbs.iter().rev().cmp(PRIME.iter().rev()) != std::cmp::Ordering::Less {
             bail!("felt out of range: {s}");
         }
-        Ok(f)
+        Ok(Felt(limbs))
     }
 
     pub fn to_hex(self) -> String {
@@ -77,6 +77,9 @@ impl Felt {
 }
 
 fn parse_hex(hex: &str) -> Result<[u32; 8]> {
+    if hex.is_empty() {
+        bail!("empty hex felt");
+    }
     let hex = hex.trim_start_matches('0');
     if hex.len() > 64 {
         bail!("felt too long");
@@ -196,6 +199,30 @@ mod tests {
         assert!(
             Felt::parse("0x1000000000000000000000000000000000000000000000000000000000000000")
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_prime_and_above_in_both_encodings() {
+        let maximum = "0x800000000000011000000000000000000000000000000000000000000000000";
+        assert_eq!(Felt::parse(maximum).unwrap().to_hex(), maximum);
+        for invalid in [
+            "0x",
+            "0X",
+            "-1",
+            "+1",
+            "0x800000000000011000000000000000000000000000000000000000000000001",
+            "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "3618502788666131213697322783095070105623107215331596699973092056135872020481",
+        ] {
+            assert!(Felt::parse(invalid).is_err(), "{invalid}");
+        }
+        assert_eq!(
+            Felt::parse(
+                "3618502788666131213697322783095070105623107215331596699973092056135872020480"
+            )
+            .unwrap(),
+            Felt::parse(maximum).unwrap()
         );
     }
 

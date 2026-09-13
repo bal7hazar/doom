@@ -29,7 +29,7 @@ export interface SegmentRequest {
 export interface SegmentProgram {
   /** The program id the wrapper has pinned (`segment_stub10`, later `doom_run`). */
   readonly id: string;
-  /** Which hash the leaf bootloader computes the program hash with (G0 **D4**). */
+  /** Which hash the leaf bootloader computes the program hash with (D31: Blake in the WASM runtime). */
   readonly hashFunction: "blake" | "poseidon";
   /** `h_in` of the first segment of a fresh run. */
   readonly genesis: Felt;
@@ -124,7 +124,7 @@ export function createStubProgram(options: StubProgramOptions = {}): SegmentProg
 
   return {
     id: "segment_stub10",
-    hashFunction: "poseidon",
+    hashFunction: "blake",
     genesis: options.genesis ?? toFelt(1),
     executableJson(): Promise<string> {
       cached ??= doFetch(url).then(async (res) => {

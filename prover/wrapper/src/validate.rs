@@ -353,13 +353,15 @@ pub fn bind_segment_to_program(
     registry_hash: &str,
 ) -> Result<String> {
     // `preimage[0]` is the task's program hash: it pins which program ran.
-    if let Some(expected) = &program.program_hash {
-        let expected = Felt::parse(expected)?;
-        if preimage[0] != expected {
+    let task_hash = preimage
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("segment {index}: output_preimage is required"))?;
+    if let Some(expected) = cfg.pinned_task_hash(program)? {
+        if *task_hash != expected {
             bail!(
                 "segment {index}: output_preimage[0] = {} is not the pinned program hash {} of \
                  `{}`",
-                preimage[0].to_hex(),
+                task_hash.to_hex(),
                 expected.to_hex(),
                 program.id
             );
@@ -387,7 +389,7 @@ mod tests {
         c.programs.push(ProgramEntry {
             id: "segment_stub".into(),
             executable: "/dev/null".into(),
-            program_hash: None,
+            program_hash: Some("0x5".into()),
             hash_function: HashFunction::Blake,
         });
         c
@@ -510,6 +512,17 @@ mod tests {
         let cells = v.segments[0].output_cells;
         sub.segments[0].public_outputs = vec![cells[0].to_hex(), cells[1].to_hex()];
         assert!(validate(&sub, &cfg(), "reg").is_ok());
+    }
+
+    #[test]
+    fn missing_task_pin_cannot_bypass_startup_through_library_admission() {
+        let mut c = cfg();
+        c.programs[0].program_hash = None;
+        let sub = run(vec![seg(0, "0x1", "0x2")]);
+        let error = validate(&sub, &c, "reg").unwrap_err().to_string();
+        assert!(error.contains("requires program_hash"), "{error}");
+        c.backend = crate::config::Backend::Stub;
+        assert!(validate(&sub, &c, "reg").is_ok());
     }
 
     #[test]

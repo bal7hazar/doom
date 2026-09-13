@@ -367,11 +367,6 @@ fn verify_job(state: &Shared, job: &Job) -> Result<()> {
 /// `leaf-prover` on one segment: 22 s / 32.5 GB (S4).
 fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
     let leaf_key = leaf_key_of(state, job)?;
-    if let Some(leaf) = state.db.leaf(&leaf_key)? {
-        if leaf.status == "done" {
-            return Ok(());
-        }
-    }
     let run_id = job.run_id.clone().unwrap_or_default();
     let idx = job.seg_index.unwrap_or(0);
     let seg = state
@@ -405,6 +400,27 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
             .map(|h| crate::felt::Felt::parse(h))
             .collect::<Result<_>>()?
     };
+    // Recovered work may have been admitted under an older program configuration.
+    // Rebind before either reusing a cached leaf or starting a circuit prover.
+    let bound_key = crate::validate::bind_segment_to_program(
+        idx,
+        &args,
+        &preimage,
+        &state.cfg,
+        program,
+        program.hash_function,
+        &state.registry_hash,
+    )?;
+    if bound_key != leaf_key {
+        anyhow::bail!(
+            "segment {run_id}/{idx} was admitted under a different program configuration"
+        );
+    }
+    if let Some(leaf) = state.db.leaf(&leaf_key)? {
+        if leaf.status == "done" {
+            return Ok(());
+        }
+    }
     // `from_proof` folds this very file instead of re-proving the segment (D19).
     let segment_proof = seg.proof_path.clone();
     if state.cfg.leaf_mode == crate::config::LeafMode::FromProof
@@ -544,4 +560,51 @@ fn fold_job(state: &Shared, job: &Job) -> Result<()> {
         "batch folded"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Config, ProgramEntry};
+    use crate::db::Db;
+    use crate::AppState;
+
+    #[test]
+    fn recovered_leaf_rebinds_before_cache_or_prover_use() {
+        for (pin, message) in [
+            ("0x6", "pinned program hash"),
+            ("0x5", "different program configuration"),
+        ] {
+            let mut cfg = Config::default();
+            cfg.programs.push(ProgramEntry {
+                id: "task".into(),
+                executable: "/not-executed".into(),
+                program_hash: Some(pin.into()),
+                hash_function: Default::default(),
+            });
+            let db = Db::open_memory().unwrap();
+            db.insert_run("old", "test", None, "task", false, "old-submission", 1)
+                .unwrap();
+            db.insert_segment(
+                "old",
+                0,
+                "old-key",
+                "[]",
+                r#"["0x5","0x1","0x2","0xfa","0x0"]"#,
+                r#"["0x1","0x2"]"#,
+                None,
+                "bincode_b64",
+            )
+            .unwrap();
+            db.ensure_leaf("old-key").unwrap();
+            db.set_leaf_status("old-key", "done", None, None, None, None)
+                .unwrap();
+            db.enqueue_leaf("old-key", "old", 0).unwrap();
+            let job = db.claim(&[JobKind::Leaf], 1).unwrap().remove(0);
+            let state = Arc::new(AppState::new(cfg, db));
+            let error = leaf_job(&state, &job).unwrap_err().to_string();
+            assert!(error.contains(message), "{error}");
+            // No proving binaries are configured: reaching either one would fail differently.
+        }
+    }
 }

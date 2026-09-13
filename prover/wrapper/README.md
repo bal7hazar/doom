@@ -55,7 +55,7 @@ submission comes back as `422` instead of surfacing later in the run status.
   "run_id": "optional-client-id",          // idempotency key; [A-Za-z0-9_-]{1,64}
   "player": "0x04a3…",                     // Starknet account address (informational for now)
   "program": "segment_stub",               // a program id the server has pinned
-  "program_hash_function": "poseidon",     // optional; must match the program's configuration
+  "program_hash_function": "blake",     // optional; must match the program's configuration
   "solo": false,                           // true = wrap this game alone, immediately
   "expected_segments": 40,                 // optional; resumable uploads only, see below
   "segments": [                            // empty (or omitted) creates a `collecting` run
@@ -106,7 +106,8 @@ files the monorepo writes; nothing else is needed on the browser side.
 
 1. segment indices contiguous and ordered; args, preimage and outputs are felts;
 2. the chain `h_in[i+1] == h_out[i]` across the run (PLAN Phase 3 task 3);
-3. `output_preimage[0]` equals the pinned program hash of `program`, when one is configured, and
+3. `output_preimage[0]` equals the pinned task hash of `program` (required for
+   `backend = "subprocess"` / `leaf_mode = "from_proof"`), and
    the submission's `program_hash_function` is the one that program is configured for (`blake`
    vs `poseidon` give different program hashes, so it is part of a leaf's identity);
 4. `public_outputs == blake2s(cairo0_encode(output_preimage))` — the two 128-bit output cells the
@@ -214,7 +215,7 @@ run no longer `collecting`, or same index with different content, `413` over `ma
 #### `POST /v1/runs/{id}/complete` — finish a resumable upload
 
 ```json
-{ "program": "doom_run", "program_hash_function": "poseidon", "player": "0x04a3…", "solo": false }
+{ "program": "doom_run", "program_hash_function": "blake", "player": "0x04a3…", "solo": false }
 ```
 
 `program` is required unless the run already has one (an explicit `POST /v1/runs` supplied it);
@@ -402,9 +403,46 @@ circuit and costs the same leaf proof (S4b measurement 3) — about 25 leaves fo
 | `require_verifiable_proof` | `true` | refuse felt-only submissions (they cannot be verified). `leaf_mode = "from_proof"` refuses them regardless: they cannot be folded either |
 | `check_preimage_binding` | `true` | `rerun` only: the bootloader's dumped preimage must equal the submitted one. `from_proof` replays nothing, and the verify stage already made that binding |
 | `job_max_attempts` | `3` | leaf and fold jobs are retried; a verification verdict is never retried |
-| `programs[].hash_function` | `blake` | `poseidon` in production (G0 D4); passed to the bootloader task input |
+| `programs[].hash_function` | `blake` | D31: matches the browser runtime; passed to bootloader task input in rerun mode |
+| `programs[].program_hash` | required for subprocess/from_proof | Task hash at `output_preimage[0]`, measured from the exact executable; parsed as a felt at startup |
 | `backend` | `subprocess` | `stub` disables proving entirely (tests, load runs) |
 | `leaf_mode` | `from_proof` | `from_proof` folds the submitted proof (`leaf-prover --cairo_proof`, needs `patches/`); `rerun` replays the segment from its `args`. Checked at startup |
+
+### Task identity at admission (D19 / D31)
+
+`from_proof` never reads the configured task executable while constructing a leaf.
+Its path alone cannot pin the submitted task: `program_hash` is therefore mandatory
+for every subprocess/from_proof program. Missing pins and malformed/out-of-field
+felts fail at startup; admission repeats that check for callers using the library.
+Stub backends may keep fake programs without pins; rerun mode may omit a pin because
+it executes the configured file. A supplied pin is always parsed and enforced.
+
+Whole-run submission binds every preimage before queueing. A bare resumable PUT
+verifies the proof/output digest without yet knowing the program; `/complete`
+checks each task pin before assigning leaf keys or queueing. Recovered leaf jobs
+rebind against the current configuration before using a cached leaf or starting
+a prover, so a changed pin cannot revive work admitted under an older identity.
+
+`hellproof-leaf-verify` reports the **bootloader** hash in `program_hash`; its
+`--expect-program-hash` option also pins that bootloader. Neither is the task hash
+at `output_preimage[0]`. The output digest binds that separate task preimage to
+the verified proof. DoomRuns additionally recomposes with its own pinned task hash.
+
+The examples use the exact committed `client/public/programs/segment_stub10.executable.json`:
+SHA-256 `7617a62d9ea3cf6968a24442c246f6c96c4a1018414fd71360ee42dbb9240a4a`,
+Blake task hash `0x6715c525e90af7cf1df88ebcae1d7556ebbbbf1da79a2a322408b3593a9786a`.
+Measured using the built WASM core on arguments `["0x1","0x0","0x1","0x0","0x0","0x0","0x0","0x0"]`,
+171,372 steps; no proof generation. From the repository root, Node 24 can remeasure:
+
+```sh
+node prover/wrapper/scripts/measure_task_hash.mjs \
+  prover/wasm/pkg/dist/core.js client/public/programs/segment_stub10.executable.json args.json
+```
+
+The script requires string felts and reports the executable SHA-256 with the task
+hash. Any rebuild, profile or artifact change needs a fresh measurement; do not
+copy this pin to doom_run. This command uses Blake because that is the runtime's
+fixed choice, without altering the leaf prover parameters or registry.
 
 ## Authentication
 
@@ -496,7 +534,7 @@ The container image in `infra/wrapper/` does all of that for you.
 ## Tests
 
 ```bash
-cargo test                       # 65 tests, no proving (5 more ignored: the real pipeline)
+cargo test                       # service tests, no proving (real pipeline tests stay ignored)
 cargo test --test load           # 20 concurrent runs on the stub backend
 ```
 
@@ -592,3 +630,17 @@ the same two segment proofs both ways and compares:
   binary folds a whole batch in one process, so the only knob is `max_circuit_proofs` across
   batches. Splitting a layer needs the `Proof<QM31>` intermediate the binary does not expose
   (S4, plan B).
+
+The verifier is an independent Cargo workspace and must be checked separately:
+
+```sh
+cargo +nightly-2026-01-15 build --manifest-path leaf-verify/Cargo.toml --release --locked
+cargo +nightly-2026-01-15 test --manifest-path leaf-verify/Cargo.toml --locked
+python3 scripts/check_leaf_proof.py --verifier leaf-verify/target/release/hellproof-leaf-verify existing-browser-proof.bin
+```
+
+The smoke script verifies an existing raw proof and its bzip2 encoding, then
+requires a one-bit corruption to be rejected. It never generates a proof. The
+2026-09-13 audit checked the real 4,343,870-byte WASM Blake proof (log21): accepted
+in about 21 ms; corruption rejected with `Root mismatch`. This verifies the native
+admission gate, not compatibility with the default log20 registry (D32).

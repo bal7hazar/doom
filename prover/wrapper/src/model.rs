@@ -8,10 +8,9 @@ use serde::{Deserialize, Serialize};
 /// Which hash the leaf simple bootloader uses to compute the task's program hash
 /// (`output_preimage[0]`).
 ///
-/// `blake` is what S4 measured; **`poseidon` is the production choice** (G0 D4, S4b measurement 2:
-/// the bootloader overhead drops from `2340 + 14.75 x words` to `1969 + 5.50 x words` steps, i.e.
-/// -294 k steps on a 31.8 k-word program, with the `doom` registry unchanged). The two produce
-/// different program hashes, so this is part of a leaf's identity.
+/// `blake` matches the browser runtime (D31). The two functions produce different
+/// task hashes, so this is part of a leaf's identity. It does not change the
+/// state hash, the output-preimage digest or the proof's channel parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum HashFunction {

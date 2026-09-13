@@ -130,6 +130,7 @@ pub struct VerifyReport {
     pub error: Option<String>,
     #[serde(default)]
     pub verify_ms: f64,
+    /// Hash of the proven bootloader, not the task pin at output_preimage[0].
     #[serde(default)]
     pub program_hash: Option<String>,
     #[serde(default)]

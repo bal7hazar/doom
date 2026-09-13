@@ -87,17 +87,15 @@ check_preimage_binding = true        # `leaf_mode = "rerun"` only: with "from_pr
 # Clients never upload code: they name one of these ids.
 
 [[programs]]
-id = "segment_stub"
-executable = "/opt/hellproof/programs/segment_stub.executable.json"
-hash_function = "blake"              # "poseidon" in production (G0 D4, S4b measurement 2)
-# Optional: pin the task's program hash (`output_preimage[0]`) under that hash function.
-# program_hash = "0x6281af8c9e914c7c1c7dac0de78a4e799473aa5478093be9d099bbdf1ad7f3c"
+id = "segment_stub10"
+executable = "/opt/hellproof/programs/segment_stub10.executable.json"
+hash_function = "blake"              # D31: same as the browser WASM runtime
+# Measured from client/public/programs/segment_stub10.executable.json (see README).
+# Executable SHA-256: 7617a62d9ea3cf6968a24442c246f6c96c4a1018414fd71360ee42dbb9240a4a
+program_hash = "0x6715c525e90af7cf1df88ebcae1d7556ebbbbf1da79a2a322408b3593a9786a"
 
-# [[programs]]
-# id = "doom_run"
-# executable = "/opt/hellproof/programs/doom_run.executable.json"
-# hash_function = "poseidon"
-# program_hash = "0x..."
+# For doom_run, add its exact executable and measure its own Blake task hash.
+# Never copy a stub hash or leaf-verify's bootloader hash to another program.
 
 # ---- authentication (R8-A2) ------------------------------------------------------------------
 # API keys today; the intended Controller session-signature scheme is documented in README.md.
