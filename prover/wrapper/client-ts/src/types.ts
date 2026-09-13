@@ -74,10 +74,64 @@ export interface RunSubmission {
   program_hash_function?: HashFunction;
   /** Wrap this run alone, immediately, instead of waiting for the batch. */
   solo?: boolean;
+  /**
+   * An empty array creates a `collecting` run with no segments yet — the resumable per-segment
+   * upload protocol (`PUT .../segments/{index}`, then `POST .../complete`). A run can also come
+   * into existence directly from a first `PUT`, without this call at all. Required (rather than
+   * optional) here so existing callers that always pass a segment array keep the same type;
+   * the wire format itself also accepts the field being omitted entirely.
+   */
   segments: SegmentSubmission[];
+  /**
+   * Optional, resumable uploads only: how many segments this game will have. Used to reject an
+   * out-of-range `PUT` index early and to check the count at `/complete`.
+   */
+  expected_segments?: number;
+}
+
+/** `POST /v1/runs/{id}/complete` body: supplies whatever a `collecting` run does not know yet. */
+export interface CompleteRunRequest {
+  /** Required unless the run already has a program (from an explicit `POST /v1/runs`). */
+  program?: string;
+  program_hash_function?: HashFunction;
+  player?: Felt;
+  /** Omitted = keep whatever the run was created with. */
+  solo?: boolean;
+}
+
+/** `GET /v1/runs/{id}/segments` — what the server currently holds for a resumable upload. */
+export interface SegmentsListResponse {
+  run_id: string;
+  status: RunStatus | string;
+  /** Indices present, for a quick "what is left to upload" check. */
+  held: number[];
+  segments: HeldSegment[];
+  expected_segments?: number;
+}
+
+export interface HeldSegment {
+  index: number;
+  size_bytes: number;
+  sha256: string;
+  verified: boolean;
+  verify_ms?: number;
+}
+
+/** `PUT /v1/runs/{id}/segments/{index}` response: the immediate verification verdict (R8-A1). */
+export interface SegmentUploadResponse {
+  run_id: string;
+  index: number;
+  verified: boolean;
+  verify_ms?: number;
+  sha256: string;
+  size_bytes: number;
+  /** True when this index was already held with the same content (idempotent no-op). */
+  duplicate?: boolean;
+  error?: string;
 }
 
 export type RunStatus =
+  | "collecting"
   | "verifying"
   | "rejected"
   | "queued"
@@ -123,9 +177,11 @@ export interface Timings {
 export interface RunStatusResponse {
   run_id: string;
   status: RunStatus | string;
+  /** Empty while `collecting` a run that has not been given a program yet. */
   program: string;
   player?: Felt;
   solo: boolean;
+  expected_segments?: number;
   batch_id?: string;
   batch_status?: string;
   created_at_ms: number;
