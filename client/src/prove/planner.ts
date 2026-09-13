@@ -115,30 +115,33 @@ export function nextPow2(n: number): number {
  * The raw (un-rounded) row count of the largest AIR component.
  *
  * The transforms are the ones the README pins: `next_pow2(count)` per opcode and
- * for `verify_instruction`, `next_pow2(len / 16)` for `memory_address_to_id`
- * (`MEMORY_ADDRESS_TO_ID_SPLIT`), `next_pow2(len)` for `memory_id_to_small` —
+ * for `verify_instruction`, `next_pow2(ceil((len - 1) / 16))` for `memory_address_to_id`
+ * (address zero is excluded; `MEMORY_ADDRESS_TO_ID_SPLIT`), `next_pow2(len)` for `memory_id_to_small` —
  * the one that binds first for a memory-writing program. Builtin components are
- * counted at face value, which is right for the ones that get one row per
- * instance and conservative for the others.
+ * counted at face value. Auxiliary counts already include dependencies and any
+ * parent padding, but not their own final padding. The prover names the largest
+ * raw count when several components share the maximum rounded height.
  */
 export function rawMaxComponentRows(summary: ResourceSummary): { rows: number; exact: boolean } {
   const candidates = new Map<string, number>();
   for (const [name, count] of summary.opcodes) candidates.set(name, count);
-  for (const [name, count] of summary.builtins) candidates.set(name, count);
+  for (const [name, count] of summary.builtins) {
+    if (name !== "output_builtin") candidates.set(name, count);
+  }
+  for (const [name, count] of summary.auxiliary_components ?? []) candidates.set(name, count);
   candidates.set("verify_instruction", summary.verify_instruction);
-  candidates.set("memory_address_to_id", summary.memory_address_to_id / 16);
+  candidates.set("memory_address_to_id", Math.ceil(Math.max(0, summary.memory_address_to_id - 1) / 16));
   candidates.set("memory_id_to_small", summary.memory_id_to_small);
 
   const reported = summary.max_component_rows;
   const named = candidates.get(summary.max_component);
-  if (named !== undefined && nextPow2(named) === reported) return { rows: named, exact: true };
+  if (named !== undefined && nextPow2(Math.max(16, named)) === reported) {
+    return { rows: named, exact: true };
+  }
 
-  let best = 0;
-  for (const value of candidates.values()) best = Math.max(best, value);
-  if (best > 0 && nextPow2(best) === reported) return { rows: best, exact: true };
-
-  // The prover knows a component we do not model. Fall back to its own rounded
-  // number: coarser, never optimistic.
+  // Only the named maximum can establish an exact count. A different known
+  // component can share its padded height while having a smaller raw count.
+  // Unknown names and old artifacts therefore use the conservative rounded bound.
   return { rows: reported, exact: false };
 }
 
@@ -231,11 +234,8 @@ export class SegmentPlanner {
       );
       factor = Math.min(factor, 1 / stepUtilisation);
     }
-    // The README documents this counter; the package's `ResourceSummary` does not
-    // declare it yet, so read it defensively rather than pinning a version.
-    const idToBig =
-      (summary as ResourceSummary & { n_memory_id_to_big_components?: number })
-        .n_memory_id_to_big_components ?? 1;
+    // Older artifacts do not declare this counter.
+    const idToBig = summary.n_memory_id_to_big_components ?? 1;
     if (idToBig > this.config.maxIdToBigComponents) {
       reasons.push(
         `${idToBig} memory_id_to_big components, over the ${this.config.maxIdToBigComponents} the leaf parameters force`,
