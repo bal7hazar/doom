@@ -14,8 +14,8 @@ mod vectors;
 use vectors::{DIV_A_ENC, DIV_B_ENC, DIV_R_ENC, MUL_A_ENC, MUL_B_ENC, MUL_R_ENC};
 use super::{
     BIAS, ENC_MAX, FRACUNIT, FRACUNIT_RAW, Fixed, HALF, RAW_MAX, RAW_MIN, ZERO, abs, add, div,
-    felt_ge, from_int, from_raw, from_units, ge, gt, is_neg, le, lt, magnitude, max, min, mul, neg,
-    shr8, split, sub, to_raw, to_units,
+    felt_ge, felt_ge_narrow, from_int, from_raw, from_units, ge, gt, is_neg, le, lt, magnitude, max,
+    min, mul, neg, shr8, split, sub, to_raw, to_u128, to_units,
 };
 
 /// Deterministic pseudo-random raw values in `(-2^31, 2^31)`, from a
@@ -114,6 +114,41 @@ fn test_felt_ge_total_order() {
     assert(felt_ge(hi, 0), 'hi >= 0');
     assert(!felt_ge(0, hi), 'not 0 >= hi');
     assert(felt_ge(hi, hi), 'hi >= hi');
+}
+
+#[test]
+fn test_felt_ge_narrow_agrees_with_felt_ge_inside_its_domain() {
+    assert(felt_ge_narrow(0, 0), 'narrow reflexive');
+    assert(felt_ge_narrow(1, 0), 'narrow 1 >= 0');
+    assert(!felt_ge_narrow(0, 1), 'narrow not 0 >= 1');
+    // The edge of the narrow domain: a difference of 2^64 - 1 either way.
+    let hi: felt252 = 0xFFFFFFFFFFFFFFFF;
+    assert(felt_ge_narrow(hi, 0), 'narrow hi >= 0');
+    assert(!felt_ge_narrow(0, hi), 'narrow not 0 >= hi');
+    assert(felt_ge_narrow(hi, hi), 'narrow hi >= hi');
+    // Every Fixed pair (enc below 2^33) answers exactly like felt_ge.
+    let mut i: u64 = 0;
+    while i != 200 {
+        let a = sample_raw(i) + BIAS;
+        let b = sample_raw(i + 1000) + BIAS;
+        assert(felt_ge_narrow(a, b) == felt_ge(a, b), 'narrow == wide');
+        assert(felt_ge_narrow(b, a) == felt_ge(b, a), 'narrow == wide (swapped)');
+        i += 1;
+    }
+    // Out of its domain it still returns (no panic): the answer is not
+    // meaningful and is deliberately not asserted here.
+    let _ = felt_ge_narrow(0, 0x100000000000000000000000);
+}
+
+#[test]
+fn test_to_u128_is_the_identity_below_2_pow_128_and_zero_above() {
+    assert(to_u128(0) == 0, 'zero');
+    assert(to_u128(BIAS) == 0x100000000, 'bias');
+    assert(
+        to_u128(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, 'max',
+    );
+    assert(to_u128(0x100000000000000000000000000000000) == 0, 'out of domain reads as 0');
+    assert(to_u128(-1) == 0, 'negative reads as 0');
 }
 
 #[test]

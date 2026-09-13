@@ -13,7 +13,7 @@ use vectors::{
 };
 use super::{
     Nodes, SUBSECTOR_FLAG, SubsectorVisitor, child_box, cross_bsp, is_subsector, point_in_subsector,
-    subsector_of, trace,
+    point_in_subsector_total, subsector_of, trace,
 };
 
 /// A visitor that records every subsector it is shown and stops after
@@ -82,6 +82,44 @@ fn test_point_in_subsector_matches_1000_reference_points() {
         assert(got == *ss.at(i), 'descent matches');
         i += 1;
     }
+}
+
+#[test]
+fn test_point_in_subsector_total_agrees_with_the_checked_descent() {
+    let nodes = tree();
+    let x = PT_X.span();
+    let y = PT_Y.span();
+    let root: u32 = ROOT;
+    let mut i: u32 = 0;
+    while i != 1000 {
+        let p = pt_enc(*x.at(i), *y.at(i));
+        assert(
+            point_in_subsector_total(@nodes, root, p) == point_in_subsector(@nodes, root, p),
+            'total == checked',
+        );
+        i += 1;
+    }
+}
+
+#[test]
+fn test_point_in_subsector_total_stops_on_a_cycle() {
+    // The same one-node cycle the checked descent panics on: the total
+    // form ends at subsector 0 instead.
+    let ab = array![131072_felt252];
+    let bb = array![131072_felt252];
+    let cb = array![1125899906842624_felt252];
+    let c0 = array![0_u32];
+    let c1 = array![0_u32];
+    let bbox = array![0_felt252, 0, 0, 0, 0, 0, 0, 0];
+    let nodes = Nodes {
+        ab: ab.span(),
+        bb: bb.span(),
+        cb: cb.span(),
+        child0: c0.span(),
+        child1: c1.span(),
+        bbox: bbox.span(),
+    };
+    assert(point_in_subsector_total(@nodes, 0, pt(1, 1)) == 0, 'total ends at 0');
 }
 
 #[test]
