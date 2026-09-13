@@ -24,6 +24,8 @@ COPY src ./src
 COPY resources ./resources
 COPY patches ./patches
 COPY build.sh ./
+COPY tools/memory64-splats/Cargo.toml tools/memory64-splats/Cargo.lock ./tools/memory64-splats/
+COPY tools/memory64-splats/src ./tools/memory64-splats/src
 
 # The nightly from rust-toolchain.toml; rust-src is needed for -Z build-std (and for the threaded
 # variant, whose std is rebuilt from the patched copy of those sources).
@@ -34,7 +36,8 @@ ENV CARGO_TARGET_DIR=/build/target \
     CARGO_NET_GIT_FETCH_WITH_CLI=true \
     HOME=/root
 # Both variants (single-threaded + threads), no wasm-opt: the shipped artifacts are the raw linker
-# output (see README §Artifact size — `wasm-opt -O3` shrinks the file but *grows* the gzip).
+# output followed by the Memory64 splat-load compatibility rewrite. See README §Artifact size:
+# `wasm-opt -O3` shrinks the file but *grows* the gzip.
 RUN mkdir -p harness/public pkg/wasm && bash ./build.sh
 
 FROM scratch AS artifact

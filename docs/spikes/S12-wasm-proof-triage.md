@@ -1,8 +1,8 @@
 # S12 — incident de génération WASM sur le programme D33
 
-État au 2026-09-13 : **reproduit, cause non encore identifiée**. Ce diagnostic
+État au 2026-09-13 : **cause identifiée, correction intégrée `e274bec` et validée localement**. Ce diagnostic
 ne modifie ni le programme Cairo, ni les paramètres cryptographiques, ni les
-plafonds de segments D26. L’étude S11 reste suspendue pendant sa résolution.
+plafonds de segments D26. La CI distante du nouveau build est verte (`34762719280`, commit `67014df`). Le garde runtime CI ajouté ensuite par `163c9e1` reste à vérifier sur GitHub. La matrice initiale ci-dessous conserve les essais avant correction.
 
 ## Entrée contrôlée
 
@@ -50,12 +50,12 @@ Preuves D33 conservées :
 Le premier essai invalide n’avait pas sauvegardé la preuve avant vérification ;
 seul le second en conserve une. Les scripts suivants sauvegardent avant `verify`.
 
-## Portée du diagnostic
+## Diagnostic intermédiaire, avant résolution
 
 Les claims, le PoW d’interaction, les quatre engagements Merkle et les valeurs
 échantillonnées de la preuve native valide et du second essai WASM invalide sont
 identiques selon le lecteur indépendant de leurs préfixes. La comparaison FRI
-et l’inspection des buffers du backend se poursuivent.
+et l’inspection des buffers du backend étaient alors en cours.
 
 Les observations excluent une explication limitée à la vérification JavaScript,
 à une race exclusivement multithread ou à l’appel `resources()` lui-même. Elles
@@ -67,3 +67,41 @@ Cet incident est **distinct** du rejet attendu par le registre de production
 log20 : la même exécution demande log21. Les smokes arithmétiques CI restent
 verts mais ne couvrent pas cette forme de trace réelle. Aucune promotion du jeu
 complet, aucun relèvement de registre ou de plafond ne résout ce défaut.
+
+## Résolution et revalidation
+
+Le diagnostic final et les tests reproductibles sont dans
+[prover/wasm/diagnostics](../../prover/wasm/diagnostics/README.md).
+Le premier engagement divergent était FRI. Les kernels ont ensuite isolé les
+chargements SIMD Memory64 de Liftoff dans Node24.16/V8 13.6 et Node25.2/V8 14.1.
+Chromium153.0.8010.12 et Node en compilation optimisée dès le départ passent le
+contrôle original. Cela explique pourquoi une variation d’allocation ou de tier
+JIT exposait un défaut préexistant sans modification de l’AIR.
+
+Le build abaisse quatre instructions en chargement scalaire de même largeur puis
+splat, après optimisation. Il conserve les offsets, alignements et limites de
+lecture. Deux tests Rust couvrent 80 modules ; 400 024 contrôles par mode Node
+et 128 cas de kernels corrigés passent. Le build Docker ARM64 épinglé a terminé
+en 763,002 s et reproduit exactement les copies soumises aux preuves root.
+
+| Contrôle root après correction | Génération | Mémoire linéaire | Résultat |
+|---|---:|---:|---|
+| D33, Node24, quatre threads | 44,934 s | 12 133 269 504 B | valide |
+| D33, Node24, mono | 156,293 s | 12 051 611 648 B | valide |
+| D33, Chromium153, original quatre threads | 43,564 s | 12 133 269 504 B | valide |
+| D29 final, Node24 corrigé, quatre threads | 42,161 s | 11 643 518 976 B | valide |
+
+Les preuves D33 de Node corrigé et Chromium original sont identiques :
+`89d7492ec4527b8c7454ccb542e0c57ae374c229437ab652676777622df34c1f`.
+La preuve D29 fait 4 327 966 octets, SHA-256
+`9eb3e16b70020535d51238df49c6a472014c124b0924f4e0457a2d7b094562cb`.
+Vérification native indépendante et bzip2 vertes ; mutations et mauvais bootloader
+refusés. Les dix sorties D29 correspondent exactement à l’ABI native validée.
+Toutes sont des preuves de quatre tics RUNNING, sans nouveau wrap ni soumission.
+
+Nouveaux SHA Linux : mono
+`0524c748f426a867254c9909da18f3d82cae07321558883598b775b9edfc3714`, threads
+`3534ddec473e406654161fd1c5138a27983de12d96a673519bdc24838e7e916c`.
+Root a vérifié les copies locales dist/pkg/harness/client après merge et relancé
+les tests Rust, le test runtime et REUSE. Aucun paramètre cryptographique ni
+plafond n’a été changé ; le registre log20 refuse toujours ces traces log21.
