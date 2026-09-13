@@ -64,14 +64,15 @@ pub fn is_awake(w: World, mo: @Mobj) -> bool {
 /// can place anyone in the window, and the alternative (threading a cursor
 /// through the state) would make the schedule depend on history rather than
 /// on `tic` alone.
-pub fn awake_count(w: World, mobjs: Span<Mobj>) -> u32 {
+pub fn awake_count(w: World, mobjs: Span<Box<Mobj>>) -> u32 {
     // The action column is hoisted out of the loop and `is_awake` is spelled
     // out here (D24): passing the ~20-span `World` through a call boundary
     // once per mobj costs more than the test itself.
     let actions = w.states.action_id;
     let mut remaining = mobjs;
     let mut c: u32 = opaque_zero(mobjs.len());
-    while let Option::Some(m) = remaining.pop_front() {
+    while let Option::Some(boxed) = remaining.pop_front() {
+        let m = boxed.as_snapshot().unbox();
         if doom_physics::has(*m.flags, MF_COUNTKILL)
             && rd32(actions, *m.state) != A_LOOK
             && *m.health > 0 {
@@ -116,7 +117,7 @@ pub fn in_window(rank: u32, tic: u32, n: u32) -> bool {
 /// keeps counting down its idle or run frames as it would have.
 fn dispatch(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -206,7 +207,7 @@ fn dispatch(
 /// it entered, up to [`MAX_ACTION_CHAIN`] deep.
 fn run_chain(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -247,7 +248,7 @@ fn run_chain(
 /// `MAX_ZERO_TIC_CHAIN` allows.
 fn think_state(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -306,7 +307,7 @@ fn think_state(
 /// state machine. Returns `false` when the mobj removed itself (`S_NULL`).
 pub fn mobj_thinker(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -340,7 +341,7 @@ pub fn mobj_thinker(
 /// [`mobj_thinker`] on the narrow [`Env`].
 pub(crate) fn mobj_thinker_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -489,7 +490,7 @@ impl BoxPassDestruct of Destruct<Box<Pass>> {
 
 fn tick_actor(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref pass: Box<Pass>,
     mut mo: Box<Mobj>,
     me: u32,
@@ -545,21 +546,21 @@ fn tick_actor(
 /// thing grid is updated in place; its canonical order is hashed (schema 2).
 fn monsters_ticker_in(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     players: Span<u32>,
     noise: Noise,
     tic: u32,
     rng: Prng,
     ref defense: Box<PlayerDefense>,
-) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
+) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>) {
     let e = BoxTrait::new(EnvData { w: BoxTrait::new(w), players, noise, tic });
-    let mut out: Array<Mobj> = array![];
+    let mut out: Array<Box<Mobj>> = array![];
     let n = mobjs.len();
     let awake = awake_count(w, mobjs);
     // Where a missile spawned this tic goes: a freed slot if there is one,
     // otherwise the end of the list. Only an awake monster can fire, and
-    // `first_free` unboxes every slot of the list, so a tic with nothing
+    // `first_free` scans every slot of the list, so a tic with nothing
     // awake does not pay for it.
     let mut spawn_at = n;
     if awake != 0 {
@@ -581,17 +582,19 @@ fn monsters_ticker_in(
     let mut i: u32 = opaque_zero(n);
     let mut rank: u32 = opaque_zero(n);
     let mut remaining = mobjs;
-    while let Option::Some(m) = remaining.pop_front() {
-        let flags = *m.flags;
-        if *m.kind == KIND_NONE || !doom_physics::has(flags, MF_COUNTKILL + MF_MISSILE) {
-            out.append(*m);
+    // Keep the one-felt box live across branches and calls. A named @Mobj
+    // snapshot here makes Cairo preserve 27 felts even on unchanged slots.
+    while let Option::Some(boxed) = remaining.pop_front() {
+        let flags = boxed.flags;
+        if boxed.kind == KIND_NONE || !doom_physics::has(flags, MF_COUNTKILL + MF_MISSILE) {
+            out.append(*boxed);
             i = inc(i);
             continue;
         }
         let countkill = doom_physics::has(flags, MF_COUNTKILL);
-        let dormant = countkill && rd32(e.w.unbox().states.action_id, *m.state) == A_LOOK;
+        let dormant = countkill && rd32(e.w.unbox().states.action_id, boxed.state) == A_LOOK;
         let mut may_chase = true;
-        if countkill && !dormant && *m.health > 0 {
+        if countkill && !dormant && boxed.health > 0 {
             may_chase = in_window(rank, tic, awake);
             rank = inc(rank);
         }
@@ -607,20 +610,27 @@ fn monsters_ticker_in(
         // The suppressed action can only be `A_Look` — that *is* what makes
         // the monster dormant — so nothing is lost.
         if dormant
-            && *m.momx == fixed::ZERO
-            && *m.momy == fixed::ZERO
-            && *m.momz == fixed::ZERO
-            && *m.z == *m.floorz {
-            let (st, tc) = if *m.tics != fsm::FOREVER {
-                let (st, tc, _) = fsm::advance(e.w.unbox().states, *m.state, *m.tics);
+            && boxed.momx == fixed::ZERO
+            && boxed.momy == fixed::ZERO
+            && boxed.momz == fixed::ZERO
+            && boxed.z == boxed.floorz {
+            let (st, tc) = if boxed.tics != fsm::FOREVER {
+                let (st, tc, _) = fsm::advance(e.w.unbox().states, boxed.state, boxed.tics);
                 (st, tc)
             } else {
-                (*m.state, *m.tics)
+                (boxed.state, boxed.tics)
             };
             if !may_look {
-                // Nothing else to do this tic: the countdown goes straight
-                // into the rebuilt list, one 27-felt write and no copy.
-                out.append(Mobj { state: st, tics: tc, ..*m });
+                // Reuse an unchanged record (including FOREVER). A changed
+                // countdown still allocates its 27 fields, then one pointer.
+                out
+                    .append(
+                        if st == boxed.state && tc == boxed.tics {
+                            *boxed
+                        } else {
+                            BoxTrait::new(Mobj { state: st, tics: tc, ..boxed.unbox() })
+                        },
+                    );
                 i = inc(i);
                 continue;
             }
@@ -628,18 +638,18 @@ fn monsters_ticker_in(
                 e,
                 mobjs,
                 ref pass,
-                BoxTrait::new(Mobj { state: st, tics: tc, ..*m }),
+                BoxTrait::new(Mobj { state: st, tics: tc, ..boxed.unbox() }),
                 i,
                 true,
                 may_chase,
                 true,
             );
-            out.append(b.unbox());
+            out.append(b);
             i = inc(i);
             continue;
         }
-        let b = tick_actor(e, mobjs, ref pass, BoxTrait::new(*m), i, may_look, may_chase, false);
-        out.append(b.unbox());
+        let b = tick_actor(e, mobjs, ref pass, *boxed, i, may_look, may_chase, false);
+        out.append(b);
         i = inc(i);
     }
     let Pass { grid, rng, patches, events, spawn_at: _, defense: final_defense } = pass.unbox();
@@ -653,13 +663,13 @@ fn monsters_ticker_in(
 /// the rebuilt list in one pass — the physics README's "batch such patches
 /// and apply them in one rebuild at the end of the tic" — and append the
 /// ones that claimed a new slot. A tic with no patch pays nothing.
-fn apply(out: Array<Mobj>, patches: Span<Patch>, n: u32) -> Array<Mobj> {
+fn apply(out: Array<Box<Mobj>>, patches: Span<Patch>, n: u32) -> Array<Box<Mobj>> {
     let np = patches.len();
     if np == 0 {
         return out;
     }
     let src = out.span();
-    let mut res: Array<Mobj> = array![];
+    let mut res: Array<Box<Mobj>> = array![];
     let mut i: u32 = opaque_zero(n);
     // The per-slot scan *is* `read_mobj`'s (S7 §8 rule 6: one shared helper
     // out of line rather than the same loop written twice).
@@ -695,13 +705,13 @@ pub(crate) fn scale(r: u32, mul: u32) -> u32 {
 #[inline(always)]
 pub fn monsters_ticker(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     players: Span<u32>,
     noise: Noise,
     tic: u32,
     rng: Prng,
-) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
+) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>) {
     let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     monsters_ticker_in(w, mobjs, ref g, players, noise, tic, rng, ref defense)
 }
@@ -711,14 +721,14 @@ pub fn monsters_ticker(
 #[inline(always)]
 pub fn monsters_ticker_with_defense(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     players: Span<u32>,
     noise: Noise,
     tic: u32,
     rng: Prng,
     ref defense: PlayerDefense,
-) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
+) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>) {
     let mut boxed = BoxTrait::new(defense);
     let out = monsters_ticker_in(w, mobjs, ref g, players, noise, tic, rng, ref boxed);
     defense = boxed.unbox();

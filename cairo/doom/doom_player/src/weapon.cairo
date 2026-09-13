@@ -709,7 +709,9 @@ fn sub_roll(ref rng: Prng, table: Span<u8>) -> felt252 {
 
 /// `P_BulletSlope`: aim straight ahead, then a degree either side.
 #[inline(always)]
-pub fn bullet_slope(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, mo: @Mobj, me: u32) -> Fixed {
+pub fn bullet_slope(
+    w: World, mobjs: Span<Box<Mobj>>, ref g: ThingGrid, mo: @Mobj, me: u32,
+) -> Fixed {
     bullet_slope_at(w, mobjs, ref g, *mo.angle, me)
 }
 
@@ -721,7 +723,9 @@ pub fn bullet_slope(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, mo: @Mobj, me
 /// is `P_BulletSlope`'s own short-circuit: `if (!linetarget)`. A shot with a
 /// target in front of the player costs one `P_AimLineAttack`; a shot into
 /// empty space costs three (README, "Measured step costs").
-fn bullet_slope_at(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, an: Angle, me: u32) -> Fixed {
+fn bullet_slope_at(
+    w: World, mobjs: Span<Box<Mobj>>, ref g: ThingGrid, an: Angle, me: u32,
+) -> Fixed {
     let aim = aim_line_attack(w, mobjs, ref g, me, an, AIMRANGE);
     if aim.target != NO_MOBJ {
         return aim.slope;
@@ -778,7 +782,7 @@ fn a_melee(
         return;
     }
     let t = match mobjs.get(aim.target) {
-        Option::Some(b) => b.unbox(),
+        Option::Some(b) => b.unbox().as_snapshot().unbox(),
         Option::None => { return; },
     };
     let facing = point_to_angle2(cur.x, cur.y, *t.x, *t.y);

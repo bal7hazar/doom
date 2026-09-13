@@ -1,5 +1,10 @@
 # doom_player
 
+The internal `Env.mobjs` field and roster arguments use `Span<Box<Mobj>>`
+(D33). The player's mutable `ref Mobj` and gameplay remain the same; targets
+are read through the existing boxes. See the [assembled comparison](../doom_game/bench_boxed/README.md)
+for exact wire/golden equivalence and the small fixture-construction overhead.
+
 **Does**: the player half of a Doom-like tic — `p_user.c`, `p_pspr.c` and
 the player's share of `p_inter.c` from linuxdoom-1.10 (GPL-2.0-only;
 semantics derived, no C copied), over `doom_physics`' geometry and

@@ -322,7 +322,7 @@ fn test_snapshot_layout_round_trip() {
         'layout length',
     );
     // The player block starts with the mobj's position.
-    let mo = *g.mobjs.at(0);
+    let mo = g.mobjs.at(0).unbox();
     assert(*snap.at(SNAPSHOT_HEADER) == mo.x.enc, 'player x');
     assert(*snap.at(SNAPSHOT_HEADER + 1) == mo.y.enc, 'player y');
     assert(*snap.at(SNAPSHOT_HEADER + 6) == 100, 'health');
@@ -336,7 +336,7 @@ fn test_snapshot_layout_round_trip() {
     let mut live: u32 = 0;
     let mut ms = g.mobjs;
     while let Option::Some(m) = ms.pop_front() {
-        if !is_removed(m) {
+        if !is_removed((m).as_snapshot().unbox()) {
             live += 1;
         }
     }
@@ -373,16 +373,16 @@ fn test_a_shot_that_lands_damages_kills_counts_and_drops() {
     let (ctx, mctx) = plumbing(@g);
     let w = ctx.w;
     let mut grid: ThingGrid = new_grid();
-    let mut pmo = *g.mobjs.at(0);
+    let mut pmo = g.mobjs.at(0).unbox();
     set_thing_position(@w.map, ref grid, ref pmo, 0);
     let mut zombie = spawn_mobj(w, KIND_POSSESSED, pmo.x, pmo.y, SpawnZ::OnFloor);
     set_thing_position(@w.map, ref grid, ref zombie, 1);
-    let mobjs = array![pmo, zombie].span();
+    let mobjs = array![BoxTrait::new(pmo), BoxTrait::new(zombie)].span();
     let mut p = g.player;
     let mut rng = from_index(1);
     let mut s = g.specials;
     let mut patches: Array<Patch> = array![];
-    let mut drops: Array<Mobj> = array![];
+    let mut drops: Array<core::box::Box<Mobj>> = array![];
     let mut cues: Array<MonsterEvent> = array![];
     let at = Point { x: pmo.x, y: pmo.y };
     // Two blows: 15 (pain) then 20 (dead: a zombieman has 20).
@@ -404,15 +404,15 @@ fn test_a_shot_that_lands_damages_kills_counts_and_drops() {
     assert((*drops.at(0)).kind == KIND_CLIP, 'a clip');
     assert(has((*drops.at(0)).flags, MF_DROPPED), 'dropped');
     // Place it: appended after the two.
-    let mut out: Array<Mobj> = array![pmo, zombie];
+    let mut out: Array<core::box::Box<Mobj>> = array![BoxTrait::new(pmo), BoxTrait::new(zombie)];
     place_drops(w, ref grid, ref out, drops.span());
     assert(out.len() == 3, 'appended');
-    assert(!is_removed(out.at(2)), 'live');
+    assert(!is_removed((out.at(2)).as_snapshot().unbox()), 'live');
     // With the chainsaw ready the blow does not thrust.
     let mut p2 = g.player;
     p2.ready_weapon = WP_CHAINSAW;
     let mut patches2: Array<Patch> = array![];
-    let mut drops2: Array<Mobj> = array![];
+    let mut drops2: Array<core::box::Box<Mobj>> = array![];
     let mut cues2: Array<MonsterEvent> = array![];
     let mut s2 = g.specials;
     let one = array![PlayerEvent::Shot((Hit::Thing((1, at, fixed::ZERO)), 3))];
@@ -431,7 +431,7 @@ fn test_use_event_reaches_the_specials_and_picked_is_ignored() {
     let mut rng = from_index(1);
     let mut s = g.specials;
     let mut patches: Array<Patch> = array![];
-    let mut drops: Array<Mobj> = array![];
+    let mut drops: Array<core::box::Box<Mobj>> = array![];
     let mut cues: Array<MonsterEvent> = array![];
     // The back side of any line is never usable: the state is unchanged.
     let events = array![PlayerEvent::Use((0, 1)), PlayerEvent::Picked(3)];
@@ -449,13 +449,13 @@ fn test_touch_picks_up_and_removes_an_item_once() {
     let (ctx, _) = plumbing(@g);
     let w = ctx.w;
     let mut grid: ThingGrid = new_grid();
-    let mut pmo = *g.mobjs.at(0);
+    let mut pmo = g.mobjs.at(0).unbox();
     set_thing_position(@w.map, ref grid, ref pmo, 0);
     // A health bonus (MISC2) under the player's feet.
     let mut bonus = spawn_mobj(w, KIND_MISC2, pmo.x, pmo.y, SpawnZ::OnFloor);
     set_thing_position(@w.map, ref grid, ref bonus, 1);
     assert(has(bonus.flags, MF_SPECIAL), 'an item');
-    let mobjs = array![pmo, bonus].span();
+    let mobjs = array![BoxTrait::new(pmo), BoxTrait::new(bonus)].span();
     let mut p = g.player;
     let mut mo = pmo;
     let mut s = g.specials;
@@ -465,11 +465,11 @@ fn test_touch_picks_up_and_removes_an_item_once() {
     assert(p.health == 101, 'one bonus, once');
     assert(p.itemcount == 1, 'counted');
     assert(patches.len() == 1, 'removed once');
-    assert(is_removed(@(*patches.at(0)).mo), 'a removed slot');
+    assert(is_removed((@(*patches.at(0)).mo).as_snapshot().unbox()), 'a removed slot');
     // The rebuild writes the patch and the player.
     let list = rebuild_list(w, mobjs, ref grid, mo, 0, patches.span(), array![].span());
-    assert(is_removed(list.at(1)), 'gone from the list');
-    assert(*list.at(0) == mo, 'player written');
+    assert(is_removed((list.at(1)).as_snapshot().unbox()), 'gone from the list');
+    assert(list.at(0).unbox() == mo, 'player written');
     g.player = p;
     g.specials = s;
     g.mobjs = list;
@@ -488,24 +488,24 @@ fn assert_state_roundtrip(g: @GameState) {
 fn test_grid_roundtrip_after_missile_removal_and_drop() {
     let mut g = genesis(LevelId::E1M1);
     let w = ctx_of(g.level, g.floor, g.ceil).w;
-    let mut player = *g.mobjs.at(0);
+    let mut player = g.mobjs.at(0).unbox();
     let mut missile = spawn_mobj(
         w, doom_things::tables::KIND_TROOPSHOT, player.x, player.y, SpawnZ::OnFloor,
     );
     let mut grid = new_grid();
     set_thing_position(@w.map, ref grid, ref player, 0);
     set_thing_position(@w.map, ref grid, ref missile, 1);
-    g.mobjs = array![player, missile].span();
+    g.mobjs = array![BoxTrait::new(player), BoxTrait::new(missile)].span();
     g.grid = grid;
     assert_state_roundtrip(@g);
     // The same unlink/tombstone transition used by the missile ticker.
     doom_physics::unset_thing_position(ref g.grid, @missile, 1);
-    let mut out = array![player, removed_mobj()];
+    let mut out = array![BoxTrait::new(player), BoxTrait::new(removed_mobj())];
     g.mobjs = out.span();
     assert_state_roundtrip(@g);
     let mut clip = spawn_mobj(w, KIND_CLIP, player.x, player.y, SpawnZ::OnFloor);
     clip.flags = clip.flags | MF_DROPPED;
-    place_drops(w, ref g.grid, ref out, array![clip].span());
+    place_drops(w, ref g.grid, ref out, array![BoxTrait::new(clip)].span());
     g.mobjs = out.span();
     assert_state_roundtrip(@g);
 }
@@ -517,7 +517,7 @@ fn test_cross_special_from_the_player_reaches_the_specials() {
     let mobjs = g.mobjs;
     let mut grid: ThingGrid = new_grid();
     let mut p = g.player;
-    let mut mo = *g.mobjs.at(0);
+    let mut mo = g.mobjs.at(0).unbox();
     let mut s = g.specials;
     let mut patches: Array<Patch> = array![];
     // Line 0 is no walk trigger on any level: nothing changes, nothing traps.
@@ -533,7 +533,7 @@ fn test_monster_events_are_applied() {
     let w = ctx.w;
     let mut p = g.player;
     let mut s = g.specials;
-    let mut drops: Array<Mobj> = array![];
+    let mut drops: Array<core::box::Box<Mobj>> = array![];
     let mut cues: Array<MonsterEvent> = array![];
     let at = Point { x: fixed::ZERO, y: fixed::ZERO };
     let ev = array![
@@ -559,7 +559,7 @@ fn test_reconcile_player_synchronizes_resolved_damage_and_death() {
     let env = env_of(ctx.w, g.mobjs, 0, 0, 0);
     let mut rng = from_index(1);
     let mut p = g.player;
-    let mut after = *g.mobjs.at(0);
+    let mut after = g.mobjs.at(0).unbox();
     after.health = 80;
     let defense = doom_physics::PlayerDefense {
         mo: 0, armor_type: 1, armor_points: 40, damagecount: 20, attacker: 4,
@@ -583,7 +583,7 @@ fn test_occupancy_blocks_a_closing_door_on_a_live_shootable_thing() {
     let g = genesis(LevelId::E1M1);
     let mobjs = g.mobjs;
     let occ = Occupancy { mobjs };
-    let pmo = *mobjs.at(0);
+    let pmo = mobjs.at(0).unbox();
     // The player's own sector, with no room: blocked; with plenty: free.
     assert(
         occ.nofit(pmo.sector, pmo.z, fixed::add(pmo.z, fixed::from_units(8))),
@@ -594,7 +594,7 @@ fn test_occupancy_blocks_a_closing_door_on_a_live_shootable_thing() {
     let mut corpse = pmo;
     corpse.health = 0;
     corpse.flags = 0;
-    let dead = Occupancy { mobjs: array![corpse].span() };
+    let dead = Occupancy { mobjs: array![BoxTrait::new(corpse)].span() };
     assert(!dead.nofit(pmo.sector, pmo.z, fixed::add(pmo.z, fixed::from_units(8))), 'corpse');
     assert(has(pmo.flags, MF_SHOOTABLE), 'the player is shootable');
 }
@@ -605,9 +605,9 @@ fn test_height_clip_keeps_a_standing_thing_on_its_floor() {
     let (ctx, _) = plumbing(@g);
     let w = ctx.w;
     let mut grid: ThingGrid = new_grid();
-    let mut mo = *g.mobjs.at(0);
+    let mut mo = g.mobjs.at(0).unbox();
     set_thing_position(@w.map, ref grid, ref mo, 0);
-    let mobjs = array![mo].span();
+    let mobjs = array![BoxTrait::new(mo)].span();
     // Pretend the floor was 8 lower when it last stood: the clip lifts it.
     let real = mo.floorz;
     mo.floorz = fixed::sub(real, fixed::from_units(8));
@@ -647,7 +647,7 @@ fn test_reader_rejects_overflowing_declared_length_without_panicking() {
 fn test_serialized_boundary_preserves_pickup_order() {
     let mut g = genesis(LevelId::E1M1);
     let ctx = ctx_of(g.level, g.floor, g.ceil);
-    let mut me = *g.mobjs.at(0);
+    let mut me = g.mobjs.at(0).unbox();
     me.health = 99;
     g.player.health = 99;
     let mut bonus = spawn_mobj(ctx.w, KIND_MISC2, me.x, me.y, SpawnZ::OnFloor);
@@ -658,7 +658,7 @@ fn test_serialized_boundary_preserves_pickup_order() {
     set_thing_position(@ctx.w.map, ref grid, ref stim, 2);
     // A previous move changes visitation order without changing any mobj.
     doom_physics::relink(ref grid, bonus.cell, 1);
-    g.mobjs = array![me, bonus, stim].span();
+    g.mobjs = array![BoxTrait::new(me), BoxTrait::new(bonus), BoxTrait::new(stim)].span();
     g.grid = grid;
     let saved = serialize(@g);
     let restored = from_felts(saved.span()).expect('readable');

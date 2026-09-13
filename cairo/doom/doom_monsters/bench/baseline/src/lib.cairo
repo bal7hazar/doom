@@ -43,7 +43,7 @@ fn main(op: u32) -> felt252 {
         SpawnZ::OnFloor,
     );
     set_thing_position(@w.map, ref grid, ref mon, 1);
-    let mut list = array![player, mon];
+    let mut list = array![BoxTrait::new(player), BoxTrait::new(mon)];
     let mobjs = list.span();
 
     let x = fixed::add(mon.x, Fixed { enc: 0x100000000 + 4 * 65536 });

@@ -79,15 +79,15 @@ fn trace(s: @GameState) {
     let mut ms = *s.mobjs;
     let mut i: u32 = 0;
     while let Option::Some(m) = ms.pop_front() {
-        if doom_monsters::is_awake(ctx.w, m) {
+        if doom_monsters::is_awake(ctx.w, (m).as_snapshot().unbox()) {
             println!(
                 "    awake {} kind {} x {} y {} health {} state {}",
                 i,
-                *m.kind,
-                fixed::to_units(*m.x),
-                fixed::to_units(*m.y),
-                *m.health,
-                *m.state,
+                m.kind,
+                fixed::to_units(m.x),
+                fixed::to_units(m.y),
+                m.health,
+                m.state,
             );
         }
         i += 1;
@@ -105,11 +105,11 @@ fn test_genesis_spawns_the_level() {
     let mut items: u32 = 0;
     let mut ms = g.mobjs;
     while let Option::Some(m) = ms.pop_front() {
-        assert(!is_removed(m), 'no hole at genesis');
-        if has(*m.flags, MF_COUNTKILL) {
+        assert(!is_removed((m).as_snapshot().unbox()), 'no hole at genesis');
+        if has(m.flags, MF_COUNTKILL) {
             kills += 1;
         }
-        if has(*m.flags, MF_COUNTITEM) {
+        if has(m.flags, MF_COUNTITEM) {
             items += 1;
         }
     }
@@ -275,7 +275,7 @@ fn test_replay_idle() {
 fn test_replay_walk() {
     let (s, status) = run(genesis(LevelId::E1M1), walk_log().span());
     assert(status == Status::Running, 'still running');
-    let mo = *s.mobjs.at(0);
+    let mo = s.mobjs.at(0).unbox();
     assert(mo.sector == 17, 'down in the trench');
     assert(mo.z.enc == fixed::from_units(-128).enc, 'on the trench floor');
     let st = stats_of(@s);
@@ -288,7 +288,7 @@ fn test_replay_walk() {
 fn test_replay_door() {
     let (s, status) = run(genesis(LevelId::E1M1), door_log().span());
     assert(status == Status::Running, 'still running');
-    let mo = *s.mobjs.at(0);
+    let mo = s.mobjs.at(0).unbox();
     assert(fixed::gt(mo.y, fixed::from_units(560)), 'through the door');
     assert(mo.sector == 56, 'in the room behind it');
     assert(s.specials.used.len() == 0 && s.specials.movers.len() == 1, 'the door is a thinker');

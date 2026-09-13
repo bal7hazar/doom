@@ -2,7 +2,7 @@
 //! `P_DamageMobj` and `P_KillMobj` (`p_inter.c`), on the target as a value.
 //!
 //! The target is the mobj the caller owns; the inflictor and the source are
-//! read from the tic's `Span<Mobj>`. `damage_mobj_with_defense` applies
+//! read from the tic's `Span<Box<Mobj>>`. `damage_mobj_with_defense` applies
 //! player armor after raw thrust and before health/pain/death. Player owns
 //! the persistent defense fields, weapon drop and `PST_DEAD`; the ticker
 //! carries a temporary `PlayerDefense` so later impacts see net health.
@@ -212,7 +212,7 @@ pub fn kill_mobj(w: World, ref rng: Prng, ref target: Mobj) -> (u32, Option<Mobj
 fn thrust_of(
     rnd: Span<u8>,
     ref rng: Prng,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     inflictor: u32,
     x: Fixed,
     y: Fixed,
@@ -223,7 +223,7 @@ fn thrust_of(
 ) -> (Fixed, Fixed) {
     let (ix, iy, iz) = match mobjs.get(inflictor) {
         Option::Some(b) => {
-            let inf = b.unbox();
+            let inf = b.unbox().as_snapshot().unbox();
             (*inf.x, *inf.y, *inf.z)
         },
         Option::None => (x, y, z),
@@ -335,7 +335,7 @@ fn react(
 #[inline(always)]
 pub fn damage_mobj(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref target: Mobj,
     target_idx: u32,
@@ -354,7 +354,7 @@ pub fn damage_mobj(
 /// then health, pain or death. A corpse never spends armor or draws again.
 pub fn damage_mobj_with_defense(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref target: Mobj,
     target_idx: u32,

@@ -52,10 +52,10 @@ fn bench_player(w: World, ref g: ThingGrid, dx: felt252, dy: felt252) -> Mobj {
 
 /// `n` zombiemen spread over the room around the player, already awake and
 /// chasing mobj 0.
-fn awake_scene(w: World, ref g: ThingGrid, n: u32) -> Array<Mobj> {
-    let mut out: Array<Mobj> = array![];
+fn awake_scene(w: World, ref g: ThingGrid, n: u32) -> Array<Box<Mobj>> {
+    let mut out: Array<Box<Mobj>> = array![];
     let p = bench_player(w, ref g, STAND_DX, STAND_DY);
-    out.append(p);
+    out.append(BoxTrait::new(p));
     let mut k: u32 = 0;
     while k != n {
         let col: felt252 = (k % 5).into();
@@ -72,7 +72,7 @@ fn awake_scene(w: World, ref g: ThingGrid, n: u32) -> Array<Mobj> {
         mo.reaction_time = 0;
         let idx = out.len();
         set_thing_position(@w.map, ref g, ref mo, idx);
-        out.append(mo);
+        out.append(BoxTrait::new(mo));
         k += 1;
     }
     out
@@ -80,10 +80,10 @@ fn awake_scene(w: World, ref g: ThingGrid, n: u32) -> Array<Mobj> {
 
 /// The player in the start alcove and every skill-2 monster of E1M1, all
 /// dormant and none of them able to see him.
-fn dormant_scene(w: World, ref g: ThingGrid) -> Array<Mobj> {
+fn dormant_scene(w: World, ref g: ThingGrid) -> Array<Box<Mobj>> {
     let m = load(LevelId::E1M1);
-    let mut out: Array<Mobj> = array![];
-    out.append(bench_player(w, ref g, 0, 0));
+    let mut out: Array<Box<Mobj>> = array![];
+    out.append(BoxTrait::new(bench_player(w, ref g, 0, 0)));
     let total = num_things(@m);
     let mut i: u32 = 0;
     while i != total {
@@ -95,7 +95,7 @@ fn dormant_scene(w: World, ref g: ThingGrid) -> Array<Mobj> {
                         let idx = out.len();
                         let mut linked = mo;
                         set_thing_position(@w.map, ref g, ref linked, idx);
-                        out.append(linked);
+                        out.append(BoxTrait::new(linked));
                     }
                 },
                 Option::None => {},
@@ -145,7 +145,7 @@ fn main(op: u32, n: u32) -> felt252 {
         }
     } else if op == 2 {
         // ticker overhead: the player alone (no monster, no missile)
-        let mut mobjs = array![bench_player(w, ref g, STAND_DX, STAND_DY)];
+        let mut mobjs = array![BoxTrait::new(bench_player(w, ref g, STAND_DX, STAND_DY))];
         let mut rng: Prng = from_index(1);
         while i != n {
             let (next, r, _ev) = monsters_ticker(
@@ -159,7 +159,7 @@ fn main(op: u32, n: u32) -> felt252 {
     } else if op == 3 {
         // one dormant monster, the whole tic
         let mut mobjs = dormant_scene(w, ref g);
-        let mut short: Array<Mobj> = array![*mobjs.span().at(0), *mobjs.span().at(1)];
+        let mut short: Array<Box<Mobj>> = array![*mobjs.span().at(0), *mobjs.span().at(1)];
         let mut rng: Prng = from_index(1);
         while i != n {
             let (next, r, _ev) = monsters_ticker(
@@ -213,7 +213,7 @@ fn main(op: u32, n: u32) -> felt252 {
         // `A_Chase`: one walking step, sight answered from the cache
         while i != n {
             let (p, mut mo) = one_chaser(w, ref g, i);
-            let mobjs = array![p, mo].span();
+            let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
             let mut rng: Prng = from_index(1);
             let mut ev: Array<MonsterEvent> = array![];
             let patches: Array<Patch> = array![];
@@ -228,7 +228,7 @@ fn main(op: u32, n: u32) -> felt252 {
             let (p, mut mo) = one_chaser(w, ref g, i);
             mo.target = doom_physics::NO_MOBJ;
             mo.sight_expires = 0;
-            let mobjs = array![p, mo].span();
+            let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
             let mut rng: Prng = from_index(1);
             let mut ev: Array<MonsterEvent> = array![];
             let ctx = Ctx { w, players, noise: silence(), tic: i };
@@ -239,7 +239,7 @@ fn main(op: u32, n: u32) -> felt252 {
         // `P_NewChaseDir`: the direction search, with its `P_TryWalk`s
         while i != n {
             let (p, mut mo) = one_chaser(w, ref g, i);
-            let mobjs = array![p, mo].span();
+            let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
             let mut rng: Prng = from_index(i);
             let mut ev: Array<MonsterEvent> = array![];
             let ctx = Ctx { w, players, noise: silence(), tic: i };
@@ -273,7 +273,7 @@ fn main(op: u32, n: u32) -> felt252 {
             let (p, mut mo) = one_chaser(w, ref g, i);
             mo.target = doom_physics::NO_MOBJ;
             mo.sight_expires = 0;
-            let mobjs = array![p, mo].span();
+            let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
             let mut rng: Prng = from_index(1);
             let mut ev: Array<MonsterEvent> = array![];
             let ctx = Ctx { w, players, noise, tic: i };
@@ -303,7 +303,7 @@ fn main(op: u32, n: u32) -> felt252 {
         let mut patches: Array<Patch> = array![];
         let mut spawn_at: u32 = 2;
         while i != n {
-            let mut mo = *short.at(1);
+            let mut mo = short.at(1).unbox();
             let ctx = Ctx { w, players, noise: silence(), tic: i };
             if doom_monsters::think::mobj_thinker(
                 ctx,
@@ -342,7 +342,7 @@ fn main(op: u32, n: u32) -> felt252 {
         // the AI's own share of a chase step.
         while i != n {
             let (p, mut mo) = one_chaser(w, ref g, i);
-            let mobjs = array![p, mo].span();
+            let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
             let mut ev: Array<MonsterEvent> = array![];
             let ctx = Ctx { w, players, noise: silence(), tic: i };
             if p_move(ctx, mobjs, ref g, ref mo, 1, ref ev) {
@@ -357,12 +357,12 @@ fn main(op: u32, n: u32) -> felt252 {
         let mobjs = dormant_scene(w, ref g);
         while i != n {
             let src = mobjs.span();
-            let mut copy: Array<Mobj> = array![];
+            let mut copy: Array<Box<Mobj>> = array![];
             let mut k: u32 = 0;
             while k != src.len() {
-                let mut mo = *src.at(k);
+                let mut mo = src.at(k).unbox();
                 mo.tics = mo.tics % 64 + i;
-                copy.append(mo);
+                copy.append(BoxTrait::new(mo));
                 k += 1;
             }
             acc += copy.len().into();

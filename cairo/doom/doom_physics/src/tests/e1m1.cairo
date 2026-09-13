@@ -99,7 +99,7 @@ fn test_moves_match_the_python_model() {
         let y = fixed::add(mo.y, fx(*v.at(b + 7)));
         let expected_ok = *v.at(b + 8) == 1;
         let blocker: u32 = (*v.at(b + 12)).try_into().unwrap();
-        let mobjs = array![mo].span();
+        let mobjs = array![BoxTrait::new(mo)].span();
         let mut events: Array<MoveEvent> = array![];
         let c = check_position(w, mobjs, ref g, @mo, 0, x, y, ref events);
         if blocker != NO_LINE {
@@ -158,7 +158,7 @@ fn test_friction_matches_the_python_model() {
         let mut mo = spawn_mobj(w, KIND_POSSESSED, units(-350), units(256), SpawnZ::OnFloor);
         mo.momx = fx(*v.at(b));
         mo.momy = fx(*v.at(b + 1));
-        let mobjs = array![mo].span();
+        let mobjs = array![BoxTrait::new(mo)].span();
         let mut events: Array<MoveEvent> = array![];
         let mut t: u32 = 0;
         while t != 12 {
@@ -252,7 +252,7 @@ fn test_shots_match_the_python_ray_cast() {
         let slope = fx(*v.at(b + 4));
         let range = units(*v.at(b + 5));
         let expected_line: u32 = (*v.at(b + 6)).try_into().unwrap();
-        let mobjs = array![shooter].span();
+        let mobjs = array![BoxTrait::new(shooter)].span();
         match line_attack(w, mobjs, ref g, 0, angle, range, slope) {
             Hit::Wall((
                 line, p, _z,
@@ -283,7 +283,7 @@ fn test_things_block_touch_and_get_hit() {
     let mut zombie = at(w, KIND_POSSESSED, units(-386), units(256), fixed::ZERO);
     set_thing_position(@w.map, ref g, ref zombie, 1);
     let mut events: Array<MoveEvent> = array![];
-    let mobjs = array![player, zombie].span();
+    let mobjs = array![BoxTrait::new(player), BoxTrait::new(zombie)].span();
     let mut p = player;
     let v = try_move(w, mobjs, ref g, ref p, 0, units(-406), p.y, ref events);
     assert(!v.ok && v.blocker == Blocker::Thing(1), 'solid thing blocks');
@@ -295,7 +295,7 @@ fn test_things_block_touch_and_get_hit() {
     // An ammo clip in the way: touched, not blocking.
     let mut clip = at(w, KIND_CLIP, units(-386), units(256), fixed::ZERO);
     set_thing_position(@w.map, ref g, ref clip, 2);
-    let mobjs = array![player, zombie, clip].span();
+    let mobjs = array![BoxTrait::new(player), BoxTrait::new(zombie), BoxTrait::new(clip)].span();
     let mut p = player;
     let mut events: Array<MoveEvent> = array![];
     let v = try_move(w, mobjs, ref g, ref p, 0, units(-436), p.y, ref events);
@@ -311,7 +311,7 @@ fn test_things_block_touch_and_get_hit() {
     set_thing_position(@w.map, ref g2, ref lone, 0);
     let mut clip2 = clip;
     set_thing_position(@w.map, ref g2, ref clip2, 1);
-    let mobjs2 = array![lone, clip2].span();
+    let mobjs2 = array![BoxTrait::new(lone), BoxTrait::new(clip2)].span();
     let v = try_move(w, mobjs2, ref g2, ref lone, 0, units(-400), lone.y, ref events);
     assert(v.ok, 'walks over the clip');
     assert(events.len() == 1, 'one touch');
@@ -323,7 +323,7 @@ fn test_things_block_touch_and_get_hit() {
     set_thing_position(@w.map, ref g3, ref z3, 0);
     let mut ball = at(w, KIND_TROOPSHOT, units(-356), units(256), units(20));
     set_thing_position(@w.map, ref g3, ref ball, 1);
-    let mobjs3 = array![z3, ball].span();
+    let mobjs3 = array![BoxTrait::new(z3), BoxTrait::new(ball)].span();
     let mut events: Array<MoveEvent> = array![];
     let v = try_move(w, mobjs3, ref g3, ref ball, 1, units(-376), ball.y, ref events);
     assert(!v.ok && v.blocker == Blocker::Thing(0), 'missile stops on the thing');
@@ -342,7 +342,7 @@ fn test_things_block_touch_and_get_hit() {
     let mut kin = ball;
     kin.target = 2; // shot by the other zombieman
     set_thing_position(@w.map, ref g4, ref kin, 1);
-    let mobjs4 = array![z4, kin, other].span();
+    let mobjs4 = array![BoxTrait::new(z4), BoxTrait::new(kin), BoxTrait::new(other)].span();
     let mut events: Array<MoveEvent> = array![];
     let v = try_move(w, mobjs4, ref g4, ref kin, 1, units(-376), kin.y, ref events);
     assert(!v.ok && v.blocker == Blocker::Thing(0), 'explodes on kin');
@@ -357,7 +357,7 @@ fn test_hitscan_hits_a_thing_and_aims_at_it() {
     set_thing_position(@w.map, ref g, ref player, 0);
     let mut zombie = at(w, KIND_POSSESSED, units(-316), units(256), fixed::ZERO);
     set_thing_position(@w.map, ref g, ref zombie, 1);
-    let mobjs = array![player, zombie].span();
+    let mobjs = array![BoxTrait::new(player), BoxTrait::new(zombie)].span();
     let aim = aim_line_attack(w, mobjs, ref g, 0, player.angle, crate::hitscan::AIMRANGE);
     assert(aim.target == 1, 'auto-aim finds it');
     match line_attack(w, mobjs, ref g, 0, player.angle, crate::hitscan::MISSILERANGE, aim.slope) {
@@ -372,7 +372,7 @@ fn test_hitscan_hits_a_thing_and_aims_at_it() {
         _ => { assert(false, 'thing hit'); },
     }
     // Aiming with nothing in the cone: slope 0, no target.
-    let empty = array![player].span();
+    let empty = array![BoxTrait::new(player)].span();
     let mut g2 = new_grid();
     let aim = aim_line_attack(w, empty, ref g2, 0, player.angle, crate::hitscan::AIMRANGE);
     assert(aim.target == NO_MOBJ && aim.slope == fixed::ZERO, 'no target');
@@ -387,7 +387,7 @@ fn test_damage_pain_retaliation_and_thrust() {
     let w = world();
     let player = player_at_start(w);
     let mut zombie = at(w, KIND_POSSESSED, units(-316), units(256), fixed::ZERO);
-    let mobjs = array![player, zombie].span();
+    let mobjs = array![BoxTrait::new(player), BoxTrait::new(zombie)].span();
     let mut rng = from_index(1); // P_Random's first byte is 8 < painchance 200
     let info = thing_info(KIND_POSSESSED);
     let out = damage_mobj(w, mobjs, ref rng, ref zombie, 1, 0, 0, 5, true);
@@ -414,7 +414,7 @@ fn test_death_gib_and_drops() {
     let info = thing_info(KIND_POSSESSED);
 
     let mut zombie = at(w, KIND_POSSESSED, units(-316), units(256), fixed::ZERO);
-    let mobjs = array![player, zombie].span();
+    let mobjs = array![BoxTrait::new(player), BoxTrait::new(zombie)].span();
     let out = damage_mobj(w, mobjs, ref rng, ref zombie, 1, 0, 0, 20, false);
     assert(out.died && out.counts_kill, 'dies');
     assert(zombie.health == 0, 'health zero');
@@ -464,7 +464,7 @@ fn test_missiles_spawn_and_explode() {
     set_thing_position(@w.map, ref g, ref player, 0);
     let mut imp = at(w, KIND_TROOP, units(-216), units(256), fixed::ZERO);
     set_thing_position(@w.map, ref g, ref imp, 1);
-    let mobjs = array![player, imp].span();
+    let mobjs = array![BoxTrait::new(player), BoxTrait::new(imp)].span();
     let mut rng = from_index(1);
     let mut events: Array<MoveEvent> = array![];
     let (ball, exploded) = spawn_missile(
@@ -559,7 +559,7 @@ fn test_momentum_decays_to_zero() {
     let mut mo = spawn_mobj(w, KIND_POSSESSED, units(-300), units(256), SpawnZ::OnFloor);
     mo.momx = units(5);
     mo.momy = units(3);
-    let mobjs = array![mo].span();
+    let mobjs = array![BoxTrait::new(mo)].span();
     let mut events: Array<MoveEvent> = array![];
     let mut t: u32 = 0;
     let mut stopped_at: u32 = 0;
@@ -638,7 +638,7 @@ fn test_scripted_walk_matches_the_model_and_its_checksum() {
     let mut g = new_grid();
     let mut player = player_at_start(w);
     set_thing_position(@w.map, ref g, ref player, 0);
-    let mobjs = array![player].span();
+    let mobjs = array![BoxTrait::new(player)].span();
     let script = walk_script();
     let checkpoints = WALK.span();
     let mut hashed: Array<felt252> = array![];

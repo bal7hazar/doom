@@ -72,7 +72,7 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
     } = state;
     let me = player.mo;
     let entered = match mobjs.get(me) {
-        Option::Some(b) => Option::Some(*b.unbox()),
+        Option::Some(b) => Option::Some(b.unbox().unbox()),
         Option::None => Option::None,
     };
     let mut mo = match entered {
@@ -141,7 +141,7 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
 
     // 4. What the think did to the rest of the world.
     let mut patches: Array<Patch> = array![];
-    let mut drops: Array<Mobj> = array![];
+    let mut drops: Array<Box<Mobj>> = array![];
     let fired = apply_player_events_boxed(
         ctx, mctx, mobjs, ref rng, ref p, ref s, events.span(), ref patches, ref drops, ref cues,
     );
@@ -183,8 +183,8 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
     );
     let after = *out.span().at(me);
     if after.health < mo.health && p.playerstate != PST_DEAD {
-        let fixed_mo = reconcile_player(env, ref g, ref rng, ref p, after, defense);
-        replace(ref out, me, fixed_mo);
+        let fixed_mo = reconcile_player(env, ref g, ref rng, ref p, after.unbox(), defense);
+        replace(ref out, me, BoxTrait::new(fixed_mo));
     }
     place_drops(w, ref g, ref out, drops.span());
 
@@ -223,7 +223,7 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
 /// its floor and ceiling and keep it on the floor it stood on (or under the
 /// ceiling it hit). `check_position` is `P_CheckPosition` at the thing's own
 /// coordinates; the touch events it may report are not ours to apply here.
-pub fn height_clip(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, ref m: Mobj, me: u32) {
+pub fn height_clip(w: World, mobjs: Span<Box<Mobj>>, ref g: ThingGrid, ref m: Mobj, me: u32) {
     let onfloor = m.z == m.floorz;
     let mut ignored: Array<MoveEvent> = array![];
     let c = check_position(w, mobjs, ref g, @m, me, m.x, m.y, ref ignored);
@@ -241,13 +241,13 @@ pub fn height_clip(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, ref m: Mobj, m
 fn apply_player_events_boxed(
     ctx: Box<Ctx>,
     mctx: Box<MonsterCtx>,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref p: Player,
     ref s: SpecialsState,
     mut events: Span<PlayerEvent>,
     ref patches: Array<Patch>,
-    ref drops: Array<Mobj>,
+    ref drops: Array<Box<Mobj>>,
     ref cues: Array<MonsterEvent>,
 ) -> bool {
     let mut fired = false;
@@ -297,26 +297,26 @@ fn apply_player_events_boxed(
 fn shoot_thing(
     ctx: Box<Ctx>,
     mctx: Box<MonsterCtx>,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref p: Player,
     idx: u32,
     damage: u32,
     ref patches: Array<Patch>,
-    ref drops: Array<Mobj>,
+    ref drops: Array<Box<Mobj>>,
     ref cues: Array<MonsterEvent>,
 ) {
     let me = p.mo;
-    let mut t = read_mobj(mobjs, patches.span(), idx);
+    let mut t = read_mobj(mobjs, patches.span(), idx).unbox();
     let thrust = p.ready_weapon != WP_CHAINSAW;
     let out = damage_mobj(ctx.unbox().w, mobjs, ref rng, ref t, idx, me, me, damage, thrust);
     passive(mctx.unbox(), ref rng, ref t, idx, out.action, ref cues);
     if out.counts_kill {
         count_kill(ref p);
     }
-    patches.append(Patch { idx, mo: t });
+    patches.append(Patch { idx, mo: BoxTrait::new(t) });
     match out.drop {
-        Option::Some(item) => { drops.append(item); },
+        Option::Some(item) => { drops.append(BoxTrait::new(item)); },
         Option::None => {},
     }
 }
@@ -327,7 +327,7 @@ fn player_mobj_thinker_boxed(
     ctx: Box<Ctx>,
     env: Env,
     mctx: Box<MonsterCtx>,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref p: Player,
@@ -368,7 +368,7 @@ fn player_mobj_thinker_boxed(
 /// removed on a pickup) and walk-over specials (`P_CrossSpecialLine`).
 fn apply_move_events_boxed(
     ctx: Box<Ctx>,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref p: Player,
     ref mo: Mobj,
@@ -389,10 +389,10 @@ fn apply_move_events_boxed(
             },
             MoveEvent::Touch(idx) => {
                 let item = read_mobj(mobjs, patches.span(), idx);
-                if !is_removed(@item) {
-                    if touch_special(ref p, ref mo, @item) {
-                        unset_thing_position(ref g, @item, idx);
-                        patches.append(Patch { idx, mo: removed_mobj() });
+                if !is_removed(@item.unbox()) {
+                    if touch_special(ref p, ref mo, @item.unbox()) {
+                        unset_thing_position(ref g, @item.unbox(), idx);
+                        patches.append(Patch { idx, mo: BoxTrait::new(removed_mobj()) });
                     }
                 }
             },
@@ -414,14 +414,16 @@ fn apply_move_events_boxed(
 /// list.
 pub fn rebuild_list(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Mobj,
     me: u32,
     patches: Span<Patch>,
     clip: Span<u32>,
-) -> Span<Mobj> {
-    let mut sorted = insert_patch(array![], BoxTrait::new(Patch { idx: me, mo }));
+) -> Span<Box<Mobj>> {
+    let mut sorted = insert_patch(
+        array![], BoxTrait::new(Patch { idx: me, mo: BoxTrait::new(mo) }),
+    );
     let mut ps = patches;
     while let Option::Some(pt) = ps.pop_front() {
         sorted = insert_patch(sorted, BoxTrait::new(*pt));
@@ -456,9 +458,9 @@ fn insert_patch(sorted: Array<Patch>, pt: Box<Patch>) -> Array<Patch> {
 
 /// The list with the sorted `patches` written in: the unpatched runs are
 /// `append_span`ed, the patched slots appended one by one.
-fn copy_patched(mobjs: Span<Mobj>, mut patches: Span<Patch>) -> Span<Mobj> {
+fn copy_patched(mobjs: Span<Box<Mobj>>, mut patches: Span<Patch>) -> Span<Box<Mobj>> {
     let n = mobjs.len();
-    let mut out: Array<Mobj> = array![];
+    let mut out: Array<Box<Mobj>> = array![];
     let mut from: u32 = 0;
     while let Option::Some(pt) = patches.pop_front() {
         let idx = *pt.idx;
@@ -479,7 +481,7 @@ fn copy_patched(mobjs: Span<Mobj>, mut patches: Span<Patch>) -> Span<Mobj> {
 /// `sorted`. One felt read per slot to find them.
 fn clip_patches(
     w: Box<World>,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     sorted: Array<Patch>,
     clip: Span<u32>,
@@ -489,15 +491,15 @@ fn clip_patches(
     let n = mobjs.len();
     let mut i: u32 = doom_physics::maputl::opaque_zero(n);
     while i != n {
-        let sector = *mobjs.at(i).sector;
+        let sector = mobjs.at(i).sector;
         if i != me && contains(clip, sector) {
             let mut cur = match patch_at(out.span(), i) {
                 Option::Some(p) => p.unbox(),
-                Option::None => *mobjs.at(i),
+                Option::None => mobjs.at(i).unbox(),
             };
             if !is_removed(@cur) {
                 height_clip(w.unbox(), mobjs, ref g, ref cur, i);
-                out = insert_patch(out, BoxTrait::new(Patch { idx: i, mo: cur }));
+                out = insert_patch(out, BoxTrait::new(Patch { idx: i, mo: BoxTrait::new(cur) }));
             }
         }
         i = i.wrapping_add(1);
@@ -510,7 +512,7 @@ fn patch_at(mut patches: Span<Patch>, i: u32) -> Option<Box<Mobj>> {
     let mut found: Option<Box<Mobj>> = Option::None;
     while let Option::Some(pt) = patches.pop_front() {
         if *pt.idx == i {
-            found = Option::Some(BoxTrait::new(*pt.mo));
+            found = Option::Some(*pt.mo);
         }
     }
     found
@@ -523,9 +525,9 @@ fn apply_monster_events_boxed(
     me: u32,
     ref p: Player,
     ref s: SpecialsState,
-    out: Span<Mobj>,
+    out: Span<Box<Mobj>>,
     mut events: Span<MonsterEvent>,
-    ref drops: Array<Mobj>,
+    ref drops: Array<Box<Mobj>>,
     ref cues: Array<MonsterEvent>,
 ) {
     while let Option::Some(e) = events.pop_front() {
@@ -548,12 +550,12 @@ fn apply_monster_events_boxed(
             // `P_KillMobj`: the item at the corpse, ONFLOORZ, MF_DROPPED.
             match out.get(ev.who) {
                 Option::Some(b) => {
-                    let corpse = b.unbox();
+                    let corpse = b.unbox().as_snapshot().unbox();
                     let mut item = spawn_mobj(
                         w.unbox(), ev.a, *corpse.x, *corpse.y, SpawnZ::OnFloor,
                     );
                     item.flags = item.flags | MF_DROPPED;
-                    drops.append(item);
+                    drops.append(BoxTrait::new(item));
                 },
                 Option::None => {},
             }
@@ -588,18 +590,20 @@ pub fn reconcile_player(
 
 /// Give every dropped item a slot: appended while the list has room,
 /// otherwise a freed slot, otherwise lost (D3's fixed maximum; documented).
-pub fn place_drops(w: World, ref g: ThingGrid, ref out: Array<Mobj>, mut drops: Span<Mobj>) {
+pub fn place_drops(
+    w: World, ref g: ThingGrid, ref out: Array<Box<Mobj>>, mut drops: Span<Box<Mobj>>,
+) {
     while let Option::Some(d) = drops.pop_front() {
-        let mut item = *d;
+        let mut item = d.unbox();
         if out.len() < MAX_MOBJS {
             let idx = out.len();
             set_thing_position(@w.map, ref g, ref item, idx);
-            out.append(item);
+            out.append(BoxTrait::new(item));
         } else {
             let idx = first_free(out.span());
             if idx != NO_MOBJ {
                 set_thing_position(@w.map, ref g, ref item, idx);
-                replace(ref out, idx, item);
+                replace(ref out, idx, BoxTrait::new(item));
             }
         }
     }
@@ -609,13 +613,13 @@ pub fn place_drops(w: World, ref g: ThingGrid, ref out: Array<Mobj>, mut drops: 
 pub fn apply_player_events(
     ctx: Ctx,
     mctx: MonsterCtx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref p: Player,
     ref s: SpecialsState,
     mut events: Span<PlayerEvent>,
     ref patches: Array<Patch>,
-    ref drops: Array<Mobj>,
+    ref drops: Array<Box<Mobj>>,
     ref cues: Array<MonsterEvent>,
 ) -> bool {
     apply_player_events_boxed(
@@ -636,7 +640,7 @@ pub fn player_mobj_thinker(
     ctx: Ctx,
     env: Env,
     mctx: MonsterCtx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref p: Player,
@@ -664,7 +668,7 @@ pub fn player_mobj_thinker(
 
 pub fn apply_move_events(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref p: Player,
     ref mo: Mobj,
@@ -683,9 +687,9 @@ pub fn apply_monster_events(
     me: u32,
     ref p: Player,
     ref s: SpecialsState,
-    out: Span<Mobj>,
+    out: Span<Box<Mobj>>,
     mut events: Span<MonsterEvent>,
-    ref drops: Array<Mobj>,
+    ref drops: Array<Box<Mobj>>,
     ref cues: Array<MonsterEvent>,
 ) {
     apply_monster_events_boxed(

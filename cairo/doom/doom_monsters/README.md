@@ -1,5 +1,12 @@
 # doom_monsters
 
+D33 migrates the shared roster to `Span<Box<Mobj>>` and `Patch.mo` to
+`Box<Mobj>`. The ticker returns an array of those boxes, preserving unchanged
+actors and allocating changed countdowns. The [current assembled measurements](../doom_game/bench_boxed/README.md)
+include those allocations: idle tic 300 improves by 24.35%, fight tic 493 by
+11.41%. Historical S7/S8 measurements below retain their original value-roster
+reference; they are not the current per-tic copy cost.
+
 **Does**: the monster AI of a Doom-like tic — the `p_enemy.c` half of
 linuxdoom-1.10 (GPL-2.0-only; semantics derived, no C copied) — for the five
 kinds Freedoom E1M1 can put in front of the player (zombieman, shotgun guy,
@@ -200,9 +207,9 @@ all for a mobj that is not this crate's.
 // last P_NoiseAlert. Returns the rebuilt list, the advanced RNG and the
 // tic's events; `g` is updated in place (canonical order is hashed in schema 2).
 pub fn monsters_ticker(
-    w: World, mobjs: Span<Mobj>, ref g: ThingGrid, players: Span<u32>,
+    w: World, mobjs: Span<Box<Mobj>>, ref g: ThingGrid, players: Span<u32>,
     noise: Noise, tic: u32, rng: Prng,
-) -> (Array<Mobj>, Prng, Array<MonsterEvent>);
+) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>);
 
 pub struct Noise { pub source: u32, pub sector: u32 }   // NO_MOBJ = silent
 pub fn silence() -> Noise;
@@ -216,10 +223,10 @@ pub const WINDOW: u32 = 8;         // D3
 
 pub fn is_dormant(w: World, mo: @Mobj) -> bool;
 pub fn is_awake(w: World, mo: @Mobj) -> bool;
-pub fn awake_count(w: World, mobjs: Span<Mobj>) -> u32;
+pub fn awake_count(w: World, mobjs: Span<Box<Mobj>>) -> u32;
 pub fn in_window(rank: u32, tic: u32, n: u32) -> bool;
 pub fn mobj_thinker(...) -> bool;                       // one mobj, one tic
-pub fn read_mobj(mobjs: Span<Mobj>, patches: Span<Patch>, i: u32) -> Mobj;
+pub fn read_mobj(mobjs: Span<Box<Mobj>>, patches: Span<Patch>, i: u32) -> Box<Mobj>;
 ```
 
 `actions` also exports every action function and `p_move`/`new_chase_dir`/

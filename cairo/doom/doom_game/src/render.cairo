@@ -95,13 +95,16 @@ fn push_player(ref out: Array<felt252>, p: @Player, mo: @Mobj) {
     out.append((*p.playerstate).into());
 }
 
-fn push_mobjs(ref out: Array<felt252>, mut mobjs: Span<Mobj>, states: fsm::StateTables) -> u32 {
+fn push_mobjs(
+    ref out: Array<felt252>, mut mobjs: Span<Box<Mobj>>, states: fsm::StateTables,
+) -> u32 {
     let sprites = states.sprite;
     let frames = states.frame;
     let doomednums = MI_DOOMEDNUM.span();
     let mut n: u32 = 0;
     let mut i: u32 = 0;
     while let Option::Some(m) = mobjs.pop_front() {
+        let m = m.as_snapshot().unbox();
         if !is_removed(m) {
             let st = *m.state;
             let frame = match frames.get(st) {
@@ -181,7 +184,7 @@ pub fn snapshot(s: @GameState) -> Array<felt252> {
     let mobjs = *s.mobjs;
     let p = s.player;
     let mo = match mobjs.get(*p.mo) {
-        Option::Some(b) => *b.unbox(),
+        Option::Some(b) => b.unbox().unbox(),
         Option::None => doom_physics::removed_mobj(),
     };
     // The header counts need only a narrow roster scan and three lengths.
@@ -206,9 +209,10 @@ pub fn snapshot(s: @GameState) -> Array<felt252> {
     out
 }
 
-fn count_live(mut mobjs: Span<Mobj>) -> u32 {
+fn count_live(mut mobjs: Span<Box<Mobj>>) -> u32 {
     let mut n = 0;
     while let Option::Some(m) = mobjs.pop_front() {
+        let m = m.as_snapshot().unbox();
         if !is_removed(m) {
             n += 1;
         }
