@@ -1,7 +1,7 @@
 # `submit-batch` — the on-chain submission CLI (P4.3)
 
-**Does**: takes a wrapper batch, builds the 6–8 transactions that verify its root proof with the
-P4.0 router and record its games with `DoomRuns`, **estimates them before signing anything**, and
+**Does**: takes a wrapper batch, builds **five verifier transactions plus one `DoomRuns`
+transaction** by default with the optimized P4.1 router (D28), **estimates them before signing anything**, and
 plays them — resuming wherever the router's checkpoint says the last attempt stopped.
 
 It is the same code as the browser: everything lives in
@@ -47,15 +47,64 @@ npm run submit-batch -- … --send
 | `--dry-run` (default) | stop after the cost screen; nothing is signed |
 | `--send` | play the sequence, resuming from the router's checkpoint |
 | `--proof-id <n>` | the router slot; a **fresh id restarts** a sequence, the same id resumes it |
-| `--fri-split a,b` | where the FRI walk is cut. Default `1,3` (6 verifier tx). `2` is the 5-tx plan of P4.0 — 0.3 % cheaper and **unsendable** with an R7-A1 bound (below) |
-| `--fewest-tx` | prefer the 5-tx plan when auto-planning |
+| `--fri-split a,b` | explicit FRI cut, preserved exactly. Default `2` (5 verifier tx); use the original cut for a legacy resume |
+| `--fewest-tx` | compatibility flag; five verifier transactions is already the default |
 | `--replay` | publish the packed input logs (R10-A3) |
 | `--single <run_id>` | `register_member` for one run instead of `submit_batch` for the batch |
 | `--verifier-only` | stop once the fact is registered |
 | `--setup-version` | owner-only: `add_version` + `set_genesis` from the batch's own values |
 | `--no-live-price` | no CoinGecko call; the S5 snapshot is used and labelled as such |
 
-## What the drive measured (devnet 0.10.0, starknet 0.14.4, S5 prices)
+## Default with the optimized P4.1 verifier (D28)
+
+`planPhasesAuto` starts with cut `[2]`: `begin`, `merkle`, `answers`, `fri1` (layers 0–1),
+`fri2` (layers 2–5). `submit_batch` or `register_member` is a separate sixth transaction;
+`--verifier-only` sends five. Existing explicit cuts take precedence. If calldata exceeds
+4,990 felts, automatic planning tries `[1,3]`, then `[1,2,4]`. If simulation finds an R7-A1
+bound over the invoke cap, a fresh automatic CLI sequence can try `[1,2,4]`, then `[1,2,3,4]`,
+**simulating every candidate again**. Replanning preserves the consumer, `--single`, and replay.
+
+The P4.1 drive on local devnet 0.10.0 / Starknet 0.14.4 recorded the following on the `n4` root
+([receipts](../../cairo/doom_contracts/results/p41_receipts.json)):
+
+| tx | observed L2 gas | R7-A1 ×1.15 applied to that consumption |
+|---|---:|---:|
+| `begin` | 302 485 920 | 347 858 808 |
+| `merkle` | 233 506 880 | 268 532 912 |
+| `answers` | 466 418 880 | 536 381 712 |
+| `fri1` | 294 609 600 | 338 801 040 |
+| `fri2` | 243 213 200 | 279 695 180 |
+| **total observed** | **1 540 234 480** | |
+
+The worst observed transaction uses 38.55 % of the 1.21e9 cap; the largest derived ×1.15
+amount is 44.33 %. The right column is a calculation from recorded consumption, **not a new
+simulation or the historical transaction bounds** (the Python drive sent fixed 1.15e9 bounds).
+That drive paid 46.93932136478046 STRK for the verifier at its recorded devnet prices; it does
+not quote the next submission. The CLI still simulates the ordered sequence from the account
+that will sign and retains R7-A1: L2 ×1.15, L1 data ×1.30, L1 gas 100,000 and prices ×2.
+An over-cap bound blocks sending; historical receipts never replace the live estimate.
+
+P4.1 uses new phase classes and requires a new router deployment
+([recorded class hashes](../../cairo/doom_contracts/results/p41_receipts_deployment.json)).
+An old P4.0 router retains its old gas cost; changing the client default does not upgrade it.
+The finer cuts and cap checks remain available, with no claim that a fixed cut always fits
+for every account or deployment.
+
+### Resuming across the default change
+
+The exact cut is saved **before the first send**, in a versioned metadata entry at reserved
+phase index `-1` in the existing echo store, bound to `(router, caller, proof_id)`. The CLI
+reloads it before planning; the shared browser sequence restores it before estimation. A saved
+six-transaction `[1,3]` plan therefore remains six transactions. An explicitly conflicting cut
+is rejected; gas fallback never changes a sequence that has started.
+
+Older echo files have no cut metadata. Checkpoint tags and `Step` counts cannot distinguish all
+FRI splits, so an active legacy sequence without an explicit cut is refused before sending.
+Resume the former default with `--fri-split 1,3` (or the actual original cut if customized).
+A missing local plan is never inferred from a shared FRI tag. Finished facts still skip the
+verifier. No old echo or persisted game is rewritten by a refused resume.
+
+## Historical P4.0 drive (devnet 0.10.0, Starknet 0.14.4, S5 prices)
 
 `B2-1_doom`, 3 leaves / 2 games, replay on, 6-transaction plan, from the devnet's OZ account
 class `0x05b4b537…e43564`. `results/devnet_B2-1_doom.json`:
@@ -79,22 +128,22 @@ The fact the router registered, `0x53ae959a…8c3c40`, is the one `results/e2e_1
 recorded for this batch in P4.2b: the TypeScript emitter produces the same calldata as the Python
 one, byte for byte, on every field (`test/calldata.test.ts`).
 
-### The 5-transaction plan cannot carry an R7-A1 bound
+### Why the former P4.0 default used six verifier transactions
 
 The P4.0 plan puts `fri1` at 90.3 % of the per-invoke cap. A *bound* is what the sequencer
 checks, so ×1.15 asks for 1 257 075 488 — **3.9 % over the cap**, refused before execution
 (`results/dryrun_B2-1_doom_5tx.json`). The 5-tx plan is only sendable with a margin below ×1.107,
-which is not a margin. Hence the default is the 6-transaction plan; `--fri-split 1,2,4` (7
+which is not a margin. Hence the former default used the 6-transaction plan; `--fri-split 1,2,4` (7
 verifier transactions, `results/dryrun_B2-1_doom_7tx.json`) keeps every *bound* under 90 % of the
 cap — the full R7-A5 rule — for +0.3 % total gas.
 
 | plan | verifier tx | worst consumption | worst bound | total L2 gas | |
 |---|---:|---:|---:|---:|---|
 | `--fri-split 2` (P4.0, 5 tx) | 5 | 90.3 % | **103.9 % — refused** | 3.81e9 | estimated only |
-| `--fri-split 1,3` (default, 6 tx) | 6 | 84.5 % | 97.1 % | 3.843e9 | sent, 117.12 STRK |
+| `--fri-split 1,3` (former default, 6 tx) | 6 | 84.5 % | 97.1 % | 3.843e9 | sent, 117.12 STRK |
 | `--fri-split 1,2,4` (7 tx) | 7 | 75.3 % | **86.5 %** | 3.854e9 | sent, 117.46 STRK |
 
-Both sent plans register the same fact and land within 0.014 % of their estimate
+Both historical sent plans register the same fact and land within 0.014 % of their estimate
 (`results/devnet_B2-1_doom.json`, `results/devnet_B2-1_doom_7tx.json`).
 
 ## Tests
@@ -106,4 +155,6 @@ SUBMIT_TEST_RPC=http://127.0.0.1:5081/rpc SUBMIT_TEST_ROUTER=0x… SUBMIT_TEST_R
 ```
 
 Without `SUBMIT_TEST_RPC` the integration test skips itself, so a clone with no devnet still has
-a green `npm test`.
+a green `npm test`. The integration test expects an optimized P4.1 router. Offline tests
+compare complete calldata against the independent Python emitter and `calldata_for` on the
+`n4`, `B2-1_doom`, and `B2_doom` roots, and cover cap fallback and legacy resume refusal/restoration.

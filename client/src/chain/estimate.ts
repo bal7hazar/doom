@@ -10,8 +10,8 @@
  *   calldata-dense transaction between two account classes, which is more than the margin;
  * * `SKIP_VALIDATE`, empty signature: nothing is signed, nothing can be broadcast;
  * * bounds = simulated × **1.15** on L2 gas and × **1.30** on L1 data gas — never a global ×1.5,
- *   which puts the two heaviest phases *over* the 1.21e9 invoke cap and gets the bound itself
- *   rejected by the sequencer;
+ *   which pushed the old P4.0 heaviest phases *over* the 1.21e9 invoke cap; P4.1 changes the
+ *   consumption, not these margins or the need to simulate the actual deployment;
  * * a fixed L1 gas bound: consumption is zero in blob mode, the bound only guards a DA change.
  *
  * **The one thing S5 could not foresee.** In the staged design S5 measured, the checkpoint lived

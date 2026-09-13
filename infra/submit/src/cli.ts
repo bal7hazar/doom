@@ -48,10 +48,13 @@ import {
 } from "../../../client/src/chain/estimate.js";
 import {
   resumePoint,
+  storedFriSplit,
   runSequence,
   type StepProgress,
 } from "../../../client/src/chain/sequence.js";
-import { prepareSubmission, preflight } from "../../../client/src/chain/submission.js";
+import {
+  prepareSubmission, preflight, type PrepareArgs,
+} from "../../../client/src/chain/submission.js";
 import { checkBatch } from "../../../client/src/chain/batch.js";
 import { submissionPolicies } from "../../../client/src/chain/signer.js";
 
@@ -59,6 +62,7 @@ import { DevnetSigner, assertLocalRpc } from "./devnetSigner.js";
 import { addVersionCall, setGenesisCall } from "./version.js";
 import { loadBatch } from "./fixture.js";
 import { FileEchoStore, FileSampleStore } from "./stores.js";
+import { submissionPlans } from "./planning.js";
 
 const argv = process.argv.slice(2);
 const flag = (name: string): boolean => argv.includes(`--${name}`);
@@ -81,14 +85,14 @@ function usage(): never {
   --account <addr>[:<key>] devnet account; the key may come from SUBMIT_PRIVATE_KEY
                          instead, and is not needed at all for --dry-run
   --batch <path>         fixture directory or saved 'GET /v1/batches/{id}' JSON
-  --router <addr>        StwoCircuitRouter (P4.0)
+  --router <addr>        StwoCircuitRouter with the optimized P4.1 classes
   --runs <addr>          DoomRuns (P4.2)
   --proof-id <n>         router proof id (default 1); a fresh id restarts a sequence
   --version-id <n>       DoomRuns version table entry (default: the batch's)
   --player <addr>        address recorded for every game (default: the signer)
-  --fri-split a,b        FRI cut; default '1,3' = 6 transactions (see --fewest-tx)
-  --fewest-tx            prefer the 5-transaction plan: 0.3 % cheaper, but its fri1 bound is
-                         over the invoke cap, so it can only be sent with no margin at all
+  --fri-split a,b        FRI cut; default '2' = 5 verifier transactions (D28)
+                         keep the original cut when resuming a pre-D28 sequence
+  --fewest-tx            compatibility flag; five transactions is already the default
   --replay               publish the packed input logs (R10-A3), +24 % consumer gas
   --single <run_id>      register_member for one run instead of submit_batch for the batch
   --no-live-price        skip the fiat quote (uses the S5 snapshot, shown as such)
@@ -187,7 +191,9 @@ async function main(): Promise<void> {
   const players = Object.fromEntries(runIds.map((r) => [r, player]));
   const single = flag("single") ? arg("single") : null;
 
-  const common = {
+  const echoStore = new FileEchoStore(join(work, `echoes_${loaded.name}.json`));
+  const savedSplit = storedFriSplit(echoStore, proofId, router, address);
+  const common: PrepareArgs = {
     batch: loaded.batch,
     router,
     doomRuns,
@@ -197,7 +203,9 @@ async function main(): Promise<void> {
     levelIds: loaded.levelIds,
     replay: flag("replay"),
     plan: {
-      ...(flag("fri-split") ? { friSplit: arg("fri-split").split(",").map(Number) } : {}),
+      ...(flag("fri-split")
+        ? { friSplit: arg("fri-split").split(",").map(Number) }
+        : savedSplit ? { friSplit: savedSplit } : {}),
       preferFewestTransactions: flag("fewest-tx"),
     },
   };
@@ -205,7 +213,8 @@ async function main(): Promise<void> {
   if (single) {
     const member = prepared.members.find((m) => m.runId === single);
     if (!member) throw new Error(`--single ${single}: no such run in the batch`);
-    prepared = prepareSubmission({ ...common, singleMember: member });
+    common.singleMember = member;
+    prepared = prepareSubmission(common);
   }
   const members = prepared.members;
 
@@ -289,7 +298,6 @@ async function main(): Promise<void> {
   }
 
   // --- resume ------------------------------------------------------------
-  const echoStore = new FileEchoStore(join(work, `echoes_${loaded.name}.json`));
   const resume = await resumePoint(rpc, prepared.sequence, address, echoStore);
   if (resume.nextPhase > 0) {
     console.log(
@@ -306,13 +314,13 @@ async function main(): Promise<void> {
   // A bound over the invoke cap is refused by the sequencer before execution, so an over-cap
   // bound is not a warning, it is a plan that cannot be sent: cut the FRI walk finer and
   // estimate again. Only possible before the first transaction — once a sequence has started,
-  // its plan is pinned by the checkpoint (a differently-cut resume fails the state echo).
-  const splits: (number[] | null)[] =
-    flag("fri-split") || resume.nextPhase > 0 ? [null] : [null, [1, 2, 4], [1, 2, 3, 4]];
+  // the saved or explicitly supplied original plan is required by resumePoint.
   let est!: Awaited<ReturnType<typeof simulateSequence>>;
-  for (const [attempt, split] of splits.entries()) {
-    if (split) {
-      prepared = prepareSubmission({ ...common, plan: { friSplit: split } });
+  for (const candidate of submissionPlans(common, prepared, resume.nextPhase)) {
+    if (candidate !== prepared) {
+      prepared = candidate;
+      const split = prepared.phases
+        .filter((p) => p.entrypoint === "fri").slice(1).map((p) => p.meta.layers![0]);
       console.log(
         `\nre-planning with FRI split [${split}] — ${prepared.phases.length} verifier ` +
           `transactions — and estimating again`,
@@ -335,8 +343,7 @@ async function main(): Promise<void> {
     if (!over.length) break;
     console.log(
       `  ! ${over.map((b) => b.label).join(", ")}: the ×1.15 bound is over the ` +
-        `${fmt(INVOKE_L2_GAS_CAP)} invoke cap` +
-        (attempt + 1 < splits.length ? "" : " and no finer plan is left"),
+        `${fmt(INVOKE_L2_GAS_CAP)} invoke cap`,
     );
   }
 
@@ -361,14 +368,14 @@ async function main(): Promise<void> {
   const overCap = bounds.filter((b) => b.overCap);
   const overCapMessage =
     `${overCap.map((b) => b.label).join(", ")}: the ×1.15 bound is over the ` +
-    `${fmt(INVOKE_L2_GAS_CAP)} invoke cap and no finer FRI cut helped — the sequencer refuses ` +
+    `${fmt(INVOKE_L2_GAS_CAP)} invoke cap after the permitted plan attempts — the sequencer refuses ` +
     `the bound itself, so this plan cannot be sent (S5 §6)`;
   if (overCap.length) console.log(`\n  ! ${overCapMessage}`);
   const over90 = bounds.filter((b) => b.over90PctRule);
   if (over90.length) {
     console.log(
       `  note: ${over90.map((b) => b.label).join(", ")} bound above 90 % of the cap (R7-A5). ` +
-        `'--fri-split 1,2,4' keeps every bound under 90 % for +0.3 % total gas.`,
+        `A finer FRI cut requires a fresh proof id and a new simulation before sending.`,
     );
   }
 

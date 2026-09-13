@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
@@ -34,6 +34,9 @@ const RECEIPTS = join(CONTRACTS, "results/e2e_10felt_receipts.json");
 const BATCHES = ["B2-1_doom", "B2_doom"] as const;
 
 function feltsOf(batch: string): bigint[] {
+  if (batch === "n4") return parseFeltStream(
+    gunzipSync(readFileSync(join(CONTRACTS, "fixtures/n4_root_proof.txt.gz"))).toString("utf8"),
+  );
   const dir = join(FIXTURES, batch);
   const plain = join(dir, "root.proof");
   if (existsSync(plain)) return parseFeltStream(readFileSync(plain, "utf8"));
@@ -72,7 +75,7 @@ describe("proof packing", () => {
   });
 });
 
-describe.each(BATCHES)("%s: the plan against the Python emitter", (batch) => {
+describe.each([...BATCHES, "n4"])("%s: the plan against the Python emitter", (batch) => {
   const felts = feltsOf(batch);
   const sections = parseProof(felts);
 
@@ -85,16 +88,33 @@ describe.each(BATCHES)("%s: the plan against the Python emitter", (batch) => {
   });
 
   it("emits the same calldata as tools/emit_calldata.py", () => {
-    const work = mkdtempSync(join(tmpdir(), "p43-"));
+    const work = mkdtempSync(join(tmpdir(), "d28-calldata-"));
+    const proofId = (1n << 200n) + 3n;
     const proof = join(work, "root.proof");
     writeFileSync(proof, felts.map((f) => "0x" + f.toString(16)).join("\n"));
     const out = join(work, "calls.json");
-    execFileSync("python3", [EMITTER, proof, "--out", out, "--proof-id", "0x1"], {
+    execFileSync("python3", [EMITTER, proof, "--out", out, "--proof-id", "0x" + proofId.toString(16)], {
       stdio: "pipe",
     });
     const py = JSON.parse(readFileSync(out, "utf8"));
 
-    const phases = planPhases(sections, { proofId: 1n, friSplit: [2] });
+    const script = `
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from devnet_drive import calldata_for
+with open(sys.argv[2]) as f:
+    txs = json.load(f)["txs"]
+sizes = {"merkle_state": 228, "fri_state": 576}
+print(json.dumps([calldata_for(tx, None if tx["entrypoint"] == "begin" else
+    [hex((1 << 200) + i) for i in range(sizes[tx["echo"]])]) for tx in txs]))
+`;
+    const complete = JSON.parse(execFileSync("python3", [
+      "-c", script, join(CONTRACTS, "tools"), out,
+    ], { encoding: "utf8", stdio: "pipe", maxBuffer: 4 * 1024 * 1024 }));
+    rmSync(work, { recursive: true });
+
+    const phases = planPhasesAuto(sections, { proofId });
+    expect(phases).toHaveLength(5);
     expect(phases).toHaveLength(py.txs.length);
     for (const [i, p] of phases.entries()) {
       const t = py.txs[i];
@@ -108,6 +128,11 @@ describe.each(BATCHES)("%s: the plan against the Python emitter", (batch) => {
       if (p.lens) expect(p.lens).toEqual(t.args.lens);
       if (p.trees) expect(p.trees).toEqual(t.args.trees);
       if (p.nValues !== undefined) expect(p.nValues).toBe(t.args.n_values);
+      const echo = p.echo === null ? null : Array.from(
+        { length: p.echo === "merkle_state" ? 228 : 576 },
+        (_, j) => "0x" + ((1n << 200n) + BigInt(j)).toString(16),
+      );
+      expect(phaseCalldata(p, echo)).toEqual(complete[i]);
     }
   });
 });
@@ -147,14 +172,35 @@ describe("the plan against the P4.2b receipts", () => {
 describe("plan selection", () => {
   const sections = parseProof(feltsOf("B2-1_doom"));
 
-  it("defaults to the six-transaction plan", () => {
+  it("defaults to the five-transaction P4.1 plan", () => {
     const phases = planPhasesAuto(sections);
-    expect(phases).toHaveLength(6);
-    expect(phases.slice(3).map((p) => p.meta.layers)).toEqual([[0], [1, 2], [3, 4, 5]]);
+    expect(phases).toHaveLength(5);
+    expect(phases.slice(3).map((p) => p.meta.layers)).toEqual([[0, 1], [2, 3, 4, 5]]);
   });
 
-  it("returns the five-transaction plan when asked for the fewest", () => {
-    expect(planPhasesAuto(sections, { preferFewestTransactions: true })).toHaveLength(5);
+  it.each([true, false])("retains the fewest-transactions compatibility flag (%s)", (value) => {
+    expect(planPhasesAuto(sections, { preferFewestTransactions: value })).toEqual(planPhasesAuto(sections));
+  });
+
+  it("keeps explicit cuts, including their cap failures", () => {
+    expect(planPhasesAuto(sections, { friSplit: [1, 3] })).toEqual(planPhases(sections, { friSplit: [1, 3] }));
+    expect(() => planPhasesAuto(sections, { friSplit: [] })).toThrow(/calldata felts >/);
+  });
+
+  it("falls back to six transactions when five exceed the calldata cap", () => {
+    // Transport stress case: enlarge a real root's first FRI section without changing the cap.
+    // This is a planner input, not a new cryptographically valid proof.
+    const larger = { ...sections, layers: [...sections.layers] };
+    larger.layers[0] = [...larger.layers[0]!, ...new Array<bigint>(11_200).fill(1n)];
+    expect(() => planPhasesAuto(larger, { friSplit: [2] })).toThrow(/fri1: .*calldata felts >/);
+    const phases = planPhasesAuto(larger);
+    expect(phases).toHaveLength(6);
+    expect(phases.slice(3).map((p) => p.meta.layers)).toEqual([[0], [1, 2], [3, 4, 5]]);
+    expect(phases.every((p) => p.calldataFelts <= 4990)).toBe(true);
+  });
+
+  it("refuses when even finer cuts cannot fit the fixed sections", () => {
+    expect(() => planPhasesAuto(sections, { maxCalldata: 2_000 })).toThrow(/begin: .*calldata felts >/);
   });
 
   it("keeps every transaction under the calldata cap", () => {
@@ -178,5 +224,14 @@ describe("plan selection", () => {
       "fri1",
       "fri2",
     ]);
+  });
+});
+
+describe("P4.1 receipts", () => {
+  it("matches the five recorded transaction lengths on the exact n4 root", () => {
+    const receipts = JSON.parse(readFileSync(join(CONTRACTS, "results/p41_receipts.json"), "utf8"));
+    const phases = planPhasesAuto(parseProof(feltsOf("n4")));
+    expect(phases.map((p) => p.calldataFelts)).toEqual(receipts.txs.map((t: any) => t.calldata_felts));
+    expect(phases.map((p) => p.payloadSlots)).toEqual(receipts.txs.map((t: any) => t.payload_slots));
   });
 });
