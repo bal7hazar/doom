@@ -10,6 +10,9 @@ stwo_circuit_phases = { path = "../stwo_circuit_phases" }
 stwo_circuit_air.workspace = true
 stwo_verifier_core.workspace = true
 stwo_verifier_utils.workspace = true
+# The measurement-only monolithic class runs the unmodified verifier.
+stwo_circuit_air_ref.workspace = true
+stwo_verifier_core_ref.workspace = true
 
 [[target.starknet-contract]]
 sierra = true
