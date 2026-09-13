@@ -324,7 +324,7 @@ fn main() {
         lb4 = live_leak_start,
         lb5 = live_leak_end,
         leak_iters = args.leak_iters,
-        checksum = checksum.to_string(),
+        checksum = checksum,
     );
 
     if args.json {
