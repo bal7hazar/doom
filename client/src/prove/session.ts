@@ -211,6 +211,14 @@ export class ProveSession {
     );
   }
 
+  /** Close this proof UI and release both Workers; the game journal remains owned by CairoClient. */
+  async dispose(): Promise<void> {
+    await this.pipeline.stop(true);
+    this.options.program?.dispose?.();
+    this.panel.element.remove();
+    this.store.close();
+  }
+
   /** The explicit reset C6 demands. */
   async reset(): Promise<void> {
     await this.pipeline.stop(true);

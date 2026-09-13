@@ -450,9 +450,10 @@ describe("concrete program identity and preparation", () => {
   });
   it("syncs pre-panel tics and persists exact async args and fresh AIR refusal without proving", async () => {
     let journal = words(4);
-    let prepared = 0;
+    let prepared = 0, releases = 0;
     const concrete: SegmentProgram = { ...fakeProgram, identity: "pinned-engine-v1",
       journalWords: () => journal,
+      releasePreparation: () => { releases++; },
       encodeArgs: () => { throw new Error("synchronous path forbidden"); },
       prepareArgs: async request => { prepared++; return fakeProgram.encodeArgs(request); },
     };
@@ -469,6 +470,7 @@ describe("concrete program identity and preparation", () => {
     expect(saved?.admissionFailure?.reason).toMatch(/update the prover artifacts/);
     expect((await store.getInputs(run.id)).ticCount).toBe(4);
     expect(prepared).toBe(1); expect(FakeProver.proves).toBe(0);
+    expect(releases).toBe(1); expect(FakeProver.terminations).toBeGreaterThan(0);
     journal = [99, ...journal.slice(1)];
     await expect(pipeline.syncGameJournal()).rejects.toThrow(/prefix/);
   });

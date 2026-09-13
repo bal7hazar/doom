@@ -55,7 +55,8 @@ export class DoomPreparation {
       if (count < 47 || output.length < count + 3 || Number(BigInt(output[count + 2]!)) !== output.length - count - 3) throw new Error("invalid replay envelope");
       const state = output.slice(2, count + 2);
       const advanced = checkState(state);
-      if (advanced !== tic + words.length || BigInt(output[0]!) !== BigInt(state[5]!) || BigInt(state[5]!) !== 0n) throw new Error("journal reaches a terminal state before segment boundary");
+      if (advanced !== tic + words.length || BigInt(output[0]!) !== BigInt(state[5]!)) throw new Error("journal reaches a terminal state before segment boundary");
+      if (BigInt(state[5]!) !== 0n) throw new Error("terminal start boundaries are not supported, including empty EXIT/DEAD segments");
       this.state = state; tic = advanced;
     }
     this.prefix = journal.slice(0, request.ticStart);

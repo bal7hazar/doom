@@ -42,6 +42,8 @@ export interface SegmentProgram {
   /** Full acknowledged journal, including all tics before opening the proof panel. */
   journalWords?(): readonly number[];
   validateJournal?(words: readonly number[]): void;
+  releasePreparation?(): void;
+  dispose?(): void;
 
 }
 

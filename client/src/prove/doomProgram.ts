@@ -59,7 +59,7 @@ export interface DoomProgramOptions {
 }
 export interface DoomProgram extends SegmentProgram { dispose(): void; journalWords(): number[] }
 export async function createDoomProgram(options: DoomProgramOptions): Promise<DoomProgram> {
-  const port = options.preparation ?? new DoomPreparationClient();
+  let port = options.preparation ?? new DoomPreparationClient();
   try {
     const ready = await port.request<{ initial: Felt[]; genesis: Felt; executable: string }>({ op: "init", assets: options.assets });
     if (Boolean(options.journal) === Boolean(options.resume)) throw new Error("provide exactly one live journal or persisted run");
@@ -93,7 +93,7 @@ export async function createDoomProgram(options: DoomProgramOptions): Promise<Do
     readJournal();
     if (options.resume && options.resume.run.programIdentity !== identity) throw new Error("persisted Doom executable/ABI identity differs");
     const prepared = new Map<string, Felt[]>();
-    let active = false;
+    let active = false, released = false, disposed = false;
     return {
       id: "doom", hashFunction: "blake", genesis: ready.genesis, identity,
       executableJson: async () => ready.executable,
@@ -104,9 +104,16 @@ export async function createDoomProgram(options: DoomProgramOptions): Promise<Do
         if (words.length > journal.length || words.some((w, i) => journal[i] !== w)) throw new Error("persisted inputs disagree with the game journal");
       },
       async prepareArgs(request: SegmentRequest): Promise<Felt[]> {
+        if (disposed) throw new Error("Doom program disposed; reopen the proof session");
         if (active) throw new Error("Cairo proof preparation already running");
         active = true;
         try {
+          if (released) {
+            port = options.preparation ?? new DoomPreparationClient();
+            released = false;
+            const fresh = await port.request<typeof ready>({ op: "init", assets: options.assets });
+            if (!exactFelts(fresh.initial, ready.initial) || fresh.genesis !== ready.genesis || fresh.executable !== ready.executable) throw new Error("recreated preparation identity differs");
+          }
           const result = await port.request<PreparedDoomSegment>({ op: "prepare", request, journal: readJournal() });
           prepared.clear(); // At most one full argument buffer; retry/resume always prepares afresh.
           prepared.set(JSON.stringify(result.args), result.expected);
@@ -117,7 +124,8 @@ export async function createDoomProgram(options: DoomProgramOptions): Promise<Do
         const expected = prepared.get(JSON.stringify(args));
         if (!expected || preimage.length !== 11 || normalizeFelt(preimage[0]!) !== pins.programHash || !exactFelts(preimage.slice(1), expected)) throw new Error("prover D14/D13 differs from the pinned Cairo journal replay");
       },
-      dispose() { port.dispose(); prepared.clear(); },
+      releasePreparation() { port.dispose(); released = true; prepared.clear(); },
+      dispose() { disposed = true; port.dispose(); prepared.clear(); },
     };
   } catch (error) { port.dispose(); throw error; }
 }

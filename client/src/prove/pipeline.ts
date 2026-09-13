@@ -318,6 +318,8 @@ export class ProofPipeline {
     this.running = true;
     this.stopping = false;
     this.loopPromise = this.loop().catch((error: unknown) => {
+      this.dropProver();
+      this.program.releasePreparation?.();
       this.lastError = error instanceof Error ? error.message : String(error);
       this.emit({ type: "log", level: "error", message: `pipeline stopped: ${this.lastError}` });
       this.running = false;
@@ -328,7 +330,7 @@ export class ProofPipeline {
   async stop(hard = false): Promise<void> {
     this.stopping = true;
     this.wake?.();
-    if (hard) this.dropProver();
+    if (hard) { this.dropProver(); this.program.releasePreparation?.(); }
     await this.loopPromise?.catch(() => undefined);
     this.running = false;
     await this.flushJournal();
@@ -357,6 +359,7 @@ export class ProofPipeline {
     this.running = false;
     await this.flushJournal();
     this.dropProver();
+    this.program.releasePreparation?.();
   }
 
   private idle(): Promise<void> {

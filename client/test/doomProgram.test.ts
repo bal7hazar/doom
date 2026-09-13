@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DoomPreparation, type DoomExecutor } from "../src/prove/doomPreparation.js";
-import { createDoomProgram, type PreparationPort } from "../src/prove/doomProgram.js";
+import { createDoomProgram, DoomPreparationClient, type PreparationPort } from "../src/prove/doomProgram.js";
 import { D29_PROOF_ARTIFACTS as pins } from "../src/prove/doomArtifacts.js";
 import { InputJournal } from "../src/game/inputJournal.js";
 import { encodeFelts } from "../src/sim/felts.js";
@@ -43,6 +43,18 @@ function port(): PreparationPort {
   }, dispose() {} };
 }
 describe("real program preparation contract", () => {
+  it("rejects in-flight work and terminates the Worker on disposal or external deadline", async () => {
+    for (const explicit of [true, false]) {
+      const worker = { onmessage: null, onerror: null, postMessage() {}, terminate: vi.fn() };
+      const client = new DoomPreparationClient(worker as unknown as Worker, 5);
+      const pending = client.request({ op: "init" });
+      if (explicit) client.dispose();
+      await expect(pending).rejects.toThrow(explicit ? /disposed/ : /deadline/);
+      expect(worker.terminate).toHaveBeenCalledOnce();
+      await expect(client.request({ op: "prepare" })).rejects.toThrow(/closed/);
+    }
+  });
+
   it("replays from genesis to a boundary between maintenance checkpoints", () => {
     const engine = new Engine(), prep = new DoomPreparation(engine);
     const result = prep.prepare(request(33, 4), words);
@@ -51,6 +63,27 @@ describe("real program preparation contract", () => {
     expect(result.expected[3]).toBe(toFelt(33));
     expect(result.expected[4]).toBe(toFelt(37));
     expect(prep.prepare(request(3, 1), words).expected[3]).toBe(toFelt(3)); // rewind is genesis replay
+  });
+  it.each([1, 2])("explicitly refuses an empty segment starting at terminal status %s", status => {
+    class TerminalEngine extends Engine {
+      override run(name: "genesis" | "step" | "segment", args: string[]): string[] {
+        const output = super.run(name, args);
+        if (name === "step") { output[0] = toFelt(status); output[7] = toFelt(status); }
+        return output;
+      }
+    }
+    const prep = new DoomPreparation(new TerminalEngine());
+    expect(() => prep.prepare(request(3, 0), words)).toThrow(/terminal start boundaries.*empty EXIT\/DEAD/);
+  });
+  it("releases preparation on demand, recreates it for retry, and makes final disposal explicit", async () => {
+    const underlying = port(); let released = 0;
+    const injected: PreparationPort = { request: body => underlying.request(body), dispose: () => { released++; } };
+    const program = await createDoomProgram({ journal, preparation: injected });
+    await program.prepareArgs!(request(0, 4)); program.releasePreparation!();
+    expect(released).toBe(1);
+    expect((await program.prepareArgs!(request(33, 4)))[7]).toBe(request(33, 4).hIn);
+    program.dispose(); expect(released).toBe(2);
+    await expect(program.prepareArgs!(request(0, 1))).rejects.toThrow(/disposed/);
   });
   it("rejects changed prefixes, forged hIn, wrong slices and noncanonical input", () => {
     const prep = new DoomPreparation(new Engine()); prep.prepare(request(33, 1), words);

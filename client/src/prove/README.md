@@ -16,12 +16,16 @@ python3 client/scripts/prepare-game-proof.py \
 
 This verifies all bytes before copying them into the ignored
 `client/public/prover/game-proof/`. No compilation occurs. `doomArtifacts.ts`
-pins D29 genesis/step/run_segment, R5 simulator WASM, its JavaScript glue and
+pins D29 + idle-loop revision `0c8a3a8` genesis/step/run_segment, R5 simulator WASM, its JavaScript glue and
 its clock snippet, plus the Blake bootloader program hash measured for that
 exact executable. The Worker independently verifies those six SHA-256 values.
 It imports verified JavaScript bytes and its verified snippet via Blob URLs,
 avoiding an unchecked second fetch. Serving requires same-origin assets and a
 CSP permitting module Workers and `blob:` module imports.
+
+The adapter initially measured revision `8ae7f1c`; migrating to `0c8a3a8` changes
+step/run SHA and the task hash explicitly. Existing old identities remain refused;
+no stored run or pin is rewritten to appear compatible.
 
 These are distinct artifacts from the corrected Memory64 proof WASM, staged by
 `client/scripts/prepare-prover.sh`. No proof parameters or hashes are inferred
@@ -59,9 +63,15 @@ implementation of Doom or state transition is used as an oracle.
 
 The preparation cache holds one replayed state and one prepared argument list;
 it is not a cache of arbitrary imported checkpoints. Rewind replays from genesis.
+A boundary starting at an already terminal EXIT/DEAD state is explicitly unsupported,
+including a zero-tic segment at that boundary. The tested final EXIT segment starts
+at tic676 and ends at677; it is not an empty segment starting at677.
 Calls have a 120-second external timeout that terminates the Worker; aborts and
 terminal boundaries are explicit errors, never manufactured neutral inputs.
-Use `program.dispose()` when its run is closed; the caller still owns this lifecycle.
+The pipeline releases both proof and preparation Workers on failure or completion,
+and on a hard stop. Preparation is recreated from pinned genesis if retried later.
+Use `session.dispose()` (or `program.dispose()` with a directly owned pipeline) when
+the run is closed; disposal rejects in-flight preparation and frees its Worker.
 
 ## Persistence and reload
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-FileCopyrightText: 2026 Bal7hazar
+# SPDX-License-Identifier: Apache-2.0
 """Stage the pinned D29 preparation executables and R5 simulator; never build anything."""
 import argparse
 import hashlib
