@@ -17,10 +17,11 @@
 //!  * a [`CairoHintProcessor`] instance, reset (not rebuilt) between calls,
 //!  * the entrypoint choice and the run configuration.
 //!
-//! Rebuilt for every call (unavoidable with cairo-vm 3.2):
+//! Rebuilt for every independent call (the stateless API below):
 //!  * the [`CairoRunner`] and the `VirtualMachine` it owns (memory segments,
 //!    builtin runners, execution scopes). cairo-vm exposes no "reset" API, and
-//!    the memory of a finished run is not reusable,
+//!    the memory of a finished run is not resettable; an unfinished run can
+//!    instead be retained by the experimental `continuation` module,
 //!  * the user arguments (`Vec<Arg>`), which hold the serialized input felts.
 
 use std::cell::RefCell;
@@ -208,6 +209,10 @@ impl SimProgram {
         })
     }
 
+    pub(crate) fn into_continuation_parts(self) -> (Program, CairoHintProcessor<'static>) {
+        (self.program, self.processor.into_inner())
+    }
+
     pub fn mode(&self) -> RunMode {
         self.mode
     }
@@ -264,7 +269,8 @@ impl SimProgram {
         let t0 = crate::clock::now_ms();
         // A `CairoRunner` owns the `VirtualMachine`, its memory segments and
         // its builtin runners; none of that survives a run, so one runner per
-        // tic is unavoidable. The `Program` clone next to it is O(1).
+        // independent call is needed here. `continuation` retains an unfinished
+        // execution instead. The `Program` clone next to it is O(1).
         let proof_mode = self.mode == RunMode::ProofShapeNoTrace;
         let mut runner = CairoRunner::new(
             &self.program,
@@ -386,7 +392,7 @@ fn make_processor(string_to_hint: UnorderedHashMap<String, Hint>) -> CairoHintPr
 ///
 /// Everything the VM run can touch is cleared here; the expensive
 /// `string_to_hint` map is left untouched, which is the whole point.
-fn reset_processor(processor: &mut CairoHintProcessor<'static>, args: &[Felt252]) {
+pub(crate) fn reset_processor(processor: &mut CairoHintProcessor<'static>, args: &[Felt252]) {
     processor.user_args = vec![vec![Arg::Array(
         args.iter().map(|f| Arg::Value(*f)).collect(),
     )]];
