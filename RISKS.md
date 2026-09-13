@@ -99,6 +99,11 @@
 - **D28/R7 alignés** : défaut cinq vérifications intégré `b00c90b`, reprise FRI sauvegardée ou
   refus explicite d’une reprise ambiguë, simulation/marges conservées. 95 tests submit + 195 client
   et CI sept jobs verts sur `c383f14`. Aucun nouveau reçu ; coûts P4.1 historiques seulement.
+- **R1/R11 : génération WASM en défaut sur D33** : natif et ancien WASM valides, nouveau
+  WASM en échec en mono et quatre threads, avec ou sans appel `resources()`. La vérification
+  indépendante confirme un refus FRI ; les smokes arithmétiques CI ne couvrent pas cette trace.
+  [S12](docs/spikes/S12-wasm-proof-triage.md) consigne les preuves et contrôles, sans attribution
+  prématurée au jeu Cairo ni au registre. L’étude S11 est suspendue pour ce diagnostic.
 - **D34, étude de coût de hash** : les traces auxiliaires Poseidon restent larges après D31.
   Un prototype isolé comparera encodage Blake2s, oracles et ressources avant preuve. Aucune
   migration de hash d’état, aucun gain mémoire déduit des seules colonnes, aucun paramètre relevé.

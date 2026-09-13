@@ -5,8 +5,8 @@
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
 > AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
 > D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
-> Incident en diagnostic : preuve du nouveau programme D33 refusée après génération WASM 4 threads (2/2), mais génération native vérifiée ; comparaison mono en cours.
-> CI générale verte sur `c383f14` (7 jobs, leaf-verify compris) ; reconstruction WASM GitHub indépendante verte.
+> Incident WASM reproduit en mono et quatre threads sur D33 ; natif et ancien WASM valides. Diagnostic S12 en cours.
+> CI générale verte sur `67f618c` (run `34754644282`) ; reconstruction WASM GitHub indépendante verte.
 > P1.9 en intégration `f306c6a` : 565 tests verts, 110 015 mots ; 2 946 tics à 53 309 steps moyens / p99 128 207, D2/D29 non atteints.
 > Simulation avec continuation + D33 : 8,8–16,6 ms/tic, 512 MiB, 386 tics exacts ; latence par frame et client restants (S10).
 > Fuzz ponctuel : 10 000 tics réels sans divergence sur la référence `b11fd7f` ; campagne nocturne P1.10 restante.
@@ -76,8 +76,11 @@ Vague active : taille totale du programme (`codex/run-bytecode`, D29), coût du 
 WASM dans `codex/proof-triage`. Deux preuves quatre threads du run D33 échouent en FRI
 (`queries do not resolve to their commitment in the first layer`), y compris sous vérifieur
 natif indépendant. Le prouveur natif épinglé produit et vérifie la même exécution en 59,14 s.
-Ce diagnostic est distinct du refus attendu du registre log20. Artefacts `wasm-boxed-*` et
-`boxed-native-*` dans `/tmp/hellproof-audit-20260913/hash-cost/`. Aucun programme promu.
+L’ancien WASM produit aussi une preuve valide du même programme (51,44 s), tandis que le
+nouveau échoue en mono et sans appel `resources()`. La vérification native indépendante confirme
+le contrôle valide et le refus de la preuve invalide. Cause encore ouverte ; voir
+[S12](spikes/S12-wasm-proof-triage.md) pour la matrice et les artefacts. Cet incident est distinct
+du refus attendu du registre log20. Aucun programme promu.
 Les compteurs AIR et l’admission wrapper sont intégrés sur `main` ; les deux passes frontière
 et le parcours monstres sont assemblés dans `codex/game-integration`.
 Les passes frontière et armure sont relues et assemblées sur la branche
