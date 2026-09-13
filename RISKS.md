@@ -13,7 +13,7 @@
 | R2 | Budget de steps par tic | Fort | Élevée, dépassement mesuré | **P0** | S8, Phase 1 |
 | R3 | Route on-chain : dimensionnement des circuits, couplage de versions | Fort | Élevée | **P0** | S4, Phase 4 |
 | R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | C2/armure corrigés et fuzz ponctuel 10 k vert ; nightly restant | **P0** | P1.9, P1.10 |
-| R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Bloquant | 17–21 tics/s mesurés sur le jeu réel | **P0** | P1.9, P2.3 |
+| R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Bloquant | Débit moyen atteint par continuation ; pauses, client et concurrence restants | **P0** | P1.9, P2.3 |
 | R6 | UX de la preuve : durée, contention CPU, perte de travail | Moyen | Élevée | P1 | Phase 2–3 |
 | R7 | Coûts on-chain et limites protocolaires mouvants | Moyen | Moyenne | P1 | S5, Phase 4 |
 | R8 | Service wrapper : disponibilité, abus, coût d'exploitation | Moyen | Moyenne | P2 | Phase 3 |
@@ -48,7 +48,7 @@
   `doom_21` expérimental construit le circuit et le repli : racine **95 325 felts**, vérifieur Cairo
   existant **5 333 257 steps**, recomposition indépendante exacte. D32 ouvre ce candidat ;
   correction du dimensionnement intégrée `d848951`, anciens compteurs refusés même à la reprise.
-  Nouveaux modules Linux validés localement ; reconstruction GitHub indépendante restante.
+  Nouveaux modules Linux validés localement et reconstruction GitHub indépendante verte (`34751692540`).
   Chromium réel isolé : **3/3 preuves à quatre threads**
   vérifiées 40,167–48,128 s / 11,524 GiB ; mono interrompu une fois à 150 s, puis vérifié à 136,425 s.
   Restent matériel 16 GiB et jeu concurrent ([S9](docs/spikes/S9-proof-sizing.md)).
@@ -87,7 +87,23 @@
   76 service/2 vérifieur/195 client verts, vraie preuve vérifiée et altérations rejetées. L’admissibilité
   du registre, les ressources d’un service exposé et sa disponibilité restent des contrôles distincts.
 
-Les constats datés ci-dessous conservent l’historique des spikes ; les décisions D26–D33 et cette
+- **D33/R2 mesurés en `f306c6a`** : 565 tests verts, run 110 015 mots, cinq pins inchangés.
+  Profil root de 2 946 tics : moyenne **53 309**, p99 **128 207**, frontière exclue. Gain cumulé
+  moyen 35,8 % contre `b11fd7f`, mais objectifs D2/D29 toujours manqués. Les coûts WASM Blake
+  0/1/4 tics deviennent **2 113 239 / 2 152 507 / 2 260 220** ; les trois cas restent log21.
+- **R5 désormais délimité par la continuation** : même moteur et 386 tics exacts dans Chromium,
+  **8,8–16,6 ms moyens/tic** maintenance comprise, **512 MiB** linéaires avec D33. Onze appels
+  dépassent 28,57 ms, p99 38,2–45,4 ms. Le runtime est assemblé, sans intégration client ;
+  longue durée, pause/reprise utilisateur et preuve concurrente sur 16 GiB restent à valider.
+  Le journal doit démarrer au premier tic et les segments doivent recevoir l’état complet.
+- **D28/R7 alignés** : défaut cinq vérifications intégré `b00c90b`, reprise FRI sauvegardée ou
+  refus explicite d’une reprise ambiguë, simulation/marges conservées. 95 tests submit + 195 client
+  et CI sept jobs verts sur `c383f14`. Aucun nouveau reçu ; coûts P4.1 historiques seulement.
+- **D34, étude de coût de hash** : les traces auxiliaires Poseidon restent larges après D31.
+  Un prototype isolé comparera encodage Blake2s, oracles et ressources avant preuve. Aucune
+  migration de hash d’état, aucun gain mémoire déduit des seules colonnes, aucun paramètre relevé.
+
+Les constats datés ci-dessous conservent l’historique des spikes ; les décisions D26–D34 et cette
 requalification priment sur leurs anciens budgets. Voir [STATUS](docs/STATUS.md) pour les suites.
 
 ---

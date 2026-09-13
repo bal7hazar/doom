@@ -5,9 +5,9 @@
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
 > AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
 > D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
-> CI générale verte sur `73d0c0e` (7 jobs, leaf-verify compris) ; reconstruction WASM GitHub indépendante verte.
-> P1.9 en intégration `91719f8` : 563 tests verts, 110 848 mots ; budgets D2/D29 non atteints.
-> Simulation Chromium réelle : 17–21 tics/s sur cinq scènes, cible 35 Hz manquée (S10).
+> CI générale verte sur `c383f14` (7 jobs, leaf-verify compris) ; reconstruction WASM GitHub indépendante verte.
+> P1.9 en intégration `f306c6a` : 565 tests verts, 110 015 mots ; 2 946 tics à 53 309 steps moyens / p99 128 207, D2/D29 non atteints.
+> Simulation avec continuation + D33 : 8,8–16,6 ms/tic, 512 MiB, 386 tics exacts ; latence par frame et client restants (S10).
 > Fuzz ponctuel : 10 000 tics réels sans divergence sur la référence `b11fd7f` ; campagne nocturne P1.10 restante.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
@@ -69,8 +69,8 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : représentation des acteurs (`codex/boxed-roster`, D33), simulation Cairo conservée
-entre tics (`codex/sim-continuation`, S10) et corpus/fuzz nocturne (`codex/golden-fuzz`, P1.10).
+Vague active : taille totale du programme (`codex/run-bytecode`, D29), coût du hash d’état
+(`codex/state-hash-spike`, étude isolée) et corpus/fuzz nocturne (`codex/golden-fuzz`, P1.10).
 Les compteurs AIR et l’admission wrapper sont intégrés sur `main` ; les deux passes frontière
 et le parcours monstres sont assemblés dans `codex/game-integration`.
 Les passes frontière et armure sont relues et assemblées sur la branche
@@ -231,7 +231,29 @@ client**, typecheck/build et REUSE **1 593 fichiers** verts ; calldata complète
 sur trois racines réelles, dont `n4` P4.1. Le test devnet reste ignoré, aucune nouvelle transaction.
 Les reçus P4.1 existants totalisent 1 540 234 480 L2 gas ; pire consommation 38,55 % du cap,
 borne dérivée ×1,15 à 44,33 %. Ces mesures exigent le vérifieur optimisé ; une classe ancienne
-reste soumise à sa propre simulation. La CI de cette intégration reste à vérifier après push.
+reste soumise à sa propre simulation. La [CI 34753506939](https://github.com/bal7hazar/doom/actions/runs/34753506939) est entièrement verte
+sur `c383f14` : les sept jobs passent.
+
+**D33 et continuation assemblées en `f306c6a`**, sans promotion du jeu complet sur `main` :
+les acteurs inchangés conservent leur boîte entre les passes. Le vrai tic idle300 baisse de
+39 433 à **29 833 steps** (−24,35 %), fight493 de 190 594 à **168 845** (−11,41 %).
+Run **110 015 mots**, step 111 502, genesis 47 415 ; les six exécutables dev/proving sont
+reproduits bit à bit après merge. Root : **565 tests / 23 cibles**, format/build/graphe verts,
+**70 comparaisons proving de replays/D14/découpes**, **35 cas ABI** et quatre enveloppes invalides
+vérifiés ; pins et sorties inchangés. Les allocations supplémentaires des dormants sont incluses.
+Le profil root complet des **2 946 tics** donne désormais **53 309 steps moyens, p99 128 207**,
+frontière exclue : amélioration cumulée de 35,8 % en moyenne contre `b11fd7f`, mais D2 reste dépassée.
+Ressources Blake seules : **2 113 239 / 2 152 507 / 2 260 220 steps pour 0 / 1 / 4 tics** ;
+15 355 compressions, `blake_g` log21, refus registre maintenu. Quatre tics passent sous 2,3 M mono,
+aucun des trois cas sous 1,5 M threads ; aucune nouvelle preuve de cet exécutable.
+
+La continuation R5 (`b51cefe`, `350d6db`) conserve le vrai moteur Cairo entre les mots.
+Root a reproduit la référence puis la combinaison D33 : **386 tics exacts**, **11 tests Rust**,
+Clippy/format verts. Chromium combiné : **8,8–16,6 ms moyens/tic** maintenance comprise,
+**512 MiB** linéaires, p99 **38,2–45,4 ms**, onze appels sur 386 dépassant 28,57 ms. L’export puis
+recréation de VM tous les 32 tics est compris dans ces mesures. Le client reste à brancher,
+le journal doit commencer au premier tic, et la contention/longue durée/16 GiB restent à mesurer.
+Voir [S10](spikes/S10-live-simulation.md) ; aucun changement de gameplay, de hash ou de budget.
 
 ## Terminé (mergé sur `main`)
 

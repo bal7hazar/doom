@@ -96,6 +96,17 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   racines réelles comparées intégralement à Python. Aucun nouveau reçu réseau ; P4.1 reste
   1 540 234 480 L2 gas, pire consommation 38,55 % et borne calculée ×1,15 à 44,33 % du cap.
 
+- D33 + continuation assemblées `f306c6a` : **565 tests Cairo**, run **110 015 mots** ;
+  revalidation root 70 comparaisons proving et 35 cas ABI, pins inchangés. Profil exact 2 946 tics :
+  **53 309 steps moyens / p99 128 207**. Les budgets D2/D29 restent dépassés.
+- Ressources du programme boxé : **2 113 239 / 2 152 507 / 2 260 220 steps** pour 0/1/4 tics,
+  15 355 compressions Blake, log21 refusé par le registre courant. Exécution seule, pas de nouvelle preuve.
+- Simulation combinée dans Chromium : **386 tics exacts**, **8,8–16,6 ms moyens/tic** maintenance
+  comprise, **512 MiB** linéaires, p99 **38,2–45,4 ms** ; onze dépassements sur 386. Onze tests Rust
+  verts. Le client et la concurrence avec preuve restent à réaliser ; détails dans S10.
+- [CI D28 34753506939](https://github.com/bal7hazar/doom/actions/runs/34753506939) : sept jobs verts
+  sur `c383f14`, sans déploiement ni nouveau reçu réseau.
+
 ## 1. Vision et périmètre
 
 Objectif : une version de Doom dont le **cœur de jeu (simulation) est réécrit en Cairo**, jouable
