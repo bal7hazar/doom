@@ -78,7 +78,7 @@ pub struct GameState {
     /// `M_Random`: reserved for cosmetic draws; nothing draws from it yet.
     pub mrng: Prng,
     pub player: Player,
-    pub mobjs: Span<Mobj>,
+    pub mobjs: Span<Box<Mobj>>,
     pub specials: SpecialsState,
     /// Derived: current floor height of every sector (`Fixed::enc`).
     pub floor: Span<felt252>,
@@ -124,7 +124,7 @@ fn append_base(s: @GameState, ref out: Array<felt252>) {
     let mut mobjs = *s.mobjs;
     out.append(mobjs.len().into());
     while let Option::Some(m) = mobjs.pop_front() {
-        push_mobj(ref out, m);
+        push_mobj(ref out, m.as_snapshot().unbox());
     }
     out.append(specials_fields(s.specials).into());
     append_specials(s.specials, ref out);
@@ -598,11 +598,11 @@ fn read_state(data: Span<felt252>) -> Option<Box<GameState>> {
 /// Decode and validate the roster outside `from_felts`' wide player/level
 /// live set. The helper returns only the roster and remaining input (S7 §8).
 #[inline(never)]
-fn read_mobjs(ref r: Reader, n_mobjs: u32, bounds: MapBounds) -> Option<Span<Mobj>> {
-    let mut mobjs: Array<Mobj> = array![];
+fn read_mobjs(ref r: Reader, n_mobjs: u32, bounds: MapBounds) -> Option<Span<Box<Mobj>>> {
+    let mut mobjs: Array<Box<Mobj>> = array![];
     let mut k: u32 = 0;
     while k != n_mobjs {
-        let mo = read_mobj(ref r)?.unbox();
+        let mo = read_mobj(ref r)?;
         if !valid_mobj(mo, bounds, n_mobjs) {
             return Option::None;
         }
@@ -657,9 +657,9 @@ struct MapBounds {
     cells: u32,
 }
 
-fn valid_mobj(mo: Mobj, bounds: MapBounds, n: u32) -> bool {
-    if doom_physics::is_removed(@mo) {
-        return mo == doom_physics::removed_mobj();
+fn valid_mobj(mo: Box<Mobj>, bounds: MapBounds, n: u32) -> bool {
+    if doom_physics::is_removed(@mo.unbox()) {
+        return mo.unbox() == doom_physics::removed_mobj();
     }
     mo.kind < doom_things::num_kinds()
         && mo.state < doom_things::num_states()
@@ -708,7 +708,7 @@ fn valid_specials(
 
 /// An external order must cover each linked mobj exactly once, in its
 /// declared cell; no duplicate cells, duplicate indices or omitted members.
-fn read_grid(ref r: Reader, mobjs: Span<Mobj>, cells: u32) -> Option<ThingGrid> {
+fn read_grid(ref r: Reader, mobjs: Span<Box<Mobj>>, cells: u32) -> Option<ThingGrid> {
     let n = next_u32(ref r)?;
     if n > mobjs.len() {
         return Option::None;
@@ -736,7 +736,7 @@ fn read_grid(ref r: Reader, mobjs: Span<Mobj>, cells: u32) -> Option<ThingGrid> 
     let mut expected: u32 = 0;
     let mut ms = mobjs;
     while let Option::Some(m) = ms.pop_front() {
-        if doom_physics::in_blockmap(m) {
+        if doom_physics::in_blockmap(m.as_snapshot().unbox()) {
             expected += 1;
         }
     }
@@ -749,13 +749,13 @@ fn read_grid(ref r: Reader, mobjs: Span<Mobj>, cells: u32) -> Option<ThingGrid> 
 /// Validate one cell outside the outer dict/grid live set. Four 64-bit
 /// words cover all MAX_MOBJS=256 indices without a second dict and squash.
 fn read_members(
-    ref r: Reader, mobjs: Span<Mobj>, cell: u32, count: u32, ref seen: (u64, u64, u64, u64),
+    ref r: Reader, mobjs: Span<Box<Mobj>>, cell: u32, count: u32, ref seen: (u64, u64, u64, u64),
 ) -> Option<Span<u32>> {
     let mut members = array![];
     let mut left = count;
     while left != 0 {
         let idx = next_u32(ref r)?;
-        let mo = mobjs.get(idx)?.unbox();
+        let mo = mobjs.get(idx)?.unbox().as_snapshot().unbox();
         if !doom_physics::in_blockmap(mo) || *mo.cell != cell || mark_member(ref seen, idx) {
             return Option::None;
         }

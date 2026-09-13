@@ -1,5 +1,11 @@
 # doom_game
 
+D33 keeps the internal actor roster as `Span<Box<Mobj>>` from parsing through
+all tic passes and rendering. Unchanged actors and patches retain their boxes;
+the serializer still writes the same 27 fields per actor, schema 2 and hashes.
+The [boxed-roster report](bench_boxed/README.md) compares immutable executables,
+complete outputs, actual tic frames, allocations and both bytecode profiles.
+
 Assembles the real Freedoom E1M1 simulation at 35 Hz: player, physics,
 monsters, pickups, moving planes and lights. Skill 2 spawns 210 mobjs,
 including 29 kill-counting monsters, 49 counted items and four secrets.

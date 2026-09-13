@@ -53,7 +53,7 @@ fn test_a_monster_never_steps_into_a_wall() {
         );
         set_thing_position(@w.map, ref g, ref tgt, 1);
         mo.move_dir = u32_of(*v.at(b + 4));
-        let mobjs = array![mo, tgt].span();
+        let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
         let mut rng: Prng = from_index(u32_of(*v.at(b + 5)));
         let mut ev: Array<MonsterEvent> = array![];
         let ctx = Ctx { w, players, noise: silence(), tic: 0 };
@@ -97,7 +97,7 @@ fn test_threshold_decrements_and_clears() {
     let mut patches: Array<crate::Patch> = array![];
     let mut k: u32 = 0;
     while k != 10 {
-        let mobjs = array![mo, tgt].span();
+        let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
         let ctx = Ctx { w, players, noise: silence(), tic: k };
         let before = mo.threshold;
         a_chase(ctx, mobjs, ref g, ref rng, ref mo, 0, patches.span(), ref ev);
@@ -107,10 +107,10 @@ fn test_threshold_decrements_and_clears() {
     // A dead target clears it outright.
     let mut rng2: Prng = from_index(1);
     let dead_idx = 1;
-    let mobjs = array![mo, tgt].span();
+    let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
     damage_mobj(w, mobjs, ref rng2, ref tgt, dead_idx, NO_MOBJ, NO_MOBJ, 1000, false);
     assert(tgt.health <= 0, 'target is dead');
-    let mobjs = array![mo, tgt].span();
+    let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
     let ctx = Ctx { w, players, noise: silence(), tic: 11 };
     a_chase(ctx, mobjs, ref g, ref rng, ref mo, 0, patches.span(), ref ev);
     assert(mo.threshold == 0, 'dead target clears threshold');
@@ -200,7 +200,7 @@ fn test_rng_consumption_is_deterministic() {
         set_thing_position(@w.map, ref g, ref tgt, 1);
         set_state(w, ref mo, *MI_SEESTATE.span().at(KIND_POSSESSED));
         mo.target = 1;
-        let mobjs = array![mo, tgt].span();
+        let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
         let mut rng: Prng = from_index(1);
         let mut ev: Array<MonsterEvent> = array![];
         let patches: Array<crate::Patch> = array![];

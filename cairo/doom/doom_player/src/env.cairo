@@ -23,7 +23,7 @@ pub struct Env {
     pub states: StateTables,
     /// The mobj list as the tic loop sees it (the player's own copy is the
     /// `ref mo` the entry points take, not this).
-    pub mobjs: Span<Mobj>,
+    pub mobjs: Span<Box<Mobj>>,
     /// Index of the player's mobj in `mobjs`.
     pub me: u32,
     /// `leveltime`: drives the view bob and the weapon bob.
@@ -33,7 +33,7 @@ pub struct Env {
 }
 
 /// Bundle one tic's read-only inputs.
-pub fn env_of(w: World, mobjs: Span<Mobj>, me: u32, tic: u32, buttons: u32) -> Env {
+pub fn env_of(w: World, mobjs: Span<Box<Mobj>>, me: u32, tic: u32, buttons: u32) -> Env {
     Env { world: BoxTrait::new(w), states: w.states, mobjs, me, tic, buttons }
 }
 

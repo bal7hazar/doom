@@ -102,19 +102,19 @@ fn cap_awake(state: GameState, keep: u32) -> GameState {
         level, leveltime, status, noise, prng, mrng, player, mobjs, specials, floor, ceil, grid,
     } = state;
     let ctx = ctx_of(level, floor, ceil);
-    let mut out: Array<Mobj> = array![];
+    let mut out: Array<Box<Mobj>> = array![];
     let mut ms = mobjs;
     let mut awake: u32 = 0;
     while let Option::Some(m) = ms.pop_front() {
-        let mut mo = *m;
-        if doom_monsters::is_awake(ctx.w, m) {
+        let mut mo = m.unbox();
+        if doom_monsters::is_awake(ctx.w, (m).as_snapshot().unbox()) {
             awake += 1;
             if awake > keep {
                 set_state(ctx.w, ref mo, *MI_SPAWNSTATE.span().at(mo.kind));
                 mo.target = doom_physics::NO_MOBJ;
             }
         }
-        out.append(mo);
+        out.append(BoxTrait::new(mo));
     }
     GameState {
         level,
@@ -171,7 +171,7 @@ fn main(op: u32, n: u32) -> felt252 {
         let mut rng = from_index(1);
         while i != n {
             let mut p = s.player;
-            let mut mo = *s.mobjs.at(0);
+            let mut mo = s.mobjs.at(0).unbox();
             let env = env_of(ctx.w, s.mobjs, 0, s.leveltime + i, cmd.buttons.into());
             let mut events: Array<PlayerEvent> = array![];
             player_think(env, ref g, ref rng, ref p, ref mo, w, 0, false, ref events);
@@ -237,7 +237,7 @@ fn main(op: u32, n: u32) -> felt252 {
     } else if what == 8 {
         let ctx = ctx_of(s.level, s.floor, s.ceil);
         let mut g = doom_physics::rebuild(s.mobjs);
-        let mo = *s.mobjs.at(0);
+        let mo = s.mobjs.at(0).unbox();
         let patch = array![Patch { idx: 1, mo: *s.mobjs.at(1) }];
         while i != n {
             let list = doom_game::tic::rebuild_list(

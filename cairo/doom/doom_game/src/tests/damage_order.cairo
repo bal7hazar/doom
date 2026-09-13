@@ -23,13 +23,13 @@ fn defense(points: u32, kind: u32) -> PlayerDefense {
 }
 fn setup(health: i32) -> (World, Mobj) {
     let g = genesis(LevelId::E1M1);
-    (ctx_of(g.level, g.floor, g.ceil).w, Mobj { health, ..*g.mobjs.at(0) })
+    (ctx_of(g.level, g.floor, g.ceil).w, Mobj { health, ..g.mobjs.at(0).unbox() })
 }
 
 #[test]
 fn two_small_hits_round_armor_separately() {
     let (w, mut mo) = setup(100);
-    let list = array![mo, mo, mo].span();
+    let list = array![BoxTrait::new(mo), BoxTrait::new(mo), BoxTrait::new(mo)].span();
     let mut d = BoxTrait::new(defense(100, 1));
     let mut rng = from_index(1);
     let a = damage_mobj_with_defense(w, list, ref rng, ref mo, 0, NO_MOBJ, 1, 2, false, ref d);
@@ -45,7 +45,7 @@ fn two_small_hits_round_armor_separately() {
 #[test]
 fn armor_is_exhausted_between_impacts() {
     let (w, mut mo) = setup(100);
-    let list = array![mo, mo].span();
+    let list = array![BoxTrait::new(mo), BoxTrait::new(mo)].span();
     let mut d = BoxTrait::new(defense(3, 1));
     let mut rng = from_index(1);
     let _ = damage_mobj_with_defense(w, list, ref rng, ref mo, 0, NO_MOBJ, 1, 9, false, ref d);
@@ -59,7 +59,7 @@ fn armor_is_exhausted_between_impacts() {
 fn raw_lethal_hit_survives_without_death_side_effects() {
     let (w, mut mo) = setup(10);
     let before = mo;
-    let list = array![mo, mo, mo].span();
+    let list = array![BoxTrait::new(mo), BoxTrait::new(mo), BoxTrait::new(mo)].span();
     let mut d = BoxTrait::new(defense(100, 2));
     let mut rng = from_index(1);
     let first = damage_mobj_with_defense(w, list, ref rng, ref mo, 0, NO_MOBJ, 1, 12, false, ref d);
@@ -85,7 +85,7 @@ fn true_death_happens_once_and_keeps_exact_corpse_state() {
     let (w, mut mo) = setup(10);
     let original_height = mo.height;
     let original_flags = mo.flags;
-    let list = array![mo, mo, mo].span();
+    let list = array![BoxTrait::new(mo), BoxTrait::new(mo), BoxTrait::new(mo)].span();
     let mut d = BoxTrait::new(defense(20, 2));
     let mut rng = from_index(1);
     let first = damage_mobj_with_defense(w, list, ref rng, ref mo, 0, NO_MOBJ, 1, 30, false, ref d);
@@ -119,7 +119,7 @@ fn armor_does_not_reduce_raw_thrust_or_its_fall_forward_draw() {
     defended.health = 10;
     defended.z = fixed::add(source.z, fixed::from_units(80));
     let mut bare = defended;
-    let list = array![defended, source].span();
+    let list = array![BoxTrait::new(defended), BoxTrait::new(source)].span();
     let mut d = BoxTrait::new(defense(100, 2));
     let mut no_armor = BoxTrait::new(defense(0, 0));
     let mut r1 = from_index(1);
@@ -180,9 +180,16 @@ fn second_monster_attacks_after_raw_lethal_but_net_surviving_bite() {
     set_thing_position(@w.map, ref grid, ref b, 2);
     let mut d = defense(100, 2);
     let (out, rng, events) = monsters_ticker_with_defense(
-        w, array![me, a, b].span(), ref grid, array![0].span(), silence(), 0, from_index(1), ref d,
+        w,
+        array![BoxTrait::new(me), BoxTrait::new(a), BoxTrait::new(b)].span(),
+        ref grid,
+        array![0].span(),
+        silence(),
+        0,
+        from_index(1),
+        ref d,
     );
-    let after = *out.at(0);
+    let after = out.at(0).unbox();
     assert(after.health == 2, 'later attacker keeps its hit');
     assert(d.armor_points == 92 && d.damagecount == 8 && d.attacker == 2, 'two actual bites');
     assert(rng.index == 5, 'bite,pain,bite,pain');
@@ -236,7 +243,7 @@ fn hitscan_then_missile_share_the_remaining_armor() {
     let mut d = defense(1, 1);
     let (out, rng, events) = monsters_ticker_with_defense(
         w,
-        array![me, shooter, ball].span(),
+        array![BoxTrait::new(me), BoxTrait::new(shooter), BoxTrait::new(ball)].span(),
         ref grid,
         array![0].span(),
         silence(),
@@ -246,12 +253,12 @@ fn hitscan_then_missile_share_the_remaining_armor() {
     );
     // Zero spread, (0 % 5 + 1) * 3 = 3 bullet damage, saves the last armor
     // point. Missile (0 % 8 + 1) * 3 = 3 now hits unarmored: 10 - 2 - 3.
-    assert(*out.at(0).health == 5, 'bullet then missile damage');
+    assert(out.at(0).health == 5, 'bullet then missile damage');
     assert(d.armor_points == 0 && d.armor_type == 0, 'armor exhausted by bullet');
     assert(d.damagecount == 5 && d.attacker == 1, 'missile source is its owner');
     // Spread x2, bullet, pain, missile, pain, explosion duration.
     assert(rng.index == 8, 'seven draws in impact order');
-    assert(!has(*out.at(2).flags, doom_physics::MF_MISSILE), 'missile exploded');
+    assert(!has(out.at(2).flags, doom_physics::MF_MISSILE), 'missile exploded');
     let mut saw_bullet = false;
     let mut ev = events.span();
     while let Option::Some(e) = ev.pop_front() {
@@ -270,7 +277,7 @@ fn hitscan_then_missile_share_the_remaining_armor() {
 fn game_tic_synchronizes_only_net_damage_after_both_attacks() {
     let mut g = genesis(LevelId::E1M1);
     let w = ctx_of(g.level, g.floor, g.ceil).w;
-    let mut me = *g.mobjs.at(0);
+    let mut me = g.mobjs.at(0).unbox();
     me.health = 21;
     g.player.health = 21;
     g.player.armor_points = 100;
@@ -299,7 +306,7 @@ fn game_tic_synchronizes_only_net_damage_after_both_attacks() {
     set_thing_position(@w.map, ref grid, ref a, 1);
     set_thing_position(@w.map, ref grid, ref b, 2);
     g.grid = grid;
-    g.mobjs = array![me, a, b].span();
+    g.mobjs = array![BoxTrait::new(me), BoxTrait::new(a), BoxTrait::new(b)].span();
     g.prng = from_index(1);
     // Keep this integration fixture focused on combat RNG: no random lights.
     g.specials.lights = array![].span();
@@ -309,7 +316,7 @@ fn game_tic_synchronizes_only_net_damage_after_both_attacks() {
     // pain 222. Blue armor saves 18 + 2, leaving 21 - 20 = 1.
     assert(status == segment::Status::Running, 'still running');
     assert(
-        after.player.health == 1 && *after.mobjs.at(0).health == 1, 'records agree after two hits',
+        after.player.health == 1 && after.mobjs.at(0).health == 1, 'records agree after two hits',
     );
     assert(
         after.player.armor_points == 80 && after.player.armor_type == 2,
@@ -319,7 +326,7 @@ fn game_tic_synchronizes_only_net_damage_after_both_attacks() {
         after.player.damagecount == 20 && after.player.attacker == 2, 'final defense synchronized',
     );
     assert(after.player.playerstate == doom_player::PST_LIVE, 'never marked dead');
-    assert(*after.mobjs.at(0).height == me.height, 'no corpse resurrection');
+    assert(after.mobjs.at(0).height == me.height, 'no corpse resurrection');
     assert(after.prng.index == 5, 'four attack and reaction draws');
 }
 
@@ -328,7 +335,7 @@ fn game_tic_synchronizes_only_net_damage_after_both_attacks() {
 fn defense_is_scoped_to_its_player_and_damage_flash_saturates() {
     let (w, mut me) = setup(100);
     let mut other = me;
-    let list = array![me, other, other].span();
+    let list = array![BoxTrait::new(me), BoxTrait::new(other), BoxTrait::new(other)].span();
     let before = PlayerDefense { damagecount: 98, ..defense(100, 2) };
     let mut d = BoxTrait::new(before);
     let mut rng = from_index(1);
@@ -373,7 +380,7 @@ fn later_wall_puff_does_not_replace_the_actual_attacker() {
     let mut d = defense(100, 1);
     let (out, rng, events) = monsters_ticker_with_defense(
         w,
-        array![me, hit, miss].span(),
+        array![BoxTrait::new(me), BoxTrait::new(hit), BoxTrait::new(miss)].span(),
         ref grid,
         array![0].span(),
         silence(),
@@ -381,7 +388,7 @@ fn later_wall_puff_does_not_replace_the_actual_attacker() {
         from_index(1),
         ref d,
     );
-    assert(*out.at(0).health == 98 && d.armor_points == 99, 'only first shot damaged');
+    assert(out.at(0).health == 98 && d.armor_points == 99, 'only first shot damaged');
     assert(d.attacker == 1 && d.damagecount == 2, 'miss cannot change attacker');
     assert(rng.index == 8, 'second shot draws no pain');
     let mut received = false;

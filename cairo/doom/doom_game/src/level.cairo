@@ -123,7 +123,7 @@ pub fn contains(mut sectors: Span<u32>, sector: u32) -> bool {
 /// moving plane per tic; a thing is "in" the sector when its centre is.
 #[derive(Copy, Drop)]
 pub struct Occupancy {
-    pub mobjs: Span<Mobj>,
+    pub mobjs: Span<Box<Mobj>>,
 }
 
 pub impl OccupancyBlocking of SectorBlocking<Occupancy> {
@@ -132,6 +132,7 @@ pub impl OccupancyBlocking of SectorBlocking<Occupancy> {
         let mut mobjs = *self.mobjs;
         let mut blocked = false;
         while let Option::Some(m) = mobjs.pop_front() {
+            let m = m.as_snapshot().unbox();
             if *m.sector == sector
                 && has(*m.flags, MF_SHOOTABLE)
                 && *m.health > 0

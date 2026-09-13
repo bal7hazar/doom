@@ -58,10 +58,10 @@ fn test_truncated_record_block_is_rejected() {
 #[test]
 fn test_grid_member_bits_cover_all_256_slots() {
     let mut g = genesis(LevelId::E1M1);
-    let mut mobjs: Array<Mobj> = g.mobjs.into();
-    let repeated = *g.mobjs.at(0);
+    let mut mobjs: Array<core::box::Box<Mobj>> = g.mobjs.into();
+    let repeated = g.mobjs.at(0).unbox();
     while mobjs.len() < doom_physics::MAX_MOBJS {
-        mobjs.append(repeated);
+        mobjs.append(BoxTrait::new(repeated));
     }
     g.mobjs = mobjs.span();
     g.grid = doom_physics::grid::rebuild(g.mobjs);

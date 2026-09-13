@@ -60,7 +60,7 @@ fn main(op: u32) -> felt252 {
         SpawnZ::OnFloor,
     );
     set_thing_position(@w.map, ref grid, ref mon, 1);
-    let mut list = array![player, mon];
+    let mut list = array![BoxTrait::new(player), BoxTrait::new(mon)];
     let mobjs = list.span();
 
     // -- the same physics calls as `../baseline` ----------------------------
@@ -136,7 +136,7 @@ fn main(op: u32) -> felt252 {
 #[inline(always)]
 fn public_surface(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref grid: ThingGrid,
     ref rng: Prng,
     ref mon: Mobj,
@@ -205,7 +205,7 @@ fn public_surface(
 #[inline(always)]
 fn public_surface(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref grid: ThingGrid,
     ref rng: Prng,
     ref mon: Mobj,

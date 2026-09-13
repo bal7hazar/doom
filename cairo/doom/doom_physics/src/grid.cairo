@@ -4,7 +4,7 @@
 //!
 //! Doom threads every mobj into a doubly linked list per cell
 //! (`bnext`/`bprev`). Those pointers cannot live inside an immutable
-//! `Array<Mobj>`, so the lists live here, in a `Felt252Dict` keyed by cell
+//! `Array<Box<Mobj>>`, so the lists live here, in a `Felt252Dict` keyed by cell
 //! whose value is a `Span<u32>` of mobj indices. Reading a cell is one dict
 //! `get` (~35 steps); linking or unlinking rebuilds that one short span
 //! (a handful of appends), and a mobj that stays in its cell — the common
@@ -129,10 +129,11 @@ pub fn relink(ref g: ThingGrid, cell: u32, idx: u32) {
 
 /// Rebuild membership from the mobjs' own `cell` fields for a fresh grid.
 /// Saved states restore their committed visitation order with `restore_cell`.
-pub fn rebuild(mut mobjs: Span<Mobj>) -> ThingGrid {
+pub fn rebuild(mut mobjs: Span<Box<Mobj>>) -> ThingGrid {
     let mut g = new_grid();
     let mut i: u32 = opaque_zero(mobjs.len());
     while let Option::Some(m) = mobjs.pop_front() {
+        let m = m.as_snapshot().unbox();
         if in_blockmap(m) {
             link(ref g, *m.cell, i);
         }
@@ -147,7 +148,7 @@ pub fn rebuild(mut mobjs: Span<Mobj>) -> ThingGrid {
 /// only at a hash/serialization boundary, and permits an immutable snapshot.
 /// Its per-cell visited bit also replaces a separate seen-cell dictionary.
 /// Format: [n_cells, cell, n_members, member_indices..., ...].
-pub fn canonical_order(g: @ThingGrid, mut mobjs: Span<Mobj>) -> Array<felt252> {
+pub fn canonical_order(g: @ThingGrid, mut mobjs: Span<Box<Mobj>>) -> Array<felt252> {
     let mut latest: Felt252Dict<Nullable<(bool, Span<u32>)>> = Default::default();
     let mut history = g.journal.span();
     while let Option::Some(record) = history.pop_front() {
@@ -157,6 +158,7 @@ pub fn canonical_order(g: @ThingGrid, mut mobjs: Span<Mobj>) -> Array<felt252> {
     let mut body: Array<felt252> = array![];
     let mut count: u32 = 0;
     while let Option::Some(m) = mobjs.pop_front() {
+        let m = m.as_snapshot().unbox();
         if in_blockmap(m) {
             let cell = *m.cell;
             let (entry, value) = latest.entry(cell.into());

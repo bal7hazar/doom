@@ -8,8 +8,8 @@
 //!
 //! * A [`World`] is what a call reads: the level's hot spans (D24), the
 //!   **current** sector heights, the state tables and the RNG table.
-//! * A [`Mobj`] is a value; the list is an `Array<Mobj>` read as a
-//!   `Span<Mobj>` and rebuilt by the tic loop (S1 §7). A [`ThingGrid`]
+//! * A [`Mobj`] is a value; the list is an `Array<Box<Mobj>>` read as a
+//!   `Span<Box<Mobj>>` and rebuilt by the tic loop (S1 §7). A [`ThingGrid`]
 //!   holds the blockmap's per-cell thing lists, the one piece of mutable
 //!   spatial state.
 //! * A function that would touch *another* mobj reports it instead:

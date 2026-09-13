@@ -28,7 +28,7 @@ pub fn genesis(level: LevelId) -> GameState {
     // The player first, at index 0.
     let (player, mut pmo) = spawn(w, 0, g0.start, g0.angle);
     set_thing_position(@w.map, ref grid, ref pmo, 0);
-    mobjs.append(pmo);
+    mobjs.append(BoxTrait::new(pmo));
 
     // Then every map thing, in THINGS order (skill 2 already filtered by
     // `doom_map`; starts and unknown types spawn nothing).
@@ -40,7 +40,7 @@ pub fn genesis(level: LevelId) -> GameState {
                 let idx = mobjs.len();
                 let mut linked = mo;
                 set_thing_position(@w.map, ref grid, ref linked, idx);
-                mobjs.append(linked);
+                mobjs.append(BoxTrait::new(linked));
             },
             Option::None => {},
         }
@@ -49,7 +49,7 @@ pub fn genesis(level: LevelId) -> GameState {
 
     // `P_SetupPsprites`: raise the pistol (no draw).
     let mut p = player;
-    let mut pmo_up = *mobjs.span().at(0);
+    let mut pmo_up = mobjs.span().at(0).unbox();
     let mut rng = from_index(1);
     let mut events: Array<PlayerEvent> = array![];
     let env = env_of(w, mobjs.span(), 0, 0, 0);
@@ -101,7 +101,7 @@ mod tests {
         let start = doom_map::genesis(level);
         let (mut player, mut mo) = doom_player::spawn(ctx.w, 0, start.start, start.angle);
         let before = mo;
-        let mobjs = array![mo].span();
+        let mobjs = array![BoxTrait::new(mo)].span();
         let env = doom_player::env_of(ctx.w, mobjs, 0, 0, 0);
         let mut grid = doom_physics::rebuild(mobjs);
         let mut rng = prng::from_index(1);

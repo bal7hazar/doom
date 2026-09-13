@@ -75,24 +75,21 @@ costs one word and one step per felt. docs/spikes/S7.md measures each of
 those rules; `bench/attribute.py` shows where every word of this crate
 goes.
 
-**A mobj is a value; the list is an `Array<Mobj>` rebuilt by the tic loop.**
-S1 §7 measured a `Felt252Dict` at 51 steps per insert/get pair on every
-access of every tic, against 11 for a `Span` read; the tic loop copies each
-mobj once anyway. A write to a mobj the loop has already passed (a missile
-spawned later in the list hitting the player at index 0) is `replace`,
-measured at **22 700 steps on a 210-slot list (108 per slot)** — so
-`doom_game` should batch such patches and apply them in one rebuild at the
-end of the tic, and write forward patches in place as its pass reaches the
-index. A removed mobj keeps its slot (`removed_mobj`, `KIND_NONE`) so that
-every `target` index stays valid; `first_free` finds one to reuse.
+**A mobj is a 27-felt value; the roster stores `Box<Mobj>` pointers.**
+The tic loop rebuilds an `Array<Box<Mobj>>`, reusing each unchanged record.
+`replace` and `push` accept an already boxed record; `first_free` preserves
+slot order. On the D33 reference, replacing one element of a 210-slot list
+falls from 20 851 to 4 525 net steps. Several writes should still be batched
+into one rebuild. Removed slots retain their indices (`KIND_NONE`). See
+[the assembled-game comparison](../doom_game/bench_boxed/README.md).
 
 **The blockmap's thing lists are a `Felt252Dict<Nullable<Span<u32>>>`
 keyed by cell** (`ThingGrid`). Doom's `bnext`/`bprev` pointers cannot live
 in an immutable array; here a cell's list is read with one dict `get` and
 rewritten (a handful of appends) only when a thing changes cell — a thing
-that stays in its cell, the common case, costs nothing. The grid is derived
-data (`rebuild` recreates it from the mobjs' `cell` fields at the start of a
-segment) and is not part of the hashed state. Doom links every mobj without
+that stays in its cell, the common case, costs nothing. The order of members in each cell is observable gameplay state. Schema 2
+commits and restores that order; `rebuild` is only a constructor when index
+order is explicitly wanted, not a replacement for restoring a segment. Doom links every mobj without
 `MF_NOBLOCKMAP`; so does this crate, and `PIT_CheckThing` skips what cannot
 collide, exactly as in C — so a corpse needs no relink when `A_Fall`
 clears `MF_SOLID`.

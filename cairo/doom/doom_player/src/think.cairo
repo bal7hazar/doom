@@ -415,7 +415,7 @@ fn death_turn(env: Box<Env>, ref p: Box<Player>, ref mo: Box<Mobj>) {
         Option::None
     };
     let t = match target {
-        Option::Some(b) => b.unbox(),
+        Option::Some(b) => b.unbox().as_snapshot().unbox(),
         Option::None => {
             if cur.damagecount != 0 {
                 p = BoxTrait::new(Player { damagecount: dec(cur.damagecount), ..cur });

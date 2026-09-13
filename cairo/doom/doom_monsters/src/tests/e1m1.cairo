@@ -85,7 +85,7 @@ fn test_new_chase_dir_vectors() {
         let tgt = linked(w, ref g, KIND_PLAYER, fx(*v.at(b + 2)), fx(*v.at(b + 3)), 1);
         mo.move_dir = u32_of(*v.at(b + 4));
         let mut rng: Prng = from_index(u32_of(*v.at(b + 5)));
-        let mobjs = array![mo, tgt].span();
+        let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
         let mut ev: Array<MonsterEvent> = array![];
         new_chase_dir(ctx_of(w, players, 0), mobjs, ref g, ref rng, ref mo, 0, @tgt, ref ev);
         assert(mo.move_dir == u32_of(*v.at(b + 6)), 'movedir');
@@ -186,7 +186,7 @@ fn test_a_look_vectors() {
         );
         assert(mo.z.enc == *v.at(b + 2), 'monster floor');
         assert(player.z.enc == *v.at(b + 6), 'player floor');
-        let mobjs = array![mo, player].span();
+        let mobjs = array![BoxTrait::new(mo), BoxTrait::new(player)].span();
         let mut rng: Prng = from_index(1);
         let mut ev: Array<MonsterEvent> = array![];
         let action = a_look(ctx_of(w, players, 0), mobjs, ref rng, ref mo, 0, ref ev);
@@ -262,7 +262,7 @@ fn test_chase_scenario_matches_the_model() {
     mo.target = 1;
     mo.reaction_time = 0;
     let players = array![1].span();
-    let mut mobjs = array![mo, tgt];
+    let mut mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)];
     let mut rng: Prng = from_index(1);
     let expect = CHASE.span();
     let mut tic: u32 = 0;
@@ -273,12 +273,12 @@ fn test_chase_scenario_matches_the_model() {
         if tic % CHASE_EVERY == CHASE_EVERY - 1 {
             let b = (tic / CHASE_EVERY) * 7;
             let m = mobjs.span().at(0);
-            assert(*m.x.enc == *expect.at(b), 'chase x');
-            assert(*m.y.enc == *expect.at(b + 1), 'chase y');
-            assert(*m.move_dir == u32_of(*expect.at(b + 2)), 'chase movedir');
-            assert(*m.move_count == u32_of(*expect.at(b + 3)), 'chase movecount');
-            assert(*m.state == u32_of(*expect.at(b + 4)), 'chase state');
-            assert(*m.tics == u32_of(*expect.at(b + 5)), 'chase tics');
+            assert(m.x.enc == *expect.at(b), 'chase x');
+            assert(m.y.enc == *expect.at(b + 1), 'chase y');
+            assert(m.move_dir == u32_of(*expect.at(b + 2)), 'chase movedir');
+            assert(m.move_count == u32_of(*expect.at(b + 3)), 'chase movecount');
+            assert(m.state == u32_of(*expect.at(b + 4)), 'chase state');
+            assert(m.tics == u32_of(*expect.at(b + 5)), 'chase tics');
             assert(rng.index == u32_of(*expect.at(b + 6)), 'chase rng');
         }
         tic += 1;
@@ -306,16 +306,18 @@ const STAND_DY: felt252 = 512;
 
 /// Every skill-2 monster of E1M1, plus the player as mobj 0 — the list the
 /// scenario ticks. `dx`/`dy` offset the player from the Player 1 start.
-fn scenario_mobjs(w: World, ref g: ThingGrid, dx: felt252, dy: felt252) -> Array<Mobj> {
+fn scenario_mobjs(
+    w: World, ref g: ThingGrid, dx: felt252, dy: felt252,
+) -> Array<core::box::Box<Mobj>> {
     let m = load(LevelId::E1M1);
     let start = genesis(LevelId::E1M1);
-    let mut out: Array<Mobj> = array![];
+    let mut out: Array<core::box::Box<Mobj>> = array![];
     let px = fixed::add(start.start.x, fixed::from_units(dx));
     let py = fixed::add(start.start.y, fixed::from_units(dy));
     let mut player = spawn_mobj(w, KIND_PLAYER, px, py, SpawnZ::OnFloor);
     player.angle = start.angle;
     set_thing_position(@w.map, ref g, ref player, 0);
-    out.append(player);
+    out.append(BoxTrait::new(player));
     let n = num_things(@m);
     let mut i: u32 = 0;
     while i != n {
@@ -327,7 +329,7 @@ fn scenario_mobjs(w: World, ref g: ThingGrid, dx: felt252, dy: felt252) -> Array
                         let idx = out.len();
                         let mut linked_mo = mo;
                         set_thing_position(@w.map, ref g, ref linked_mo, idx);
-                        out.append(linked_mo);
+                        out.append(BoxTrait::new(linked_mo));
                     }
                 },
                 Option::None => {},
@@ -352,17 +354,17 @@ fn test_the_start_alcove_is_quiet() {
     let mut g = new_grid();
     let mut mobjs = scenario_mobjs(w, ref g, 0, 0);
     let players = array![0].span();
-    let noise = crate::Noise { source: 0, sector: *mobjs.span().at(0).sector };
+    let noise = crate::Noise { source: 0, sector: mobjs.span().at(0).sector };
     let mut rng: Prng = from_index(1);
     let mut heard: u32 = 0;
     let mut i: u32 = 1;
     while i != mobjs.len() {
         let m = mobjs.span().at(i);
         if !doom_map::reject_of(
-            w.map.reject, w.map.reject_stride, w.map.pow2, *m.sector, noise.sector,
+            w.map.reject, w.map.reject_stride, w.map.pow2, m.sector, noise.sector,
         ) {
             heard += 1;
-            assert(has(*m.flags, MF_AMBUSH), 'the two who hear are deaf');
+            assert(has(m.flags, MF_AMBUSH), 'the two who hear are deaf');
         }
         i += 1;
     }
@@ -390,7 +392,7 @@ fn test_scripted_700_tics_on_e1m1() {
     let mut mobjs = scenario_mobjs(w, ref g, STAND_DX, STAND_DY);
     assert(mobjs.len() == SCENARIO_MONSTERS + 1, 'skill-2 monster count');
     let players = array![0].span();
-    let noise = crate::Noise { source: 0, sector: *mobjs.span().at(0).sector };
+    let noise = crate::Noise { source: 0, sector: mobjs.span().at(0).sector };
     let mut rng: Prng = from_index(1);
     let mut digest: Array<felt252> = array![];
     let mut awake_max: u32 = 0;
@@ -398,7 +400,7 @@ fn test_scripted_700_tics_on_e1m1() {
     let mut ambush: u32 = 0;
     let mut k: u32 = 0;
     while k != mobjs.len() {
-        if has(*mobjs.span().at(k).flags, MF_AMBUSH) {
+        if has(mobjs.span().at(k).flags, MF_AMBUSH) {
             ambush += 1;
         }
         k += 1;
@@ -416,7 +418,7 @@ fn test_scripted_700_tics_on_e1m1() {
         if tic % 50 == 49 {
             let mut i: u32 = 0;
             while i != mobjs.len() {
-                push_felts(ref digest, mobjs.span().at(i));
+                push_felts(ref digest, (mobjs.span().at(i)).as_snapshot().unbox());
                 i += 1;
             }
             digest.append(rng.index.into());
@@ -458,7 +460,7 @@ fn test_scenario_list_is_stable() {
     let mut alive: u32 = 0;
     let mut i: u32 = 1;
     while i != mobjs.len() {
-        if *mobjs.span().at(i).health > 0 {
+        if mobjs.span().at(i).health > 0 {
             alive += 1;
         }
         i += 1;
@@ -476,8 +478,8 @@ fn test_patch_reads_back() {
     let mo = spawn_mobj(w, KIND_POSSESSED, start.x, start.y, SpawnZ::OnFloor);
     let mut hurt_mo = mo;
     hurt_mo.health = 3;
-    let mobjs = array![mo].span();
-    let patches = array![Patch { idx: 0, mo: hurt_mo }].span();
+    let mobjs = array![BoxTrait::new(mo)].span();
+    let patches = array![Patch { idx: 0, mo: BoxTrait::new(hurt_mo) }].span();
     assert(crate::read_mobj(mobjs, patches, 0).health == 3, 'patch wins');
     assert(crate::read_mobj(mobjs, array![].span(), 0).health == mo.health, 'list otherwise');
 }

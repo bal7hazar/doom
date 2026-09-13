@@ -92,12 +92,12 @@ fn item(kind: u32, flags: u32) -> Mobj {
 /// so that no test body keeps a ~56-felt bundle live beside a `Player` and a
 /// `Mobj` (see the module note on `Offset overflow`).
 fn env_at(mo: Mobj, tic: u32, buttons: u32) -> Env {
-    env_of(world(), array![mo].span(), 0, tic, buttons)
+    env_of(world(), array![BoxTrait::new(mo)].span(), 0, tic, buttons)
 }
 
 /// The same with a second mobj at index 1.
 fn env_two(a: Mobj, b: Mobj, tic: u32, buttons: u32) -> Env {
-    env_of(world(), array![a, b].span(), 0, tic, buttons)
+    env_of(world(), array![BoxTrait::new(a), BoxTrait::new(b)].span(), 0, tic, buttons)
 }
 
 fn word_of(forward: i64, side: i64, turn: i64, buttons: u32) -> felt252 {
@@ -843,7 +843,7 @@ fn test_bullet_slope_finds_nothing_to_aim_at() {
     let (_, mut mo) = spawn(world(), 0, g0.start, g0.angle);
     let mut g: ThingGrid = new_grid();
     set_thing_position(@world().map, ref g, ref mo, 0);
-    let slope = bullet_slope(world(), array![mo].span(), ref g, @mo, 0);
+    let slope = bullet_slope(world(), array![BoxTrait::new(mo)].span(), ref g, @mo, 0);
     assert(slope == fixed::ZERO, 'no target, no slope');
 }
 

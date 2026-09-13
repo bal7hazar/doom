@@ -177,7 +177,7 @@ fn sound_of(column: Span<u32>, kind: u32) -> u32 {
 /// the tic it bumps into a door, one tic earlier than vanilla.
 pub fn p_move(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref mo: Mobj,
     me: u32,
@@ -191,7 +191,7 @@ pub fn p_move(
 
 pub(crate) fn p_move_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref mo: Box<Mobj>,
     me: u32,
@@ -229,7 +229,7 @@ pub(crate) fn p_move_in(
 /// `P_TryWalk`: move, and on success re-arm `movecount` with `P_Random()&15`.
 fn try_walk(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -247,7 +247,7 @@ fn try_walk(
 /// `P_NewChaseDir`: Doom's direction search, in Doom's order.
 pub fn new_chase_dir(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -266,7 +266,7 @@ pub fn new_chase_dir(
 /// `P_TryWalk` attempts (S7 §8 rule 3).
 pub(crate) fn new_chase_dir_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -502,7 +502,7 @@ fn hears(e: Env, listener: u32, noise: u32) -> bool {
 /// the answer is identical every time and each repeat is a full
 /// `P_CheckSight`, so the loop runs once per player here. No `P_Random` is
 /// drawn either way, so the RNG stream is unaffected.
-pub fn look_for_players(ctx: Ctx, mobjs: Span<Mobj>, ref mo: Mobj, all_around: bool) -> bool {
+pub fn look_for_players(ctx: Ctx, mobjs: Span<Box<Mobj>>, ref mo: Mobj, all_around: bool) -> bool {
     let mut b = BoxTrait::new(mo);
     let r = look_for_players_in(env_of(ctx), mobjs, ref b, all_around);
     mo = b.unbox();
@@ -510,7 +510,7 @@ pub fn look_for_players(ctx: Ctx, mobjs: Span<Mobj>, ref mo: Mobj, all_around: b
 }
 
 pub(crate) fn look_for_players_in(
-    e: Env, mobjs: Span<Mobj>, ref mo: Box<Mobj>, all_around: bool,
+    e: Env, mobjs: Span<Box<Mobj>>, ref mo: Box<Mobj>, all_around: bool,
 ) -> bool {
     let n = e.players.len();
     let mut k: u32 = opaque_zero(n);
@@ -522,7 +522,7 @@ pub(crate) fn look_for_players_in(
         let pi = rd32(e.players, k);
         k = inc(k);
         let p = match mobjs.get(pi) {
-            Option::Some(b) => b.unbox(),
+            Option::Some(b) => b.unbox().as_snapshot().unbox(),
             Option::None => { continue; },
         };
         if *p.health <= 0 {
@@ -570,7 +570,12 @@ fn pick_sound(
 /// `A_Look`: wake on the sector's `soundtarget` (subject to `MF_AMBUSH`) or
 /// on seeing a player, then enter `seestate`.
 pub fn a_look(
-    ctx: Ctx, mobjs: Span<Mobj>, ref rng: Prng, ref mo: Mobj, me: u32, ref ev: Array<MonsterEvent>,
+    ctx: Ctx,
+    mobjs: Span<Box<Mobj>>,
+    ref rng: Prng,
+    ref mo: Mobj,
+    me: u32,
+    ref ev: Array<MonsterEvent>,
 ) -> u32 {
     let mut b = BoxTrait::new(mo);
     let r = a_look_in(env_of(ctx), mobjs, ref rng, ref b, me, ref ev);
@@ -580,7 +585,7 @@ pub fn a_look(
 
 pub(crate) fn a_look_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref mo: Box<Mobj>,
     me: u32,
@@ -593,7 +598,7 @@ pub(crate) fn a_look_in(
     if src != NO_MOBJ && src < mobjs.len() && hears(e, m.sector, e.noise.sector) {
         match mobjs.get(src) {
             Option::Some(b) => {
-                let targ = b.unbox();
+                let targ = b.unbox().as_snapshot().unbox();
                 if has(*targ.flags, MF_SHOOTABLE) {
                     m.target = src;
                     if has(m.flags, MF_AMBUSH) {
@@ -634,7 +639,7 @@ pub(crate) fn a_look_in(
 /// and missile decisions, the walk, and the active sound.
 pub fn a_chase(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -650,7 +655,7 @@ pub fn a_chase(
 
 pub(crate) fn a_chase_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -819,7 +824,7 @@ fn sub_roll(rnd: Span<u8>, ref rng: Prng) -> felt252 {
 /// puff/blood event and the damage the crossing costs.
 fn shoot(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     me: u32,
@@ -840,7 +845,7 @@ fn shoot(
             idx, p, _,
         )) => {
             let bleed = match mobjs.get(idx) {
-                Option::Some(b) => bleeds(b.unbox()),
+                Option::Some(b) => bleeds(b.unbox().as_snapshot().unbox()),
                 Option::None => false,
             };
             let kind = if bleed {
@@ -860,7 +865,7 @@ fn shoot(
 /// `P_SetMobjState` does.
 pub fn hurt(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     target_idx: u32,
     inflictor: u32,
@@ -886,7 +891,7 @@ pub fn hurt(
 
 pub(crate) fn hurt_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     target_idx: u32,
     inflictor: u32,
@@ -896,7 +901,7 @@ pub(crate) fn hurt_in(
     ref ev: Array<MonsterEvent>,
     ref defense: Box<PlayerDefense>,
 ) {
-    let mut t = read_mobj(mobjs, patches.span(), target_idx);
+    let mut t = read_mobj(mobjs, patches.span(), target_idx).unbox();
     let out: DamageOutcome = damage_mobj_with_defense(
         e.w.unbox(),
         mobjs,
@@ -915,7 +920,7 @@ pub(crate) fn hurt_in(
     if out.counts_kill {
         ev.append(event(EV_KILLED, target_idx, source, 0));
     }
-    patches.append(Patch { idx: target_idx, mo: t });
+    patches.append(Patch { idx: target_idx, mo: BoxTrait::new(t) });
     match out.drop {
         Option::Some(item) => { ev.append(event(EV_DROP, target_idx, item.kind, 0)); },
         Option::None => {},
@@ -982,7 +987,7 @@ pub(crate) fn scream(
 /// `A_PosAttack`: the zombieman's single pistol shot.
 pub fn a_pos_attack(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -1000,7 +1005,7 @@ pub fn a_pos_attack(
 
 pub(crate) fn a_pos_attack_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -1025,7 +1030,7 @@ pub(crate) fn a_pos_attack_in(
 /// `A_SPosAttack`: the shotgun guy's three pellets, one aim for all three.
 pub fn a_spos_attack(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -1043,7 +1048,7 @@ pub fn a_spos_attack(
 
 pub(crate) fn a_spos_attack_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -1091,7 +1096,7 @@ fn roll_damage(rnd: Span<u8>, ref rng: Prng, n: NonZero<u8>, mul: u32) -> u32 {
 /// `A_TroopAttack`: the imp's claw, or its fireball.
 pub fn a_troop_attack(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -1119,7 +1124,7 @@ pub fn a_troop_attack(
 
 pub(crate) fn a_troop_attack_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -1151,14 +1156,14 @@ pub(crate) fn a_troop_attack_in(
     );
     super::event::drain(moves.span(), idx, ref ev);
     ev.append(sound(me, SFX_FIRSHT));
-    patches.append(Patch { idx, mo: missile });
+    patches.append(Patch { idx, mo: BoxTrait::new(missile) });
     spawn_at = inc(idx);
 }
 
 /// `A_SargAttack`: the demon's (and the spectre's) bite.
 pub fn a_sarg_attack(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref mo: Mobj,
     me: u32,
@@ -1173,7 +1178,7 @@ pub fn a_sarg_attack(
 
 pub(crate) fn a_sarg_attack_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref mo: Box<Mobj>,
     me: u32,

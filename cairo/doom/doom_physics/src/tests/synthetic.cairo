@@ -281,7 +281,7 @@ fn monster(w: World, x: felt252, y: felt252) -> Mobj {
 
 fn attempt(w: World, ref mo: Mobj, x: felt252, y: felt252) -> Blocker {
     let mut g = new_grid();
-    let mobjs = array![mo].span();
+    let mobjs = array![BoxTrait::new(mo)].span();
     let mut events: Array<MoveEvent> = array![];
     try_move(w, mobjs, ref g, ref mo, 0, units(x), units(y), ref events).blocker
 }
@@ -323,7 +323,9 @@ fn test_height_rules() {
     p.z = units(80);
     let mut g = new_grid();
     let mut events: Array<MoveEvent> = array![];
-    let v = try_move(w, array![p].span(), ref g, ref p, 0, units(110), units(128), ref events);
+    let v = try_move(
+        w, array![BoxTrait::new(p)].span(), ref g, ref p, 0, units(110), units(128), ref events,
+    );
     assert(v.blocker == Blocker::Ceiling && v.floatok, 'ceiling, but floatok');
     // A teleporting thing skips the step and ceiling rules.
     let mut p = player(w, 350, 128);
@@ -353,14 +355,18 @@ fn test_lines_block_by_kind() {
     let mut p = player(w, 30, 128);
     let mut g = new_grid();
     let mut events: Array<MoveEvent> = array![];
-    let v = try_move(w, array![p].span(), ref g, ref p, 0, units(70), units(128), ref events);
+    let v = try_move(
+        w, array![BoxTrait::new(p)].span(), ref g, ref p, 0, units(70), units(128), ref events,
+    );
     assert(v.ok, 'player crosses it');
     assert(events.len() == 1, 'and triggers its special');
     assert(*events.at(0) == MoveEvent::CrossSpecial((9, geom2d::SIDE_BACK)), 'from the west side');
     // Straddling without crossing triggers nothing.
     let mut p = player(w, 30, 128);
     let mut events: Array<MoveEvent> = array![];
-    let v = try_move(w, array![p].span(), ref g, ref p, 0, units(55), units(128), ref events);
+    let v = try_move(
+        w, array![BoxTrait::new(p)].span(), ref g, ref p, 0, units(55), units(128), ref events,
+    );
     assert(v.ok && events.len() == 0, 'straddled, not crossed');
     // A missile ignores ML_BLOCKING and ML_BLOCKMONSTERS but not walls.
     let mut ball = spawn_mobj(w, KIND_TROOPSHOT, units(150), units(128), SpawnZ::At(units(40)));
@@ -398,7 +404,9 @@ fn test_corners_and_the_void() {
     let mut g = new_grid();
     let p = player(w, 40, 128);
     let mut events: Array<MoveEvent> = array![];
-    let c = check_position(w, array![p].span(), ref g, @p, 0, units(60), units(128), ref events);
+    let c = check_position(
+        w, array![BoxTrait::new(p)].span(), ref g, @p, 0, units(60), units(128), ref events,
+    );
     assert(c.nspec == 1 && c.spec0 == 9, 'one special straddled');
 }
 
@@ -429,7 +437,10 @@ fn test_thing_grid() {
     let mut c = monster(w, 100, 128);
     c.cell = 12;
     c.flags = c.flags | MF_NOBLOCKMAP;
-    let mut g2 = rebuild(array![a, b, c, removed_mobj()].span());
+    let mut g2 = rebuild(
+        array![BoxTrait::new(a), BoxTrait::new(b), BoxTrait::new(c), BoxTrait::new(removed_mobj())]
+            .span(),
+    );
     assert(things_in(ref g2, 11).len() == 2, 'two in cell 11');
     assert(things_in(ref g2, 12).len() == 0, 'noblockmap not linked');
     assert(!in_blockmap(@c) && in_blockmap(@a), 'in_blockmap');
@@ -445,7 +456,7 @@ fn test_thing_grid() {
     assert(things_in(ref g3, p.cell).len() == 1, 'link_thing');
     // Moving within the cell keeps the link; crossing a cell boundary
     // relinks.
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     let mut events: Array<MoveEvent> = array![];
     let before = p.cell;
     assert(
@@ -465,22 +476,26 @@ fn test_thing_grid() {
 fn test_mobj_list_helpers() {
     let s = strip();
     let w = world(@s);
-    let mut list: Array<Mobj> = array![];
+    let mut list: Array<core::box::Box<Mobj>> = array![];
     let p = player(w, 100, 128);
-    assert(push(ref list, p) == 0, 'first slot');
+    assert(push(ref list, BoxTrait::new(p)) == 0, 'first slot');
     let m = monster(w, 300, 128);
-    assert(push(ref list, m) == 1, 'second slot');
+    assert(push(ref list, BoxTrait::new(m)) == 1, 'second slot');
     assert(first_free(list.span()) == NO_MOBJ, 'no free slot');
-    replace(ref list, 1, removed_mobj());
-    assert(is_removed(list.at(1)) && !is_removed(list.at(0)), 'replaced');
+    replace(ref list, 1, BoxTrait::new(removed_mobj()));
+    assert(
+        is_removed((list.at(1)).as_snapshot().unbox())
+            && !is_removed((list.at(0)).as_snapshot().unbox()),
+        'replaced',
+    );
     assert(first_free(list.span()) == 1, 'free slot found');
     // Fill to capacity.
     let mut k: u32 = list.len();
     while k != crate::mobj::MAX_MOBJS {
-        push(ref list, removed_mobj());
+        push(ref list, BoxTrait::new(removed_mobj()));
         k += 1;
     }
-    assert(push(ref list, p) == NO_MOBJ, 'full');
+    assert(push(ref list, BoxTrait::new(p)) == NO_MOBJ, 'full');
 }
 
 #[test]
@@ -494,7 +509,7 @@ fn test_things_collide_and_pick_up() {
     set_thing_position(@w.map, ref g, ref m, 1);
     let mut item = spawn_mobj(w, KIND_CLIP, units(100), units(60), SpawnZ::OnFloor);
     set_thing_position(@w.map, ref g, ref item, 2);
-    let mobjs = array![p, m, item].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(m), BoxTrait::new(item)].span();
     let mut events: Array<MoveEvent> = array![];
     let v = try_move(w, mobjs, ref g, ref p, 0, units(120), units(128), ref events);
     assert(v.blocker == Blocker::Thing(1), 'monster blocks');
@@ -505,26 +520,36 @@ fn test_things_collide_and_pick_up() {
     // not; a missile against a non-shootable solid explodes silently.
     let mut ball = spawn_mobj(w, KIND_TROOPSHOT, units(120), units(128), SpawnZ::At(units(20)));
     set_thing_position(@w.map, ref g, ref ball, 3);
-    let mobjs = array![p, m, item, ball].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(m), BoxTrait::new(item), BoxTrait::new(ball)]
+        .span();
     let mut events: Array<MoveEvent> = array![];
     let v = try_move(w, mobjs, ref g, ref ball, 3, units(135), units(128), ref events);
     assert(v.blocker == Blocker::Thing(1) && *events.at(0) == MoveEvent::MissileHit(1), 'hit');
     let mut solid = monster(w, 150, 128);
     solid.flags = MF_SOLID;
-    let mobjs = array![p, solid, item, ball].span();
+    let mobjs = array![
+        BoxTrait::new(p), BoxTrait::new(solid), BoxTrait::new(item), BoxTrait::new(ball),
+    ]
+        .span();
     let mut events: Array<MoveEvent> = array![];
     let v = try_move(w, mobjs, ref g, ref ball, 3, units(135), units(128), ref events);
     assert(v.blocker == Blocker::Thing(1) && events.len() == 0, 'explodes on a pillar');
     let mut ghost = monster(w, 150, 128);
     ghost.flags = 0;
-    let mobjs = array![p, ghost, item, ball].span();
+    let mobjs = array![
+        BoxTrait::new(p), BoxTrait::new(ghost), BoxTrait::new(item), BoxTrait::new(ball),
+    ]
+        .span();
     let v = try_move(w, mobjs, ref g, ref ball, 3, units(135), units(128), ref events);
     assert(v.ok, 'nothing to hit');
     // Under a floating monster.
     let mut floating = m;
     floating.z = units(40);
     let mut low = ball;
-    let mobjs = array![p, floating, item, low].span();
+    let mobjs = array![
+        BoxTrait::new(p), BoxTrait::new(floating), BoxTrait::new(item), BoxTrait::new(low),
+    ]
+        .span();
     let v = try_move(w, mobjs, ref g, ref low, 3, units(135), units(128), ref events);
     assert(v.ok, 'passes under');
 }
@@ -542,7 +567,7 @@ fn test_slide_along_walls() {
     let mut p = player(w, 100, 200);
     set_thing_position(@w.map, ref g, ref p, 0);
     p.momy = units(50);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     let mut events: Array<MoveEvent> = array![];
     slide_move(w, mobjs, ref g, ref p, 0, ref events);
     assert(fixed::gt(p.y, units(230)) && fixed::le(p.y, units(240)), 'up against the wall');
@@ -551,7 +576,7 @@ fn test_slide_along_walls() {
     let mut p = player(w, 300, 200);
     p.momx = units(10);
     p.momy = units(50);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     slide_move(w, mobjs, ref g, ref p, 0, ref events);
     assert(fixed::gt(p.momx, fixed::ZERO) && p.momy == fixed::ZERO, 'slides east');
     assert(fixed::gt(p.x, units(300)), 'moved east');
@@ -560,14 +585,14 @@ fn test_slide_along_walls() {
     let mut p = player(w, 48, 200);
     p.momx = units(-30);
     p.momy = units(10);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     slide_move(w, mobjs, ref g, ref p, 0, ref events);
     assert(fixed::is_neg(p.momx) && fixed::is_neg(p.momy), 'turned along it');
     // Perpendicular to it: nothing to slide along.
     let mut p = player(w, 48, 200);
     p.momx = units(-30);
     p.momy = units(30);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     slide_move(w, mobjs, ref g, ref p, 0, ref events);
     // cos(90 degrees) is a hair below zero in the (i + 0.5)-sampled table,
     // so a residue well under a unit survives, as in Doom.
@@ -577,14 +602,14 @@ fn test_slide_along_walls() {
     let mut p = player(w, 100, 200);
     p.momx = units(10);
     p.momy = units(50);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     slide_move_lite(w, mobjs, ref g, ref p, 0, ref events);
     assert(p.y == units(200) && p.x == units(110), 'x alone succeeded');
     // Nothing found by the traces: the stairstep tries y alone, which
     // succeeds on the spot, and leaves the x momentum for the next tic.
     let mut p = player(w, 100, 128);
     p.momx = units(5);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     slide_move(w, mobjs, ref g, ref p, 0, ref events);
     assert(p.x == units(100) && p.y == units(128), 'stairstep keeps y');
     assert(p.momx == units(5), 'momentum kept');
@@ -597,7 +622,7 @@ fn test_xy_movement_friction_and_stops() {
     let mut g = new_grid();
     let mut p = player(w, 100, 128);
     set_thing_position(@w.map, ref g, ref p, 0);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     let mut events: Array<MoveEvent> = array![];
     // At rest: nothing happens.
     assert(
@@ -632,7 +657,7 @@ fn test_xy_movement_friction_and_stops() {
     c.flags = MF_CORPSE;
     c.momx = units(4);
     c.floorz = units(16); // as if standing partly on S1's step
-    let mobjs = array![c].span();
+    let mobjs = array![BoxTrait::new(c)].span();
     xy_movement(w, mobjs, ref g, ref c, 0, false, true, ref events);
     // Its move succeeds into S1, where floorz == the sector floor: friction
     // then applies on the next tic only.
@@ -641,12 +666,12 @@ fn test_xy_movement_friction_and_stops() {
     let mut m = monster(w, 100, 128);
     m.momx = units(-30);
     m.momy = units(0);
-    let mobjs = array![m].span();
+    let mobjs = array![BoxTrait::new(m)].span();
     let _ = xy_movement(w, mobjs, ref g, ref m, 0, false, true, ref events);
     assert(m.momx == fixed::ZERO, 'monster stops at the wall');
     let mut ball = spawn_mobj(w, KIND_TROOPSHOT, units(20), units(128), SpawnZ::At(units(40)));
     ball.momx = units(-20);
-    let mobjs = array![ball].span();
+    let mobjs = array![BoxTrait::new(ball)].span();
     match xy_movement(w, mobjs, ref g, ref ball, 0, false, true, ref events) {
         XyOutcome::MissileHit(b) => { assert(b == Blocker::Line(2), 'hit the wall'); },
         _ => { assert(false, 'missile hit'); },
@@ -655,7 +680,7 @@ fn test_xy_movement_friction_and_stops() {
     // MAXMOVE first: 30 units from y = 230 reach the wall at 256).
     let mut p = player(w, 100, 230);
     p.momy = units(50);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     xy_movement(w, mobjs, ref g, ref p, 0, false, false, ref events);
     assert(p.y == units(230), 'lite: y refused');
 }
@@ -761,7 +786,7 @@ fn test_hitscan_rules() {
     let mut g = new_grid();
     let mut p = player(w, 64, 128);
     set_thing_position(@w.map, ref g, ref p, 0);
-    let mobjs = array![p].span();
+    let mobjs = array![BoxTrait::new(p)].span();
     // East, level: the shot clears the 16 step (slope < 0 at 64 units) and
     // hits the 24 step of line 5 (floor 40 > gun height 36).
     match line_attack(w, mobjs, ref g, 0, 0, units(2048), fixed::ZERO) {
@@ -787,14 +812,14 @@ fn test_hitscan_rules() {
     // hits nothing — a degenerate position.)
     let mut on_wall = player(w, 100, 240);
     set_thing_position(@w.map, ref g, ref on_wall, 0);
-    let mobjs2 = array![on_wall].span();
+    let mobjs2 = array![BoxTrait::new(on_wall)].span();
     match line_attack(w, mobjs2, ref g, 0, 0, units(512), fixed::ZERO) {
         Hit::Wall((line, _, _)) => { assert(line == 5, 'along the wall'); },
         _ => { assert(false, 'along the wall 2'); },
     }
     let mut exactly_on = player(w, 100, 256);
     set_thing_position(@w.map, ref g, ref exactly_on, 0);
-    let mobjs2b = array![exactly_on].span();
+    let mobjs2b = array![BoxTrait::new(exactly_on)].span();
     assert(
         line_attack(w, mobjs2b, ref g, 0, 0, units(512), fixed::ZERO) == Hit::Nothing,
         'on the wall',
@@ -802,7 +827,7 @@ fn test_hitscan_rules() {
     // North: the top wall (from x = 100, clear of the diagonal's end at 64).
     let mut mid = player(w, 100, 128);
     set_thing_position(@w.map, ref g, ref mid, 0);
-    let mobjs_mid = array![mid].span();
+    let mobjs_mid = array![BoxTrait::new(mid)].span();
     match line_attack(w, mobjs_mid, ref g, 0, bam::ANG90, units(2048), fixed::ZERO) {
         Hit::Wall((line, _, _)) => { assert(line == 1, 'top wall'); },
         _ => { assert(false, 'wall hit 3'); },
@@ -810,17 +835,21 @@ fn test_hitscan_rules() {
     // A monster in the way: aimed at, hit, and it bleeds.
     let mut m = monster(w, 100, 128);
     set_thing_position(@w.map, ref g, ref m, 1);
-    let mobjs3 = array![p, m].span();
+    let mobjs3 = array![BoxTrait::new(p), BoxTrait::new(m)].span();
     let aim = aim_line_attack(w, mobjs3, ref g, 0, 0, units(1024));
     assert(aim.target == 1, 'aimed');
     match line_attack(w, mobjs3, ref g, 0, 0, units(2048), aim.slope) {
-        Hit::Thing((idx, _, _)) => { assert(idx == 1 && bleeds(mobjs3.at(1)), 'hit and bleeds'); },
+        Hit::Thing((
+            idx, _, _,
+        )) => {
+            assert(idx == 1 && bleeds((mobjs3.at(1)).as_snapshot().unbox()), 'hit and bleeds');
+        },
         _ => { assert(false, 'thing hit'); },
     }
     // Aiming over a corpse finds nothing; a corpse is not shot either.
     let mut corpse = m;
     corpse.flags = without(corpse.flags, MF_SHOOTABLE);
-    let mobjs4 = array![p, corpse].span();
+    let mobjs4 = array![BoxTrait::new(p), BoxTrait::new(corpse)].span();
     assert(
         aim_line_attack(w, mobjs4, ref g, 0, 0, units(1024)).target == NO_MOBJ, 'corpse ignored',
     );
@@ -831,7 +860,7 @@ fn test_hitscan_rules() {
     // A thing above the aim cone is not aimed at.
     let mut high = m;
     high.z = units(120);
-    let mobjs5 = array![p, high].span();
+    let mobjs5 = array![BoxTrait::new(p), BoxTrait::new(high)].span();
     assert(aim_line_attack(w, mobjs5, ref g, 0, 0, units(1024)).target == NO_MOBJ, 'over the cone');
     // The raw traversal lists both lines and things, nearest cell first.
     let list = path_traverse(w, mobjs3, ref g, pt(64, 128), pt(300, 128), true, 0);
@@ -839,7 +868,7 @@ fn test_hitscan_rules() {
     // Aiming down the closed door stops at it.
     let mut p4 = player(w, 576, 128);
     set_thing_position(@w.map, ref g, ref p4, 2);
-    let mobjs6 = array![p, m, p4].span();
+    let mobjs6 = array![BoxTrait::new(p), BoxTrait::new(m), BoxTrait::new(p4)].span();
     assert(aim_line_attack(w, mobjs6, ref g, 2, 0, units(1024)).target == NO_MOBJ, 'door');
 }
 
@@ -858,7 +887,7 @@ fn test_damage_edge_cases() {
     m.health = 3;
     let mut low = player(w, 100, 128);
     low.z = units(-200);
-    let mobjs = array![low, m].span();
+    let mobjs = array![BoxTrait::new(low), BoxTrait::new(m)].span();
     let out = damage_mobj(w, mobjs, ref rng, ref m, 1, 0, 0, 10, true);
     assert(out.died, 'killed');
     // Not shootable: nothing happens.
@@ -909,7 +938,7 @@ fn test_spawn_helpers() {
     let mut imp = spawn_mobj(w, KIND_TROOP, units(8), units(128), SpawnZ::OnFloor);
     set_thing_position(@w.map, ref g, ref imp, 0);
     let mut target = player(w, -100, 128);
-    let mobjs = array![imp, target].span();
+    let mobjs = array![BoxTrait::new(imp), BoxTrait::new(target)].span();
     let mut rng = from_index(1);
     let mut events: Array<MoveEvent> = array![];
     let (ball, exploded) = spawn_missile(
@@ -919,7 +948,7 @@ fn test_spawn_helpers() {
     // Against a shadow target the aim is fuzzed.
     target.flags = target.flags | crate::mobj::MF_SHADOW;
     target.x = units(300);
-    let mobjs = array![imp, target].span();
+    let mobjs = array![BoxTrait::new(imp), BoxTrait::new(target)].span();
     let (ball2, exploded2) = spawn_missile(
         w, mobjs, ref g, ref rng, @imp, 0, @target, FIREBALL, 2, ref events,
     );
@@ -947,7 +976,9 @@ fn test_world_helpers_and_line_meta() {
     p.z = units(72);
     let mut g = new_grid();
     let mut events: Array<MoveEvent> = array![];
-    let v = try_move(w2, array![p].span(), ref g, ref p, 0, units(650), units(128), ref events);
+    let v = try_move(
+        w2, array![BoxTrait::new(p)].span(), ref g, ref p, 0, units(650), units(128), ref events,
+    );
     assert(v.blocker == Blocker::Fit, 'S4 itself is 8 units tall');
     let mut p5 = player(w2, 700, 128);
     assert(p5.ceilingz == units(200), 'raised ceiling');
@@ -972,7 +1003,7 @@ fn test_restored_grid_keeps_lists_and_rejects_duplicate_cells() {
     a.cell = 11;
     let mut b = monster(w, 100, 128);
     b.cell = 11;
-    let mobjs = array![a, b].span();
+    let mobjs = array![BoxTrait::new(a), BoxTrait::new(b)].span();
     let mut g = new_grid();
     assert(restore_cell(ref g, 11, array![1, 0].span()), 'first restore');
     assert(!restore_cell(ref g, 11, array![0].span()), 'duplicate cell');
