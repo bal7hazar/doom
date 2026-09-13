@@ -14,7 +14,7 @@
 //!     (shot monsters, picked-up items), P_ThingHeightClip in moving sectors
 //!  7. doom_monsters::monsters_ticker  (every monster and missile, D3)
 //!  8. its events: EV_CROSS -> cross_line, EV_USE -> use_line, EV_KILLED ->
-//!     kills, EV_DROP -> a dropped item; the player's armor reconciled
+//!     kills, EV_DROP -> a dropped item; synchronize the player's defense
 //!  9. doom_specials::specials_ticker  (planes and lights), heights refreshed
 //! 10. leveltime += 1; status = EXIT | DEAD | RUNNING
 //! ```
@@ -30,17 +30,17 @@
 use core::num::traits::WrappingAdd;
 use doom_monsters::actions::passive;
 use doom_monsters::{
-    Ctx as MonsterCtx, EV_BLOOD, EV_CROSS, EV_DROP, EV_KILLED, EV_PUFF, EV_USE, MonsterEvent, Noise,
-    Patch, monsters_ticker, read_mobj,
+    Ctx as MonsterCtx, EV_CROSS, EV_DROP, EV_KILLED, EV_USE, MonsterEvent, Noise, Patch,
+    monsters_ticker_with_defense, read_mobj,
 };
 use doom_physics::{
-    Hit, MAX_MOBJS, MF_DROPPED, Mobj, MoveEvent, NO_MOBJ, SpawnZ, ThingGrid, World, XyOutcome,
-    check_position, damage_mobj, first_free, is_removed, removed_mobj, replace, set_thing_position,
-    spawn_mobj, unset_thing_position, xy_movement, z_movement,
+    Hit, MAX_MOBJS, MF_DROPPED, Mobj, MoveEvent, NO_MOBJ, PlayerDefense, SpawnZ, ThingGrid, World,
+    XyOutcome, check_position, damage_mobj, first_free, is_removed, removed_mobj, replace,
+    set_thing_position, spawn_mobj, unset_thing_position, xy_movement, z_movement,
 };
 use doom_player::{
-    Env, PST_DEAD, Player, PlayerEvent, WP_CHAINSAW, absorb, count_kill, drop_weapon, env_of,
-    has_blue_key, player_stopped, player_think, touch_special,
+    Env, PST_DEAD, Player, PlayerEvent, WP_CHAINSAW, count_kill, drop_weapon, env_of, has_blue_key,
+    player_stopped, player_think, touch_special,
 };
 use doom_specials::{
     PlayerSector, SpecialsState, cross_line, monster, player, player_in_special_sector,
@@ -53,8 +53,6 @@ use super::level::{Ctx, Occupancy, contains, ctx_of, moving_sectors, refresh_hei
 use super::setup::status_from;
 use super::state::GameState;
 
-/// `MAXDAMAGECOUNT` of `p_inter.c`.
-const MAXDAMAGECOUNT: u32 = 100;
 /// `1/8` as a `Fixed`: `FixedMul(momz, 1/8)` is `momz >> 3`, floor included.
 const EIGHTH: Fixed = Fixed { enc: BIAS + 8192 };
 
@@ -164,15 +162,24 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
     };
 
     // 7. The monsters and the missiles.
-    let (list_out, r2, mev) = monsters_ticker(w, list_in, ref g, players, noise_now, tic, rng);
+    let mut defense = PlayerDefense {
+        mo: me,
+        armor_points: p.armor_points,
+        armor_type: p.armor_type,
+        damagecount: p.damagecount,
+        attacker: p.attacker,
+    };
+    let (list_out, r2, mev) = monsters_ticker_with_defense(
+        w, list_in, ref g, players, noise_now, tic, rng, ref defense,
+    );
     rng = r2;
     let mut out = list_out;
 
-    // 8. Their events, then the player's share of the damage.
+    // 8. Their events, then synchronize the player after per-impact damage.
     apply_monster_events(ctx, w, me, ref p, ref s, out.span(), mev.span(), ref drops, ref cues);
     let after = *out.span().at(me);
     if after.health < mo.health && p.playerstate != PST_DEAD {
-        let fixed_mo = reconcile_player(env, ref g, ref rng, ref p, mo, after, cues.span());
+        let fixed_mo = reconcile_player(env, ref g, ref rng, ref p, after, defense);
         replace(ref out, me, fixed_mo);
     }
     place_drops(w, ref g, ref out, drops.span());
@@ -548,70 +555,27 @@ pub fn apply_monster_events(
     }
 }
 
-/// The player's half of `P_DamageMobj`, after the monsters applied the raw
-/// damage to the mobj (`doom_monsters` damages every target alike):
-/// armor absorption, `damagecount`, `attacker`, `PST_DEAD` and the weapon
-/// drop. Returns the mobj to write back: health mirrored from the player,
-/// and — when the raw blow was lethal but the armor was not — the mobj
-/// restored from its pre-hit record (state, tics, flags, height).
+/// Synchronize the Player record from the already-resolved impacts. Armor,
+/// pain and death were decided in order by physics; no mobj is resurrected.
+/// The weapon is dropped only on the first live -> dead transition.
 pub fn reconcile_player(
-    env: Env,
-    ref g: ThingGrid,
-    ref rng: Prng,
-    ref p: Player,
-    before: Mobj,
-    after: Mobj,
-    mut cues: Span<MonsterEvent>,
+    env: Env, ref g: ThingGrid, ref rng: Prng, ref p: Player, after: Mobj, defense: PlayerDefense,
 ) -> Mobj {
-    let lost: felt252 = (before.health - after.health).into();
-    let raw: u32 = match lost.try_into() {
+    p.armor_points = defense.armor_points;
+    p.armor_type = defense.armor_type;
+    p.damagecount = defense.damagecount;
+    p.attacker = defense.attacker;
+    p.health = match after.health.try_into() {
         Option::Some(v) => v,
         Option::None => 0,
     };
-    let net = absorb(ref p, raw);
-    p.health = if net >= p.health {
-        0
-    } else {
-        p.health - net
-    };
-    let count = p.damagecount + net;
-    p.damagecount = if count > MAXDAMAGECOUNT {
-        MAXDAMAGECOUNT
-    } else {
-        count
-    };
-    // The attacker: the last shooter whose puff/blood landed on us; a
-    // missile leaves no cue, so fall back to the retaliation target.
-    let mut attacker = if after.target != NO_MOBJ {
-        after.target
-    } else {
-        p.attacker
-    };
-    while let Option::Some(c) = cues.pop_front() {
-        if (*c.kind == EV_BLOOD || *c.kind == EV_PUFF) && *c.a == p.mo {
-            attacker = *c.who;
-        }
-    }
-    p.attacker = attacker;
-    let mut fixed_mo = after;
-    if p.health == 0 {
+    let mut mo = after;
+    if p.health == 0 && p.playerstate != PST_DEAD {
         p.playerstate = PST_DEAD;
         let mut ignored: Array<PlayerEvent> = array![];
-        drop_weapon(env, ref g, ref rng, ref p, ref fixed_mo, ref ignored);
-    } else {
-        if after.health <= 0 {
-            fixed_mo.state = before.state;
-            fixed_mo.tics = before.tics;
-            fixed_mo.flags = before.flags;
-            fixed_mo.height = before.height;
-        }
-        let h: felt252 = p.health.into();
-        fixed_mo.health = match h.try_into() {
-            Option::Some(v) => v,
-            Option::None => 0,
-        };
+        drop_weapon(env, ref g, ref rng, ref p, ref mo, ref ignored);
     }
-    fixed_mo
+    mo
 }
 
 /// Give every dropped item a slot: appended while the list has room,

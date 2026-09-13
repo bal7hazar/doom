@@ -4,5 +4,6 @@
 //! coverage run executes on the miniature level).
 
 mod boundary;
+mod damage_order;
 mod e1m1;
 mod synthetic;
