@@ -95,12 +95,52 @@ the weapon's (Doom copies them every tic). `cheats` is kept, always zero,
 because `P_PlayerThink` and `P_CalcHeight` branch on it and a fork that
 wants `CF_NOCLIP` should not have to change the hash schema.
 
-**`Env` boxes the `World`.** A `doom_physics::World` is nineteen spans plus
-a grid, about 56 felts, and Cairo copies a struct at every call boundary —
-the lesson D24 records and `doom_physics` measured as ~740 steps of
-argument plumbing on `xy_movement`. The psprite chain is four calls deep on
-an idle tic and only three of its actions ever trace a shot, so the world is
-put in a `Box` (one felt) and unboxed where it is actually read.
+**Inside the crate, everything crosses a call behind a pointer** (S7 §8
+rule 3). `Env` is 16 felts, `Player` 36 and `Mobj` 27; a tic goes eight
+levels deep (`player_think` → `buttons` → `move_psprites` → `tick_slot` →
+`set_psprite` → `run_action` → `A_WeaponReady`), and Cairo pushes every
+felt of every one of them at every level *and* stores the function's whole
+return width again at each of its return points and panic sites.
+`bench/attribute.py` had the psprite chain at **88 felts of parameters and
+72 of return** at every level. So `env::enter` boxes the three records once
+at each public entry point and the inside of the crate (`*_in`) carries
+`Box<Env>`, `Box<Player>`, `Box<Mobj>` — one felt each, and the same
+functions now measure **12 in and 11 out**. The public signatures are
+unchanged. The public boxing adapters now inline at the caller; the
+boxed algorithms remain shared, avoiding a wide call immediately before
+converting the records to pointers.
+
+Reading a field through a box is free (`unbox` emits nothing, the field is
+a double dereference). What a box costs is a **write**: rebuilding a boxed
+`Player` measures 111 steps, so each step of the tic rebuilds the record it
+changes exactly once (`buttons` folds the weapon switch and the use latch,
+`calc_height_in` the four view fields, `damage_player_in` the five a hit
+changes), the pure halves are split out (`thrust_of`, `spring`,
+`absorb_of`, `requested_weapon`), and **a record is not rebuilt to write
+the values it already holds** — `set_slot` and `A_WeaponReady` hit that
+case on every tic a weapon is simply up (a self-looping "ready" state, zero
+bob), and `P_MovePlayer` with an empty command is a no-op.
+
+**Direct table accesses and arithmetic use panic-free helpers** (S7 §8
+rule 1); `bam` still has checked operations upstream. A panic site is not
+an error path in Cairo 2.16, it is 72 felts of zero-padding: the `Err`
+variant of the enclosing function's `PanicResult` is stored at the full
+width of its `Ok`, and "may panic" propagates to every caller, which then
+carries a propagation path of *its* width. `src/num.cairo` re-exports
+`doom_physics::maputl`'s panic-free scalars and adds the ones this crate
+needs; table reads go through `rd32`/`get` + `match`, the state machine
+through `doom_physics::spawn::state_entry` and the RNG through its `roll`
+(the twins S7 §9 parked there), divisions through `NonZero` literals, and
+the constant angles are folded into `const`s. That took the crate's
+`PanicResult` stores from 12 600 words to about 1 900 before the
+final adapter inlining; the remaining checked paths propagate through `bam`'s `reduce`/`sub`/`finesine`, which still
+panic (S7 §9 has them on the list).
+
+**No literal at a call site that the lowering can specialise on** (S7 §8
+rules 4 and 7). `give_ammo(ref p, AM_CLIP, 5)` in each arm of `take_ammo`
+gave the compiler **nine copies of `give_ammo`, 3 562 words**; two arms
+calling `a_melee(…, false)` and `a_melee(…, true)` gave two copies of a
+2 184-word function. Each `if` tree now picks the *values* and calls once.
 
 **The use-line trace goes through `path_traverse`, not through a second
 instance of `doom_physics`' generic `traverse`.** Implementing the
@@ -180,83 +220,128 @@ rebuilds the tic's `Env`, so nothing accumulates and nothing is hoisted.
 Costs are net of the baseline op that builds the same operands.
 
 ```sh
-cd bench && python3 measure.py          # measure + check budgets
+cd bench && python3 measure.py          # steps + both word figures, checked
 python3 measure.py --update             # re-baseline after an intended change
-python3 size_split.py                   # where the bytecode goes, module by module
+python3 attribute.py --top 40           # where every word goes (S7 §3.1)
+python3 size_split.py                   # the words, module by module
 python3 coverage.py                     # line coverage
 ```
 
-| Operation | steps (net) | range checks | task target | note |
-|---|---:|---:|---|---|
-| `player_think`, idle (pistol ready, no input) | **2 775** | 102 | ≤ 400 | see below |
-| `player_think`, walking forward | 3 002 | 127 | — | +227 for the turn, two `P_Thrust` and the run frame |
-| `move_psprites`, one `A_WeaponReady` tic | **1 448** | 33 | ≤ 80 | the bulk of the idle think |
-| `calc_height` | 475 | 46 | — | `finesine`, the spring, four `Fixed` compares |
-| `touch_special`, health bonus | **514** | 12 | ≤ 200 | the 22-arm `switch` and two `ref` records |
-| `push_felts` (36 felts) | **18** | 3 | ≤ 60 fields ✓ | 0.5 steps a felt |
-| `damage_player`, armor absorption | 1 241 | 43 | — | 1 100 of it is `doom_physics::damage_mobj` |
-| `use_lines`, `USERANGE` trace | 1 435 | 112 | — | `path_traverse` over one or two cells |
-| `player_think`, use held | 4 191 | 210 | — | the same, plus the whole think |
-| `player_think`, firing the pistol | **113 932** | 12 000 | — | see below |
+The "before" column is this tree measured *before* the S7 §8 pass, after
+the S7 physics merge (which is why it differs from the figures the earlier
+revision of this README quoted — a pistol shot was 113 932 steps then).
 
-Three figures need saying out loud rather than a relaxed budget.
+| Operation | steps (net) | range checks | before S7 |
+|---|---:|---:|---:|
+| `player_think`, idle | **1 303.5** | 101.7 | 2 784 |
+| `player_think`, walking | 1 671.5 | 135.7 | 3 018 |
+| `move_psprites`, ready tic | 705.5 | 34.7 | 1 456 |
+| `calc_height` | 413 | 52 | 474 |
+| `touch_special`, health bonus | 473 | 16 | 522 |
+| `push_felts` (36 felts) | 18 | 3 | 18 |
+| `damage_player`, armor absorption | 1 331 | 42 | 1 300 |
+| `use_lines`, `USERANGE` trace | 1 507 | 161 | 1 485 |
+| `player_think`, use held | 2 726.5 | 258.7 | 4 249 |
+| `player_think`, pistol at a target 128 u ahead | **9 309** | 998 | — |
+| `player_think`, pistol into the empty hall | **98 944** | 13 266 | 100 790 |
 
-* **The idle think is 2 775 steps, not 400.** 1 448 of it is one psprite
-  tic, and that tic is four calls deep (`move_psprites` → `tick_slot` →
-  `set_psprite` → `run_action` → `a_weapon_ready`) with a `Player` (36
-  felts) and a `Mobj` (27) crossing each boundary by `ref` — 126 felts in
-  and out per level before any work happens — plus `finesine` +
-  `finecosine` (103) for the weapon bob and `fsm::enter` (44). This is the
-  same wall `doom_physics` hit and named: in Cairo 2.16 the cost of a
-  faithful transcription is the argument plumbing, not the arithmetic. The
-  400 in the task assumed the rules alone. Two structural fixes exist and
-  are not in this PR: shrink `Player`, or let the psprite chain work on a
-  four-field `Psprite` value instead of the whole record.
-* **`touch_special` at 514** is two `ref` records through a
-  three-way-split `switch`; the split is there because a single 22-arm
-  function overflows the CASM jump offsets under the coverage build (below).
-* **Firing the pistol costs 114 000 steps**, and none of it is this crate's:
-  `P_BulletSlope` makes **three** `P_AimLineAttack` traces of 1 024 units
-  when the first two find no target, and `P_GunShot` one `P_LineAttack` of
-  2 048 — four traversals down E1M1's long start hall at
-  `doom_physics`' measured ~8 500 steps each, and rather more here because
-  the start hall is line-dense in every direction the aim tries. That is
-  ten times D2's 12 000 steps/tic budget on the tic a shot leaves the
-  barrel. It is Doom's own algorithm; the levers are all in `doom_physics`
-  (a cheaper per-line test) or in the game design (D3), and it is the
-  crate's first open question.
+The resumed S8 audit found a failing damage benchmark at 1 477 steps
+against the existing 1 430-step tolerance limit. Inlining the public boxing
+adapter brought it to 1 331; its 1 300-step baseline was not raised. The
+same change removes 168 steps from idle and walking, 145 from the ready
+psprite tic and 104 from the public height calculation. No operation's
+recorded budget was raised; improved baselines were tightened.
+
+Idle still misses its original 400-step target, and pickups miss 200.
+The previous profile found about 490 steps in boxed-record rebuilds; a
+narrow psprite state would be a separate structural change. The shooting
+policy remains vanilla: a miss takes three 1 024-unit aim traces, about
+66 001 steps together in this hall, plus a 30 294-step pellet trace. A hit
+stops on the first aim trace. The aim-policy alternatives below remain
+proposals; these optimizations change neither aim nor RNG order.
 
 ### Bytecode
 
-`bench/size` calls every public entry point once on the loaded level;
-`bench/baseline` links the same crate graph **and calls every
-`doom_physics` / `doom_specials` / `bam` / `fsm` / `ticcmd` function
-`doom_player` reaches**, with `op`-derived arguments so that constant
-propagation does not prune one side and not the other. The difference is
-**39 890 words** of `doom_player` code — 589 000 steps of bootloader
-program-hashing per segment (S1 §5.9) — against the **4 000** the task
-allots. `bench/size_split.py` switches one module's calls on at a time:
+The S8 audit keeps **three distinct measurements**, on Scarb 2.16.0.
+`bench/size` exercises the public facade, including the optional
+`player_tic` convenience API; `bench/baseline` calls the lower-crate
+functions. Scalar facade arguments derive from `op`, including pickup
+kind, damage, weapon/slot/depth, commands and movement. A literal pickup
+kind had previously folded away most of the dispatch: the old harness
+under-counted it by **5 628 words**. More literals remained in the recovered
+harness and were removed during this audit. Use the corrected figures.
 
-| step | cumulative words |
-|---|---:|
-| `state` (the record, `spawn`, `push_felts`) | ~0 |
-| `+ inter` (`P_Give*`, `P_TouchSpecialThing`, `P_DamageMobj`, and through `P_DropWeapon` the whole action tree) | 13 600 |
-| `+ weapon` (what the action tree did not already pull in) | 15 400 |
-| `+ think` (`P_PlayerThink`, `P_CalcHeight`, `P_UseLines`) | 27 000 |
-| `+ tic` (the `doom_specials` wiring) | 39 400 |
+| Metric | dev | proving (`unsafe-panic = true`) |
+|---|---:|---:|
+| Full `bench/size` executable, including data/header | 71 568 | 64 690 |
+| Full `bench/baseline` executable | 47 977 | 44 336 |
+| Historical difference: size minus baseline | **23 591** | **20 354** |
+| Player code attributed by source stack | 20 650 | 18 809 |
+| Player constant data | 21 | 21 |
+| Player source contribution, code + own constants | **20 671** | **18 830** |
 
-The shape is the one `doom_physics`' README diagnoses for its own 57 000
-words: **a Cairo function's bytecode grows with its live set at every
-branch**, and every branch here has a `Player`, a `Mobj`, an `Env`, a grid,
-an RNG and an event array live. `inlining-strategy = "avoid"` cannot be
-measured against it (the real E1M1 constants do not compile under that
-flag), and the two planar-table rewrites tried made it *worse*, not better
-(above). `measure.py` guards the measured figure against regression (+10 %)
-and prints the D23 target; reconciling D23 with a faithful transcription —
-a narrower mutable bundle, fewer call levels, or a revised budget now that
-S4b priced 32 k words at ~6 % of a segment — is the same open question
-`doom_physics` left for `doom_game`/P1.9, with this crate's 39 k on top of
-its 57 k.
+**The historical proving difference remains 354 words above 20 000.**
+It did not pass that target. Its final 20 354 compares with 20 928 in the
+recovered partial harness; after making the remaining arguments opaque,
+the intermediate figure was 21 476, before the final wrapper/loop changes.
+The earlier 22 796 pre-S7 figure and 18 963 after-S7 figure used a folded
+harness and are not complete measurements of the shipped facade.
+
+D29's allocation remains **20 000 proving words**. `measure.py` now adds a
+strict guard on source contribution, without a 10% tolerance and without
+an `--update` bypass. The historical differences retain their separate
+10% regression guards and their over-allocation warning. Passing the new
+source guard is not reported as passing the old differential target.
+`bench/test_measure.py` tests the exact boundary, a one-word overage,
+re-baselining, and an oversized consumer whose small harness would pass.
+
+`attribute.py` joins Sierra statement offsets from `infra/sierra_words`
+to source stacks. A code word is charged once when a player function owns
+its Sierra function or appears in the stack, including a public wrapper
+inlined into a caller. Shared out-of-line lower-crate functions remain
+outside that total. The 21 words in the four player tables are counted
+once per `const_as_box` declaration with player as closest non-core source;
+shared `bam`/map/things tables and executable/segment headers remain with
+their own component. The **1 524-word** difference between the proving
+differential and player source contribution belongs to differing harness
+call sites and lower-crate linkage; source attribution exposes that
+residual instead of silently assigning it to player.
+
+The facade harness does not establish what `doom_game` links: that crate
+calls `player_think` directly and does not use `player_tic`. To inspect the
+real consumer, build its proving executable with statement/function debug
+annotations, then run:
+
+```sh
+python3 bench/attribute.py --sierra /path/to/doom_run.executable.sierra.json --json /tmp/player-words.json
+python3 bench/measure.py --consumer-sierra /path/to/doom_run.executable.sierra.json
+```
+
+The optional consumer check applies the same strict 20 000-word limit.
+The consumer must be built from the same player revision and proving
+profile; the Sierra format does not encode the Scarb profile name. The
+whole `doom_run` executable still needs its independent D29 100 000-word
+guard at integration. The branch's Cairo workspace has no root `proving`
+profile yet; both player benchmark manifests compile the complete linked
+crate under that profile.
+
+The final style change inlines the public boxing adapters, groups pickup
+returns and moves both `player_tic` event loops outside its wide live set.
+The shared boxed algorithms, API, serialized state and game rules remain
+the same. `bench/size_split.py` also handles statements wrapped by
+`scarb fmt`; its dev increments are diagnostic, not source ownership:
+
+| Enabled modules | Difference from baseline | Increment |
+|---|---:|---:|
+| state | −27 059 | — |
+| + inter | 2 631 | 29 690 |
+| + weapon | 4 161 | 1 530 |
+| + think | 11 217 | 7 056 |
+| + tic | 23 591 | 12 374 |
+
+The negative first row occurs because this partial program lacks lower
+code the baseline calls; later increments can include that code. Neither
+these increments nor the all-API source total replaces the consumer check.
 
 ## Tests
 
@@ -307,6 +392,11 @@ python3 scripts/model.py            # run the model, print a summary
 python3 scripts/model.py --write    # regenerate src/tests/vectors.cairo
 ```
 
+The audited 350-tic checksum remains **4760390154965462**. The generator
+was run without `--write`; no fixture was regenerated. Its SPDX string
+was split across adjacent Python literals to satisfy REUSE 6.2.0 while
+preserving the generated header and GPL-2.0-only license byte for byte.
+
 A changed `WALK_CHECKSUM` must be regenerated on purpose, never silently
 (PLAN.md §3.1 rule 5).
 
@@ -315,8 +405,9 @@ A changed `WALK_CHECKSUM` must be regenerated on purpose, never silently
 `python3 bench/coverage.py` measures line coverage with `cairo-coverage`
 0.5.0, on `doom_map`'s miniature fixture level (the real E1M1 constants do
 not compile under the `inlining-strategy = "avoid"` the tool requires) with
-`doom_specials`' tables regenerated from it: **95 tests, 459/501 production
-lines = 91.6 %**.
+`doom_specials`' tables regenerated from it: **95 tests, 548/585 production
+lines = 93.7 %** (`inter` 131/132, `state` 65/65, `num` 6/6, `weapon`
+196/213, `think` 142/160).
 
 It runs the suite in **several passes and takes the union of the covered
 lines**, because `doom_player` links `doom_map`, `doom_things`,
@@ -333,32 +424,73 @@ reported. Both limits are also why `src/tests/synthetic.cairo` is written
 one behaviour per test, and why `P_PlayerThink` and `P_TouchSpecialThing`
 are each split into two or three functions in the shipped code.
 
-`test_player_tic_wires_the_specials_in` is the one test that does not
-compile even alone (it is the only path that reaches
-`doom_specials::use_line`), so `src/tic.cairo` is not in the coverage
-figure; `scarb test` runs it on the real level. The other misses are
+The two `player_tic` tests are the ones that do not compile even alone
+(they are the only paths that reach `doom_specials::use_line`), so
+`src/tic.cairo` is not in the coverage figure; `scarb test` runs them on
+the real level. The other misses are
 `use_lines`' walk and the gun actions' bodies, which the fixture level's
 2 × 2 blockmap cannot exercise — E1M1 does, under `scarb test`.
 
 ## Open questions
 
-* **114 000 steps for one pistol shot** (above). `P_BulletSlope`'s three
-  auto-aim traces are Doom's, but at `doom_physics`' ~110 steps per
-  candidate line they blow through D2's 12 000 steps/tic on the tic a gun
-  fires. Options: cache the aim for a few tics the way R2-A3 caches sight,
-  shorten `AIMRANGE`, or accept a p99 spike and let D1's segment cutter
-  absorb it. Needs a decision with `doom_physics` and `doom_game`.
-* **39 890 words of bytecode against a 4 000-word slice** (above), on top of
-  `doom_physics`' 57 000. D23's 12 000 for all code is not reachable with
-  this transcription style; the budget or the style has to give, and P1.9 is
-  where that is decided.
+### An aim policy for a missed shot — for D10 / D3, proposed not decided
+
+A shot that finds a target costs **9 309 steps**; the same shot into empty
+space costs **98 944**, of which **66 001 is `P_BulletSlope`'s three
+`P_AimLineAttack` traces** (22 000 each, 1 024 units through a line-dense
+hall) and 30 294 the pellet. D2 budgets 12 000 steps a tic. The
+short-circuit is already vanilla's, so the three options are about the
+*policy*. The first aims to preserve behavior; it still needs validation:
+
+1. **Prove there is nothing to aim at, and skip all three traces.** When no
+   shootable thing's box can meet a 1 024-unit segment from the shooter,
+   every one of the three traces returns `Aim { slope: 0, target: NO_MOBJ }`
+   by construction (only `Aimer::thing` ever writes `aim`), and
+   `P_BulletSlope` therefore returns exactly `fixed::ZERO`. An unimplemented squared-
+   distance test per shootable mobj against `(AIMRANGE + 2·radius)²` in the
+   field is estimated at ~15 steps a thing (not benchmarked): **~450 steps for E1M1's 29 monsters, ~4 000
+   for a full 256-slot list**, against 66 001 potentially saved on a geometrically empty miss and
+   nothing changed for a hit. **Behavior preservation requires a conservative bound and tests**;
+   the figures above are estimates, not measured gains. The proposal needs
+   an orchestration decision after S8 about
+   where it lives (here, over `env.mobjs`, or in
+   `doom_physics::aim_line_attack` where every caller would get it). The
+   cost is paid on hits too, which is why it is a proposal and not a commit:
+   the trade depends on how many mobjs `doom_game` keeps in the list.
+2. **A shorter `AIMRANGE` for the two side traces** (vanilla: 1 024 units
+   for all three, offset ±1 << 26 ≈ 5.6°). At 256 units the two side traces
+   cost ~5 500 each instead of 22 000: a miss becomes ~63 000. *Consequence*:
+   the horizontal auto-aim stops helping beyond 256 units. At 1 024 units
+   the ±5.6° cone is ±100 units wide, which is exactly the assistance that
+   lets a player hit an imp across a room without lining it up; cutting it
+   makes distant off-axis shots miss that vanilla would land, and any
+   recorded demo diverges. It is also the option that helps least.
+3. **One straight trace only.** A miss becomes 22 000 + 30 294 ≈ 52 000, a
+   hit dead ahead is unchanged. *Consequence*: no auto-aim except on a
+   target the centre ray already crosses. Because Doom has no free look,
+   `bulletslope` is also the *vertical* aim: a monster on a higher or lower
+   floor that is slightly off-axis would be shot flat and missed, where
+   vanilla adjusts. This is the largest gameplay change of the three and
+   the one a player would notice first.
+
+There is a fourth, orthogonal lever the README already listed: cache the
+aim for a few tics the way R2-A3 caches sight. It helps a held trigger (the
+chaingun) and does nothing for a single shot.
+
+### The rest
+
+* **The all-API differential is still 20 354 proving words**, 354 over
+  D29's 20 000 allocation. Exact player source is 18 830 including its
+  constants; consumer linkage and the full `doom_run` budget must be
+  checked independently, as described above.
 * **`S_PLAY_ATK2` and `S_CHAINFLASH2`** are the two states `doom_things`'
   generator does not emit because only C action code reaches them. Adding an
   "extra states" list to `scripts/gen_things.py` would remove both
   departures above for ~10 words.
-* **The idle think at 2 775 steps.** Shrinking the mutable bundle the
-  psprite chain carries is worth ~1 000 steps a tic and is a `Player`
-  layout change, so it belongs with `doom_game`'s state design, not here.
+* **The idle think at 1 303.5 steps** (was 2 775, later target 1 200).
+  Public-wrapper overhead has been removed. A narrower mutable psprite
+  bundle may save more rebuilds, but that is a separate state-design
+  decision and was not implemented here.
 * **Sound.** Every `S_StartSound` is dropped (the simulation never reads one
   back). `doom_game`'s snapshot will need a cue for the client, most
   cheaply as another `PlayerEvent`.

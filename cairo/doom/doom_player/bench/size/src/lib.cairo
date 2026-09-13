@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //! The "with the player" side of `doom_player`'s bytecode measurement: every
-//! public entry point called once, on the real level, so that nothing is
-//! dead-code-eliminated. `../baseline` loads the same data, links the same
-//! crates, calls every function of them that `doom_player` reaches, and
+//! facade entry point called once, on the real level. `../baseline` loads the same data, links the
+//! same crates, calls every function of them that `doom_player` reaches, and
 //! calls nothing of `doom_player`.
 //!
-//! Every call is one statement tagged `// SIZE:<module>`, so that
+//! Facade calls are statements tagged `// SIZE:<module>`, so that
 //! `../size_split.py` can rebuild this file with one module's calls at a
 //! time and attribute the words.
 
@@ -21,68 +20,70 @@ use doom_player::{
     player_stopped, player_think, player_tic, push_felts, set_psprite, spawn, thrust, touch_special,
     use_lines,
 };
-use doom_things::tables::KIND_MISC2;
+use doom_things::tables::KIND_MISC2; // SIZE:inter
 use prng::from_index;
 use ticcmd::TicCmd;
 
 #[executable]
 fn main(op: u32) -> felt252 {
     let m = load(LevelId::E1M1);
-    let lm = doom_specials::load(LevelId::E1M1);
+    let lm = doom_specials::load(LevelId::E1M1); // SIZE:tic
     let g0 = genesis(LevelId::E1M1);
     let w: World = world_of(@m);
     let mut acc: felt252 = op.into();
-    let (mut p, mut mo) = spawn(w, 0, g0.start, g0.angle);
+    let zero = op - op;
+    let (mut p, mut mo) = spawn(w, zero, g0.start, g0.angle);
     let mut g: ThingGrid = new_grid();
     set_thing_position(@w.map, ref g, ref mo, 0);
-    let mut rng = from_index(1);
+    let mut rng = from_index(1); // SIZE:inter
     let mut events: Array<PlayerEvent> = array![];
-    let word = ticcmd::encode(TicCmd { forward: 25, side: 3, angle_turn: 256, buttons: 3 });
-    let e = env_of(w, array![mo].span(), 0, op, 3);
+    let word = tic_word(zero); // SIZE:think
+    // `op`-derived arguments, never literals: a literal specialises the
+    // callee and this program then measures a folded copy (S7 §8 rule 7).
+    let e = env_of(w, array![mo].span(), zero, op, zero + 3); // SIZE:inter
     let mut felts: Array<felt252> = array![];
-    let mut thing: Mobj = removed_mobj();
+    let mut thing: Mobj = removed_mobj(); // SIZE:inter
     // `op - op` is a zero the compiler cannot see: a literal `kind` here
     // specialised `touch_special` and `take_health` on it and put a second,
     // folded copy of the pickup dispatch in this program (S7 §8 rule 7).
-    thing.kind = KIND_MISC2 + (op - op);
-    thing.flags = MF_SPECIAL;
-    thing.z = mo.z;
-    thing.height = fixed::from_units(16);
+    thing.kind = KIND_MISC2 + (op - op); // SIZE:inter
+    thing.flags = MF_SPECIAL; // SIZE:inter
+    thing.z = mo.z; // SIZE:inter
+    thing.height = fixed::from_units(16); // SIZE:inter
 
     push_felts(ref felts, @p); // SIZE:state
     acc += felts.len().into(); // SIZE:state
 
-    // `op`-derived arguments, never literals: a literal specialises the
-    // callee and this program then measures a folded copy (S7 §8 rule 7).
-    let zero = op - op;
     acc += bool_felt(give_ammo(ref p, zero, zero + 1)); // SIZE:inter
     acc += bool_felt(give_weapon(ref p, zero + 2, zero == 0)); // SIZE:inter
-    acc += bool_felt(give_body(ref p, ref mo, 10)); // SIZE:inter
-    acc += bool_felt(give_armor(ref p, 1)); // SIZE:inter
-    give_card(ref p, 1); // SIZE:inter
+    acc += bool_felt(give_body(ref p, ref mo, zero + 10)); // SIZE:inter
+    acc += bool_felt(give_armor(ref p, zero + 1)); // SIZE:inter
+    give_card(ref p, zero + 1); // SIZE:inter
     acc += bool_felt(give_strength(ref p, ref mo)); // SIZE:inter
     acc += bool_felt(touch_special(ref p, ref mo, @thing)); // SIZE:inter
     count_kill(ref p); // SIZE:inter
-    acc += absorb(ref p, 9).into(); // SIZE:inter
-    acc +=
-        bool_felt(
-            damage_player(e, ref g, ref rng, ref p, ref mo, ref events, NO_MOBJ, NO_MOBJ, 7, false)
-                .died,
-        ); // SIZE:inter
+    acc += absorb(ref p, zero + 9).into(); // SIZE:inter
+    acc += hurt_words(e, ref g, ref rng, ref p, ref mo, ref events); // SIZE:inter
 
     move_psprites(e, ref g, ref rng, ref p, ref mo, ref events); // SIZE:weapon
-    set_psprite(e, ref g, ref rng, ref p, ref mo, ref events, 0, chain(1).attack, 0); // SIZE:weapon
-    bring_up_weapon(e, ref g, ref rng, ref p, ref mo, ref events, 0); // SIZE:weapon
+    set_psprite(
+        e, ref g, ref rng, ref p, ref mo, ref events, zero, chain(zero + 1).attack, zero,
+    ); // SIZE:weapon
+    bring_up_weapon(e, ref g, ref rng, ref p, ref mo, ref events, zero); // SIZE:weapon
     drop_weapon(e, ref g, ref rng, ref p, ref mo, ref events); // SIZE:weapon
-    acc += bool_felt(check_ammo(e, ref g, ref rng, ref p, ref mo, ref events, 0)); // SIZE:weapon
-    acc += bullet_slope(w, array![mo].span(), ref g, @mo, 0).enc; // SIZE:weapon
+    acc += bool_felt(check_ammo(e, ref g, ref rng, ref p, ref mo, ref events, zero)); // SIZE:weapon
+    acc += bullet_slope(w, array![mo].span(), ref g, @mo, zero).enc; // SIZE:weapon
 
-    player_think(e, ref g, ref rng, ref p, ref mo, word, 5, true, ref events); // SIZE:think
-    move_player(e, ref p, ref mo, 25, 3, 256); // SIZE:think
-    thrust(ref mo, mo.angle, 25); // SIZE:think
+    player_think(
+        e, ref g, ref rng, ref p, ref mo, word, zero + 5, zero == 0, ref events,
+    ); // SIZE:think
+    move_player(
+        e, ref p, ref mo, move_arg(zero, 25), move_arg(zero, 3), move_arg(zero, 256),
+    ); // SIZE:think
+    thrust(ref mo, mo.angle, move_arg(zero, 25)); // SIZE:think
     calc_height(ref p, @mo, op); // SIZE:think
     death_think(e, ref g, ref rng, ref p, ref mo, ref events); // SIZE:think
-    change_weapon(ref p, 4 + 8); // SIZE:think
+    change_weapon(ref p, zero + 4 + 8); // SIZE:think
     use_lines(e, ref g, @mo, ref events); // SIZE:think
     player_stopped(e, ref mo); // SIZE:think
     acc += bool_felt(onground(@mo)); // SIZE:think
@@ -92,12 +93,55 @@ fn main(op: u32) -> felt252 {
     acc + events.len().into() + p.health.into() + mo.z.enc
 }
 
+/// Build an opaque ticcmd for the facade-size harness.
+fn tic_word(zero: u32) -> felt252 {
+    ticcmd::encode(
+        TicCmd {
+            forward: move_arg(zero, 25),
+            side: move_arg(zero, 3),
+            angle_turn: move_arg(zero, 256),
+            buttons: (zero + 3).try_into().unwrap(),
+        },
+    )
+}
+
+fn move_arg(zero: u32, amount: u32) -> i64 {
+    (zero + amount).into()
+}
+
 fn bool_felt(b: bool) -> felt252 {
     if b {
         1
     } else {
         0
     }
+}
+
+/// Return the damage verdict as a felt for this harness.
+fn hurt_words(
+    e: doom_player::Env,
+    ref g: ThingGrid,
+    ref rng: prng::Prng,
+    ref p: doom_player::Player,
+    ref mo: Mobj,
+    ref events: Array<PlayerEvent>,
+) -> felt252 {
+    let zero = e.tic - e.tic;
+    bool_felt(
+        damage_player(
+            e,
+            ref g,
+            ref rng,
+            ref p,
+            ref mo,
+            ref events,
+            NO_MOBJ - zero,
+            NO_MOBJ - zero,
+            zero + 7,
+            zero != 0,
+        )
+            .died,
+    )
 }
 
 fn tic_words(

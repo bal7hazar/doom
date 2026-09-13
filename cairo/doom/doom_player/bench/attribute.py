@@ -22,7 +22,8 @@ stack of source functions it was inlined from. From that it prints
   function, and the constant-argument specialisations still present.
 
 Usage:
-    python3 attribute.py [--top N] [--fn NAME ...]
+    python3 attribute.py [--profile dev|proving] [--top N] [--fn NAME ...]
+    python3 attribute.py --sierra /path/to/doom_run.executable.sierra.json --json out.json
 """
 
 from __future__ import annotations
@@ -50,10 +51,10 @@ def sh(args, cwd, env=None):
     return p.stdout
 
 
-def build_size() -> Path:
+def build_size(profile: str = "dev") -> Path:
     env = dict(os.environ, ASDF_SCARB_VERSION="2.16.0")
-    sh(["scarb", "build"], SIZE, env)
-    files = sorted((SIZE / "target" / "dev").glob("*.executable.sierra.json"))
+    sh(["scarb", "--profile", profile, "build"], SIZE, env)
+    files = sorted((SIZE / "target" / profile).glob("*.executable.sierra.json"))
     if not files:
         raise SystemExit("no *.executable.sierra.json under bench/size/target/dev (sierra = true?)")
     return files[0]
@@ -90,17 +91,28 @@ def table(title, counter, n):
 def main() -> int:
     top = 40
     wanted: list[str] = []
+    profile = "dev"
+    sierra_path = None
+    json_path = None
     args = sys.argv[1:]
     while args:
         a = args.pop(0)
         if a == "--top":
             top = int(args.pop(0))
+        elif a == "--profile":
+            profile = args.pop(0)
+            if profile not in ("dev", "proving"):
+                raise SystemExit("profile must be dev or proving")
+        elif a == "--sierra":
+            sierra_path = Path(args.pop(0)).resolve()
+        elif a == "--json":
+            json_path = Path(args.pop(0))
         elif a == "--fn":
             wanted.append(args.pop(0))
         else:
             raise SystemExit(__doc__)
 
-    sierra_path = build_size()
+    sierra_path = sierra_path or build_size(profile)
     s = json.loads(sierra_path.read_text())
     words, total = offsets(sierra_path)
     ann = s["debug_info"]["annotations"]["github.com/software-mansion/cairo-profiler"]
@@ -159,7 +171,60 @@ def main() -> int:
             continue
         inner[clean(stack[0])] += w
 
-    print("code words: %d (unattributed %d)" % (total, unattributed))
+    # Account for public wrappers inlined into the consumer as well as the
+    # crate's out-of-line functions. Each statement contributes once, even
+    # when several player helpers appear in its source stack. Inlined lower
+    # crate helpers are charged to this call site; shared out-of-line lower
+    # crate functions keep their own ownership.
+    crate_words = sum(
+        w for i, w in words.items()
+        if any(name.startswith(CRATE) for name in stmt_fns.get(str(i), []))
+        or owner.get(i, "").startswith(CRATE)
+    )
+    # Constant segments are outside the statement offsets (S7 §3.1).
+    # Count each const_as_box declaration once when its closest non-core
+    # source function belongs to player; shared bam/map/things tables retain
+    # their own ownership even when their accessor is inlined here.
+    types_for_data = {d["id"]["id"]: d["long_id"] for d in s["type_declarations"]}
+
+    def data_size(tid):
+        decl = types_for_data[tid]
+        kind, args = decl["generic_id"], decl["generic_args"]
+        if kind == "Const":
+            return data_size(args[0]["Type"]["id"])
+        if kind == "Struct":
+            return sum(data_size(a["Type"]["id"]) for a in args[1:])
+        if kind == "Enum":
+            return 1 + max((data_size(a["Type"]["id"]) for a in args[1:]), default=0)
+        return 1
+
+    declarations = {d["id"]["id"]: d["long_id"] for d in s["libfunc_declarations"]}
+    player_data = set()
+    for i, stmt in enumerate(stmts):
+        invocation = stmt.get("Invocation") if isinstance(stmt, dict) else None
+        if not invocation:
+            continue
+        lib_id = invocation["libfunc_id"]["id"]
+        decl = declarations[lib_id]
+        source = next((f for f in stmt_fns.get(str(i), []) if not f.startswith("core::")), "")
+        if decl["generic_id"] == "const_as_box" and source.startswith(CRATE):
+            player_data.add(lib_id)
+    data_words = sum(data_size(declarations[i]["generic_args"][0]["Type"]["id"])
+                     for i in player_data)
+    executable = sierra_path.with_name(sierra_path.name.replace(".sierra.json", ".json"))
+    executable_words = (len(json.loads(executable.read_text())["program"]["bytecode"])
+                        if executable.exists() and executable != sierra_path else None)
+    print("code words: %d (unattributed %d; executable including data/header %s)"
+          % (total, unattributed, executable_words))
+    print("player source: %d code + %d constant data = %d words"
+          % (crate_words, data_words, crate_words + data_words))
+    if json_path:
+        json_path.write_text(json.dumps(dict(
+            sierra=str(sierra_path), code_words=total, executable_words=executable_words,
+            crate_code_words=crate_words, crate_data_words=data_words,
+            crate_words=crate_words + data_words, unattributed_code_words=unattributed,
+            method="code: player in source stack or Sierra owner, once per statement; data: closest non-core source is player, once per const_as_box declaration; shared segment/executable headers excluded",
+        ), indent=2) + "\n")
     table("words by function (loop bodies and specialised copies merged)", by_fn, top)
     table("words by innermost source function (which helper a word came from)", inner, top)
     table("store_temp words by stored type", stemp, 25)

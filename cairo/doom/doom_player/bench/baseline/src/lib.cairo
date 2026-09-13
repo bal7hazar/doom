@@ -5,8 +5,9 @@
 //! that `doom_player` reaches** — `doom_physics`' traversals, hitscans,
 //! damage and spawns, `doom_specials`' two triggers, `bam`'s tables,
 //! `fsm::enter`, `ticcmd::decode`/`encode`, `geom2d::point_side_alone` — so
-//! that the difference between the two compiled sizes is `doom_player`'s own
-//! code and nothing else.
+//! that the historical size difference removes most shared lower code.
+//! Harness call sites and different lower-code linkage still affect the
+//! difference; `attribute.py` reports source ownership separately.
 //!
 //! Every argument is derived from `op`, never a literal: with constants the
 //! compiler propagates them into the callee and prunes branches, which made
@@ -76,6 +77,13 @@ fn main(op: u32) -> felt252 {
     acc += bam::reduce(mo.angle.into() + 0x100000000).into();
     let (tics, action) = fsm::enter(w.states, 58 + op % 4);
     acc += tics.into() + action.into();
+    // The panic-free twins of `fsm::enter` and `PrngTrait::next` that S7 §9
+    // parked in `doom_physics::spawn`, and which `doom_player` now reaches
+    // instead of the originals (S7 §8 rule 1).
+    let (t2, a2) = doom_physics::spawn::state_entry(w.states, 58 + op % 4);
+    acc += t2.into() + a2.into();
+    let mut r2 = from_index(1 + op % 4);
+    acc += doom_physics::spawn::roll(ref r2, doom_things::rndtable()).into();
     let f: i64 = (op % 8).into();
     let word = ticcmd::encode(TicCmd { forward: f, side: 3, angle_turn: 256, buttons: 3 });
     let cmd = ticcmd::decode(word);
