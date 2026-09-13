@@ -3,3 +3,7 @@
 # npm workspaces (tools/wad, client) hoist most of node_modules up here.
 node_modules/
 
+
+# Rust helper of docs/spikes/S7.md (cairo/doom/*/bench/attribute.py builds it on demand).
+infra/sierra_words/target/
+infra/sierra_words/Cargo.lock

@@ -15,11 +15,15 @@ Two measurements, both required by PLAN.md §3.1 rule 7:
    the loaded level; `bench/baseline/` loads and touches the same level and
    table data and calls none of them. The difference is what this crate's
    code costs in the program the bootloader re-hashes every segment
-   (`2 340 + 14.7 x words` steps, S1 §5.9). docs/DECISIONS.md D23 budgets
-   12 000 words of code for the whole core and 5 000 for this crate; the
-   crate as written measures ~57 000 (see ../README.md), so the check here
-   guards the *measured* figure in `budgets.json` against regression
-   (+10 %) and prints the D23 target for the record.
+   (`2 340 + 14.7 x words` steps, S1 §5.9). It is measured twice: with the
+   default features and without `vanilla_slide` (P_SlideMove's traces out,
+   the stairstep alone). docs/DECISIONS.md D23 budgets 12 000 words of code
+   for the whole core; docs/spikes/S7.md brought this crate from ~57 000 to
+   the figures in `budgets.json` and explains why the rest is the price of
+   the algorithm under Cairo 2.16's code generation, so the check here
+   guards the *measured* figures against regression (+10 %) and prints the
+   S7 target (12 000) for the record. `attribute.py` says where every word
+   goes.
 
 Usage:
     python3 measure.py            # measure, print the table, check budgets
@@ -41,7 +45,7 @@ SIZE = HERE / "size"
 BASELINE = HERE / "baseline"
 RE_RESOURCE = re.compile(r"^\s*([a-z_0-9 ]+):\s*([0-9,]+)\s*$")
 TOLERANCE = 1.10
-D23_CODE_WORDS = 5000  # docs/DECISIONS.md D23: this crate's slice of the 12 k code words
+S7_CODE_WORDS = 12000  # docs/spikes/S7.md: the target set for this crate
 BOOTLOADER_PER_WORD = 14.7  # S1 §5.9 / S0 §5.2
 BOOTLOADER_FIXED = 2340
 
@@ -53,8 +57,8 @@ def scarb(args: list[str], cwd: Path = HERE) -> subprocess.CompletedProcess:
     )
 
 
-def build(cwd: Path) -> None:
-    p = scarb(["build"], cwd)
+def build(cwd: Path, *flags: str) -> None:
+    p = scarb(["build", *flags], cwd)
     if p.returncode != 0:
         raise SystemExit(p.stdout + p.stderr)
 
@@ -102,11 +106,13 @@ def main() -> int:
     budgets = json.loads((HERE / "budgets.json").read_text())
 
     build(HERE)
-    build(SIZE)
     build(BASELINE)
+    base_words = bytecode_words(BASELINE)
+    build(SIZE, "--no-default-features")
+    lite_words = bytecode_words(SIZE) - base_words
+    build(SIZE)
     bench_words = bytecode_words(HERE)
     words = bytecode_words(SIZE)
-    base_words = bytecode_words(BASELINE)
     code_words = words - base_words
 
     cache: dict[int, tuple[float, float]] = {}
@@ -150,17 +156,23 @@ def main() -> int:
         "          bootloader program-hashing: %d steps/segment for this code"
         % round(BOOTLOADER_FIXED + BOOTLOADER_PER_WORD * code_words)
     )
+    print("          without vanilla_slide: %d words" % lite_words)
     print("          (the step benchmark itself compiles to %d words)" % bench_words)
-    print("          D23 target for this crate: %d words" % D23_CODE_WORDS)
+    print("          S7 target for this crate: %d words" % S7_CODE_WORDS)
     baselined = budgets.get("code_words", 0)
     if baselined and code_words > baselined * TOLERANCE:
         print("  REGRESSION (+10 %% over the %d words of budgets.json)" % baselined)
         failures.append("code_words")
+    baselined_lite = budgets.get("code_words_lite", 0)
+    if baselined_lite and lite_words > baselined_lite * TOLERANCE:
+        print("  REGRESSION (+10 %% over the %d lite words of budgets.json)" % baselined_lite)
+        failures.append("code_words_lite")
 
     if "--update" in sys.argv:
         for entry, res in zip(budgets["operations"], results):
             entry["budget"] = int(round(res["net"]))
         budgets["code_words"] = code_words
+        budgets["code_words_lite"] = lite_words
         (HERE / "budgets.json").write_text(json.dumps(budgets, indent=2) + "\n")
         print("budgets.json updated")
         return 0
@@ -175,6 +187,7 @@ def main() -> int:
                     step_bench_words=bench_words,
                     baseline_words=base_words,
                     code_words=code_words,
+                    code_words_lite=lite_words,
                     operations=results,
                 ),
                 indent=2,

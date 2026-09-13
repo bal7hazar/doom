@@ -57,7 +57,7 @@
 //! infinite line, so the box test is what bounds it to the segment.
 
 use bam::Angle;
-use fixed::{BIAS, Fixed, felt_ge};
+use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
 
 /// Point on the map, in the `fixed` offset encoding.
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
@@ -133,7 +133,7 @@ pub fn hoist(p: Point) -> felt252 {
 /// **Measured: 18 steps, 2 range checks** -- exactly S1 §5.5's figure and
 /// its floor: 2 multiplications, 2 additions and one `felt_ge`.
 pub fn point_side(hp: HalfPlane, p: Point, rhs: felt252) -> u8 {
-    if felt_ge(hp.ab * p.y.enc + hp.bb * p.x.enc + hp.cb, rhs) {
+    if felt_ge_narrow(hp.ab * p.y.enc + hp.bb * p.x.enc + hp.cb, rhs) {
         SIDE_BACK
     } else {
         SIDE_FRONT
@@ -159,7 +159,7 @@ pub fn divline_side(hp: HalfPlane, p: Point, rhs: felt252) -> u8 {
     let lhs = hp.ab * p.y.enc + hp.bb * p.x.enc + hp.cb;
     if lhs == rhs {
         SIDE_CROSS
-    } else if felt_ge(lhs, rhs) {
+    } else if felt_ge_narrow(lhs, rhs) {
         SIDE_BACK
     } else {
         SIDE_FRONT
@@ -204,8 +204,8 @@ pub fn half_plane(v1: Point, v2: Point) -> HalfPlane {
 pub fn diagonal(v1: Point, v2: Point) -> u8 {
     let ldx = fixed::to_units(fixed::sub(v2.x, v1.x));
     let ldy = fixed::to_units(fixed::sub(v2.y, v1.y));
-    let neg_x = !felt_ge(ldx + BIAS, BIAS);
-    let neg_y = !felt_ge(ldy + BIAS, BIAS);
+    let neg_x = !felt_ge_narrow(ldx + BIAS, BIAS);
+    let neg_y = !felt_ge_narrow(ldy + BIAS, BIAS);
     if neg_x != neg_y {
         1
     } else {
@@ -246,7 +246,7 @@ pub fn point_on_side_truncated(p: Point, v1: Point, v2: Point) -> u8 {
     // is `(ldy * dx) >> 16`, not `ldy * dx`.
     let left = fixed::mul(fixed::from_raw(ldy), dx);
     let right = fixed::mul(dy, fixed::from_raw(ldx));
-    if felt_ge(right.enc, left.enc) {
+    if felt_ge_narrow(right.enc, left.enc) {
         SIDE_BACK
     } else {
         SIDE_FRONT
@@ -265,16 +265,16 @@ pub fn point_on_side_truncated(p: Point, v1: Point, v2: Point) -> u8 {
 /// one rejects** (the common case, and the ~30 S1 §5.7 measured on a real
 /// blockmap cell).
 pub fn bbox_reject(a: Box, b: Box) -> bool {
-    if felt_ge(b.left.enc, a.right.enc) {
+    if felt_ge_narrow(b.left.enc, a.right.enc) {
         return true;
     }
-    if felt_ge(a.left.enc, b.right.enc) {
+    if felt_ge_narrow(a.left.enc, b.right.enc) {
         return true;
     }
-    if felt_ge(b.bottom.enc, a.top.enc) {
+    if felt_ge_narrow(b.bottom.enc, a.top.enc) {
         return true;
     }
-    felt_ge(a.bottom.enc, b.top.enc)
+    felt_ge_narrow(a.bottom.enc, b.top.enc)
 }
 
 /// Which side of the line the whole box is on, or [`SIDE_CROSS`] when it
@@ -366,13 +366,14 @@ pub fn intercept_fraction(v2: DivLine, v1: DivLine) -> Fixed {
 pub fn approx_distance(dx: Fixed, dy: Fixed) -> Fixed {
     let a = fixed::magnitude(dx);
     let b = fixed::magnitude(dy);
-    let (big, small) = if felt_ge(a, b) {
+    let (big, small) = if felt_ge_narrow(a, b) {
         (a, b)
     } else {
         (b, a)
     };
-    let s: u128 = small.try_into().unwrap();
-    let half: felt252 = (s / 2).into();
+    let two: NonZero<u128> = 2;
+    let (h, _) = DivRem::div_rem(to_u128(small), two);
+    let half: felt252 = h.into();
     fixed::from_raw(big + small - half)
 }
 

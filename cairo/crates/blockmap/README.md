@@ -72,16 +72,16 @@ python3 measure.py --update             # re-baseline after an intended change
 | Operation | steps (net) | range checks | note |
 |---|---:|---:|---|
 | `cell_index` | 7 | 2 | a multiply and an add |
-| `cell_of` | 92 | 18 | two comparisons, two `u128` divisions |
-| `cells_of_box` | 199 | 36 | four `axis_cell` |
-| `P_TryMove` cell preamble | 272 | 42 | `cells_of_box` + enumerating its cells |
-| `walk_start` | 272 | 45 | one `cell_of` plus the two cross products |
-| walk, 4 cells | 662 | 51 | `walk_start` included |
-| walk, 22 cells across the grid | 2 168 | 87 | ~84 steps per extra cell |
+| `cell_of` | 108 | 20 | two comparisons, two `u128` divisions; panic-free since S7 (+16) |
+| `cells_of_box` | 217 | 40 | four `axis_cell` |
+| `P_TryMove` cell preamble | 284 | 46 | `cells_of_box` + enumerating its cells |
+| `walk_start` | 304 | 49 | one `cell_of` plus the two cross products |
+| walk, 4 cells | 694 | 55 | `walk_start` included |
+| walk, 22 cells across the grid | 2 200 | 91 | ~84 steps per extra cell |
 | cell list (4 entries), open-coded | 121 | 6 | `list_range` + 4 × `list_item` |
 | cell list (4 entries), visitor | 132 | 9 | ~3 steps per entry more |
 
-Bytecode: **4 517 words** for the benchmark executable, `geom2d`/`fixed`
+Bytecode: **4 208 words** for the benchmark executable, `geom2d`/`fixed`
 included.
 
 The consequence for `doom_physics` is S1 §7's advice, now quantified:

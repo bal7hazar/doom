@@ -3,6 +3,11 @@
 //! public entry point called once, on the real level, so that nothing is
 //! dead-code-eliminated. `../baseline` loads the same data and calls none
 //! of them.
+//!
+//! Every scalar argument is derived from `op` rather than written as a
+//! literal: Cairo 2.16 specialises a function on the constant arguments of
+//! a call site (S7 §2), and a specialised copy of `xy_movement` measured
+//! 936 words that no game caller would produce.
 
 use doom_map::{LevelId, genesis, load, thing};
 use doom_physics::{
@@ -23,47 +28,59 @@ fn main(op: u32) -> felt252 {
     let t = thing(@m, 0);
     let mut acc: felt252 = op.into();
     acc += g.start.x.enc + t.position.x.enc;
+    // `zero` is 0 for every `op` below 1000, and unknown to the compiler.
+    let zero: u32 = op / 1000;
+    let one: u32 = zero + 1;
+    let two: u32 = zero + 2;
+    let zf: felt252 = zero.into();
+    let yes: bool = zero == 0;
 
     let mut grid = new_grid();
     let mut rng = from_index(op);
     let mut events: Array<MoveEvent> = array![];
-    let mut player = spawn_mobj(w, KIND_POSSESSED, g.start.x, g.start.y, SpawnZ::OnFloor);
-    set_thing_position(@w.map, ref grid, ref player, 0);
+    let mut player = spawn_mobj(w, KIND_POSSESSED + zero, g.start.x, g.start.y, SpawnZ::OnFloor);
+    set_thing_position(@w.map, ref grid, ref player, zero);
     let mut imp = spawn_mobj(
-        w, KIND_TROOP, fixed::add(g.start.x, fixed::from_units(200)), g.start.y, SpawnZ::OnFloor,
+        w,
+        KIND_TROOP + zero,
+        fixed::add(g.start.x, fixed::from_units(200 + zf)),
+        g.start.y,
+        SpawnZ::OnFloor,
     );
-    set_thing_position(@w.map, ref grid, ref imp, 1);
+    set_thing_position(@w.map, ref grid, ref imp, one);
     let mut list = array![player, imp];
     let mobjs = list.span();
 
-    let x = fixed::add(player.x, Fixed { enc: 0x100000000 + 4 * 65536 });
-    if try_move(w, mobjs, ref grid, ref player, 0, x, player.y, ref events).ok {
+    let x = fixed::add(player.x, Fixed { enc: 0x100000000 + 4 * 65536 + zf });
+    if try_move(w, mobjs, ref grid, ref player, zero, x, player.y, ref events).ok {
         acc += 1;
     }
-    player.momx = fixed::from_units(3);
-    xy_movement(w, mobjs, ref grid, ref player, 0, true, true, ref events);
-    z_movement(ref player, Option::Some(mobjs.at(1)));
-    slide_move(w, mobjs, ref grid, ref player, 0, ref events);
-    slide_move_lite(w, mobjs, ref grid, ref player, 0, ref events);
+    player.momx = fixed::from_units(3 + zf);
+    xy_movement(w, mobjs, ref grid, ref player, zero, yes, yes, ref events);
+    z_movement(ref player, Option::Some(mobjs.at(one)));
+    slide_move(w, mobjs, ref grid, ref player, zero, ref events);
+    slide_move_lite(w, mobjs, ref grid, ref player, zero, ref events);
     if check_sight(w, @player, @imp) {
         acc += 2;
     }
-    if check_sight_cached(w, ref imp, @player, 3, 4) {
+    if check_sight_cached(w, ref imp, @player, zero + 3, zero + 4) {
         acc += 4;
     }
-    let aim = aim_line_attack(w, mobjs, ref grid, 0, player.angle, fixed::from_units(1024));
+    let aim = aim_line_attack(w, mobjs, ref grid, zero, player.angle, fixed::from_units(1024 + zf));
     acc += aim.slope.enc;
-    match line_attack(w, mobjs, ref grid, 0, player.angle, fixed::from_units(2048), aim.slope) {
+    match line_attack(
+        w, mobjs, ref grid, zero, player.angle, fixed::from_units(2048 + zf), aim.slope,
+    ) {
         doom_physics::Hit::Nothing => {},
         doom_physics::Hit::Wall((line, _, _)) => { acc += line.into(); },
         doom_physics::Hit::Thing((idx, _, _)) => { acc += idx.into(); },
     }
-    let out = damage_mobj(w, mobjs, ref rng, ref imp, 1, 0, 0, 5, true);
+    let out = damage_mobj(w, mobjs, ref rng, ref imp, one, zero, zero, zero + 5, yes);
     if out.pain {
         acc += 8;
     }
     let (mut ball, exploded) = spawn_missile(
-        w, mobjs, ref grid, ref rng, @imp, 1, @player, KIND_TROOPSHOT, 2, ref events,
+        w, mobjs, ref grid, ref rng, @imp, one, @player, KIND_TROOPSHOT + zero, two, ref events,
     );
     if exploded {
         acc += 16;
@@ -73,7 +90,7 @@ fn main(op: u32) -> felt252 {
         Option::Some(mo) => { acc += mo.z.enc; },
         Option::None => {},
     }
-    replace(ref list, 1, imp);
+    replace(ref list, one, imp);
     let mut felts: Array<felt252> = array![];
     push_felts(ref felts, @player);
     let mut g2 = rebuild(list.span());

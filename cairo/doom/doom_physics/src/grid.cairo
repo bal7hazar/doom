@@ -18,8 +18,9 @@
 //! tic); here the dict is touched a few times per tic, and the alternative —
 //! scanning every mobj on every `P_TryMove` — is O(n) at ~25 steps per mobj.
 
-use core::dict::Felt252Dict;
+use core::dict::{Felt252Dict, Felt252DictEntryTrait};
 use core::nullable::{FromNullableResult, NullableTrait, match_nullable};
+use super::maputl::{inc, opaque_zero};
 use super::mobj::{Mobj, in_blockmap};
 
 /// The per-cell thing lists. `Destruct` squashes the dict when it is
@@ -36,21 +37,22 @@ pub fn new_grid() -> ThingGrid {
 
 /// The mobj indices linked into `cell` (empty when none).
 pub fn things_in(ref g: ThingGrid, cell: u32) -> Span<u32> {
-    match match_nullable(g.cells.get(cell.into())) {
+    // `entry` + `finalize` are the explicitly panic-free form of `get`.
+    let (entry, value) = g.cells.entry(cell.into());
+    g.cells = entry.finalize(value);
+    match match_nullable(value) {
         FromNullableResult::Null => array![].span(),
         FromNullableResult::NotNull(v) => v.unbox(),
     }
 }
 
 /// Link mobj `idx` into `cell` (`P_SetThingPosition`'s blockmap half).
+#[inline(never)]
 pub fn link(ref g: ThingGrid, cell: u32, idx: u32) {
-    let old = things_in(ref g, cell);
+    let mut old = things_in(ref g, cell);
     let mut out: Array<u32> = array![];
-    let n = old.len();
-    let mut k: u32 = 0;
-    while k != n {
-        out.append(*old.at(k));
-        k += 1;
+    while let Option::Some(v) = old.pop_front() {
+        out.append(*v);
     }
     out.append(idx);
     g.cells.insert(cell.into(), NullableTrait::new(out.span()));
@@ -58,33 +60,54 @@ pub fn link(ref g: ThingGrid, cell: u32, idx: u32) {
 
 /// Unlink mobj `idx` from `cell` (`P_UnsetThingPosition`'s blockmap half).
 /// A no-op if it is not there.
+#[inline(never)]
 pub fn unlink(ref g: ThingGrid, cell: u32, idx: u32) {
-    let old = things_in(ref g, cell);
+    let mut old = things_in(ref g, cell);
     let mut out: Array<u32> = array![];
-    let n = old.len();
-    let mut k: u32 = 0;
-    while k != n {
-        let v = *old.at(k);
-        if v != idx {
-            out.append(v);
+    while let Option::Some(v) = old.pop_front() {
+        if *v != idx {
+            out.append(*v);
         }
-        k += 1;
     }
+    g.cells.insert(cell.into(), NullableTrait::new(out.span()));
+}
+
+/// `unlink` then `link` of the same mobj in the same cell, in one rewrite:
+/// the mobj ends up last in the cell's list, exactly as the pair would leave
+/// it — and when it already is last (a cell holding just this thing, the
+/// common case), the list is left untouched (S7).
+#[inline(never)]
+pub fn relink(ref g: ThingGrid, cell: u32, idx: u32) {
+    let list = things_in(ref g, cell);
+    let n = list.len();
+    if n != 0 {
+        if let Option::Some(last) = list.get(n - 1) {
+            if *last.unbox() == idx {
+                return;
+            }
+        }
+    }
+    let mut old = list;
+    let mut out: Array<u32> = array![];
+    while let Option::Some(v) = old.pop_front() {
+        if *v != idx {
+            out.append(*v);
+        }
+    }
+    out.append(idx);
     g.cells.insert(cell.into(), NullableTrait::new(out.span()));
 }
 
 /// Rebuild the grid from the mobjs' own `cell` fields — what `doom_game`
 /// does once at the start of a segment, after deserializing the state.
-pub fn rebuild(mobjs: Span<Mobj>) -> ThingGrid {
+pub fn rebuild(mut mobjs: Span<Mobj>) -> ThingGrid {
     let mut g = new_grid();
-    let n = mobjs.len();
-    let mut i: u32 = 0;
-    while i != n {
-        let m = mobjs.at(i);
+    let mut i: u32 = opaque_zero(mobjs.len());
+    while let Option::Some(m) = mobjs.pop_front() {
         if in_blockmap(m) {
             link(ref g, *m.cell, i);
         }
-        i += 1;
+        i = inc(i);
     }
     g
 }

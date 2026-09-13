@@ -61,6 +61,20 @@ implement a monster's or the player's decisions (`P_Move`, `A_Chase`,
 
 ## Shape, and the decisions behind it
 
+**Every internal call is narrow (S7).** `World` is passed once, at the
+public entry point; inside, a function takes a five-felt [`Level`] (the
+`HotMap` behind a `Box` — a field read through the pointer is free — plus
+the two height spans), the moving thing as the eleven fields
+`P_CheckPosition` reads (`Mover`) or as a `Box<Mobj>` re-boxed only when
+it moves, and every loop lives in its own small function with a narrow
+return type and **no panic site**: in Cairo 2.16 a panic site costs the
+enclosing function its whole return width in bytecode (the `PanicResult`
+store is zero-padded to the widest variant), a return is copied into every
+branch that reaches it at that same width, and a struct pushed at a call
+costs one word and one step per felt. docs/spikes/S7.md measures each of
+those rules; `bench/attribute.py` shows where every word of this crate
+goes.
+
 **A mobj is a value; the list is an `Array<Mobj>` rebuilt by the tic loop.**
 S1 §7 measured a `Felt252Dict` at 51 steps per insert/get pair on every
 access of every tic, against 11 for a `Span` read; the tic loop copies each
@@ -171,83 +185,81 @@ thing grid does not grow. Costs are net of the baseline op that builds the
 same operands.
 
 ```sh
-cd bench && python3 measure.py          # measure + check budgets
+cd bench && python3 measure.py          # measure + check budgets (both feature sets)
 python3 measure.py --update             # re-baseline after an intended change
+python3 attribute.py                    # words per function / helper / stored type / panic path
 python3 size_avoid.py                   # the bytecode under both inlining strategies
 ```
 
 | Operation | steps (net) | range checks | task budget | note |
 |---|---:|---:|---:|---|
-| `try_move`, 1 cell, ≤ 8 lines, no things (player) | **964** | 30 | ≤ 1 000 | lines 336, cells 184, widen 110, things 98, no descent (see above) |
-| `try_move`, 1 cell, one thing checked | 1 060 | 34 | — | +96 for one `things_in` read and one `PIT_CheckThing` |
-| `try_move`, monster whose box spans 2 cells (the doorway) | 4 316 | 336 | — | the doorway cells are line-dense |
-| `check_sight`, REJECT answers | 311 | 20 | ≤ 100 | `reject_of` ~150 + the `World` copy; S1's 107 was a bare table read |
-| `check_sight`, 300 u across the hall, visible | 7 703 | 912 | ≤ 2 500 | 3 cells, ~39 lines tested at ~110 each, 4 crossings with slopes |
-| `check_sight`, 900 u down the hall | 9 715 | 1 217 | — | |
-| `line_attack`, wall 188 u away (a room shot) | 6 608 | 681 | ≤ 8 000 | stops at the first wall |
-| `line_attack`, wall 1 740 u away | 8 478 | 958 | ≤ 8 000 | 14 cells |
-| `aim_line_attack`, 1 024 u, wall at 188 | 6 339 | 657 | — | |
-| `xy_movement` + `z_movement`, walking player | 1 704 | 68 | ≤ 300 | includes the 964-step `try_move`; 740 of plumbing, clamp, friction |
-| `set_thing_position`, same cell | 1 158 | 63 | ≤ 900 | `locate` 740 + unlink + link (two dict rewrites) |
-| `locate` | 740 | 59 | — | `cell_of` + the `CELL_NODE` descent |
-| `damage_mobj`, pain + thrust | 1 471 | 116 | — | `point_to_angle2`, `sin_cos`, two RNG draws, `fsm::enter` |
-| `spawn_mobj` | 1 150 | 86 | — | `locate` + `thing_info` + `fsm::enter` |
-| `replace`, 210-slot list | 22 728 | 212 | — | 108 per slot |
-| `slide_move` (vanilla), wall 24 u ahead | 16 314 | 1 131 | — | three traces (4 divisions each) + two `try_move` |
-| `path_traverse`, 188 u, lines + things | 4 213 | 353 | — | the collector, for tests |
+| `try_move`, 1 cell, ≤ 8 lines, no things (player) | **865** | 37 | ≤ 1 000 | 964 before S7; no descent (see above) |
+| `try_move`, 1 cell, one thing checked | 930 | 41 | — | +65 for one `things_in` read and one `PIT_CheckThing` |
+| `try_move`, monster whose box spans 2 cells (the doorway) | 3 575 | 306 | — | the doorway cells are line-dense (4 316 before S7) |
+| `check_sight`, REJECT answers | 313 | 20 | ≤ 100 | `reject_of` 72 + ~20 in the crate; the rest is the public call pushing the 67-felt `World` and two 27-felt `@Mobj` |
+| `check_sight`, 300 u across the hall, visible | 6 172 | 905 | ≤ 2 500 | 3 cells, 39 candidate lines (22 dismissed on the packed box at ~45, 13 on the side tests at ~130), 4 crossings with slopes at ~550 (7 703 before S7) |
+| `check_sight`, 900 u down the hall | 8 059 | 1 202 | — | 9 715 before S7 |
+| `line_attack`, wall 188 u away (a room shot) | 5 208 | 786 | ≤ 8 000 | stops at the first wall (6 608 before S7) |
+| `line_attack`, wall 1 740 u away | 6 906 | 977 | ≤ 8 000 | 14 cells (8 478 before S7) |
+| `aim_line_attack`, 1 024 u, wall at 188 | 4 985 | 759 | — | 6 339 before S7 |
+| `xy_movement` + `z_movement`, walking player | 1 477 | 82 | ≤ 300 | includes the 865-step `try_move` (1 704 before S7) |
+| `set_thing_position`, same cell | 882 | 65 | ≤ 900 | `locate` 665 + one relink (none when the thing is already last in its cell) — 1 158 before S7 |
+| `locate` | 665 | 63 | — | `cell_of` + the `CELL_NODE` descent |
+| `damage_mobj`, pain + thrust | 1 240 | 83 | — | `point_to_angle2`, `sin_cos`, two RNG draws (1 471 before S7) |
+| `spawn_mobj` | 1 069 | 90 | — | `locate` + `info_of` + `state_entry` |
+| `replace`, 210-slot list | 20 851 | 4 | — | 99 per slot |
+| `slide_move` (vanilla), wall 24 u ahead | 11 088 | 1 393 | — | three traces (4 divisions each) + two `try_move` (16 314 before S7) |
+| `path_traverse`, 188 u, lines + things | 2 993 | 451 | — | the collector, for tests |
 
 Where the budgets are missed, the profile (`cairo-profiler`, method of S1
-§2) says why:
+§2; docs/spikes/S7.md §5) says why:
 
-* **Sight and hitscans are dominated by the number of lines in the cells
-  the ray crosses**, at a floor of ~110 steps per line that is *not*
-  crossed (three coefficient reads, two side tests, the loop's own
-  bookkeeping — a `while` in Cairo is a recursive function re-passing its
-  live set) and ~500 for a crossed two-sided line with a height difference
-  (`line_meta`, `line_opening`, `intercept_fraction`, one or two
-  `fixed::div`). E1M1's start hall lists ~13 lines per cell, three times
-  the map's average. S1's 2 642 was the prototype's cheaper test (no
-  opening, no slopes, 33-step predicates). The levers are in the callers:
-  the R2-A3 cache (`ttl` ≥ 8), `A_Look` at 1/4 cadence, and `A_Chase` only
-  asking when `movecount` reaches zero.
-* **`xy_movement` + `z_movement` at 1 704** is the 964 of `try_move` plus
-  ~740 of argument plumbing (`World` is ~50 felts and `Mobj` 27, copied at
-  every call boundary), clamping and friction. The 300 in the task assumed
-  the movement integration alone.
-* **`set_thing_position` at 1 158** is `locate` (740) plus two dict
-  rewrites; `try_move` avoids both in the common case (`place` relinks only
-  on a cell change, and does not locate).
+* **A sight traversal is now dominated by its crossings.** A candidate
+  line the trace's bounding box excludes costs ~45 steps (one read of the
+  packed `L_BOX`, one `u128` divmod, two comparisons), one that reaches
+  the side tests ~130, and a crossed two-sided line with a height
+  difference ~550: `P_InterceptVector` (4 `mul`, 4 `shr8`, 1 `div`) and
+  one or two slope `div`s, Doom's arithmetic to the bit. The 300-unit hall
+  trace has four such crossings — 2 200 steps before a single candidate is
+  looked at — so ≤ 2 500 is out of reach for it without changing the
+  arithmetic (D10 would allow an exact-rational slope test; S7 §5 costs
+  it) or the candidate set (a per-line "never blocks sight" flag kept by
+  `doom_game`, S7 §7). The levers in the callers stand: the R2-A3 cache
+  (`ttl` ≥ 8), `A_Look` at 1/4 cadence, `A_Chase` asking only when
+  `movecount` reaches zero.
+* **`xy_movement` + `z_movement` at 1 477** is the 865 of `try_move` plus
+  the passes, the clamp and the friction; the public call itself pushes the
+  67-felt `World` and the 27-felt `Mobj` (94 steps) that a narrower
+  `World` for `doom_game` would save (S7 §7).
 
 ### Bytecode
 
 `bench/size` calls every public entry point once on the loaded level,
 `bench/baseline` loads and touches the same data and calls none: the
-difference is **56 961 words** of `doom_physics` code (838 000 steps of
-bootloader program-hashing per segment, S1 §5.9), against the 5 000 D23
-allots to this crate. `bench/size_avoid.py` repeats the measurement on the
-miniature level under `inlining-strategy = "avoid"`: **61 753 words** — the
-size is not the inliner's doing. Attributing the executable's 41 000 Sierra
-statements to their innermost function
-(`unstable-add-statements-functions-debug-info`) shows where it goes:
+difference is the crate's code in the program the bootloader re-hashes
+every segment (S1 §5.9). **35 873 words** with the default features,
+**32 678** without `vanilla_slide` (the stairstep alone) — down from
+**56 961** before docs/spikes/S7.md, for the same API and the same
+results. `measure.py` guards both figures against regression (+10 %) and
+prints the 12 000 S7 set out to reach; `attribute.py` attributes every
+word (`infra/sierra_words` compiles the Sierra to CASM exactly as
+`cairo-execute` does and gives each statement its offset range).
 
-| source | Sierra statements |
-|---|---:|
-| core helpers expanded at every use (`u128_try_from_felt252` behind every `felt_ge`, `array_at`, `u32 ==`, `felt252` add/sub, `U128PartialOrd`) | ~20 000 |
-| `check_position` / `try_move` / `xy_movement` / `slide_*` | ~5 300 |
-| `line_attack` / `aim_line_attack` / `traverse` / `path_traverse` | ~3 600 |
-| `check_sight`, `damage_mobj`, `spawn_missile`, `z_movement` | ~2 900 |
-| `Felt252Dict` destruct/squash, `bam`, `bsp`, `fixed::div` | ~1 500 |
+Where the words went, and where they go now (S7 §1-2):
 
-A Cairo function's bytecode grows with its **live set at every branch**
-(each arm re-stores every live variable) and with every struct it passes
-(one instruction per felt): hoisting nine spans into a loop (D24) and
-carrying a 27-felt `Mobj` by `ref` through four call levels is what a
-faithful `P_TryMove` costs in this compiler. `measure.py` guards the
-measured figure against regression (+10 %) and prints the D23 target; how
-to reconcile D23 with this crate — a narrower `World` per function, fewer
-call levels, `#[inline(never)]` wrappers around the hottest comparisons,
-or a revised budget now that S4b priced 32 k words at ~6 % of a segment —
-is an open question for `doom_game`/P1.9 (see below).
+| words | before S7 | after | how |
+|---|---:|---:|---|
+| `store_temp<PanicResult>` — the zero-padded return enum stored at every panic site and every return point, at the function's whole return width | 17 558 | 2 822 | panic-free loops and primitives (`get` + `match`, wrapping counters, `felt_ge_narrow`, `to_u128`, `NonZero` literals), narrow return types, one return per wide function |
+| `World` (67 felts) and `Mobj` (27) pushed at calls | 4 650 | 1 660 | `Level` (5 felts), `Mover` (11), `Box<Mobj>` |
+| comparisons (`u128s_from_felt252` + `U128PartialOrd`) | 8 500 | 4 640 | `felt_ge_narrow`: 38 words per site against 57 |
+| constant-argument specialisations (a second copy of a loop body) | ~4 000 | ~260 | no literal as a loop-carried start (`opaque_zero`), opaque harness arguments |
+| two monomorphisations of `traverse` | 6 000 | 1 110 | one concrete walker, a small generic dispatch |
+| the rest: the algorithm's own comparisons, reads and divmods (~15 words per comparison, ~11 per `Span` read, ~10 per `u128` divmod) | | ~25 000 | see S7 §6 for what a 12 000-word physics would have to give up |
+
+A Cairo function's bytecode grows with what it pushes at each call, what
+it re-stores at each branch merge and at each return, and with every
+panic path; S7 §8 turns the measurements into the code-style rules for
+`doom_player`/`doom_monsters`/`doom_game`.
 
 ## Tests
 
@@ -332,10 +344,16 @@ regenerated on purpose, never silently (PLAN.md §3.1 rule 5).
   traversal in a line-dense area costs 7 000–10 000 steps: `doom_monsters`
   should use `check_sight_cached` with `ttl` ≥ 8 and keep `A_Look` at 1/4
   cadence (D3), and budget ~1 traversal per tic across the 8 awake monsters.
-* **Bytecode (D23).** See above: 57 k words for this crate as written; a
-  decision is needed on trimming (vanilla slide → `slide_move_lite`, the
-  test-only `path_traverse`), on argument-plumbing refactors, or on the
-  budget itself.
+* **Bytecode (D23).** 35 873 words after S7 (32 678 without
+  `vanilla_slide`), against 12 000 targeted: S7 §6 lists what a 12 000-word
+  physics would have to drop and §3 what the compiler-level switches
+  (`unsafe-panic`, `inlining-strategy`) buy; a decision on the budget
+  itself is needed at P1.9.
+* **A narrower `World` for the callers.** Every public call pushes the
+  67-felt `World` (the `HotMap` by value *and* behind `hot`) and returns
+  the 27-felt `Mobj`: ~100 steps and ~100 words per call site. Once
+  `doom_game` is the only caller, `World` can shrink to the `Level` plus
+  the two table handles.
 * **Sky.** A sky flag per sector (one bit in `doom_map`'s `S_META`) would
   let `line_attack` and `xy_movement` drop puffs/missiles on the sky as
   Doom does.

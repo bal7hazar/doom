@@ -202,8 +202,20 @@ pub fn sin_cos(a: Angle) -> (Fixed, Fixed) {
 ///
 /// **Measured: 16 steps, 3 range checks.**
 pub fn tantoangle(slope: u32) -> Angle {
-    let v = *TANTOANGLE.span().at(slope);
-    v.try_into().unwrap()
+    // Panic-free (S7): an out-of-range slope reads as `ANG0` instead of
+    // aborting. Written as two `match`es rather than `at`/`unwrap` also
+    // because Cairo 2.16's `unsafe-panic = true` build crashed the compiler
+    // on this function's panic paths ("Invalid function ap change
+    // annotation", docs/spikes/S7.md §3).
+    let v: felt252 = match TANTOANGLE.span().get(slope) {
+        Option::Some(b) => *b.unbox(),
+        Option::None => 0,
+    };
+    let a: Option<Angle> = v.try_into();
+    match a {
+        Option::Some(a) => a,
+        Option::None => ANG0,
+    }
 }
 
 // ---------------------------------------------------------------------------

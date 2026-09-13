@@ -110,6 +110,44 @@ pub fn felt_ge(a: felt252, b: felt252) -> bool {
     d >= CMP_BIAS_U128
 }
 
+/// `2^64`: the bias of [`felt_ge_narrow`].
+const NARROW_BIAS: felt252 = 0x10000000000000000;
+
+/// `a >= b` for two felts whose difference is below `2^64` in magnitude
+/// (`|a - b| < 2^64`), **with no panic path**: `a - b + 2^64` fits a `u64`
+/// exactly when `a < b`, so one `u64` conversion is the whole test.
+///
+/// This is the comparison the hot loops of `doom_physics` use
+/// (docs/spikes/S7.md). [`felt_ge`] keeps the wider `[0, 2^71)` domain and
+/// its panic on a caller bug, but that panic is paid in bytecode at every
+/// inlined use — a propagation path that stores the enclosing function's
+/// whole return width in zero-padding — and it makes the enclosing function
+/// panicking. This form compiles to **38 words per inlined site against 57**
+/// and leaves the enclosing function `nopanic`-eligible. Outside its domain
+/// the answer is meaningless but the function still returns; every `Fixed`
+/// (below `2^33`) and every `geom2d` half-plane sum (below `2^54`) is well
+/// inside it, so the `Fixed` comparisons below are built on it.
+///
+/// **Measured: 13 steps, 2.5 range checks** (`felt_ge`: 11 and 2).
+pub fn felt_ge_narrow(a: felt252, b: felt252) -> bool {
+    let r: Option<u64> = (a - b + NARROW_BIAS).try_into();
+    match r {
+        Option::Some(_) => false,
+        Option::None => true,
+    }
+}
+
+/// `felt252 -> u128` for a value the caller knows to be below `2^128`,
+/// with no panic path: an out-of-domain value (a caller bug) reads as `0`
+/// instead of aborting the proof. See [`felt_ge_narrow`] for why.
+pub fn to_u128(v: felt252) -> u128 {
+    let r: Option<u128> = v.try_into();
+    match r {
+        Option::Some(u) => u,
+        Option::None => 0,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Boundary conversions
 // ---------------------------------------------------------------------------
@@ -151,8 +189,9 @@ pub fn from_int(n: i64) -> Fixed {
 ///
 /// **Measured: 15 steps, 5 range checks.**
 pub fn to_units(a: Fixed) -> felt252 {
-    let e: u128 = a.enc.try_into().unwrap();
-    let q: felt252 = (e / 65536).into();
+    let w16: NonZero<u128> = 65536;
+    let (q128, _) = DivRem::div_rem(to_u128(a.enc), w16);
+    let q: felt252 = q128.into();
     // BIAS is exactly 65536 map units, so the shift of the bias is exact.
     q - 65536
 }
@@ -186,7 +225,7 @@ pub fn neg(a: Fixed) -> Fixed {
 ///
 /// **Measured: 15 steps, 2 range checks.**
 pub fn is_neg(a: Fixed) -> bool {
-    !felt_ge(a.enc, BIAS)
+    !felt_ge_narrow(a.enc, BIAS)
 }
 
 /// `|a|` as a non-negative raw felt (no re-encoding), for callers that need a
@@ -194,7 +233,7 @@ pub fn is_neg(a: Fixed) -> bool {
 ///
 /// **Measured: 15 steps, 2 range checks.**
 pub fn magnitude(a: Fixed) -> felt252 {
-    if felt_ge(a.enc, BIAS) {
+    if felt_ge_narrow(a.enc, BIAS) {
         a.enc - BIAS
     } else {
         BIAS - a.enc
@@ -208,7 +247,7 @@ pub fn magnitude(a: Fixed) -> felt252 {
 ///
 /// **Measured: 16 steps, 2 range checks.**
 pub fn split(a: Fixed) -> (bool, felt252) {
-    if felt_ge(a.enc, BIAS) {
+    if felt_ge_narrow(a.enc, BIAS) {
         (false, a.enc - BIAS)
     } else {
         (true, BIAS - a.enc)
@@ -219,7 +258,7 @@ pub fn split(a: Fixed) -> (bool, felt252) {
 ///
 /// **Measured: 14 steps, 2 range checks.**
 pub fn abs(a: Fixed) -> Fixed {
-    if felt_ge(a.enc, BIAS) {
+    if felt_ge_narrow(a.enc, BIAS) {
         a
     } else {
         Fixed { enc: BIAS + BIAS - a.enc }
@@ -238,8 +277,9 @@ pub fn abs(a: Fixed) -> Fixed {
 ///
 /// **Measured: 15 steps, 5 range checks.**
 pub fn shr8(a: Fixed) -> Fixed {
-    let e: u128 = a.enc.try_into().unwrap();
-    let q: felt252 = (e / 256).into();
+    let w8: NonZero<u128> = 256;
+    let (q128, _) = DivRem::div_rem(to_u128(a.enc), w8);
+    let q: felt252 = q128.into();
     Fixed { enc: q - 0x1000000 + BIAS }
 }
 
@@ -256,8 +296,9 @@ pub fn shr8(a: Fixed) -> Fixed {
 /// included here.
 pub fn mul(a: Fixed, b: Fixed) -> Fixed {
     let p = (a.enc - BIAS) * (b.enc - BIAS) + MUL_OFFSET;
-    let u: u128 = p.try_into().unwrap();
-    let q: felt252 = (u / 65536).into();
+    let w16: NonZero<u128> = 65536;
+    let (q128, _) = DivRem::div_rem(to_u128(p), w16);
+    let q: felt252 = q128.into();
     Fixed { enc: q - MUL_FIXUP }
 }
 
@@ -276,8 +317,8 @@ pub fn mul(a: Fixed, b: Fixed) -> Fixed {
 /// division of two bare non-negative magnitudes; the extra 22 are the two
 /// sign tests and Doom's overflow guard, which that figure did not include.
 pub fn div(a: Fixed, b: Fixed) -> Fixed {
-    let a_neg = !felt_ge(a.enc, BIAS);
-    let b_neg = !felt_ge(b.enc, BIAS);
+    let a_neg = !felt_ge_narrow(a.enc, BIAS);
+    let b_neg = !felt_ge_narrow(b.enc, BIAS);
     let ma_f = if a_neg {
         BIAS - a.enc
     } else {
@@ -293,7 +334,7 @@ pub fn div(a: Fixed, b: Fixed) -> Fixed {
     // is exactly `abs(a) >= abs(b) << 14`. Kept in the field: measured, the
     // whole `div` costs 77 steps this way, 86 with a `u128` division and 101
     // with a checked `u128` multiplication.
-    if felt_ge(ma_f, mb_f * 16384) {
+    if felt_ge_narrow(ma_f, mb_f * 16384) {
         // Doom's FixedDiv overflow branch (also catches mb == 0).
         return if negative {
             Fixed { enc: RAW_MIN + BIAS }
@@ -302,9 +343,16 @@ pub fn div(a: Fixed, b: Fixed) -> Fixed {
         };
     }
     // The guard above bounds the quotient by 2^30, so `ma_f << 16 < 2^48`.
-    let num: u128 = (ma_f * 65536).try_into().unwrap();
-    let den: u128 = mb_f.try_into().unwrap();
-    let q: felt252 = (num / den).into();
+    let num: u128 = to_u128(ma_f * 65536);
+    // The guard also excludes `mb == 0`, so the divisor is non-zero here;
+    // the fallback arm is unreachable and only keeps the function panic-free.
+    let den_opt: Option<NonZero<u128>> = to_u128(mb_f).try_into();
+    let den: NonZero<u128> = match den_opt {
+        Option::Some(nz) => nz,
+        Option::None => 1,
+    };
+    let (q128, _) = DivRem::div_rem(num, den);
+    let q: felt252 = q128.into();
     if negative {
         Fixed { enc: BIAS - q }
     } else {
@@ -318,28 +366,28 @@ pub fn div(a: Fixed, b: Fixed) -> Fixed {
 
 /// `a >= b`. **Measured: 11 steps, 2 range checks.**
 pub fn ge(a: Fixed, b: Fixed) -> bool {
-    felt_ge(a.enc, b.enc)
+    felt_ge_narrow(a.enc, b.enc)
 }
 
 /// `a > b`. **Measured: 11 steps, 2 range checks.**
 pub fn gt(a: Fixed, b: Fixed) -> bool {
-    !felt_ge(b.enc, a.enc)
+    !felt_ge_narrow(b.enc, a.enc)
 }
 
 /// `a <= b`. **Measured: 11 steps, 2 range checks.**
 pub fn le(a: Fixed, b: Fixed) -> bool {
-    felt_ge(b.enc, a.enc)
+    felt_ge_narrow(b.enc, a.enc)
 }
 
 /// `a < b`. **Measured: 11 steps, 2 range checks.**
 pub fn lt(a: Fixed, b: Fixed) -> bool {
-    !felt_ge(a.enc, b.enc)
+    !felt_ge_narrow(a.enc, b.enc)
 }
 
 /// Smaller of the two. **Measured: 13 steps, 2 range checks** (25 for
 /// `min` and `max` together).
 pub fn min(a: Fixed, b: Fixed) -> Fixed {
-    if felt_ge(a.enc, b.enc) {
+    if felt_ge_narrow(a.enc, b.enc) {
         b
     } else {
         a
@@ -349,7 +397,7 @@ pub fn min(a: Fixed, b: Fixed) -> Fixed {
 /// Larger of the two. **Measured: 13 steps, 2 range checks** (25 for
 /// `min` and `max` together).
 pub fn max(a: Fixed, b: Fixed) -> Fixed {
-    if felt_ge(a.enc, b.enc) {
+    if felt_ge_narrow(a.enc, b.enc) {
         a
     } else {
         b

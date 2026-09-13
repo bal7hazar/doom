@@ -42,7 +42,8 @@
 //! *within* a cell (documented divergence from `P_PathTraverse`, which sorts
 //! intercepts).
 
-use fixed::{Fixed, felt_ge};
+use core::num::traits::WrappingSub;
+use fixed::{Fixed, felt_ge, felt_ge_narrow, to_u128};
 use geom2d::{Box, Point};
 
 /// Side of a blockmap cell in map units (Doom's `MAPBLOCKUNITS`).
@@ -121,14 +122,24 @@ pub struct Walk {
 
 /// Position of `v` along one axis: `(clamped cell index, 0 inside / 1 below
 /// the grid / 2 above it)`.
+///
+/// Panic-free (docs/spikes/S7.md): the difference is non-negative by the
+/// test above, and a cell index always fits a `u32`; the fallback arms
+/// exist only so that `cell_of`/`cells_of_box` compile without a
+/// `PanicResult`, which every caller would otherwise pay for in bytecode.
 fn axis_cell(origin: Fixed, v: Fixed, count: u32) -> (u32, u8) {
-    if !felt_ge(v.enc, origin.enc) {
+    if !felt_ge_narrow(v.enc, origin.enc) {
         return (0, 1);
     }
-    let d: u128 = (v.enc - origin.enc).try_into().unwrap();
-    let c: u32 = (d / CELL_RAW_U128).try_into().unwrap();
+    let cell_raw: NonZero<u128> = 0x800000;
+    let (d, _) = DivRem::div_rem(to_u128(v.enc - origin.enc), cell_raw);
+    let q: Option<u32> = d.try_into();
+    let c: u32 = match q {
+        Option::Some(c) => c,
+        Option::None => count,
+    };
     if c >= count {
-        (count - 1, 2)
+        (count.wrapping_sub(1), 2)
     } else {
         (c, 0)
     }

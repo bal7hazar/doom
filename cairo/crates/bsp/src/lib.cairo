@@ -25,7 +25,10 @@
 //! accelerator) answers in one read, and this crate's descent is what it
 //! falls back to. `blockmap::PackedLists` carries that accelerator.
 
-use geom2d::{Box, Point, SIDE_CROSS, SIDE_FRONT, divline_side, hoist, point_side_at};
+use core::num::traits::{WrappingAdd, WrappingSub};
+use geom2d::{
+    Box, HalfPlane, Point, SIDE_CROSS, SIDE_FRONT, divline_side, hoist, point_side, point_side_at,
+};
 
 /// A child id at or above this value is a **subsector** (leaf), not a node.
 ///
@@ -142,6 +145,64 @@ pub fn point_in_subsector(nodes: @Nodes, root: u32, p: Point) -> u32 {
                 *(*nodes.child0).at(current)
             } else {
                 *(*nodes.child1).at(current)
+            };
+    }
+}
+
+/// `*s.at(i)` without the out-of-bounds panic (an index past the end reads
+/// as `0`).
+#[inline(always)]
+fn rd(s: Span<felt252>, i: u32) -> felt252 {
+    match s.get(i) {
+        Option::Some(b) => *b.unbox(),
+        Option::None => 0,
+    }
+}
+
+#[inline(always)]
+fn rd32(s: Span<u32>, i: u32) -> u32 {
+    match s.get(i) {
+        Option::Some(b) => *b.unbox(),
+        Option::None => 0,
+    }
+}
+
+/// [`point_in_subsector`] as a **total** function: the same descent and the
+/// same answer on a well-formed tree, but a malformed one (a cycle, an
+/// out-of-range child) ends the descent at subsector `0` after
+/// `nodes.len() + 1` hops instead of panicking, and no array read can
+/// panic either.
+///
+/// This is the form the proving path calls (docs/spikes/S7.md): a panic
+/// site inside a callee costs every *caller* its whole return width in
+/// bytecode, so a locate at the bottom of `P_TryMove` must not have one.
+/// Same measured cost per level as [`point_in_subsector`].
+pub fn point_in_subsector_total(nodes: @Nodes, root: u32, p: Point) -> u32 {
+    let rhs = hoist(p);
+    let ab = *nodes.ab;
+    let bb = *nodes.bb;
+    let cb = *nodes.cb;
+    let child0 = *nodes.child0;
+    let child1 = *nodes.child1;
+    let max_hops = ab.len().wrapping_add(1);
+    // An opaque zero: a loop-carried counter that starts at a literal gets a
+    // second, specialised copy of the loop body (S7 §2).
+    let mut hops: u32 = max_hops.wrapping_sub(max_hops);
+    let mut current = root;
+    loop {
+        if is_subsector(current) {
+            break current.wrapping_sub(SUBSECTOR_FLAG);
+        }
+        if hops == max_hops {
+            break 0;
+        }
+        hops = hops.wrapping_add(1);
+        let hp = HalfPlane { ab: rd(ab, current), bb: rd(bb, current), cb: rd(cb, current) };
+        current =
+            if point_side(hp, p, rhs) == SIDE_FRONT {
+                rd32(child0, current)
+            } else {
+                rd32(child1, current)
             };
     }
 }

@@ -79,18 +79,18 @@ operation appears to cost 1 step.
 | `neg` | 10 | 2 | |
 | `angle_to_fine_index` | 8 | 3 | one `u32` division |
 | `reduce` | 17 | 6 | one `u128` modulo |
-| `tantoangle` | 16 | 3 | one `Span` index (11) + a `u32` conversion |
+| `tantoangle` | 21 | 3 | one `Span` read + a `u32` conversion, both panic-free since S7 (16 with `at`/`unwrap`: the `unsafe-panic` build of Cairo 2.16 crashed on that form, S7 §3) |
 | `finesine` | 45 | 4 | two comparisons + index + re-encoding |
 | `finecosine` | 58 | 7 | `finesine` plus the quarter-turn wrap |
 | `sine` | 51 | 6 | |
 | `cosine` | 64 | 9 | |
 | `sin_cos` | 109 | 12 | only 6 steps cheaper than `sine` + `cosine` |
 | `slope_div` | 45 | 12 | two `u128` divisions (Doom's `SlopeDiv`) |
-| `point_to_angle` | 118 | 22 | S1 §5.6 measured 138 in the prototype |
-| `point_to_angle2` | 122 | 22 | one `fixed::sub` more |
+| `point_to_angle` | 126 | 24 | S1 §5.6 measured 138 in the prototype; 118 before S7 |
+| `point_to_angle2` | 130 | 24 | one `fixed::sub` more |
 | turn + `sin_cos` (player step) | 125 | 15 | representative composite |
 
-Bytecode: **8 551 words** for the benchmark executable, the two tables
+Bytecode: **8 689 words** for the benchmark executable, the two tables
 (2 048 + 2 049 felts) and `fixed` included — well inside the 16 k-word
 budget D4 sets for the whole `doom_run` program, but it is the single
 biggest constant block of the geometry stack, which is why the packing
