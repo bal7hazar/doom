@@ -6,7 +6,7 @@
 
 ## État mesuré à la reprise du 2026-09-13
 
-Cette section et les décisions D26–D29 remplacent les hypothèses de dimensionnement initiales
+Cette section et les décisions D26–D30 remplacent les hypothèses de dimensionnement initiales
 dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STATUS](docs/STATUS.md).
 
 - `main` après intégration monstres `8471b7e` : **511 tests Cairo** ; la suite spécifique conserve
@@ -32,10 +32,18 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
 - Les 7 E2E rendu/leaderboard passent. Les performances de rendu seul et les références de preuve
   sur M2 Max 64 GB ne valident pas encore une partie complète avec preuve concurrente sur 16 GB.
   **C3 PLAN : ≤ 10 min** résiduelles après partie de 3 min ; **D2 : objectif opérationnel ≤ 5 min**.
-- La CI générale est verte au début de l'audit ; la CI WASM échoue sur les hashes avant le smoke
-  navigateur. La réparation de la reproductibilité par plateforme est en cours. P1.9 corrige aussi
-  un défaut de déterminisme des frontières : l'ordre des objets dans `ThingGrid` doit faire partie
-  de l'état engagé, car il affecte les collisions et ramassages.
+- Reproductibilité WASM corrigée par `30f8d77` : build ARM64 sur image épinglée, les deux hashes
+  Linux existants sont reproduits bit à bit. Cinq smokes locaux vérifiés avec ces artefacts : Node
+  mono/4 threads 37,82/11,99 s ; Chromium 33,09/10,19 s (1,83/1,96 GiB), repli sans isolation 33,4 s.
+  Validation des workflows GitHub en attente ; oracle Python du nouveau contrôle submit corrigé.
+- **Jeu réel : R1 reste bloquant.** Quatre tics de marche avec `run_segment` 117 531 mots donnent
+  1 499 208 steps sous bootloader et 65 138 instances Poseidon. Preuve native interrompue à 180 s,
+  RSS observé proche de 32 GiB, aucune preuve vérifiée. Les microprogrammes S2 ne prédisent pas
+  ce coût ; `resources()` estime des hauteurs, sans encore borner toute la largeur ni les composants
+  auxiliaires des traces. Diagnostic requis avant nouvelle preuve lourde.
+- P1.9 corrige l'ordre `ThingGrid` dans l'état engagé (schema 2), indispensable au déterminisme des
+  ramassages après frontière. L'audit détecte aussi une absorption d'armure agrégée trop tard :
+  correction par impact avant douleur/mort en cours, sans changer le schéma d'état.
 
 ## 1. Vision et périmètre
 

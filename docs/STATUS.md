@@ -1,8 +1,8 @@
 # STATUS — point d'avancement
 
 > Mis à jour le 2026-09-13 : monstres `8471b7e`, contrôles CI `375f092`, joueur `06058b1` intégrés.
-> CI : le nouveau contrôle submit révèle `poseidon_py` absent du runner ; correction en cours.
-> Le dernier workflow **prover-wasm reste rouge** ; rebuild arm64 et smoke en cours.
+> CI : oracle Python installé explicitement ; reproductibilité WASM ARM64 réparée (`30f8d77`).
+> Rebuild local conforme aux hashes existants et cinq preuves de smoke vérifiées ; validation GitHub en attente.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -25,8 +25,8 @@ Contrôles locaux sur `82e52db` (Scarb 2.16.0 / contrats 2.18.0, Foundry 0.61.0,
 | REUSE 6.2.0 local | **4 expressions SPDX invalides**, dans des chaînes de générateurs Python ; la CI REUSE ne reproduit pas ce résultat |
 
 Les premières erreurs de cache Scarb et de serveurs locaux provenaient du sandbox ; les relances
-avec les accès nécessaires passent. Les preuves lourdes, le build WASM et les drives de déploiement
-n'ont pas été relancés pendant cet audit. Les logs locaux sont dans `/tmp/hellproof-audit-20260913/`.
+avec les accès nécessaires passent. Les validations supplémentaires sont détaillées ci-dessous ;
+aucun déploiement Sepolia/mainnet n'a été lancé. Logs initiaux : `/tmp/hellproof-audit-20260913/`.
 
 Écarts relevés sur la base d'audit (corrections intégrées détaillées plus bas) :
 
@@ -53,7 +53,7 @@ n'ont pas été relancés pendant cet audit. Les logs locaux sont dans `/tmp/hel
   pas une cotation actuelle. **C3 : critère PLAN ≤ 10 min, objectif opérationnel D2 ≤ 5 min** après partie.
 - R1/R5 : mesures favorables sur M2 Max 64 GB et programmes de référence ; le vrai jeu, la contention
   jeu/preuve et le matériel 16 GB restent à valider en P3.7. Pas de nouveau changement de gameplay
-  ni de décision D30 avant le profil S8.
+  de gameplay avant le profil S8. D30 clarifie seulement les métriques de bytecode.
 
 Branches récupérées :
 
@@ -61,9 +61,9 @@ Branches récupérées :
 |---|---|---|
 | `s7-monsters-bytecode` / `agent-a6ac67f3ed7fc7f8f` | **intégrée par `8471b7e`** ; 55 tests et replay 700 tics inchangé validés ; ticker 14 209 mots sous `proving` | format/build/511 tests/graphe verts après merge ; limite de domaine D3 à `tic ≥ 2^29` confiée à P1.9 |
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
-| `worktree-agent-a3f0a4e676dba3186` | `df1888d` contient C2, les deux styles et garde D3 ; profil/preuve encore en cours | nouvel agent frontière/performance sur `codex/state-boundary-perf` ; agent P1.9 conserve tic, profil et preuve |
+| `worktree-agent-a3f0a4e676dba3186` | `df1888d` contient C2, les deux styles et garde D3 ; profil en cours, preuve native expirée | frontière/performance sur `codex/state-boundary-perf`, ordre dégâts/armure sur `codex/player-damage-order` ; agent P1.9 conserve profil et preuve |
 
-Vague de reprise : P1.9/profil/preuve, frontière état/rendu et reproductibilité CI en parallèle.
+Vague active : P1.9/profil, frontière état/rendu et correction dégâts/armure en parallèle.
 L'orchestrateur tranche les leviers R2 à partir du programme complet. Ensuite : P1.10 et Worker/contrôles/écrans client,
 puis P3.7. Sepolia nécessite toujours une décision explicite du sponsor.
 
@@ -79,7 +79,15 @@ tests** (5 pipelines lourds ignorés). `actionlint` vert. La CI ajoute `doom_run
 `recursion_outputs`, submit et indexeur, et prépare les assets/fixtures avant les tests client.
 Trois générateurs SPDX sont corrigés sans changer leur AST ni leurs sorties : REUSE 6.2.0 ne
 signalait plus que le générateur joueur ; **REUSE est entièrement vert après `06058b1`** (1 578 fichiers).
-Le rebuild WASM arm64 et sa vérification de hashes restent en cours dans la ligne CI.
+Complément intégré par **`30f8d77`** : oracle `poseidon-py==0.1.5` installé dans le job submit,
+image Rust épinglée par digest et runner Docker Linux ARM64 conforme à la référence. Rebuild local
+754 s, **les deux hashes Linux existants sont reproduits bit à bit**, sans les remplacer. Avec ces
+artefacts : Node mono/4 threads **37,82/11,99 s**, Chromium mono/4 threads **33,09/10,19 s**,
+sans isolation repli mono **33,4 s** ; **cinq preuves vérifiées**, 755 280 felts chacune (programme
+arithmétique k14). Chromium utilise 1,83/1,96 GiB. Le smoke construit désormais son exécutable Cairo
+et rapporte le hash du fichier réellement chargé. `actionlint`, syntaxe JS et REUSE verts.
+La validation GitHub reste à obtenir : dernier run `34748732776` en `startup_failure`, aucun job
+créé ; le run précédent avait exposé l'oracle Python manquant, maintenant corrigé.
 
 Joueur intégré par **`06058b1`** : 132 tests inchangés, checksum **4760390154965462** sur 350 tics,
 couverture agent **93,7 %** (hors adaptateur `player_tic`, dont les tests ordinaires passent),
@@ -96,6 +104,19 @@ marche **601 998** ; huit idle en `run_segment` ajoutent **53 725 steps/tic**, t
 Ces chiffres ne sont pas un p99 ni une mesure navigateur. Le coût fixe place **R5** sur le chemin
 critique : une ligne dédiée optimise sérialisation, parseur et snapshot sans réduire la validation,
 changer les hashes ou le gameplay. C2 : cas 101/101 et replay de combat avec 28 frontières passent.
+
+**R1 requalifié sur le jeu réel** : preuve native de quatre tics de marche, mêmes paramètres feuille
+que le navigateur, programme de 117 531 mots. Exécution directe **850 629 steps**, bootloader
+**1 499 208**, dont **65 138 instances Poseidon** (6 367 hors bootloader). La preuve atteint
+**environ 32 GiB RSS observés** et expire à **180 s**, groupe arrêté et verrou libéré ; **aucune preuve
+vérifiée produite**. Logs : `/tmp/game-p19-native-segment/`. Le plafond de steps D26 et les seules
+hauteurs estimées par `resources()` ne garantissent pas la mémoire : les composants auxiliaires et
+la largeur totale des traces doivent être mesurés. Pas de relance identique ; diagnostic AIR en cours.
+
+**Correction de gameplay en cours dans P1.9** : l'armure était appliquée après agrégation des dégâts
+des monstres. Cela change l'arrondi par impact et peut déclencher une mort avant absorption, puis
+rétablir la santé trop tard. Une ligne dédiée déplace l'absorption à chaque impact, avant les effets
+de douleur/mort, et vérifie les attaques suivantes et le RNG. Schémas d'état conservés.
 
 ## Terminé (mergé sur `main`)
 

@@ -9,7 +9,7 @@
 
 | Id | Risque | Gravité | Probabilité | Priorité | Où il se lève |
 |----|--------|---------|-------------|----------|---------------|
-| R1 | Mémoire du prouveur dans le navigateur | Bloquant | Élevée sans action, faible avec | **P0** | S0, S2 |
+| R1 | Mémoire du prouveur dans le navigateur | Bloquant | Dépassement mesuré sur jeu réel | **P0** | P1.9, S8, P3.7 |
 | R2 | Budget de steps par tic | Fort | Élevée, dépassement mesuré | **P0** | S8, Phase 1 |
 | R3 | Route on-chain : dimensionnement des circuits, couplage de versions | Fort | Élevée | **P0** | S4, Phase 4 |
 | R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | Défaut C2 confirmé dans P1.9 | **P0** | P1.9, P1.10 |
@@ -34,9 +34,16 @@
 - **R4 / C2 prioritaire** : P1.9 omet l'ordre des listes `ThingGrid` de l'état canonique. Un cas
   reproduit donne santé 101 en continu contre 100 après désérialisation. Le test d'associativité
   en mémoire ne suffisait pas. Correction et preuve native requises avant clôture de P1.9.
-- **R11 non clos** : workflow WASM en échec sur la comparaison des hashes, navigateur non exécuté.
-  L'audit identifie un build GitHub x86_64 comparé à une référence Linux arm64 ; la correction doit
-  vérifier le build sur la plateforme annoncée et conserver une comparaison de hashes effective.
+- **R11 réparé localement, validation GitHub attendue** (`30f8d77`) : le build était x86_64 face à
+  une référence arm64. Rebuild ARM64 sur image épinglée conforme aux deux hashes existants ; cinq
+  smokes Node/Chromium vérifiés, y compris repli sans isolation. Aucune référence de hash remplacée.
+- **R1 bloquant sur le jeu réel** : quatre tics, 1 499 208 steps bootloader compris, 65 138 instances
+  Poseidon ; preuve native interrompue à 180 s et environ 32 GiB RSS observés. Aucune preuve valide.
+  L'estimation de hauteur `resources()` ne suffit pas : mesurer aussi les composants auxiliaires et
+  la largeur des traces. Le succès S2 sur microprogrammes ne clôt pas R1 pour `doom_run`.
+- **R4 / armure** : absorption après somme des dégâts des monstres, avec arrondis incorrects et
+  effets de mort possibles avant réduction par l'armure. Corriger par impact avant douleur/mort ;
+  tests de deux attaquants, épuisement d'armure et continuité RNG requis avant intégration P1.9.
 - **R1/R5/R6** : il manque la partie réelle avec jeu et preuve concurrents sur matériel 16 GB.
   C3 PLAN ≤ 10 min après partie ; objectif opérationnel D2 ≤ 5 min. Aucun succès sur les seules
   micro-mesures ne ferme ces risques.
@@ -45,7 +52,7 @@
   un tic idle atteint 585 777 avant dernier style joueur. R5 devient P0. Optimiser cette frontière
   en préservant toutes les validations et les hashes avant tout changement de cadence ou de gameplay.
 
-Les constats datés ci-dessous conservent l'historique des spikes ; les décisions D26–D29 et cette
+Les constats datés ci-dessous conservent l'historique des spikes ; les décisions D26–D30 et cette
 requalification priment sur leurs anciens budgets. Voir [STATUS](docs/STATUS.md) pour les suites.
 
 ---
