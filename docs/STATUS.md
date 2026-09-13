@@ -1,6 +1,9 @@
 # STATUS — point d'avancement
 
-> Mis à jour le 2026-09-12 (fin de journée 1). `main` est poussé sur `origin`, CI verte.
+> Mis à jour le 2026-09-13 (arrêt pour limite d'usage du sponsor). `main` est poussé sur `origin`, CI verte.
+> **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
+> Trois agents étaient encore en vol à l'arrêt (passes de style `doom_monsters`/`doom_player`, P1.9
+> `doom_game`+`doom_run`) : leurs branches sont listées dans le handoff et doivent être mergées en premier.
 
 ## Terminé (mergé sur `main`)
 

@@ -21,6 +21,13 @@ prng = { path = "../../../../crates/prng" }
 fsm = { path = "../../../../crates/fsm" }
 cairo_execute = "2.16.0"
 
+# `scarb build --no-default-features` measures the crate as `doom_game`
+# links it (the ticker alone); the default measures the whole public
+# surface. `measure.py` reports both.
+[features]
+default = ["full_api"]
+full_api = []
+
 [[target.executable]]
 name = "doom_monsters_size"
 function = "doom_monsters_size::main"
@@ -28,3 +35,21 @@ sierra = true
 
 [cairo]
 enable-gas = false
+
+# Attribution (docs/spikes/S7.md §3.1): the statement -> source-function map
+# `bench/attribute.py` joins to the CASM offsets. It does not change the
+# generated code, only the debug info of the Sierra file.
+unstable-add-statements-functions-debug-info = true
+unstable-add-statements-code-locations-debug-info = true
+
+# The proving profile (docs/DECISIONS.md D29): a panic becomes an
+# `unsafe_panic` trap, which R4-A2 accepts for the proved program — a panic
+# on the proving path was unprovable anyway. Kept out of `dev` because the
+# tests use `assert`. `measure.py` reports the crate's size under both
+# profiles and this build is also the compile test S7 §6 asks for (the flag
+# has crashed the 2.16.0 compiler on some `at` + `unwrap` sites).
+[profile.proving]
+inherits = "dev"
+
+[profile.proving.cairo]
+unsafe-panic = true

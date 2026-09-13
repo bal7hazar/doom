@@ -41,11 +41,12 @@ export default defineConfig({
     target: "es2022",
     sourcemap: true,
     rollupOptions: {
-      // Two pages: the renderer preview and the proving pipeline harness
-      // (P3.2), which the Playwright end-to-end test drives.
+      // Three pages: the renderer preview, the proving pipeline harness (P3.2), and the
+      // leaderboard (P4.4) — the Playwright end-to-end tests drive prove.html and leaderboard.html.
       input: {
         main: resolve(import.meta.dirname, "index.html"),
         prove: resolve(import.meta.dirname, "prove.html"),
+        leaderboard: resolve(import.meta.dirname, "leaderboard.html"),
       },
     },
   },

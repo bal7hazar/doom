@@ -2,7 +2,19 @@
 //! The "with the AI" side of `doom_monsters`' bytecode measurement:
 //! `../baseline` verbatim, plus one call to every public entry point of this
 //! crate, so that nothing is dead-code-eliminated. The difference between
-//! the two compiled sizes is `doom_monsters`' own code (D23: ≤ 5 000 words).
+//! the two compiled sizes is `doom_monsters`' own code.
+//!
+//! Measured twice (`measure.py` prints both):
+//!
+//! * with the default `full_api` feature — the **whole public surface**,
+//!   sixteen entry points that each take the 72-felt `Ctx` and the actor by
+//!   `ref`;
+//! * without it — **the ticker alone**, which is what `doom_game` calls and
+//!   therefore what ends up in the proved program that D29 budgets at
+//!   15 000 words.
+//!
+//! The difference between the two is the price of the public boundary; see
+//! ../../README.md.
 
 use doom_map::{LevelId, genesis, load, reject_of, thing};
 use doom_monsters::actions::{
@@ -14,17 +26,17 @@ use doom_monsters::event::{drain, event, missile_hit, sound};
 use doom_monsters::think::{awake_count, in_window, is_awake, is_dormant, mobj_thinker};
 use doom_monsters::{Ctx, MonsterEvent, Patch, monsters_ticker, read_mobj, silence};
 use doom_physics::{
-    MoveEvent, SpawnZ, aim_line_attack, bleeds, check_sight_cached, damage_mobj, explode_missile,
-    first_free, is_removed, line_attack, new_grid, removed_mobj, set_state, set_thing_position,
-    spawn_map_thing, spawn_missile, spawn_mobj, try_move, unset_thing_position, xy_movement,
-    z_movement,
+    Mobj, MoveEvent, SpawnZ, ThingGrid, World, aim_line_attack, bleeds, check_sight_cached,
+    damage_mobj, explode_missile, first_free, is_removed, line_attack, new_grid, removed_mobj,
+    set_state, set_thing_position, spawn_map_thing, spawn_missile, spawn_mobj, try_move,
+    unset_thing_position, xy_movement, z_movement,
 };
 use doom_things::tables::{
     A_PAIN, KIND_PLAYER, KIND_POSSESSED, KIND_TROOP, KIND_TROOPSHOT, MI_MELEESTATE, MI_MISSILESTATE,
     MI_RADIUS, MI_SEESTATE, MI_SPAWNSTATE, MI_SPEED,
 };
 use fixed::Fixed;
-use prng::{PrngTrait, from_index};
+use prng::{Prng, PrngTrait, from_index};
 
 #[executable]
 fn main(op: u32) -> felt252 {
@@ -111,6 +123,28 @@ fn main(op: u32) -> felt252 {
     acc += state.into() + tics.into() + action.into();
 
     // -- and every public entry point of `doom_monsters` --------------------
+    acc += public_surface(w, mobjs, ref grid, ref rng, ref mon, @player, events.span(), op);
+    let players = array![0].span();
+    let (after, r2, ev2) = monsters_ticker(w, mobjs, ref grid, players, silence(), op, rng);
+    acc + after.len().into() + r2.index.into() + ev2.len().into()
+}
+
+/// One call to every public entry point of the crate, so that nothing is
+/// dead-code-eliminated: the sixteen that take a `Ctx`, plus the scheduler
+/// and event helpers.
+#[cfg(feature: "full_api")]
+#[inline(always)]
+fn public_surface(
+    w: World,
+    mobjs: Span<Mobj>,
+    ref grid: ThingGrid,
+    ref rng: Prng,
+    ref mon: Mobj,
+    player: @Mobj,
+    events: Span<MoveEvent>,
+    op: u32,
+) -> felt252 {
+    let mut acc: felt252 = 0;
     let players = array![0].span();
     let ctx = Ctx { w, players, noise: silence(), tic: op };
     let mut ev: Array<MonsterEvent> = array![];
@@ -121,11 +155,11 @@ fn main(op: u32) -> felt252 {
 
     acc += a_look(ctx, mobjs, ref rng, ref mon, 1, ref ev).into();
     acc += a_chase(ctx, mobjs, ref grid, ref rng, ref mon, 1, patches.span(), ref ev).into();
-    a_face_target(ctx, ref rng, ref mon, @player);
-    if check_melee_range(ctx, ref mon, @player) {
+    a_face_target(ctx, ref rng, ref mon, player);
+    if check_melee_range(ctx, ref mon, player) {
         acc += 64;
     }
-    if check_missile_range(ctx, ref rng, ref mon, @player) {
+    if check_missile_range(ctx, ref rng, ref mon, player) {
         acc += 128;
     }
     if look_for_players(ctx, mobjs, ref mon, true) {
@@ -134,7 +168,7 @@ fn main(op: u32) -> felt252 {
     if p_move(ctx, mobjs, ref grid, ref mon, 1, ref ev) {
         acc += 512;
     }
-    new_chase_dir(ctx, mobjs, ref grid, ref rng, ref mon, 1, @player, ref ev);
+    new_chase_dir(ctx, mobjs, ref grid, ref rng, ref mon, 1, player, ref ev);
     a_pos_attack(ctx, mobjs, ref grid, ref rng, ref mon, 1, ref patches, ref ev);
     a_spos_attack(ctx, mobjs, ref grid, ref rng, ref mon, 1, ref patches, ref ev);
     a_troop_attack(ctx, mobjs, ref grid, ref rng, ref mon, 1, ref patches, ref ev, ref spawn_at);
@@ -158,12 +192,28 @@ fn main(op: u32) -> felt252 {
     }
     acc += awake_count(w, mobjs).into();
     acc += read_mobj(mobjs, patches.span(), 0).kind.into();
-    drain(events.span(), 1, ref ev);
-    acc += missile_hit(events.span()).into();
+    drain(events, 1, ref ev);
+    acc += missile_hit(events).into();
     ev.append(event(1, 1, 2, 3));
     ev.append(sound(1, 4));
-    acc += ev.len().into();
+    acc + ev.len().into()
+}
 
-    let (after, r2, ev2) = monsters_ticker(w, mobjs, ref grid, players, silence(), op, rng);
-    acc + after.len().into() + r2.index.into() + ev2.len().into()
+/// Without `full_api`: only what `doom_game` calls, so that the measurement
+/// is the crate's contribution to the *proved* program.
+#[cfg(not(feature: "full_api"))]
+#[inline(always)]
+fn public_surface(
+    w: World,
+    mobjs: Span<Mobj>,
+    ref grid: ThingGrid,
+    ref rng: Prng,
+    ref mon: Mobj,
+    player: @Mobj,
+    events: Span<MoveEvent>,
+    op: u32,
+) -> felt252 {
+    mon.target = 0;
+    mon.reaction_time = 0;
+    (mobjs.len() + events.len() + op).into()
 }

@@ -9,6 +9,7 @@
 //! its own construction code at every site (S1 §5.9), and a renderer event
 //! is read, never branched on, by the proving path.
 
+use doom_physics::maputl::{inc, opaque_zero};
 use doom_physics::{MoveEvent, NO_MOBJ};
 use geom2d::Point;
 
@@ -65,29 +66,39 @@ pub fn sound(who: u32, id: u32) -> MonsterEvent {
 /// `MissileHit` is handled by the caller, which owns the RNG order.
 pub fn drain(moves: Span<MoveEvent>, who: u32, ref ev: Array<MonsterEvent>) {
     let n = moves.len();
-    let mut k: u32 = 0;
+    let mut k: u32 = opaque_zero(n);
     while k != n {
-        match *moves.at(k) {
-            MoveEvent::CrossSpecial((
-                line, side,
-            )) => { ev.append(event(EV_CROSS, who, line, side.into())); },
-            _ => {},
+        match moves.get(k) {
+            Option::Some(b) => {
+                match *b.unbox() {
+                    MoveEvent::CrossSpecial((
+                        line, side,
+                    )) => { ev.append(event(EV_CROSS, who, line, side.into())); },
+                    _ => {},
+                }
+            },
+            Option::None => {},
         }
-        k += 1;
+        k = inc(k);
     }
 }
 
 /// The mobj a missile's move ran into, or [`NO_MOBJ`].
 pub fn missile_hit(moves: Span<MoveEvent>) -> u32 {
     let n = moves.len();
-    let mut k: u32 = 0;
+    let mut k: u32 = opaque_zero(n);
     let mut hit = NO_MOBJ;
     while k != n {
-        match *moves.at(k) {
-            MoveEvent::MissileHit(idx) => { hit = idx; },
-            _ => {},
+        match moves.get(k) {
+            Option::Some(b) => {
+                match *b.unbox() {
+                    MoveEvent::MissileHit(idx) => { hit = idx; },
+                    _ => {},
+                }
+            },
+            Option::None => {},
         }
-        k += 1;
+        k = inc(k);
     }
     hit
 }

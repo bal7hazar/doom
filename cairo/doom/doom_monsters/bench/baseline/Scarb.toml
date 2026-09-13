@@ -25,3 +25,15 @@ sierra = true
 
 [cairo]
 enable-gas = false
+
+# The proving profile (docs/DECISIONS.md D29): a panic becomes an
+# `unsafe_panic` trap, which R4-A2 accepts for the proved program — a panic
+# on the proving path was unprovable anyway. Kept out of `dev` because the
+# tests use `assert`. `measure.py` reports the crate's size under both
+# profiles and this build is also the compile test S7 §6 asks for (the flag
+# has crashed the 2.16.0 compiler on some `at` + `unwrap` sites).
+[profile.proving]
+inherits = "dev"
+
+[profile.proving.cairo]
+unsafe-panic = true

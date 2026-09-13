@@ -53,8 +53,9 @@ anything about a renderer.
   of the tic, so a segment restarted from a state hash schedules exactly as
   the continuous run did; with 8 awake monsters or fewer nothing is ever
   de-scheduled;
-* no `Array` is allocated per candidate direction, spans are hoisted out of
-  every loop (D24), no `if`-tree stands in for a table, and every felt
+* no `Array` is allocated per candidate direction, no `if`-tree stands in
+  for a table, nothing wide crosses a call and nothing this crate writes
+  itself can panic (docs/spikes/S7.md §8, see *Shape*), and every felt
   written stays below 2^72 (A7).
 
 ## Shape, and the decisions behind it
@@ -121,13 +122,48 @@ end of the tic. Reads inside the tic go through [`read_mobj`], which prefers
 a pending patch, so two hits on the same target in one tic compose. A tic
 with no patch pays nothing for the mechanism.
 
+**Nothing wide crosses a call (docs/spikes/S7.md §8).** A struct pushed at
+a call costs one word of bytecode and one step per felt; a `ref` parameter
+is pushed twice, once in and once out; and every panic site of a function
+stores its **whole return width**, zero-padded, so a call of anything that
+can panic costs the caller that width again. The crate was paying all three
+at once: a 72-felt `Ctx` and a 27-felt `ref mo: Mobj` through the six levels
+of `monsters_ticker` → `mobj_thinker` → `think_state` → `run_chain` →
+`dispatch` → an action → `p_move`, for parameter lists of 93 to 125 felts
+and return types of 30 to 41 for functions that answer a `bool`. So:
+
+* the **public API is the boundary** — every public function still takes
+  `Ctx` and the actor by `ref` — and each of them converts once and calls an
+  `_in` twin that carries the six-felt [`Env`] (the `World` behind one
+  pointer, since a field read through a `Box` is free) and the actor as a
+  `Box<Mobj>`, unboxed into a local at the top of a function and re-boxed
+  once, where it is written;
+* what only needs a `P_Random` takes the `rndtable` span, what only needs
+  the target's position takes two `Fixed`s, and what only needs the actor's
+  `kind` takes a `u32` and answers with a flag (`run_passive`);
+* there is **no panic site in this crate's own code**: `get` + `match`
+  reads, `wrapping` counters, `NonZero` literal divisions, `to_u128`/`low32`
+  conversions, and the panic-free twins `doom_physics::spawn::roll`,
+  `state_entry` and `set_state_in`. What is left is propagation from
+  `doom_physics`, `bam` and `geom2d`;
+* no loop-carried counter starts at a literal, which is what made the
+  compiler emit a second, specialised copy of seven loop bodies.
+
+That pass took the crate from 33 046 to 21 220 words with the same 55 tests,
+the same 700-tic checksum and the same reference vectors, and took a tic of
+29 dormant monsters from 22 092 to 13 185 steps. The `Bytecode` section
+below attributes what is left.
+
 **A dormant, still monster takes a fast path.** A monster asleep with no
 momentum, standing on its floor, has exactly one thing to do per tic: count
 its idle frame down (and look, on its phase). Doing that in the ticker's own
-loop rather than through `mobj_thinker` skips four call boundaries that each
-copy the ~60-felt `World` inside `Ctx`, and it is the path 29 of E1M1's 30
-monsters are on for most of a run. Measured: **51 513 → 21 890 steps/tic**
-for the whole dormant roster.
+loop rather than through `mobj_thinker` skips four call boundaries, and it is
+the path 29 of E1M1's 30 monsters are on for most of a run. Measured:
+**51 513 → 21 890 steps/tic** for the whole dormant roster, and **13 185**
+after the S7 pass. The loop also classifies each slot *through the list's
+snapshot* and materialises the 27 felts of a `Mobj` only where the slot is
+about to be written — one copy per mobj per tic instead of two, and none at
+all for a mobj that is not this crate's.
 
 ### Known departures from vanilla
 
@@ -190,6 +226,15 @@ pub fn read_mobj(mobjs: Span<Mobj>, patches: Span<Patch>, i: u32) -> Mobj;
 `look_for_players`/`check_melee_range`/`check_missile_range` for
 `doom_game`'s and the tests' use.
 
+Every one of those sixteen entry points takes the 72-felt `Ctx` and the
+actor by `ref`, and is the **boundary**: it converts once and calls a narrow
+`_in` twin (see *Shape* above). A caller that reaches for one of them in a
+loop pays the conversion each time — the bench measures it at 67 steps for
+the `World` and 27 for the actor — which is why `doom_game` should call
+`monsters_ticker` and let the crate dispatch. It is also 4 979 words of the
+crate's compiled size (3 754 under the `proving` profile): the *Bytecode*
+section reports the size with and without the public surface.
+
 ### The D3 schedule, stated exactly
 
 On tic `t`, with `n` awake monsters (alive, `MF_COUNTKILL`, and not in a
@@ -214,76 +259,138 @@ state whose action is `A_Look`) enumerated in list order and ranked
 **step-budget and bytecode-budget test** (it fails at +10 % over
 `bench/budgets.json`). Every scene is on the real Freedoom E1M1; each
 iteration of a ticker op is one real tic of a scene built once before the
-loop, so the number is what a tic costs in a run.
+loop, so the number is what a tic costs in a run (see the *Bytecode*
+section below for how to run it).
 
-```sh
-cd bench && python3 measure.py          # measure + check budgets
-python3 measure.py --update             # re-baseline after an intended change
-python3 coverage.py                     # line coverage
-```
+| Operation | steps (net) | range checks | task budget | before S7 |
+|---|---:|---:|---:|---:|
+| `monsters_ticker`, player only | **530** | 9 | — | 603 |
+| `monsters_ticker`, +1 dormant monster | 439 | 12 | ≤ 60 | 746 |
+| `monsters_ticker`, 29 dormant (all of E1M1) | **13 185** | 412 | — | 22 092 |
+| … the same with nobody to look for | 10 183 | 251 | — | 18 547 |
+| … of which `A_Look` (cadence + R2-A3 cache) | **104**/monster | — | ≤ 60 | 122 |
+| `monsters_ticker`, 5 awake | **13 359** | 718 | — | 16 493 |
+| `monsters_ticker`, 8 awake (D3's own cap) | **30 711** | 1 937 | — | — |
+| `monsters_ticker`, 20 awake | **61 425** | 3 802 | — | 72 860 |
+| `A_Chase`, walking step, sight cached | 3 872 | 154 | ≤ 1 800 | 3 787 |
+| … of which `P_Move` (i.e. `doom_physics`) | **3 352** | 131 | — | — |
+| `A_Look`, one sight traversal | 4 521 | 550 | — | 4 719 |
+| `A_Look`, woken by a noise | 784 | 34 | — | 623 |
+| `P_NewChaseDir` | 3 805 | 158 | — | 3 789 |
+| `P_CheckMissileRange`, sight cached | 754 | 31 | — | 493 |
+| `awake_count` over 30 mobjs | 1 729 | 61 | — | 1 793 |
+| rebuilding a 30-mobj list | 2 697 | 150 | — | 2 697 |
 
-| Operation | steps (net) | range checks | task budget | note |
-|---|---:|---:|---:|---|
-| `monsters_ticker`, player only | **598** | 5 | — | the tic's fixed cost: `Ctx`, `awake_count`, `apply` |
-| `monsters_ticker`, +1 dormant monster | 740 | 14 | ≤ 60 | the marginal cost of one sleeping monster |
-| `monsters_ticker`, 29 dormant (all of E1M1) | **21 890** | 446 | — | 755 per monster per tic |
-| … of which `A_Look` (cadence + R2-A3 cache) | **118**/monster | — | ≤ 60 | `21 890 − 18 467`, over 29 monsters |
-| `monsters_ticker`, 5 awake | **17 540** | 694 | — | see below |
-| `monsters_ticker`, 20 awake | **81 311** | 3 760 | — | the window holds the *thinking* to 8 |
-| `A_Chase`, walking step, sight cached | 5 123 | 182 | ≤ 1 800 | ~4 300 of it is `doom_physics::try_move` |
-| `A_Look`, one sight traversal | 5 463 | 508 | — | the uncached case |
-| `A_Look`, woken by a noise | 750 | 36 | — | REJECT answers; no traversal |
-| `P_NewChaseDir` | 5 117 | 186 | — | up to ten `P_TryWalk`s |
-| `P_CheckMissileRange`, sight cached | 472 | 27 | — | |
-| `awake_count` over 30 mobjs | 1 792 | 88 | — | 60 per slot: the schedule's own pass |
-| rebuilding a 30-mobj list | 2 697 | 150 | — | 90 per slot, the floor everything stands on |
+The "before S7" column is `main` at `632e742`, i.e. with the S7 pass on
+`doom_physics` already in but none of it here.
+
+**Five of those went up, and all five are the public boundary.** `A_Chase`,
+`P_NewChaseDir`, `A_Look` and `P_CheckMissileRange` are benched through the
+*public* entry point, which now boxes the 67-felt `World` and the 27-felt
+actor on the way in (94 steps) so that the six call levels below it carry
+seven felts instead of ninety-nine. Inside a tic — the only thing a run
+pays — every scene got cheaper: −40 % on the dormant roster, −19 % on five
+awake, −16 % on twenty. A handful of steps also went into the panic-free
+forms themselves: a `get` + `match` read and a `NonZero` divmod cost two or
+three steps more than the panicking `at` and `%` (S7 §4.3), which is what
+buys 4 000 words.
+
+**Physics against AI.** `P_Move` alone on the bench's chaser is 3 352 of
+`A_Chase`'s 3 872 steps: the AI's own share of a chase step — two
+countdowns, the 45° turn, the melee and missile tests answered from the
+R2-A3 cache, the active-sound draw — is **520 steps**, 13 %. On the twenty-
+awake scene the split is the same in kind: what D3's window bounds is eight
+`try_move`s and the occasional `check_sight`, not this crate's arithmetic.
 
 **Against D2's 12 000 steps/tic.** Five awake monsters cost **17 540** and
 twenty cost **81 311**, both over budget. The profile says where it goes, and
 almost none of it is this crate's arithmetic:
 
-* a zombieman's shot is `aim_line_attack` (6 339) + `line_attack` (6 608) +
-  `damage_mobj` (1 471) ≈ **14 400 steps**, all `doom_physics`; five awake
+* a zombieman's shot is `aim_line_attack` (4 985) + `line_attack` (5 208) +
+  `damage_mobj` (1 240) ≈ **11 400 steps**, all `doom_physics`; five awake
   monsters fire about one shot every five tics between them;
 * a sight traversal in a line-dense room is 7 700–9 700 steps
   (`doom_physics`' own figure). The R2-A3 cache with `ttl = 8` already cuts
   it to one traversal per monster per eight tics — without the cache the
   five-monster scene would be roughly twice as expensive;
-* `A_Chase`'s walking step is 5 123, of which ~4 300 is one `try_move` for a
-  20-unit-radius monster (the `doom_physics` README measures 4 316 in a
-  line-dense cell against 964 for a player in an open one), and it runs one
+* `A_Chase`'s walking step is 3 872, of which 3 352 is one `try_move` for a
+  20-unit-radius monster (the `doom_physics` README measures 3 575 in a
+  line-dense cell against 865 for a player in an open one), and it runs one
   tic in four because `info.c` gives the run frames 4 tics each.
 
-Subtracting the physics, the AI's own share is about **500–800 steps per
-awake monster per tic**. The levers are therefore all in `doom_physics`
-(which is being size-optimised in parallel) and in D3's cap; the twenty-awake
-figure is what D3 exists to prevent, and it is reported here so that the cap
-can be re-priced if the physics costs come down. With eight awake monsters —
-D3's own ceiling — the scene costs about **29 000 steps/tic** as the physics
-stands today, against a p99 allowance of 25 000.
+Subtracting the physics, the AI's own share is about **520 steps per awake
+monster per tic**. The levers are therefore all in `doom_physics` and in
+D3's cap; the twenty-awake figure is what D3 exists to prevent, and it is
+reported here so that the cap can be re-priced if the physics costs come
+down. With eight awake monsters — D3's own ceiling — the scene is measured
+at **30 711 steps/tic**, against a p99 allowance of 25 000.
 
 **The dormant roster** is the other half of the story: 29 sleeping monsters
-cost 21 890 steps/tic, of which only 3 423 (118 each) is the AI. The rest is
-one materialised copy of a 27-felt `Mobj` per slot per tic plus the ticker
-loop's own live set — a property of the `Array<Mobj>` state representation,
-which `doom_game`'s tic loop pays for every mobj whether this crate touches
-it or not. Cutting it means changing that representation, not the AI.
+cost 13 185 steps/tic, of which 3 002 (104 each) is `A_Look` on its cadence.
+The rest is the countdown, the schedule's own pass (`awake_count`, 1 729)
+and one materialised copy of a 27-felt `Mobj` per slot per tic — the S7 pass
+removed the second copy (the classification now reads through the list's
+snapshot), and what is left is a property of the `Array<Mobj>` state
+representation, which `doom_game`'s tic loop pays for every mobj whether
+this crate touches it or not. Cutting it means changing that representation,
+not the AI.
 
 ### Bytecode
 
-`bench/size` calls every public entry point once; `bench/baseline` is the
+`bench/size` calls the crate's entry points once; `bench/baseline` is the
 same package with the same level data **and the same `doom_physics` calls**
-and no `doom_monsters` call, so the difference is this crate's own code:
-**34 014 words** (502 000 steps of bootloader program-hashing per segment,
-S1 §5.9), against the 5 000 D23 allots to it. Where it goes is the same
-place `doom_physics`' 57 000 goes: a Cairo function's bytecode grows with the
-live set at every branch and with every struct it passes, and this crate
-passes a `Ctx` that contains a ~60-felt `World` through four call levels and
-twelve `ref` parameters, across a dispatcher with eleven arms. The measured
-figure is guarded against regression (+10 %) by `measure.py`; how to
-reconcile D23 with a faithful `p_enemy.c` on top of a faithful `p_map.c` is
-the same open question `doom_physics` left for `doom_game`/P1.9, and the two
-crates should be re-budgeted together.
+and no `doom_monsters` call, so the difference is this crate's own code.
+Four figures, because two axes matter:
+
+|  | `dev` | `proving` |
+|---|---:|---:|
+| whole public surface | 21 220 | 17 963 |
+| the ticker alone (what `doom_game` links) | 16 241 | **14 209** |
+
+* `bench/size`'s default `full_api` feature calls all sixteen entry points
+  that take a `Ctx`; `--no-default-features` calls only what `doom_game`
+  calls. The difference — **4 979 words on `dev`, 3 754 under `proving`** —
+  is the price of the public boundary (a 72-felt `Ctx` and a 27-felt actor
+  pushed at the call, boxed in the wrapper, and stored again on the
+  wrapper's panic-propagation path).
+* the `proving` profile sets `unsafe-panic = true` (D29): a panic becomes a
+  trap, which R4-A2 accepts for the proved program since a panic there was
+  unprovable anyway. It was worth **−10 600 words** on this crate before the
+  pass (S7 §6) and is worth −3 250 now, because the panic sites it was
+  deleting are gone from the source. Building under it is also the compile
+  test S7 §6 asks for: it compiles clean, no repeat of the `bam::tantoangle`
+  ICE.
+* **docs/DECISIONS.md D29 budgets this crate at 15 000 words**, and the
+  figure it is about is the last one: **14 209, inside the budget**
+  (211 000 steps of bootloader program-hashing per segment). `measure.py`
+  fails at +10 % over it and guards all four against regression.
+
+Where the words were, and where they are now (`bench/attribute.py`, which
+gives every Sierra statement its CASM offsets through `infra/sierra_words`
+and joins them to the statement → source-function map):
+
+| words | before | after | how |
+|---|---:|---:|---|
+| `store_temp<PanicResult>` — the zero-padded return enum stored at every panic site and every return point, at the function's whole return width | 11 935 | 5 066 | no panic site left in this crate's own code, and the propagation that remains is stored at a return width of 6 to 16 felts instead of 30 to 41 |
+| `store_temp<Ctx>` — the 72-felt context pushed at every call of the chain | 4 980 | 780 | the six-felt `Env`, a `Box<World>`; what is left is the public boundary and the harness |
+| `store_temp<Mobj>` — `ref mo` in and out at every level, and `@Mobj` targets | 4 883 | 2 965 | `Box<Mobj>` through the chain, re-boxed only where written; the target boxed or reduced to the two coordinates it is read for |
+| constant-argument specialisations (a second copy of a loop body) | 18 | 6 (2 of them `doom_physics`') | `opaque_zero(n)` as every loop-carried start |
+| parameter / return widths of the chain | 93–125 / 30–41 | 11–24 / 6–16 | all of the above |
+
+The 14 000 that remain are the algorithm under this code generation, as S7
+§7 concluded for the physics: `P_NewChaseDir`'s ten attempts (1 725 words),
+the ticker's own pass (1 581), `P_MobjThinker` with its missile arms
+(1 519), `A_Chase` (1 414), `P_LookForPlayers` and `A_Look` (1 908), the
+eleven-arm dispatcher (779) and the four attacks (~2 000). A comparison
+costs ~15 words in this compiler, a `Span` read ~11, a divmod ~10, and the
+27 felts of a `Mobj` have to be written wherever one is actually written.
+
+```sh
+cd bench && python3 measure.py          # steps + the four bytecode figures
+python3 measure.py --update             # re-baseline after an intended change
+python3 attribute.py --top 40           # where every word goes
+python3 coverage.py                     # line coverage
+```
 
 ## Tests
 
@@ -388,26 +495,35 @@ emit if it cannot find one. A changed `SCENARIO_CHECKSUM` in
 
 ## Open questions
 
-* **Bytecode (D23).** 34 014 words for this crate against a 5 000 budget, on
-  top of `doom_physics`' 57 000 against the same. The levers are structural
-  (a narrower context than `World` per function, fewer call levels, fewer
-  `ref` parameters through the dispatcher) or budgetary (S4b priced 32 k
-  words at ~6 % of a segment). The two crates should be re-budgeted in one
-  pass, not separately.
-* **Steps/tic (D2).** With the physics as it stands, eight awake monsters
-  cost ~29 000 steps/tic against a 12 000 average and a 25 000 p99. Either
-  the physics' hitscan and sight get cheaper, or D3's cap comes down, or the
-  attack cadence gets a budget of its own. This crate's own share is
-  500–800 steps per awake monster per tic.
+* **The public boundary.** 4 979 words of the crate's `dev` size (3 754 of
+  its `proving` size) are the sixteen public entry points that take a
+  72-felt `Ctx` and the actor by `ref`, plus the harness's calls to them.
+  Making `Ctx` carry a `Box<World>` and the entry points a `Box<Mobj>` would
+  delete almost all of it — the internals already work that way — at the
+  price of an API change for `doom_game` and the tests. Worth deciding once
+  `doom_game` is the only caller, together with the narrower `World` the
+  `doom_physics` README asks for.
+* **Steps/tic (D2).** Eight awake monsters cost 30 711 steps/tic against a
+  12 000 average and a 25 000 p99, and 87 % of it is `doom_physics`. Either
+  the hitscan and sight get cheaper, or D3's cap comes down, or the attack
+  cadence gets a budget of its own. This crate's own share is ~520 steps per
+  awake monster per tic.
+* **A panic-free `fsm::advance`.** A local twin built on
+  `doom_physics::spawn::state_entry` was measured at **+20 steps per mobj
+  per tic** — the ticker advances every mobj's countdown, awake or not —
+  against ~120 words, and was dropped. It becomes worth having the day `fsm`
+  itself gets the panic-free accessor S7 §9 asks for, which would cost
+  nothing at the call site.
 * **`P_NoiseAlert`.** A faithful flood needs a `sector -> lines` index in
   `doom_map` (about 470 entries for E1M1, ~1 000 words of data) and a
   bounded BFS. With that index the flood is a few thousand steps per shot;
   without it, the REJECT proxy under-wakes as described above. Worth
   revisiting when `doom_map` is next regenerated.
-* **The list representation.** 90 steps per mobj per tic just to copy a
-  27-felt record out of one `Array<Mobj>` and into the next, before anything
-  thinks — 2 700 steps/tic for E1M1's 30 mobjs, more once the items are in
-  the list. If `doom_game` finds a cheaper representation, every crate that
-  ticks a list gains.
+* **The list representation.** One materialised copy of a 27-felt record
+  per mobj per tic, before anything thinks — the S7 pass removed the second
+  one, and the remaining ~2 700 steps/tic for E1M1's 30 mobjs are the
+  `Array<Mobj>` itself (`bench` op 15 measures the floor at 90 per slot with
+  a field written). If `doom_game` finds a cheaper representation, every
+  crate that ticks a list gains.
 * **`MF_SHADOW`.** The spectre never spawns at skill 2, so `A_FaceTarget`'s
   spread against a shadow target is implemented but only reached by a test.
