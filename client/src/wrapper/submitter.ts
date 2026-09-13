@@ -234,10 +234,22 @@ export class WrapperSubmitter {
         `${this.baseUrl}/v1/runs/${encodeURIComponent(runId)}/segments`,
         { method: "GET", headers: this.headers(false) },
       );
-      // 404 on a run that does not exist yet is ambiguous; 405 / 501 is not.
-      if (res.status === 200 || res.status === 404) {
-        const body = res.status === 200 ? ((await res.json()) as { held?: number[] }) : null;
+      if (res.status === 200) {
+        const body = (await res.json()) as { held?: number[] };
         if (body && Array.isArray(body.held)) return "per-segment";
+      } else if (res.status === 404) {
+        // 404 is ambiguous: the run does not exist yet, or the endpoints do not.
+        // A wrapper with per-segment support accepts an empty `segments` array
+        // and answers `202 collecting`; an old wrapper rejects it with 400.
+        const created = await this.doFetch(`${this.baseUrl}/v1/runs`, {
+          method: "POST",
+          headers: this.headers(true),
+          body: JSON.stringify({ run_id: runId, segments: [] }),
+        });
+        if (created.ok) {
+          const body = (await created.json().catch(() => null)) as { status?: string } | null;
+          if (body?.status === "collecting") return "per-segment";
+        }
       }
     } catch {
       /* the wrapper is old, or offline; the fallback covers both */

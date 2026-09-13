@@ -98,12 +98,22 @@ impl Scheduler {
             tracing::info!(run = %run_id, batch = %batch_id, solo = run.solo, "run verified and batched");
 
             for seg in db.segments(&run_id)? {
-                if db.ensure_leaf(&seg.leaf_key)? {
+                // By the time a run leaves `verifying` it has gone through `/complete` (or the
+                // whole-run `POST`), so every segment already has a leaf key assigned.
+                let Some(leaf_key) = &seg.leaf_key else {
+                    tracing::error!(
+                        run = %run_id,
+                        idx = seg.idx,
+                        "segment has no leaf_key while batching; skipping it"
+                    );
+                    continue;
+                };
+                if db.ensure_leaf(leaf_key)? {
                     // Already proven for another run (or an earlier submission of this one).
                     self.state.metrics.incr("wrapper_leaf_cache_hits_total", "");
                     continue;
                 }
-                db.enqueue_leaf(&seg.leaf_key, &run_id, seg.idx)?;
+                db.enqueue_leaf(leaf_key, &run_id, seg.idx)?;
             }
 
             // Close as soon as the batch is full, so a burst of submissions produces batches of
@@ -287,7 +297,8 @@ fn leaf_key_of(state: &Shared, job: &Job) -> Result<String> {
         .db
         .segment(&run, idx)?
         .ok_or_else(|| anyhow::anyhow!("job {} references an unknown segment", job.id))?;
-    Ok(seg.leaf_key)
+    seg.leaf_key
+        .ok_or_else(|| anyhow::anyhow!("segment {run}/{idx} has no leaf_key"))
 }
 
 fn run_job(state: &Shared, job: &Job) -> Result<()> {
@@ -371,10 +382,14 @@ fn leaf_job(state: &Shared, job: &Job) -> Result<()> {
         .db
         .run(&run_id)?
         .ok_or_else(|| anyhow::anyhow!("unknown run {run_id}"))?;
+    let run_program_id = run
+        .program_id
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("run {run_id} has no program (never completed?)"))?;
     let program = state
         .cfg
-        .program(&run.program_id)
-        .ok_or_else(|| anyhow::anyhow!("program `{}` is no longer configured", run.program_id))?;
+        .program(&run_program_id)
+        .ok_or_else(|| anyhow::anyhow!("program `{run_program_id}` is no longer configured"))?;
 
     let args: Vec<crate::felt::Felt> = {
         let hexes: Vec<String> = serde_json::from_str(&seg.args_json)?;

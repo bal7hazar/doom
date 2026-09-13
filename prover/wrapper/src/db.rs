@@ -30,12 +30,18 @@ CREATE TABLE IF NOT EXISTS runs (
   id              TEXT PRIMARY KEY,
   account         TEXT NOT NULL,
   player          TEXT,
-  program_id      TEXT NOT NULL,
+  -- NULL while `collecting`: the resumable upload protocol lets a run exist before its program
+  -- is known (a bare `PUT` auto-vivifies the run; `POST /v1/runs` with no segments may also
+  -- supply it immediately). `/complete` fills it in either way.
+  program_id      TEXT,
   solo            INTEGER NOT NULL DEFAULT 0,
   status          TEXT NOT NULL,
   batch_id        TEXT,
-  submission_hash TEXT NOT NULL,
-  n_segments      INTEGER NOT NULL,
+  -- NULL while `collecting`: only computable once every segment (and the program) is known.
+  submission_hash TEXT,
+  n_segments      INTEGER NOT NULL DEFAULT 0,
+  -- Optional, resumable uploads only: how many segments the client says this game will have.
+  expected_segments INTEGER,
   error           TEXT,
   created_at      INTEGER NOT NULL,
   updated_at      INTEGER NOT NULL,
@@ -47,12 +53,18 @@ CREATE INDEX IF NOT EXISTS runs_batch ON runs(batch_id);
 CREATE TABLE IF NOT EXISTS segments (
   run_id          TEXT NOT NULL,
   idx             INTEGER NOT NULL,
-  leaf_key        TEXT NOT NULL,
+  -- NULL until the run's program is known (`/complete`): the leaf key is a function of the
+  -- program's identity as well as the segment's own content (`validate::bind_segment_to_program`).
+  leaf_key        TEXT,
   args_json       TEXT NOT NULL,
   preimage_json   TEXT NOT NULL,
   outputs_json    TEXT NOT NULL,
   proof_path      TEXT,
   proof_format    TEXT NOT NULL,
+  -- Set by the resumable upload endpoint (`PUT .../segments/{index}`), which is idempotent by
+  -- this hash; NULL for segments that arrived through the whole-run `POST`.
+  sha256          TEXT,
+  size_bytes      INTEGER,
   verified        INTEGER NOT NULL DEFAULT 0,
   verify_ms       REAL,
   PRIMARY KEY (run_id, idx)
@@ -298,7 +310,7 @@ impl Db {
         let row = conn
             .query_row(
                 "SELECT idx, leaf_key, args_json, preimage_json, outputs_json, proof_path,
-                        proof_format, verified, verify_ms
+                        proof_format, verified, verify_ms, sha256, size_bytes
                  FROM segments WHERE run_id = ?1 AND idx = ?2",
                 params![run_id, idx],
                 segment_row,
@@ -311,11 +323,55 @@ impl Db {
         let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT idx, leaf_key, args_json, preimage_json, outputs_json, proof_path,
-                    proof_format, verified, verify_ms
+                    proof_format, verified, verify_ms, sha256, size_bytes
              FROM segments WHERE run_id = ?1 ORDER BY idx",
         )?;
         let rows = stmt.query_map(params![run_id], segment_row)?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Assigns a segment's leaf key once the run's program is known (`/complete`).
+    pub fn set_segment_leaf_key(&self, run_id: &str, idx: u32, leaf_key: &str) -> Result<()> {
+        self.lock().execute(
+            "UPDATE segments SET leaf_key = ?3 WHERE run_id = ?1 AND idx = ?2",
+            params![run_id, idx, leaf_key],
+        )?;
+        Ok(())
+    }
+
+    /// `PUT /v1/runs/{id}/segments/{index}`: records a newly uploaded segment with no leaf key
+    /// yet (`/complete` assigns it once the program is known) and no chain check (that also
+    /// happens at `/complete`, across every segment at once).
+    #[allow(clippy::too_many_arguments)]
+    pub fn insert_uploaded_segment(
+        &self,
+        run_id: &str,
+        idx: u32,
+        args_json: &str,
+        preimage_json: &str,
+        outputs_json: &str,
+        proof_path: &str,
+        proof_format: &str,
+        sha256: &str,
+        size_bytes: u64,
+    ) -> Result<()> {
+        self.lock().execute(
+            "INSERT INTO segments (run_id, idx, args_json, preimage_json, outputs_json,
+                                    proof_path, proof_format, sha256, size_bytes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                run_id,
+                idx,
+                args_json,
+                preimage_json,
+                outputs_json,
+                proof_path,
+                proof_format,
+                sha256,
+                size_bytes as i64
+            ],
+        )?;
+        Ok(())
     }
 
     pub fn all_segments_verified(&self, run_id: &str) -> Result<bool> {
@@ -487,7 +543,14 @@ impl Db {
         let mut position = 0u32;
         for run_id in &runs {
             for seg in self.segments(run_id)? {
-                leaves.push((position, run_id.clone(), seg.idx, seg.leaf_key.clone()));
+                // By the time a batch closes every member run left `collecting` through
+                // `/complete` (or the whole-run `POST`), so every segment has a leaf key.
+                leaves.push((
+                    position,
+                    run_id.clone(),
+                    seg.idx,
+                    seg.leaf_key.clone().unwrap_or_default(),
+                ));
                 position += 1;
             }
         }
@@ -733,7 +796,7 @@ impl Db {
         let row = conn
             .query_row(
                 "SELECT id, account, player, program_id, solo, status, batch_id, n_segments,
-                        error, created_at, updated_at, verified_at
+                        error, created_at, updated_at, verified_at, expected_segments
                  FROM runs WHERE id = ?1",
                 params![id],
                 |r| {
@@ -750,11 +813,107 @@ impl Db {
                         created_at: r.get(9)?,
                         updated_at: r.get(10)?,
                         verified_at: r.get(11)?,
+                        expected_segments: r.get::<_, Option<i64>>(12)?.map(|v| v as u32),
                     })
                 },
             )
             .optional()?;
         Ok(row)
+    }
+
+    // ---- resumable per-segment uploads (R8-A2 extension) -------------------------------------
+
+    /// `POST /v1/runs` with no segments: creates a `collecting` run whose program is already
+    /// known. Errors (unique constraint) if `id` already exists — the caller checks first so it
+    /// can answer idempotently instead.
+    pub fn create_collecting_run(
+        &self,
+        id: &str,
+        account: &str,
+        player: Option<&str>,
+        program_id: &str,
+        solo: bool,
+        expected_segments: Option<u32>,
+    ) -> Result<()> {
+        let now = now_ms();
+        self.lock().execute(
+            "INSERT INTO runs (id, account, player, program_id, solo, status, n_segments,
+                                expected_segments, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'collecting', 0, ?6, ?7, ?7)",
+            params![
+                id,
+                account,
+                player,
+                program_id,
+                solo as i64,
+                expected_segments,
+                now
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// A bare `PUT .../segments/{index}` on a run id that does not exist yet: the run comes into
+    /// existence without a program, which `/complete` supplies. A no-op if the id already exists
+    /// (whatever state it is in — the caller checks that separately).
+    pub fn ensure_collecting_run(&self, id: &str, account: &str) -> Result<()> {
+        let now = now_ms();
+        self.lock().execute(
+            "INSERT OR IGNORE INTO runs (id, account, status, n_segments, created_at, updated_at)
+             VALUES (?1, ?2, 'collecting', 0, ?3, ?3)",
+            params![id, account, now],
+        )?;
+        Ok(())
+    }
+
+    /// `/complete`: assigns the program, freezes the submission hash and moves a `collecting` run
+    /// into `verifying` — exactly where a whole-run `POST` would have left it (every segment is
+    /// already verified: `PUT` verified it synchronously, so the scheduler bats it straight into
+    /// a batch on its next tick). Returns `false` if the run was not `collecting` any more (a
+    /// concurrent `PUT` rejected it in between): the caller re-reads and answers idempotently.
+    #[allow(clippy::too_many_arguments)]
+    pub fn finalize_collecting_run(
+        &self,
+        id: &str,
+        player: Option<&str>,
+        program_id: &str,
+        solo: Option<bool>,
+        submission_hash: &str,
+        n_segments: usize,
+    ) -> Result<bool> {
+        let now = now_ms();
+        let n = self.lock().execute(
+            "UPDATE runs SET player = COALESCE(?2, player), program_id = ?3,
+                    solo = COALESCE(?4, solo),
+                    submission_hash = ?5, n_segments = ?6, status = 'verifying', updated_at = ?7
+             WHERE id = ?1 AND status = 'collecting'",
+            params![
+                id,
+                player,
+                program_id,
+                solo.map(|s| s as i64),
+                submission_hash,
+                n_segments as i64,
+                now
+            ],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// `DELETE /v1/runs/{id}`: only ever a `collecting` run (nothing has been queued for it yet).
+    /// Returns `false` if it was not `collecting` (or did not exist), so nothing was deleted.
+    pub fn delete_collecting_run(&self, id: &str) -> Result<bool> {
+        let conn = self.lock();
+        let tx = conn.unchecked_transaction()?;
+        let n = tx.execute(
+            "DELETE FROM runs WHERE id = ?1 AND status = 'collecting'",
+            params![id],
+        )?;
+        if n > 0 {
+            tx.execute("DELETE FROM segments WHERE run_id = ?1", params![id])?;
+        }
+        tx.commit()?;
+        Ok(n > 0)
     }
 }
 
@@ -763,11 +922,13 @@ pub struct RunRow {
     pub id: String,
     pub account: String,
     pub player: Option<String>,
-    pub program_id: String,
+    /// `None` while `collecting` a run whose program is not known yet.
+    pub program_id: Option<String>,
     pub solo: bool,
     pub status: RunStatus,
     pub batch_id: Option<String>,
     pub n_segments: usize,
+    pub expected_segments: Option<u32>,
     pub error: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -777,12 +938,16 @@ pub struct RunRow {
 #[derive(Debug, Clone)]
 pub struct SegmentRow {
     pub idx: u32,
-    pub leaf_key: String,
+    /// `None` until the run's program is known (`/complete` fills it in).
+    pub leaf_key: Option<String>,
     pub args_json: String,
     pub preimage_json: String,
     pub outputs_json: String,
     pub proof_path: Option<String>,
     pub proof_format: String,
+    /// Set by the resumable upload endpoint; `None` for a whole-run `POST` segment.
+    pub sha256: Option<String>,
+    pub size_bytes: Option<u64>,
     pub verified: bool,
     pub verify_ms: Option<f64>,
 }
@@ -825,6 +990,8 @@ fn segment_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SegmentRow> {
         proof_format: r.get(6)?,
         verified: r.get::<_, i64>(7)? != 0,
         verify_ms: r.get(8)?,
+        sha256: r.get(9)?,
+        size_bytes: r.get::<_, Option<i64>>(10)?.map(|v| v as u64),
     })
 }
 

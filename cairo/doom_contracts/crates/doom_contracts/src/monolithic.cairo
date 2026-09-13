@@ -13,10 +13,10 @@ pub trait IStwoCircuitMonolithic<TContractState> {
 
 #[starknet::contract]
 pub mod StwoCircuitMonolithic {
-    use stwo_circuit_air::{
+    use stwo_circuit_air_ref::{
         CircuitProof, compute_circuit_hash, get_verification_output, verify_circuit,
     };
-    use stwo_verifier_core::Hash;
+    use stwo_verifier_core_ref::Hash;
 
     #[storage]
     struct Storage {}

@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::config::{Config, LeafMode, ProgramEntry};
 use crate::felt::{leaf_output_words, output_cells_from_words, Felt};
-use crate::model::{HashFunction, ProofFormat, RunSubmission, SegmentSubmission};
+use crate::model::{HashFunction, ProofBlob, ProofFormat, RunSubmission, SegmentSubmission};
 
 /// A submission that passed validation: felts parsed, proof bytes decoded, leaf keys computed.
 #[derive(Debug)]
@@ -182,150 +182,199 @@ fn validate_segment(
     hash_function: HashFunction,
     registry_hash: &str,
 ) -> Result<ValidSegment> {
+    let proof_bytes = decode_proof_bytes(&seg.proof, seg.index)?;
+    let shaped = shape_segment(
+        seg.index,
+        &seg.args,
+        &seg.output_preimage,
+        &seg.public_outputs,
+        seg.proof.format,
+        proof_bytes,
+        cfg,
+    )?;
+    let leaf_key = bind_segment_to_program(
+        seg.index,
+        &shaped.args,
+        &shaped.preimage,
+        cfg,
+        program,
+        hash_function,
+        registry_hash,
+    )?;
+    Ok(ValidSegment {
+        index: seg.index,
+        args: shaped.args,
+        preimage: shaped.preimage,
+        output_cells: shaped.output_cells,
+        proof_format: seg.proof.format,
+        proof_bytes: shaped.proof_bytes,
+        leaf_key,
+    })
+}
+
+/// Decodes a submitted proof blob into bytes, whatever its wire format. Shared by the whole-run
+/// `POST` and the resumable `PUT` endpoint.
+pub fn decode_proof_bytes(proof: &ProofBlob, index: u32) -> Result<Vec<u8>> {
+    match proof.format {
+        ProofFormat::BincodeB64 => {
+            let data = proof
+                .data
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("segment {index}: proof.data is required"))?;
+            base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .map_err(|e| anyhow::anyhow!("segment {index}: proof.data is not base64: {e}"))
+        }
+        ProofFormat::CairoSerdeFelts => {
+            let felts = proof
+                .felts
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("segment {index}: proof.felts is required"))?;
+            if felts.is_empty() {
+                bail!("segment {index}: proof.felts is empty");
+            }
+            // Parse them so a malformed stream is rejected here, and store the canonical form.
+            let parsed: Vec<Felt> = felts
+                .iter()
+                .map(|f| Felt::parse(f))
+                .collect::<Result<_>>()
+                .map_err(|e| anyhow::anyhow!("segment {index}: bad proof felt: {e}"))?;
+            let hexes: Vec<String> = parsed.iter().map(|f| f.to_hex()).collect();
+            Ok(serde_json::to_vec(&hexes)?)
+        }
+    }
+}
+
+/// A segment shaped and checked without knowing which program it belongs to.
+pub struct ShapedSegment {
+    pub args: Vec<Felt>,
+    pub preimage: Vec<Felt>,
+    pub output_cells: [Felt; 2],
+    pub proof_bytes: Vec<u8>,
+}
+
+/// Everything about one segment that can be checked before its program is known: felt parsing,
+/// the output-cells/preimage cross-check, the proof-format policy and the size limit. This is
+/// what `PUT /v1/runs/{id}/segments/{index}` runs immediately (the resumable upload protocol does
+/// not require a program until `/complete`); the whole-run `POST` runs it too, as the first half
+/// of [`validate_segment`].
+#[allow(clippy::too_many_arguments)]
+pub fn shape_segment(
+    index: u32,
+    args: &[String],
+    output_preimage: &[String],
+    public_outputs: &[String],
+    proof_format: ProofFormat,
+    proof_bytes: Vec<u8>,
+    cfg: &Config,
+) -> Result<ShapedSegment> {
     // `args` are what the server replays in `rerun` mode; in `from_proof` mode it folds the
     // submitted proof and never needs them (D19).
-    if seg.args.is_empty() && cfg.leaf_mode == LeafMode::Rerun {
-        bail!(
-            "segment {}: no args (required with leaf_mode = \"rerun\")",
-            seg.index
-        );
+    if args.is_empty() && cfg.leaf_mode == LeafMode::Rerun {
+        bail!("segment {index}: no args (required with leaf_mode = \"rerun\")");
     }
-    let args: Vec<Felt> = seg
-        .args
+    let args: Vec<Felt> = args
         .iter()
         .map(|a| Felt::parse(a))
         .collect::<Result<_>>()
-        .map_err(|e| anyhow::anyhow!("segment {}: bad arg: {e}", seg.index))?;
+        .map_err(|e| anyhow::anyhow!("segment {index}: bad arg: {e}"))?;
 
-    if seg.output_preimage.is_empty() {
-        bail!(
-            "segment {}: output_preimage is required (it is what the tree hashes)",
-            seg.index
-        );
+    if output_preimage.is_empty() {
+        bail!("segment {index}: output_preimage is required (it is what the tree hashes)");
     }
-    let preimage: Vec<Felt> = seg
-        .output_preimage
+    let preimage: Vec<Felt> = output_preimage
         .iter()
         .map(|a| Felt::parse(a))
         .collect::<Result<_>>()
-        .map_err(|e| anyhow::anyhow!("segment {}: bad output_preimage felt: {e}", seg.index))?;
+        .map_err(|e| anyhow::anyhow!("segment {index}: bad output_preimage felt: {e}"))?;
 
+    // The digest the leaf circuit will output, recomputed from the preimage.
+    let words = leaf_output_words(&preimage);
+    let output_cells = output_cells_from_words(&words);
+    if !public_outputs.is_empty() {
+        let claimed: Vec<Felt> = public_outputs
+            .iter()
+            .map(|a| Felt::parse(a))
+            .collect::<Result<_>>()
+            .map_err(|e| anyhow::anyhow!("segment {index}: bad public_outputs felt: {e}"))?;
+        if claimed.len() != 2 {
+            bail!(
+                "segment {index}: the leaf format requires exactly 2 output cells, got {}",
+                claimed.len()
+            );
+        }
+        if claimed[0] != output_cells[0] || claimed[1] != output_cells[1] {
+            bail!("segment {index}: public_outputs do not match blake2s(encode(output_preimage))");
+        }
+    }
+
+    if cfg.require_verifiable_proof && !proof_format.verifiable() {
+        bail!(
+            "segment {index}: proof format `{}` cannot be verified (the cairo-serde felt stream \
+             is one-way at cd7bc5f); submit the bincode CairoProof",
+            proof_format.as_str()
+        );
+    }
+    // In `from_proof` mode the proof is not merely checked, it is folded — and only the bincode
+    // form can be read back into a `CairoProof` at all, whatever `require_verifiable_proof` says.
+    if cfg.leaf_mode == LeafMode::FromProof && !proof_format.verifiable() {
+        bail!(
+            "segment {index}: proof format `{}` cannot be folded (leaf_mode = \"from_proof\" \
+             needs the bincode CairoProof); set leaf_mode = \"rerun\" to accept it",
+            proof_format.as_str()
+        );
+    }
+    if proof_bytes.len() > cfg.max_proof_bytes {
+        bail!(
+            "segment {index}: proof is {} bytes, over the {} byte limit",
+            proof_bytes.len(),
+            cfg.max_proof_bytes
+        );
+    }
+
+    Ok(ShapedSegment {
+        args,
+        preimage,
+        output_cells,
+        proof_bytes,
+    })
+}
+
+/// The other half of [`validate_segment`]: what needs the program (pinned program hash and the
+/// leaf cache key). Applied immediately for a whole-run `POST`; deferred to `/complete` for a
+/// resumable upload, where the program is not known until then.
+pub fn bind_segment_to_program(
+    index: u32,
+    args: &[Felt],
+    preimage: &[Felt],
+    cfg: &Config,
+    program: &ProgramEntry,
+    hash_function: HashFunction,
+    registry_hash: &str,
+) -> Result<String> {
     // `preimage[0]` is the task's program hash: it pins which program ran.
     if let Some(expected) = &program.program_hash {
         let expected = Felt::parse(expected)?;
         if preimage[0] != expected {
             bail!(
-                "segment {}: output_preimage[0] = {} is not the pinned program hash {} of `{}`",
-                seg.index,
+                "segment {index}: output_preimage[0] = {} is not the pinned program hash {} of \
+                 `{}`",
                 preimage[0].to_hex(),
                 expected.to_hex(),
                 program.id
             );
         }
     }
-
-    // The digest the leaf circuit will output, recomputed from the preimage.
-    let words = leaf_output_words(&preimage);
-    let output_cells = output_cells_from_words(&words);
-    if !seg.public_outputs.is_empty() {
-        let claimed: Vec<Felt> = seg
-            .public_outputs
-            .iter()
-            .map(|a| Felt::parse(a))
-            .collect::<Result<_>>()
-            .map_err(|e| anyhow::anyhow!("segment {}: bad public_outputs felt: {e}", seg.index))?;
-        if claimed.len() != 2 {
-            bail!(
-                "segment {}: the leaf format requires exactly 2 output cells, got {}",
-                seg.index,
-                claimed.len()
-            );
-        }
-        if claimed[0] != output_cells[0] || claimed[1] != output_cells[1] {
-            bail!(
-                "segment {}: public_outputs do not match blake2s(encode(output_preimage))",
-                seg.index
-            );
-        }
-    }
-
-    if cfg.require_verifiable_proof && !seg.proof.format.verifiable() {
-        bail!(
-            "segment {}: proof format `{}` cannot be verified (the cairo-serde felt stream is \
-             one-way at cd7bc5f); submit the bincode CairoProof",
-            seg.index,
-            seg.proof.format.as_str()
-        );
-    }
-    // In `from_proof` mode the proof is not merely checked, it is folded — and only the bincode
-    // form can be read back into a `CairoProof` at all, whatever `require_verifiable_proof` says.
-    if cfg.leaf_mode == LeafMode::FromProof && !seg.proof.format.verifiable() {
-        bail!(
-            "segment {}: proof format `{}` cannot be folded (leaf_mode = \"from_proof\" needs the \
-             bincode CairoProof); set leaf_mode = \"rerun\" to accept it",
-            seg.index,
-            seg.proof.format.as_str()
-        );
-    }
-
-    let proof_bytes =
-        match seg.proof.format {
-            ProofFormat::BincodeB64 => {
-                let data = seg.proof.data.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("segment {}: proof.data is required", seg.index)
-                })?;
-                base64::engine::general_purpose::STANDARD
-                    .decode(data)
-                    .map_err(|e| {
-                        anyhow::anyhow!("segment {}: proof.data is not base64: {e}", seg.index)
-                    })?
-            }
-            ProofFormat::CairoSerdeFelts => {
-                let felts = seg.proof.felts.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("segment {}: proof.felts is required", seg.index)
-                })?;
-                if felts.is_empty() {
-                    bail!("segment {}: proof.felts is empty", seg.index);
-                }
-                // Parse them so a malformed stream is rejected here, and store the canonical form.
-                let parsed: Vec<Felt> = felts
-                    .iter()
-                    .map(|f| Felt::parse(f))
-                    .collect::<Result<_>>()
-                    .map_err(|e| anyhow::anyhow!("segment {}: bad proof felt: {e}", seg.index))?;
-                let hexes: Vec<String> = parsed.iter().map(|f| f.to_hex()).collect();
-                serde_json::to_vec(&hexes)?
-            }
-        };
-    if proof_bytes.len() > cfg.max_proof_bytes {
-        bail!(
-            "segment {}: proof is {} bytes, over the {} byte limit",
-            seg.index,
-            proof_bytes.len(),
-            cfg.max_proof_bytes
-        );
-    }
-
-    let leaf_key = leaf_key(
+    Ok(leaf_key(
         registry_hash,
         &program.id,
         program.program_hash.as_deref(),
         hash_function,
         match cfg.leaf_mode {
-            LeafMode::Rerun => LeafIdentity::Args(&args),
-            LeafMode::FromProof => LeafIdentity::Preimage(&preimage),
+            LeafMode::Rerun => LeafIdentity::Args(args),
+            LeafMode::FromProof => LeafIdentity::Preimage(preimage),
         },
-    );
-
-    Ok(ValidSegment {
-        index: seg.index,
-        args,
-        preimage,
-        output_cells,
-        proof_format: seg.proof.format,
-        proof_bytes,
-        leaf_key,
-    })
+    ))
 }
 
 #[cfg(test)]
@@ -372,6 +421,7 @@ mod tests {
             program_hash_function: None,
             solo: false,
             segments,
+            expected_segments: None,
         }
     }
 

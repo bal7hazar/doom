@@ -100,6 +100,12 @@ pub struct ProofBlob {
 }
 
 /// `POST /v1/runs` body: one game.
+///
+/// `segments` may be empty (or omitted): that creates the run's metadata without any segment
+/// proofs yet, for the resumable upload protocol (`PUT /v1/runs/{id}/segments/{index}`, then
+/// `POST /v1/runs/{id}/complete`) — see the README's "Resumable per-segment uploads" section.
+/// A run can also come into existence directly from a first `PUT`, without this call at all; the
+/// two only differ in whether `program` is known before the first segment arrives.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunSubmission {
     /// Client-chosen id, used for idempotency. Omitted = the server allocates one.
@@ -119,11 +125,78 @@ pub struct RunSubmission {
     /// "submit alone now" option, at the displayed cost).
     #[serde(default)]
     pub solo: bool,
+    /// Empty (or omitted) creates a `collecting` run with no segments yet.
+    #[serde(default)]
     pub segments: Vec<SegmentSubmission>,
+    /// Optional, resumable uploads only: how many segments this game will have. Used only to
+    /// reject an out-of-range `PUT` index early and to check the count at `/complete`; the chain
+    /// check is what actually proves completeness.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_segments: Option<u32>,
+}
+
+/// `POST /v1/runs/{id}/complete` body: supplies whatever a `collecting` run does not know yet
+/// (its program, if it was never given one) and finishes it exactly like a whole-run `POST`
+/// would have.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct CompleteRunRequest {
+    /// Required unless the run already has a program (from an explicit `POST /v1/runs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_hash_function: Option<HashFunction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player: Option<String>,
+    /// Omitted = keep whatever the run was created with (`false` unless an explicit
+    /// `POST /v1/runs` said otherwise); `/complete` only overrides it when given explicitly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solo: Option<bool>,
+}
+
+/// `GET /v1/runs/{id}/segments` — what the server currently holds for a run being assembled.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SegmentsListResponse {
+    pub run_id: String,
+    pub status: String,
+    /// Indices present, for a quick "what is left to upload" check.
+    pub held: Vec<u32>,
+    pub segments: Vec<HeldSegment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_segments: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeldSegment {
+    pub index: u32,
+    pub size_bytes: u64,
+    pub sha256: String,
+    pub verified: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_ms: Option<f64>,
+}
+
+/// `PUT /v1/runs/{id}/segments/{index}` response: the immediate verification verdict (R8-A1).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SegmentUploadResponse {
+    pub run_id: String,
+    pub index: u32,
+    pub verified: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_ms: Option<f64>,
+    pub sha256: String,
+    pub size_bytes: u64,
+    /// True when this index was already held with the same content (idempotent no-op).
+    #[serde(default)]
+    pub duplicate: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunStatus {
+    /// Accepting segments via the resumable upload protocol (or freshly created with none yet).
+    /// Not queued for anything; `PUT` is the only thing that can change it, until `/complete`.
+    Collecting,
     /// Accepted, segment proofs being verified (seconds).
     Verifying,
     /// A segment proof was rejected, or validation failed. Terminal.
@@ -141,6 +214,7 @@ pub enum RunStatus {
 impl RunStatus {
     pub fn as_str(self) -> &'static str {
         match self {
+            RunStatus::Collecting => "collecting",
             RunStatus::Verifying => "verifying",
             RunStatus::Rejected => "rejected",
             RunStatus::Queued => "queued",
@@ -151,6 +225,7 @@ impl RunStatus {
     }
     pub fn parse(s: &str) -> Self {
         match s {
+            "collecting" => RunStatus::Collecting,
             "verifying" => RunStatus::Verifying,
             "rejected" => RunStatus::Rejected,
             "wrapping" => RunStatus::Wrapping,
@@ -297,10 +372,14 @@ pub struct SegmentStatus {
 pub struct RunStatusResponse {
     pub run_id: String,
     pub status: String,
+    /// Empty while `collecting` a run that has not been given a program yet.
+    #[serde(default)]
     pub program: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player: Option<String>,
     pub solo: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_segments: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub batch_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -3,9 +3,12 @@
 
 import type {
   BatchResponse,
+  CompleteRunRequest,
   RunStatusResponse,
   RunSubmission,
+  SegmentsListResponse,
   SegmentSubmission,
+  SegmentUploadResponse,
   SubmitResponse,
 } from "./types.js";
 
@@ -70,6 +73,70 @@ export class WrapperClient {
 
   async getRun(runId: string): Promise<RunStatusResponse> {
     return this.request<RunStatusResponse>("GET", `/v1/runs/${encodeURIComponent(runId)}`);
+  }
+
+  /**
+   * Resumable per-segment uploads (see the README's "Resumable per-segment uploads" section):
+   * `PUT` each segment on its own — a dropped connection costs one proof, not the whole run —
+   * then `POST .../complete`. A run comes into existence from either the first `PUT` (its
+   * program is fixed at `/complete`) or this call (fixed immediately); `getHeldSegments` is what
+   * a resumed client probes to find out what is already uploaded.
+   *
+   * ```ts
+   * await client.putSegment(runId, 0, toSegmentSubmission(segment0));
+   * await client.putSegment(runId, 1, toSegmentSubmission(segment1));
+   * const { run_id } = await client.completeRun(runId, { program: "doom_run" });
+   * ```
+   */
+  async putSegment(
+    runId: string,
+    index: number,
+    segment: SegmentSubmission,
+  ): Promise<SegmentUploadResponse> {
+    return this.request<SegmentUploadResponse>(
+      "PUT",
+      `/v1/runs/${encodeURIComponent(runId)}/segments/${index}`,
+      segment,
+    );
+  }
+
+  /** What the server currently holds for a run being assembled by `putSegment`. */
+  async getHeldSegments(runId: string): Promise<SegmentsListResponse> {
+    return this.request<SegmentsListResponse>(
+      "GET",
+      `/v1/runs/${encodeURIComponent(runId)}/segments`,
+    );
+  }
+
+  /**
+   * Finishes a resumable upload: binds every uploaded segment to `req.program` (unless the run
+   * already has one), checks the chain across all of them, and queues the run exactly like
+   * `submitRun` would have. Same response shape and the same `wait_verify_ms` semantics.
+   */
+  async completeRun(
+    runId: string,
+    req: CompleteRunRequest = {},
+    waitVerifyMs = 0,
+  ): Promise<SubmitResponse> {
+    const query = waitVerifyMs > 0 ? `?wait_verify_ms=${waitVerifyMs}` : "";
+    return this.request<SubmitResponse>(
+      "POST",
+      `/v1/runs/${encodeURIComponent(runId)}/complete${query}`,
+      req,
+    );
+  }
+
+  /** An unfinished (`collecting`) run only: nothing has been queued for it yet. */
+  async deleteRun(runId: string): Promise<void> {
+    const res = await this.doFetch(`${this.baseUrl}/v1/runs/${encodeURIComponent(runId)}`, {
+      method: "DELETE",
+      headers: this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {},
+      signal: this.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new WrapperError(res.status, text ? JSON.parse(text) : {});
+    }
   }
 
   async getBatch(

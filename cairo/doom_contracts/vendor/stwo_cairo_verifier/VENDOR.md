@@ -17,7 +17,21 @@ The `cairo/doom_contracts` workspace pulls these crates by path and compiles the
 `poseidon252_verifier` (the circuit verifier is blake2s-only). The `circuit_verifier` crate is
 kept for reference only (it is an executable target and needs `cairo_execute`).
 
-## Local modifications (`hellproof-visibility.patch`)
+## Local modifications
+
+Two layers, both re-applicable on a pristine `crates/` (`../patches/apply.sh`):
+
+1. `hellproof-visibility.patch` — visibility only (below).
+2. **The P4.1 optimization series** `../patches/0002-fri-lazy-folds.patch`,
+   `0003-fri-answers-lazy.patch` — refactors of arithmetic and data movement that change nothing
+   of what is verified (invariant and equivalence argument per patch in `../patches/README.md`;
+   regenerated from git by `tools/vendor_patches.sh`). The UNMODIFIED tree (upstream + layer 1)
+   is kept next to this one as `../stwo_cairo_verifier_ref/` under `*_ref` package names
+   (`tools/vendor_ref.sh`) and is the reference of
+   `crates/stwo_circuit_phases/tests/test_equivalence.cairo` and the measurement-only
+   `StwoCircuitMonolithic` class.
+
+### `hellproof-visibility.patch`
 
 Visibility-only changes so that `crates/stwo_circuit_phases` can split `verify_circuit` into
 phases without forking its logic (every change adds a `pub`; no expression is touched):
@@ -43,9 +57,11 @@ multiverifier circuit hash); the committed content is the `doom` registry (= ups
 `production` shape). `tools/check_registry.sh <name>` runs the conformance suites on the
 regenerated constants (`doom_fold4_min` verified on 2026-09-12).
 
-Regenerate the patch after a bump: copy the pristine upstream `crates/` next to this one and run
-`diff -ru <pristine>/crates crates > hellproof-visibility.patch`. Re-apply with
-`patch -p1 < hellproof-visibility.patch` from this directory (paths are `crates/...`).
-`crates/stwo_circuit_phases/tests/test_monolithic.cairo` and `test_phases.cairo` are the
-conformance check after any bump (R3-A5): the phased verifier must accept the S4 fixture and
-produce the same `output_hash` as the monolithic one.
+Regenerate the visibility patch after a bump: copy the pristine upstream `crates/` next to this
+one and run `diff -ru <pristine>/crates crates > hellproof-visibility.patch` before the series is
+applied; then `sh ../patches/apply.sh` from this directory (paths are `crates/...`) and
+`tools/vendor_ref.sh <pristine crates>` to refresh the reference copy.
+`crates/stwo_circuit_phases/tests/test_equivalence.cairo` (with `test_monolithic.cairo` and
+`test_phases.cairo`) is the conformance check after any bump (R3-A5): the phased verifier must
+accept the real root proofs with the same `output_hash` as the unmodified one and reject the
+same tampered proofs.

@@ -57,7 +57,8 @@ submission comes back as `422` instead of surfacing later in the run status.
   "program": "segment_stub",               // a program id the server has pinned
   "program_hash_function": "poseidon",     // optional; must match the program's configuration
   "solo": false,                           // true = wrap this game alone, immediately
-  "segments": [
+  "expected_segments": 40,                 // optional; resumable uploads only, see below
+  "segments": [                            // empty (or omitted) creates a `collecting` run
     {
       "index": 0,                          // 0-based, contiguous, in fold order
       "args": ["0x1", "0xfa"],             // optional; only `leaf_mode = "rerun"` needs them
@@ -82,6 +83,12 @@ Response `202` (or `422` when `wait_verify_ms` caught a rejection):
 
 Errors: `400` validation, `401` auth, `409` same `run_id` with different content, `422` rejected
 proof, `429` quota, `413` body over `max_body_bytes`.
+
+An empty (or omitted) `segments` array does not submit a game — it creates one, with none of its
+segments uploaded yet: `{ "run_id": "…", "status": "collecting", "segments": 0, "duplicate": false }`,
+`202`. `expected_segments`, if given, is checked later at `/complete`; it is not required, since the
+chain check is what actually proves a game is whole. This is the resumable per-segment upload
+protocol below — a run can also come into existence without this call at all, from a first `PUT`.
 
 **Proof formats.** `bincode_b64` is what `prover/wasm`'s `prove()` returns, the **only form the
 Rust verifier can read**, and — since P3.4b — the only form that can be *folded*. The cairo-serde
@@ -112,6 +119,127 @@ files the monorepo writes; nothing else is needed on the browser side.
    through the public logup sum, so a leaf cannot be built around a preimage that is not the
    proof's own.
 
+### Resumable per-segment uploads
+
+A 3-minute DOOM run is 25–75 segment proofs, ~3 MB each — tens of megabytes in the one request
+`POST /v1/runs` wants. These four endpoints let a client upload a game one segment at a time
+instead, so a dropped connection costs one proof rather than a whole re-upload, and a reload can
+resume from whatever the server already holds. `client-ts`'s `putSegment`/`getHeldSegments`/
+`completeRun`/`deleteRun` wrap them; `client/src/wrapper/submitter.ts` in the browser client probes
+for them and falls back to the whole-run `POST` when they are absent (an older server).
+
+A run spends its whole life in one extra state, `collecting`, before it ever reaches `verifying`:
+accepting segments, nothing queued, nothing billed yet. It ends there either by `/complete` (moving
+on to `verifying`, exactly where a whole-run `POST` would have left it) or by `DELETE`.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Wrapper
+
+    Note over C,S: First attempt
+    C->>S: GET /v1/runs/{id}/segments
+    S-->>C: 404 (run does not exist yet)
+    C->>S: PUT /v1/runs/{id}/segments/0  (proof 0)
+    Note right of S: verifies immediately (R8-A1)<br/>run created as `collecting`
+    S-->>C: 200 { verified: true, sha256, ... }
+    C->>S: PUT /v1/runs/{id}/segments/1  (proof 1)
+    S-->>C: 200 { verified: true, ... }
+    Note over C,S: connection drops before segment 2
+
+    Note over C,S: Resumed attempt (reload, retry)
+    C->>S: GET /v1/runs/{id}/segments
+    S-->>C: 200 { held: [0, 1], segments: [...] }
+    C->>S: PUT /v1/runs/{id}/segments/1  (proof 1, same bytes)
+    S-->>C: 200 { verified: true, duplicate: true }
+    Note right of C: idempotent by sha256 — a safe retry, not a re-verification
+    C->>S: PUT /v1/runs/{id}/segments/2  (proof 2)
+    S-->>C: 200 { verified: true, ... }
+    C->>S: POST /v1/runs/{id}/complete  { program, player, solo }
+    Note right of S: chain check (h_in/h_out) across every<br/>segment; binds each to the program (leaf key);<br/>queues into the batching policy (D6)
+    S-->>C: 202 { status: "verifying", batch_id: null }
+    C->>S: GET /v1/runs/{id}  (poll, as with a whole-run POST)
+    S-->>C: 200 { status: "done", batch_id, ... }
+```
+
+#### `GET /v1/runs/{id}/segments` — what the server holds
+
+```json
+{
+  "run_id": "9f2c…", "status": "collecting", "expected_segments": 40,
+  "held": [0, 1, 2],
+  "segments": [
+    { "index": 0, "size_bytes": 2954931, "sha256": "1c2a…", "verified": true, "verify_ms": 21.4 }
+  ]
+}
+```
+
+`404` if `id` does not exist yet — indistinguishable, on purpose, from "nothing uploaded"; a client
+that wants to know which is the case tracks that itself (or just starts uploading: the first `PUT`
+creates the run).
+
+#### `PUT /v1/runs/{id}/segments/{index}` — one segment
+
+`Content-Type: application/json` carries exactly one element of a whole-run `POST`'s `segments`
+array (`index` in the body must match the URL, if present). Any other content type is the raw
+bincode `CairoProof` bytes as the whole body, with the felts a JSON envelope would have carried
+instead in headers: `X-Hellproof-Output-Preimage` (required), `X-Hellproof-Args` and
+`X-Hellproof-Public-Outputs` (both optional) — comma-separated `0x…` felts. Either way this is at
+most `max_proof_bytes` of one proof, so the request body is never more than a single segment's
+worth of memory, matching the bound a whole-run `POST` has per segment it streams.
+
+If the run does not exist yet, this call creates it (`collecting`, no program: `/complete` supplies
+one). An index at or past `expected_segments` (or past `max_segments_per_run` when that was never
+declared) is `400`. The proof is **verified immediately** with the Rust verifier — not merely
+queued — against the output cells its own `output_preimage` implies; the response is the verdict:
+
+```json
+{ "run_id": "9f2c…", "index": 0, "verified": true, "verify_ms": 21.4,
+  "sha256": "1c2a…", "size_bytes": 2954931, "duplicate": false }
+```
+
+Idempotent by content hash: uploading the same bytes again under the same index replays this same
+response (`"duplicate": true`) without re-verifying; different bytes under an already-held index is
+`409`, not a silent overwrite. A failed verdict (`422`, mirroring `wait_verify_ms` on the whole-run
+path) also rejects the run itself (`status: "rejected"`), the same as an invalid proof in a
+whole-run `POST` — nothing later can un-reject it, `/complete` included.
+
+The pinned-program-hash check and the leaf cache key (`validate::bind_segment_to_program`) are not
+made here — a bare `PUT` does not know the program yet — so they wait for `/complete`, along with
+the chain check, which needs every segment at once regardless.
+
+Errors: `400` validation or out-of-range index, `401` auth, `403` a different account's run, `409`
+run no longer `collecting`, or same index with different content, `413` over `max_proof_bytes`.
+
+#### `POST /v1/runs/{id}/complete` — finish a resumable upload
+
+```json
+{ "program": "doom_run", "program_hash_function": "poseidon", "player": "0x04a3…", "solo": false }
+```
+
+`program` is required unless the run already has one (an explicit `POST /v1/runs` supplied it);
+giving a different one than that is `400`. This is where the whole-run checks that need every
+segment at once finally run — indices contiguous from `0`, the count matches `expected_segments`
+when one was declared, the `h_in[i+1] == h_out[i]` chain, and each segment's pinned program hash —
+and the first one that fails is what comes back, `422`. Once all of that passes the run is queued
+into the batching policy exactly as a whole-run `POST` would have (every segment is already
+verified, so nothing is re-verified). Same response and `wait_verify_ms` semantics as
+`POST /v1/runs`:
+
+```json
+{ "run_id": "9f2c…", "status": "verifying", "segments": 40, "duplicate": false }
+```
+
+Calling it again on a run that already left `collecting` answers idempotently — the run's current
+status, `duplicate: true` — or replays the stored rejection (`422`) if a segment was rejected along
+the way.
+
+#### `DELETE /v1/runs/{id}` — abandon an unfinished upload
+
+Only ever a `collecting` run: nothing has been queued or billed for it yet, so this is just
+forgetting its rows and its proof files. `204`, or `409` if the run has already left `collecting`
+(finish it or leave it be — it cannot be un-queued), or `404` if it never existed.
+
 ### `GET /v1/runs/{id}` — status, progress, per-stage timings
 
 ```jsonc
@@ -128,7 +256,9 @@ files the monorepo writes; nothing else is needed on the browser side.
 }
 ```
 
-`status`: `verifying` → `rejected` | `queued` → `wrapping` → `done` | `failed`.
+`status`: (`collecting` →) `verifying` → `rejected` | `queued` → `wrapping` → `done` | `failed`.
+`collecting` only appears for a run built through the resumable per-segment upload protocol,
+before its `/complete`.
 
 ### `GET /v1/batches/{id}` — the root proof and the fold order
 
@@ -306,7 +436,10 @@ leaves, batches with their frozen fold order, and the job queue. The service per
 *before* queueing any work, and on startup `recover()` re-queues every job that was `running`,
 re-opens batches caught mid-fold and resets half-proven leaves. Killing the process at any point
 loses no game. Proof files live under `data_dir/proofs/` (`leaves/<leaf_key>.json`,
-`batches/<id>/root.proof`).
+`batches/<id>/root.proof`); a segment uploaded through the resumable protocol lands under
+`data_dir/submissions/<run_id>/` immediately, on `PUT`, the same as a whole-run `POST` writes its
+segments — so a `collecting` run's progress is exactly as durable as a queued one's, restart or
+not. Its `leaf_key` is `NULL` until `/complete` assigns it (the program is not known before then).
 
 Leaves are **content addressed**: `leaf_key = sha256(registry_hash, program_id, program_hash,
 hash_function, identity)`. The same segment submitted twice — by the same player or by two players
@@ -363,7 +496,7 @@ The container image in `infra/wrapper/` does all of that for you.
 ## Tests
 
 ```bash
-cargo test                       # 53 tests, no proving
+cargo test                       # 65 tests, no proving (5 more ignored: the real pipeline)
 cargo test --test load           # 20 concurrent runs on the stub backend
 ```
 
@@ -374,10 +507,17 @@ cargo test --test load           # 20 concurrent runs on the stub backend
   on its own output and fails the batch on a mismatch.
 * `tests/service.rs` — submission, batching, fold order, cache, idempotency, auth, validation,
   metrics, and two restart tests.
+* `tests/resumable.rs` — the resumable per-segment upload protocol: a bare `PUT` creating a run,
+  idempotent-by-hash and out-of-range `PUT`s, `/complete` rejecting a broken chain / a gap / a
+  short count with `422`, ownership on the new endpoints, `DELETE` only working on a `collecting`
+  run, the raw-bincode `PUT` body, and a restart test that rebuilds the router against the same
+  on-disk database mid-upload to check a partial upload survives it.
 * `tests/pipeline_e2e.rs` — the **real** pipeline (ignored by default), see its module docs. One
   test per `leaf_mode`: `folds_the_submitted_proofs_without_reproving_them` submits with **no**
   `args` at all and checks the root is the recomposition of the submitted preimages;
-  `wraps_two_real_segment_proofs_into_one_root` does the same in `"rerun"`.
+  `wraps_two_real_segment_proofs_into_one_root` does the same in `"rerun"`;
+  `resumable_upload_wraps_two_real_segment_proofs_into_one_root` submits the same two fixtures
+  through `PUT`/`/complete` instead of one `POST`, and checks it folds the same way.
 * `scripts/leaf_mode_equivalence.sh` — the two modes on the same segment proofs, folded, compared
   leaf by leaf and at the root, then the circuit verifier on the proof-only root and a tampered
   proof that must be rejected. Not a `cargo test`: it needs 32 GB and the pinned binaries.

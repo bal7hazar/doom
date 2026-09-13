@@ -28,6 +28,10 @@ stwo_verifier_core = { path = "vendor/stwo_cairo_verifier/crates/verifier_core" 
 stwo_constraint_framework = { path = "vendor/stwo_cairo_verifier/crates/constraint_framework" }
 stwo_verifier_utils = { path = "vendor/stwo_cairo_verifier/crates/verifier_utils" }
 bounded_int = { path = "vendor/stwo_cairo_verifier/crates/bounded_int" }
+# The unmodified vendored verifier (tools/vendor_ref.sh): the equivalence reference of the P4.1
+# patch series and the measurement-only monolithic class.
+stwo_circuit_air_ref = { path = "vendor/stwo_cairo_verifier_ref/crates/circuit_air" }
+stwo_verifier_core_ref = { path = "vendor/stwo_cairo_verifier_ref/crates/verifier_core" }
 
 [workspace.scripts]
 test = "snforge test"
