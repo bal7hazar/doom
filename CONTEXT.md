@@ -65,6 +65,17 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   La taxe fixe dépasse à elle seule 1,5 M steps. `blake_g` atteint log21 (16 137 × 80 lignes),
   donc registre candidat et correction du planificateur sont nécessaires, sans suffire à lever R2/R5.
   Les plafonds actuels et les paramètres cryptographiques restent inchangés.
+- Correction AIR intégrée `d848951` : les nouveaux WASM Linux reproduisent les **43 hauteurs**
+  de la preuve réelle ; `blake_g` est annoncé log21 et refusé par le registre courant. Les anciens
+  compteurs incomplets sont refusés, y compris avant une preuve reprise. **193 tests client et build
+  verts** sur `main` ; cinq smokes k14 vérifiés après rebuild ARM64 (779,2 s). Les hashes Linux
+  correspondent au changement de source ; reconstruction GitHub indépendante restante.
+- Intégration monstres `883efbb` : idle du ticker **34 765 steps** (−25,7 %), combat tic 493
+  **123 418** (−9,4 %), programme **115 814 mots**. 247 comparaisons exactes par profil ; tests
+  root monstres 56/game 57 et build proving verts. D2/D29 restent ouverts.
+- Fuzz ponctuel de la référence `b11fd7f` : **10 000 tics**, 157 séquences, dix épisodes, seed
+  `20260913`, aucun écart état/rendu/statut entre exécution continue et frontières aléatoires.
+  Felts état/rendu < 2^72, aucun ABORT ; campagne nocturne et vingt goldens encore à livrer en P1.10.
 
 ## 1. Vision et périmètre
 

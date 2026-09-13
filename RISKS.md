@@ -12,7 +12,7 @@
 | R1 | Mémoire du prouveur dans le navigateur | Bloquant | Registre actuel incompatible, 11,52 GiB WASM Node | **P0** | P1.9, S8, P3.7 |
 | R2 | Budget de steps par tic | Fort | Élevée, dépassement mesuré | **P0** | S8, Phase 1 |
 | R3 | Route on-chain : dimensionnement des circuits, couplage de versions | Fort | Élevée | **P0** | S4, Phase 4 |
-| R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | C2 et armure corrigés en intégration, fuzz restant | **P0** | P1.9, P1.10 |
+| R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | C2/armure corrigés et fuzz ponctuel 10 k vert ; nightly restant | **P0** | P1.9, P1.10 |
 | R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Fort | Élevée au coût réel mesuré | **P0** | P1.9, P2.3 |
 | R6 | UX de la preuve : durée, contention CPU, perte de travail | Moyen | Élevée | P1 | Phase 2–3 |
 | R7 | Coûts on-chain et limites protocolaires mouvants | Moyen | Moyenne | P1 | S5, Phase 4 |
@@ -47,7 +47,9 @@
   11,524 GiB mais **log21 réel (`blake_g`) contre log20 annoncé**, donc registre `doom` incompatible.
   `doom_21` expérimental construit le circuit et le repli : racine **95 325 felts**, vérifieur Cairo
   existant **5 333 257 steps**, recomposition indépendante exacte. D32 ouvre ce candidat ;
-  correction du dimensionnement en livraison. Chromium réel isolé : **3/3 preuves à quatre threads**
+  correction du dimensionnement intégrée `d848951`, anciens compteurs refusés même à la reprise.
+  Nouveaux modules Linux validés localement ; reconstruction GitHub indépendante restante.
+  Chromium réel isolé : **3/3 preuves à quatre threads**
   vérifiées 40,167–48,128 s / 11,524 GiB ; mono interrompu une fois à 150 s, puis vérifié à 136,425 s.
   Restent matériel 16 GiB et jeu concurrent ([S9](docs/spikes/S9-proof-sizing.md)).
   S4b généralisait à tort le manque de `seq_21` à tout composant : le cas réel invalide ce NO-GO.
@@ -67,6 +69,10 @@
   frontière sans tic **288 045 steps** (−45,5 %), 554 tests Cairo verts en intégration. Profil exact
   2 946 tics : moyenne **83 003**, p99 **168 038**, hors frontière. Les copies du parcours monstres
   sont le prochain levier sans changement UX ; aucun budget relevé. D2/D29 restent manqués.
+- **Parcours monstres et C2** : `883efbb` ramène le ticker idle à **34 765 steps** (−25,7 %) et
+  le programme à **115 814 mots**, avec 247 comparaisons exactes par profil. Les copies Mobj restent
+  à traiter. Le fuzz ponctuel antérieur (`b11fd7f`) avance **10 000 tics** sans divergence de
+  frontière ni ABORT, felts < 2^72 ; il ne remplace pas les vingt goldens et le nightly P1.10.
 - **Taxe de programme et segmentation** : même zéro tic coûte **2 224 712 steps** avec le bootloader
   Blake, quatre tics **2 505 814**. Registre log21 nécessaire mais insuffisant : 1,5 M threads et
   2,3 M mono inchangés, validation Chromium concurrente à construire, aucun GO navigateur déduit de Node.

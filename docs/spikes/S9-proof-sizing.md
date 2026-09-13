@@ -38,7 +38,7 @@ Les compteurs VM du même segment sont :
 | Poseidon | 1 499 208 | 65 138 | 65 136 | 3 |
 | Blake | 2 681 208 | 6 368 | 6 366 | 16 290 |
 
-`resources()` annonce `max_component_rows=2^20`, `fits_leaf_registry=true` pour
+L’ancien `resources()` annonce `max_component_rows=2^20`, `fits_leaf_registry=true` pour
 Blake. Les claims réels de sa preuve donnent pourtant **`blake_g.log_size=21`**,
 `cube_252=20`, `range_check_252_width_27=20`. La configuration finale porte
 `trace_lifting_log_size=22`, `preprocessed_lifting_log_size=22`, blowup=1,
@@ -53,8 +53,14 @@ production, cette dernière taille est une déduction de source et non un claim 
 
 Les tables fixes, le nombre total de colonnes, les contraintes de préprocessing
 et les composantes auxiliaires ne se réduisent pas à un compteur de steps.
-Une correction des compteurs est en cours ; elle doit conserver les plafonds
-actuels tant qu’une politique de registre et de mémoire n’a pas été validée.
+La correction intégrée par `d848951` conserve les plafonds actuels tant qu’une
+politique de registre et de mémoire n’a pas été validée. Les deux nouveaux modules
+Linux ARM64 reproduisent les compteurs réels et les 43 hauteurs variables de la
+preuve ; ils déclarent log21, `fits_leaf_registry=false` et un prétraitement valide.
+Les tableaux auxiliaires incomplets d’un ancien module sont refusés par le client,
+y compris après reprise d’un segment ; contrôle frais avant chaque appel à `prove`.
+Onze tests Rust et 193 tests client passent. Le rebuild local et cinq smokes k14
+sont verts ; la reconstruction GitHub des nouveaux hashes reste à vérifier.
 
 ## Correction de S4b et voie de migration
 
@@ -71,8 +77,8 @@ Le multivérifieur conserve le hash de production
 Les paramètres de sécurité des preuves et les constantes du vérifieur final
 n’ont pas été changés pour cette expérience. Aucun déploiement n’a été effectué.
 
-D32 retient cette voie comme candidat technique. Restent : compteurs auxiliaires,
-capacité de chaque composant à utiliser le préprocessing, budget mémoire réel,
+D32 retient cette voie comme candidat technique. Les compteurs auxiliaires et
+besoins de préprocessing sont corrigés ; restent budget mémoire réel,
 planificateur et version de jeu/registre cohérents, fiabilité Chromium en concurrence
 avec le jeu. Les plafonds de précaution 1,5 M steps avec threads et 2,3 M mono ne
 sont pas relevés sur la base d’un seul essai Node. D2/D29 restent hors cible.

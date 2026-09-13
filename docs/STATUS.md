@@ -3,7 +3,9 @@
 > Mis à jour le 2026-09-13 : monstres `8471b7e`, contrôles CI `375f092`, joueur `06058b1` intégrés.
 > CI : oracle Python installé explicitement ; reproductibilité WASM ARM64 réparée (`30f8d77`).
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
+> AIR complet et admission des reprises intégrés (`d848951`), 193 tests client verts ; nouvelle reconstruction GitHub à vérifier.
 > P1.9 en intégration : workspace 554 tests verts, puis suite game portée à 57 tests verts ; budgets D2/D29 non atteints.
+> Fuzz ponctuel : 10 000 tics réels sans divergence sur la référence `b11fd7f` ; campagne nocturne P1.10 restante.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -64,9 +66,10 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : nouvelle passe frontière/bytecode (`codex/game-boundary-sizing`), optimisation du
-parcours des monstres (`codex/monster-loop-perf`) et livraison des compteurs AIR/planificateur
-(`codex/air-sizing`). Les passes frontière et armure sont relues et assemblées sur la branche
+Vague active : nouvelle passe frontière/bytecode (`codex/game-boundary-sizing`) et admission du
+wrapper (`codex/wrapper-admission` : hash programme, D14, vérifieur natif autonome). Les compteurs
+AIR sont intégrés sur `main` ; le parcours monstres est assemblé dans `codex/game-integration`.
+Les passes frontière et armure sont relues et assemblées sur la branche
 d’intégration ; `main` conserve encore les squelettes. Le complément P1.9 `50e3c2f` ajoute six
 régressions de frontières : **57 tests game verts** après intégration, smoke CI `genesis 0`,
 codec et actionlint verts ; aucun changement de code de production après `b11fd7f`.
@@ -151,12 +154,31 @@ indépendante : un seul felt d’état change (attaquant 132 → 64), les quatre
 préimages exacts. Mono : premier essai arrêté à 150 s ; second vérifié **136,425 s / 11,449 GiB**
 avec échéance plus longue. Hôte 64 GiB, aucun jeu concurrent ; les plafonds ne changent pas.
 
-**Correction AIR en livraison** (`4309399`, `5ed01d0`) : 43 hauteurs variables confrontées aux
+**Correction AIR intégrée par `d848951`** (`4309399`, `5ed01d0`, `962cbb4`, `97a2443`) : 43 hauteurs variables confrontées aux
 claims de preuve, 11 tests Rust dont VM réelle. `blake_g` est correctement annoncé à log21,
 `fits_leaf_registry=false`, prétraitement admissible. Planificateur corrigé pour utiliser les
-compteurs auxiliaires bruts et rester conservateur sur un maximum inconnu. **187 tests client
-verts, sans saut**, après préparation des assets. Rebuild Docker ARM64 en cours avant merge et
-mise à jour des seuls hashes Linux correspondant au changement de source intentionnel.
+compteurs auxiliaires bruts et rester conservateur sur un maximum inconnu. Les anciens compteurs
+sont refusés ; chaque preuve, reprise comprise, réexécute et revalide ses ressources. Un refus
+conserve le segment sans lancer `prove` ni essayer un autre nombre de threads. **193 tests client
+verts sans saut et build vert**, revérifiés par l’orchestrateur sur `main`. Rebuild Docker ARM64
+779,2 s : nouveaux hashes Linux mono `3e94a4c0…479a5`, threads `fdb977ad…4277c`, vérifiés par
+l’orchestrateur ; hashes macOS historiques conservés. Les deux nouveaux modules reproduisent
+les compteurs du programme réel et ses 43 hauteurs. Cinq preuves k14 vérifiées : Node mono/4 threads,
+Chromium mono/4 threads et fallback sans isolation. Reconstruction GitHub indépendante restante.
+
+**Parcours monstres optimisé en intégration** (`a2343cb`, merge `883efbb`) : ticker idle
+46 802 → **34 765 steps** (−25,7 %), combat au tic 493 136 183 → **123 418** (−9,4 %).
+Le programme intégré passe à **115 814 mots** ; `step_tic` 117 366. Les gros contextes passent
+par pointeur, sans changer les règles de jeu. Équivalence exacte sur **247 comparaisons par profil**
+dev/proving, dont cinq replays et 118 frontières sérialisées. Revalidation root : **56 tests monstres
+et 57 tests game verts**, build proving vert. Les copies de chaque Mobj restent un levier distinct.
+
+**Fuzz ponctuel de frontière réussi**, référence immuable `b11fd7f` : **10 000 tics réellement
+avancés**, 157 séquences, dix épisodes, seed `20260913`, Scarb 2.16/proving, 900 s. Exécution entière
+contre découpage aléatoire : état, rendu et statut exactement identiques ; tous les felts état/rendu
+restent < 2^72. Contrôles périodiques de frontière vide et de chaînage D14 verts, aucun ABORT.
+Ce passage porte sur la référence antérieure à l’optimisation du parcours monstres, conserve cinq
+replays et n’installe pas encore le fuzz nocturne P1.10. Traces : `/tmp/hellproof-audit-20260913/fuzz/`.
 
 **Taxe fixe encore bloquante** : sur cet exécutable intégré, le WASM Blake exécute **2 224 712 /
 2 297 659 / 2 505 814 steps pour 0 / 1 / 4 tics**. Même sans tic, il dépasse le plafond threads
