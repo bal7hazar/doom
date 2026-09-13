@@ -103,8 +103,8 @@ pub fn in_window(rank: u32, tic: u32, n: u32) -> bool {
         Option::Some(v) => v,
         Option::None => 1,
     };
-    let (_, start) = DivRem::div_rem(fixed::to_u128(WINDOW.into() * tic.into()), nz);
-    let distance = fixed::to_u128(rank.into() + n.into() - start.into());
+    let (_, start) = DivRem::div_rem(doom_physics::maputl::to_u128(WINDOW.into() * tic.into()), nz);
+    let distance = doom_physics::maputl::to_u128(rank.into() + n.into() - start.into());
     let (_, k) = DivRem::div_rem(distance, nz);
     k < WINDOW.into()
 }
@@ -698,7 +698,7 @@ fn apply(out: Array<Box<Mobj>>, patches: Span<Patch>, n: u32) -> Array<Box<Mobj>
 /// operands here are bounded by a table (S7 §8 rule 1).
 #[inline(always)]
 pub(crate) fn scale(r: u32, mul: u32) -> u32 {
-    maputl::low32(fixed::to_u128((r.into() + 1) * mul.into()))
+    maputl::low32(doom_physics::maputl::to_u128((r.into() + 1) * mul.into()))
 }
 
 /// Compatibility entry point: no player-specific damage bookkeeping.

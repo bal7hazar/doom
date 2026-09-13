@@ -74,6 +74,7 @@ pub struct Cursor {
 }
 
 /// The boxed trace `p1 -> p2`.
+#[inline(never)]
 pub fn trace_of(p1: Point, p2: Point) -> Box<Trace> {
     BoxTrait::new(
         Trace {
