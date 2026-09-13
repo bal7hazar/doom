@@ -13,7 +13,7 @@
 | R2 | Budget de steps par tic | Fort | Élevée, dépassement mesuré | **P0** | S8, Phase 1 |
 | R3 | Route on-chain : dimensionnement des circuits, couplage de versions | Fort | Élevée | **P0** | S4, Phase 4 |
 | R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | C2/armure corrigés et fuzz ponctuel 10 k vert ; nightly restant | **P0** | P1.9, P1.10 |
-| R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Fort | Élevée au coût réel mesuré | **P0** | P1.9, P2.3 |
+| R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Bloquant | 17–21 tics/s mesurés sur le jeu réel | **P0** | P1.9, P2.3 |
 | R6 | UX de la preuve : durée, contention CPU, perte de travail | Moyen | Élevée | P1 | Phase 2–3 |
 | R7 | Coûts on-chain et limites protocolaires mouvants | Moyen | Moyenne | P1 | S5, Phase 4 |
 | R8 | Service wrapper : disponibilité, abus, coût d'exploitation | Moyen | Moyenne | P2 | Phase 3 |
@@ -76,8 +76,18 @@
 - **Taxe de programme et segmentation** : même zéro tic coûte **2 224 712 steps** avec le bootloader
   Blake, quatre tics **2 505 814**. Registre log21 nécessaire mais insuffisant : 1,5 M threads et
   2,3 M mono inchangés, validation Chromium concurrente à construire, aucun GO navigateur déduit de Node.
+- **R5 confirmé dans Chromium (S10)** : intégration `91719f8`, 386 tics, **17,3–21,4 tics/s**, tous
+  les appels dépassent 28,57 ms, sans rendu ni preuve. Les cinq sorties finales sont exactes ; le JS
+  coûte <0,1 ms moyen, la VM porte presque tout le coût. La passe frontière ramène run à 110 848 mots
+  et 563 tests passent, mais elle ne suffit pas. D33 traite les copies d’acteurs ; un prototype séparé
+  conserve la VM entre tics et doit borner sa mémoire croissante, sans ajout de latence d’inputs.
+- **R8 / admission corrigée** (`14cce87`) : task pin obligatoire en from_proof, bootloader du fichier
+  configuré contrôlé, offsets D14 corrigés sur les deux routes, reprise revalidée avant un circuit neuf.
+  Felt p et faux hex Unicode rejetés ; lock du vérifieur autonome et couverture CI corrigés. Tests root
+  76 service/2 vérifieur/195 client verts, vraie preuve vérifiée et altérations rejetées. L’admissibilité
+  du registre, les ressources d’un service exposé et sa disponibilité restent des contrôles distincts.
 
-Les constats datés ci-dessous conservent l’historique des spikes ; les décisions D26–D32 et cette
+Les constats datés ci-dessous conservent l’historique des spikes ; les décisions D26–D33 et cette
 requalification priment sur leurs anciens budgets. Voir [STATUS](docs/STATUS.md) pour les suites.
 
 ---

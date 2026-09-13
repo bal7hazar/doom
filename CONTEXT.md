@@ -6,7 +6,7 @@
 
 ## État mesuré à la reprise du 2026-09-13
 
-Cette section et les décisions D26–D32 remplacent les hypothèses de dimensionnement initiales
+Cette section et les décisions D26–D33 remplacent les hypothèses de dimensionnement initiales
 dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STATUS](docs/STATUS.md).
 
 - `main` après intégration monstres `8471b7e` : **511 tests Cairo** ; la suite spécifique conserve
@@ -76,6 +76,16 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
 - Fuzz ponctuel de la référence `b11fd7f` : **10 000 tics**, 157 séquences, dix épisodes, seed
   `20260913`, aucun écart état/rendu/statut entre exécution continue et frontières aléatoires.
   Felts état/rendu < 2^72, aucun ABORT ; campagne nocturne et vingt goldens encore à livrer en P1.10.
+- Intégration finale des passes locales `91719f8` : **563 tests / 23 cibles verts** ; run
+  **110 848 mots**, step 112 334, genesis 47 426. D29 encore dépassé de 10 848 mots ; trois
+  budgets hash/serde restent rouges. D33 lance une représentation boxée des acteurs sans changer le wire.
+- [S10](docs/spikes/S10-live-simulation.md) : même programme `step_tic` dans un Worker Chromium,
+  386 tics, cinq sorties finales complètes exactes face à Scarb ; **17,3–21,4 tics/s** contre 35 visés,
+  **46,6–57,8 ms moyens/tic**, ~67 MiB linéaires. La VM domine, le JS prend <0,1 ms. Un prototype
+  conserve l’exécution Cairo entre les tics ; aucune baisse de cadence ni regroupement d’inputs.
+- Wrapper `14cce87` : identité task/bootloader, D14 et reprises contrôlées avant circuit ; lock du
+  vérifieur autonome réparé et gate CI ajoutée. **76 tests service, 2 leaf-verify, 195 client verts**
+  sur main. Preuve réelle existante vérifiée en ~25 ms, version corrompue et mauvais bootloader rejetés.
 
 ## 1. Vision et périmètre
 
