@@ -24,7 +24,7 @@ This is spike **S3** / risk action **R5-A1** (see `docs/spikes/S3.md`,
 | the entrypoint, its builtins, the run configuration | idem |
 | the argument/output scratch buffers | avoids two allocations per tic |
 
-Rebuilt on **every** call, unavoidably with cairo-vm 3.2:
+Rebuilt on every **independent stateless** call:
 
 * the `CairoRunner` and the `VirtualMachine` it owns — memory segments,
   builtin runners, execution scopes. There is no reset API, and a finished
@@ -97,15 +97,17 @@ npm run build                           # Cairo executable + wasm + native bench
 * `wasm-pack build --release --target web --out-dir pkg` → `prover/sim/pkg/`
 * `cargo build --release` → `target/release/hellproof-sim-bench`
 
-Nothing built is committed (see `.gitignore`).
+Build outputs are ignored (see `.gitignore`), except the small protocol-only
+continuation test fixture needed to run `cargo test` without Scarb.
 
 ### Version pinning
 
 `cairo-vm 3.2.0` and `cairo-lang-* 2.19.4` are pinned to the versions
 StarkWare's [`proving`](https://github.com/starkware-libs/proving) repository
 pins (`Cargo.lock` @ `cd7bc5f`), so the simulation VM **is** the VM the prover
-executes. Scarb must match the `cairo-lang-*` minor version, hence
-**Scarb 2.19.4**: an executable produced by another Scarb may not deserialize.
+executes. The original calibration harness uses **Scarb 2.19.4**. The real-game
+continuation below uses **Scarb 2.16.0**, whose executable format was also
+validated with this runner; other compiler versions require an explicit check.
 
 ## Benchmarks
 
@@ -144,3 +146,19 @@ target/release/hellproof-sim-bench \
 `--inflate N` appends `N` dead bytecode words to the executable JSON before
 loading it, to see how the one-off parse — and therefore the naive
 re-parse-per-call alternative — scales with program size.
+
+## Experimental retained execution (R5)
+
+[`bench/continuation`](bench/continuation/README.md) retains an unfinished Cairo
+VM and supplies one command at each input boundary. The autonomous Cairo
+harness calls the same `doom_game::step_tic`, emits each real snapshot and
+exports a complete schema-2 state on demand. The existing `SimProgram` and
+proven entrypoints keep their interfaces and validation.
+
+On 386 real tics in Chromium 153, this prototype measured 8.95–17.85 ms/tic,
+or 9.73–18.64 ms including checkpoint/restart every 32 tics. Exact snapshots,
+states and statuses matched the stateless executable. Periodic maintenance
+produced 40.17–60.61 ms p99 latency, and WASM linear memory reached 906 MiB:
+this is a feasibility result, not a guarantee that every frame meets 35 Hz.
+The simulation-only custom hint transport is not a proof API. See the
+benchmark README for trust assumptions, resource bounds and reproduction.
