@@ -1,0 +1,37 @@
+{
+ "timestamp_utc": "2026-09-12T17:50:49.838Z",
+ "rpc": "http://127.0.0.1:5081/rpc",
+ "router": "0x04fd8f0c40a2d711da981c182b193d017b53c434a94967d0b3cb209fdc679f0b",
+ "starknet_version": "0.14.4",
+ "lengths": [
+  0,
+  1000,
+  4600
+ ],
+ "accounts": [
+  {
+   "address": "0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba",
+   "class_hash": "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+   "l2_gas": {
+    "0": 825600,
+    "1000": 6825600,
+    "4600": 31017600
+   },
+   "empty_envelope_l2_gas": 825600,
+   "l2_gas_per_calldata_felt": 6563.478260869565,
+   "worst_tx_calldata_cost": 30369213.913043477
+  },
+  {
+   "address": "0x02939f2dc3f80cc7d620e8a86f2e69c1e187b7ff44b74056647368b5c49dc370",
+   "class_hash": "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+   "l2_gas": {
+    "0": 825600,
+    "1000": 6825600,
+    "4600": 31017600
+   },
+   "empty_envelope_l2_gas": 825600,
+   "l2_gas_per_calldata_felt": 6563.478260869565,
+   "worst_tx_calldata_cost": 30369213.913043477
+  }
+ ]
+}
