@@ -198,11 +198,23 @@ pub fn sin_cos(a: Angle) -> (Fixed, Fixed) {
         (false, i)
     };
     let mirrored = half >= FINE_QUARTER;
-    let q = if mirrored { 4095 - half } else { half };
+    let q = if mirrored {
+        4095 - half
+    } else {
+        half
+    };
     let sine_m = *FINESINE_Q.span().at(q);
     let cosine_m = *FINESINE_Q.span().at(2047 - q);
-    let sine_enc = if negative { BIAS - sine_m } else { BIAS + sine_m };
-    let cosine_enc = if negative != mirrored { BIAS - cosine_m } else { BIAS + cosine_m };
+    let sine_enc = if negative {
+        BIAS - sine_m
+    } else {
+        BIAS + sine_m
+    };
+    let cosine_enc = if negative != mirrored {
+        BIAS - cosine_m
+    } else {
+        BIAS + cosine_m
+    };
     (Fixed { enc: sine_enc }, Fixed { enc: cosine_enc })
 }
 
