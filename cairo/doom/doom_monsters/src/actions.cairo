@@ -11,22 +11,31 @@
 //! # Shape (docs/spikes/S7.md §8)
 //!
 //! Every public function of this module is the **boundary**: it takes the
-//! 72-felt [`Ctx`] and hands it to the `_in` twin that does the work, which
-//! carries the six-felt [`Env`] instead. Nothing wide crosses a call inside
-//! the crate — a `Box<World>` where `doom_physics` wants a `World`, the
-//! `rndtable` span alone where only a `P_Random` is needed — because a
-//! struct pushed at a call costs one word of bytecode and one step per felt,
-//! and it is stored again, at the enclosing function's full return width, at
-//! every panic site the call propagates.
+//! 72-felt [`Ctx`] and the actor as a `Mobj`, and hands both to the `_in`
+//! twin that does the work, which carries the six-felt [`Env`] and the
+//! actor as a `Box<Mobj>`. Nothing wide crosses a call inside the crate:
+//!
+//! * a struct pushed at a call costs one word of bytecode and one step per
+//!   felt, and a `ref` parameter is pushed **twice**, once in and once out;
+//! * every panic site of a function stores its whole return width in
+//!   zero-padded bytecode, and every call of a function that can panic is
+//!   such a site in the caller — so the 27 felts of a `ref mo: Mobj` were
+//!   being paid again at each of the ~90 propagation points of the chain;
+//! * a `Box` is one felt, reading a field through it is free, and writing
+//!   costs one `into_box` (27 felts) at the point of the write.
+//!
+//! The actor is therefore unboxed into a local at the top of a function,
+//! mutated there, and re-boxed once — at the end, or just before a call
+//! that has to see the change.
 
 use bam::{ANG270, ANG90, Angle, point_to_angle2};
 use doom_map::reject_of;
 use doom_physics::maputl::{add32, dec, inc, low32, opaque_zero, rd, rd32};
-use doom_physics::spawn::roll;
+use doom_physics::spawn::{roll, set_state_in};
 use doom_physics::{
     Aim, DamageOutcome, FIREBALL, Hit, MELEERANGE, MF_AMBUSH, MF_JUSTATTACKED, MF_JUSTHIT,
     MF_SHADOW, MF_SHOOTABLE, MF_SOLID, MISSILERANGE, Mobj, MoveEvent, NO_MOBJ, ThingGrid, Verdict,
-    aim_line_attack, bleeds, check_sight_cached, damage_mobj, has, line_attack, maputl, set_state,
+    aim_line_attack, bleeds, check_sight_cached, damage_mobj, has, line_attack, maputl,
     spawn_missile, try_move, without,
 };
 use doom_things::tables::{
@@ -47,6 +56,19 @@ use super::tables::{
 use super::think::scale;
 use super::{Ctx, Env, Patch, SIGHT_TTL, env_of, read_mobj};
 
+/// One eighth of a turn, `ANG90 / 2`: what `A_Chase` turns by per tic.
+const ANG45: Angle = 0x20000000;
+
+/// `P_CheckMeleeRange`'s slack: `MELEERANGE - 20 * FRACUNIT`, before the
+/// target's radius is added.
+const MELEE_SLACK: Fixed = Fixed { enc: BIAS + 44 * 65536 };
+
+/// `64 * FRACUNIT`, subtracted by `P_CheckMissileRange`.
+const MISSILE_NEAR: Fixed = Fixed { enc: BIAS + 64 * 65536 };
+
+/// `128 * FRACUNIT`, subtracted again when the actor has no melee attack.
+const MISSILE_FAR: Fixed = Fixed { enc: BIAS + 128 * 65536 };
+
 /// The eight angles `A_Chase` snaps to, `octant * ANG45`.
 ///
 /// A table instead of `bam::add`/`bam::sub` around a multiplication: those
@@ -59,7 +81,7 @@ const OCTANT_ANGLE: [u32; 8] = [
 
 /// `ANG45` as a divisor and `DI_NODIR` as a modulus, as `NonZero` literals:
 /// the `/` and `%` operators keep an unfolded "division by zero" panic path
-/// even against a constant (S7 §8 rule 1).
+/// even against a constant divisor (S7 §8 rule 1).
 const ANG45_NZ: NonZero<u32> = 0x20000000;
 const EIGHT: NonZero<u32> = 8;
 const SIXTEEN: NonZero<u8> = 16;
@@ -76,18 +98,26 @@ fn reduce_at(x: felt252) -> Angle {
     low32(r)
 }
 
-/// One eighth of a turn, `ANG90 / 2`: what `A_Chase` turns by per tic.
-const ANG45: Angle = 0x20000000;
+// ---------------------------------------------------------------------------
+// Writing through the box
+// ---------------------------------------------------------------------------
 
-/// `P_CheckMeleeRange`'s slack: `MELEERANGE - 20 * FRACUNIT`, before the
-/// target's radius is added.
-const MELEE_SLACK: Fixed = Fixed { enc: BIAS + 44 * 65536 };
+/// `mo.move_dir = dir`, out of line: every `BoxTrait::new` writes the 27
+/// felts of a `Mobj`, and `P_NewChaseDir` has eight such assignments
+/// (S7 §8 rule 6).
+fn set_dir(ref mo: Box<Mobj>, dir: u32) {
+    mo = BoxTrait::new(Mobj { move_dir: dir, ..mo.unbox() });
+}
 
-/// `64 * FRACUNIT`, subtracted by `P_CheckMissileRange`.
-const MISSILE_NEAR: Fixed = Fixed { enc: BIAS + 64 * 65536 };
-
-/// `128 * FRACUNIT`, subtracted again when the actor has no melee attack.
-const MISSILE_FAR: Fixed = Fixed { enc: BIAS + 128 * 65536 };
+/// `P_SetMobjState` on the boxed actor, returning the entered state's
+/// action. `set_state_in` takes the five state spans, not the 67-felt
+/// `World` its `set_state` sibling does.
+fn state_to(e: Env, ref mo: Box<Mobj>, s: u32) -> u32 {
+    let mut m = mo.unbox();
+    let a = set_state_in(e.w.unbox().states, ref m, s);
+    mo = BoxTrait::new(m);
+    a
+}
 
 // ---------------------------------------------------------------------------
 // `mobjinfo` columns, read one field at a time
@@ -153,21 +183,35 @@ pub fn p_move(
     me: u32,
     ref ev: Array<MonsterEvent>,
 ) -> bool {
-    p_move_in(env_of(ctx), mobjs, ref g, ref mo, me, ref ev)
+    let mut b = BoxTrait::new(mo);
+    let r = p_move_in(env_of(ctx), mobjs, ref g, ref b, me, ref ev);
+    mo = b.unbox();
+    r
 }
 
 pub(crate) fn p_move_in(
-    e: Env, mobjs: Span<Mobj>, ref g: ThingGrid, ref mo: Mobj, me: u32, ref ev: Array<MonsterEvent>,
+    e: Env,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    ref mo: Box<Mobj>,
+    me: u32,
+    ref ev: Array<MonsterEvent>,
 ) -> bool {
-    let dir = mo.move_dir;
+    let mut m = mo.unbox();
+    let dir = m.move_dir;
     if dir >= DI_NODIR {
         return false;
     }
-    let sp: felt252 = speed_of(mo.kind).into();
-    let tryx = Fixed { enc: mo.x.enc + sp * rd(XSPEED.span(), dir) };
-    let tryy = Fixed { enc: mo.y.enc + sp * rd(YSPEED.span(), dir) };
+    let sp: felt252 = speed_of(m.kind).into();
+    let tryx = Fixed { enc: m.x.enc + sp * rd(XSPEED.span(), dir) };
+    let tryy = Fixed { enc: m.y.enc + sp * rd(YSPEED.span(), dir) };
     let mut moves: Array<MoveEvent> = array![];
-    let v: Verdict = try_move(e.w.unbox(), mobjs, ref g, ref mo, me, tryx, tryy, ref moves);
+    let v: Verdict = try_move(e.w.unbox(), mobjs, ref g, ref m, me, tryx, tryy, ref moves);
+    // `MF_INFLOAT` is only ever set by the float arm; nothing clears it here.
+    if v.ok {
+        m.z = m.floorz;
+    }
+    mo = BoxTrait::new(m);
     if !v.ok {
         // A monster never floats on E1M1 (no lost soul, no cacodemon), so
         // vanilla's `MF_FLOAT && floatok` arm is not reachable here; the
@@ -179,8 +223,6 @@ pub(crate) fn p_move_in(
         return false;
     }
     super::event::drain(moves.span(), me, ref ev);
-    // `MF_INFLOAT` is only ever set by the float arm; nothing clears it here.
-    mo.z = mo.floorz;
     true
 }
 
@@ -190,7 +232,7 @@ fn try_walk(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     ref ev: Array<MonsterEvent>,
 ) -> bool {
@@ -198,7 +240,7 @@ fn try_walk(
         return false;
     }
     let (_, low) = DivRem::div_rem(roll(ref rng, e.w.unbox().rndtable), SIXTEEN);
-    mo.move_count = low.into();
+    mo = BoxTrait::new(Mobj { move_count: low.into(), ..mo.unbox() });
     true
 }
 
@@ -213,7 +255,9 @@ pub fn new_chase_dir(
     target: @Mobj,
     ref ev: Array<MonsterEvent>,
 ) {
-    new_chase_dir_in(env_of(ctx), mobjs, ref g, ref rng, ref mo, me, target, ref ev);
+    let mut b = BoxTrait::new(mo);
+    new_chase_dir_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, target, ref ev);
+    mo = b.unbox();
 }
 
 pub(crate) fn new_chase_dir_in(
@@ -221,16 +265,17 @@ pub(crate) fn new_chase_dir_in(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     target: @Mobj,
     ref ev: Array<MonsterEvent>,
 ) {
     let rnd = e.w.unbox().rndtable;
-    let olddir = mo.move_dir;
+    let m = mo.unbox();
+    let olddir = m.move_dir;
     let turnaround = rd32(OPPOSITE.span(), olddir);
-    let deltax = fixed::sub(*target.x, mo.x);
-    let deltay = fixed::sub(*target.y, mo.y);
+    let deltax = fixed::sub(*target.x, m.x);
+    let deltay = fixed::sub(*target.y, m.y);
     let ten = Fixed { enc: BIAS + 10 * 65536 };
     let east = fixed::gt(deltax, ten);
     let west = fixed::lt(deltax, fixed::neg(ten));
@@ -263,8 +308,9 @@ pub(crate) fn new_chase_dir_in(
             } else {
                 0
             };
-        mo.move_dir = rd32(DIAGS.span(), idx);
-        if mo.move_dir != turnaround && try_walk(e, mobjs, ref g, ref rng, ref mo, me, ref ev) {
+        let diag = rd32(DIAGS.span(), idx);
+        set_dir(ref mo, diag);
+        if diag != turnaround && try_walk(e, mobjs, ref g, ref rng, ref mo, me, ref ev) {
             return;
         }
     }
@@ -283,20 +329,20 @@ pub(crate) fn new_chase_dir_in(
         d2 = DI_NODIR;
     }
     if d1 != DI_NODIR {
-        mo.move_dir = d1;
+        set_dir(ref mo, d1);
         if try_walk(e, mobjs, ref g, ref rng, ref mo, me, ref ev) {
             return;
         }
     }
     if d2 != DI_NODIR {
-        mo.move_dir = d2;
+        set_dir(ref mo, d2);
         if try_walk(e, mobjs, ref g, ref rng, ref mo, me, ref ev) {
             return;
         }
     }
     // No direct path: keep going the old way if there was one.
     if olddir != DI_NODIR {
-        mo.move_dir = olddir;
+        set_dir(ref mo, olddir);
         if try_walk(e, mobjs, ref g, ref rng, ref mo, me, ref ev) {
             return;
         }
@@ -317,7 +363,7 @@ pub(crate) fn new_chase_dir_in(
         if tdir == turnaround {
             continue;
         }
-        mo.move_dir = tdir;
+        set_dir(ref mo, tdir);
         if try_walk(e, mobjs, ref g, ref rng, ref mo, me, ref ev) {
             done = true;
             break;
@@ -327,12 +373,12 @@ pub(crate) fn new_chase_dir_in(
         return;
     }
     if turnaround != DI_NODIR {
-        mo.move_dir = turnaround;
+        set_dir(ref mo, turnaround);
         if try_walk(e, mobjs, ref g, ref rng, ref mo, me, ref ev) {
             return;
         }
     }
-    mo.move_dir = DI_NODIR;
+    set_dir(ref mo, DI_NODIR);
 }
 
 // ---------------------------------------------------------------------------
@@ -342,15 +388,21 @@ pub(crate) fn new_chase_dir_in(
 /// `P_CheckMeleeRange`: within `MELEERANGE - 20 + target radius`, and in
 /// sight (through the R2-A3 cache).
 pub fn check_melee_range(ctx: Ctx, ref mo: Mobj, target: @Mobj) -> bool {
-    check_melee_range_in(env_of(ctx), ref mo, target)
+    let mut b = BoxTrait::new(mo);
+    let r = check_melee_range_in(env_of(ctx), ref b, target);
+    mo = b.unbox();
+    r
 }
 
-pub(crate) fn check_melee_range_in(e: Env, ref mo: Mobj, target: @Mobj) -> bool {
-    let dist = approx_distance(fixed::sub(*target.x, mo.x), fixed::sub(*target.y, mo.y));
+pub(crate) fn check_melee_range_in(e: Env, ref mo: Box<Mobj>, target: @Mobj) -> bool {
+    let mut m = mo.unbox();
+    let dist = approx_distance(fixed::sub(*target.x, m.x), fixed::sub(*target.y, m.y));
     if fixed::ge(dist, fixed::add(MELEE_SLACK, radius_of(*target.kind))) {
         return false;
     }
-    check_sight_cached(e.w.unbox(), ref mo, target, e.tic, SIGHT_TTL)
+    let seen = check_sight_cached(e.w.unbox(), ref m, target, e.tic, SIGHT_TTL);
+    mo = BoxTrait::new(m);
+    seen
 }
 
 /// `P_CheckMissileRange`: sight, `MF_JUSTHIT`, `reactiontime`, then the
@@ -359,24 +411,36 @@ pub(crate) fn check_melee_range_in(e: Env, ref mo: Mobj, target: @Mobj) -> bool 
 /// The `P_Random` draw of the last line happens **whatever** the distance,
 /// exactly as in C, so RNG consumption does not depend on the geometry.
 pub fn check_missile_range(ctx: Ctx, ref rng: Prng, ref mo: Mobj, target: @Mobj) -> bool {
-    check_missile_range_in(env_of(ctx), ref rng, ref mo, target)
+    let mut b = BoxTrait::new(mo);
+    let r = check_missile_range_in(env_of(ctx), ref rng, ref b, target);
+    mo = b.unbox();
+    r
 }
 
-pub(crate) fn check_missile_range_in(e: Env, ref rng: Prng, ref mo: Mobj, target: @Mobj) -> bool {
-    if !check_sight_cached(e.w.unbox(), ref mo, target, e.tic, SIGHT_TTL) {
+pub(crate) fn check_missile_range_in(
+    e: Env, ref rng: Prng, ref mo: Box<Mobj>, target: @Mobj,
+) -> bool {
+    let mut m = mo.unbox();
+    let seen = check_sight_cached(e.w.unbox(), ref m, target, e.tic, SIGHT_TTL);
+    // "The target just hit us: fight back", folded into the one write-back
+    // so that the function boxes the actor once whichever way it answers.
+    let fight_back = seen && has(m.flags, MF_JUSTHIT);
+    if fight_back {
+        m.flags = without(m.flags, MF_JUSTHIT);
+    }
+    mo = BoxTrait::new(m);
+    if !seen {
         return false;
     }
-    if has(mo.flags, MF_JUSTHIT) {
-        // The target just hit us: fight back.
-        mo.flags = without(mo.flags, MF_JUSTHIT);
+    if fight_back {
         return true;
     }
-    if mo.reaction_time != 0 {
+    if m.reaction_time != 0 {
         return false;
     }
-    let mut dist = approx_distance(fixed::sub(mo.x, *target.x), fixed::sub(mo.y, *target.y));
+    let mut dist = approx_distance(fixed::sub(m.x, *target.x), fixed::sub(m.y, *target.y));
     dist = fixed::sub(dist, MISSILE_NEAR);
-    if meleestate_of(mo.kind) == 0 {
+    if meleestate_of(m.kind) == 0 {
         dist = fixed::sub(dist, MISSILE_FAR);
     }
     // `dist >>= 16` on a signed fixed_t, then `if (dist > 200) dist = 200`.
@@ -429,15 +493,21 @@ fn hears(e: Env, listener: u32, noise: u32) -> bool {
 /// `P_CheckSight`, so the loop runs once per player here. No `P_Random` is
 /// drawn either way, so the RNG stream is unaffected.
 pub fn look_for_players(ctx: Ctx, mobjs: Span<Mobj>, ref mo: Mobj, all_around: bool) -> bool {
-    look_for_players_in(env_of(ctx), mobjs, ref mo, all_around)
+    let mut b = BoxTrait::new(mo);
+    let r = look_for_players_in(env_of(ctx), mobjs, ref b, all_around);
+    mo = b.unbox();
+    r
 }
 
 pub(crate) fn look_for_players_in(
-    e: Env, mobjs: Span<Mobj>, ref mo: Mobj, all_around: bool,
+    e: Env, mobjs: Span<Mobj>, ref mo: Box<Mobj>, all_around: bool,
 ) -> bool {
     let n = e.players.len();
     let mut k: u32 = opaque_zero(n);
     let mut found = false;
+    // The loop carries the actor's `Box`, not the actor: a loop is a
+    // function, and a 27-felt live value is pushed into it and returned out
+    // of it on every iteration (S7 §8 rule 4).
     while k != n {
         let pi = rd32(e.players, k);
         k = inc(k);
@@ -448,19 +518,22 @@ pub(crate) fn look_for_players_in(
         if *p.health <= 0 {
             continue;
         }
-        if !check_sight_cached(e.w.unbox(), ref mo, p, e.tic, SIGHT_TTL) {
+        let mut m = mo.unbox();
+        let seen = check_sight_cached(e.w.unbox(), ref m, p, e.tic, SIGHT_TTL);
+        mo = BoxTrait::new(m);
+        if !seen {
             continue;
         }
         if !all_around {
-            let an = bam::sub(point_to_angle2(mo.x, mo.y, *p.x, *p.y), mo.angle);
+            let an = bam::sub(point_to_angle2(m.x, m.y, *p.x, *p.y), m.angle);
             if an > ANG90 && an < ANG270 {
-                let dist = approx_distance(fixed::sub(*p.x, mo.x), fixed::sub(*p.y, mo.y));
+                let dist = approx_distance(fixed::sub(*p.x, m.x), fixed::sub(*p.y, m.y));
                 if fixed::gt(dist, MELEERANGE) {
                     continue; // behind the back and out of reach
                 }
             }
         }
-        mo.target = pi;
+        mo = BoxTrait::new(Mobj { target: pi, ..m });
         found = true;
         break;
     }
@@ -471,7 +544,7 @@ pub(crate) fn look_for_players_in(
 /// contiguous families `posit1..3` and `bgsit1..2` (`podth1..3` and
 /// `bgdth1..2` for a death) draw one `P_Random`, everything else does not.
 ///
-/// Takes the `rndtable` span, not the context: this needs four felts, not
+/// Takes the `rndtable` span, not the context: this needs two felts, not
 /// six (S7 §8 rule 3).
 fn pick_sound(
     rnd: Span<u8>, ref rng: Prng, base: u32, low: u32, high: u32, span: NonZero<u8>,
@@ -489,30 +562,46 @@ fn pick_sound(
 pub fn a_look(
     ctx: Ctx, mobjs: Span<Mobj>, ref rng: Prng, ref mo: Mobj, me: u32, ref ev: Array<MonsterEvent>,
 ) -> u32 {
-    a_look_in(env_of(ctx), mobjs, ref rng, ref mo, me, ref ev)
+    let mut b = BoxTrait::new(mo);
+    let r = a_look_in(env_of(ctx), mobjs, ref rng, ref b, me, ref ev);
+    mo = b.unbox();
+    r
 }
 
 pub(crate) fn a_look_in(
-    e: Env, mobjs: Span<Mobj>, ref rng: Prng, ref mo: Mobj, me: u32, ref ev: Array<MonsterEvent>,
+    e: Env,
+    mobjs: Span<Mobj>,
+    ref rng: Prng,
+    ref mo: Box<Mobj>,
+    me: u32,
+    ref ev: Array<MonsterEvent>,
 ) -> u32 {
-    mo.threshold = 0; // any shot will wake us up
+    let mut m = mo.unbox();
+    m.threshold = 0; // any shot will wake us up
     let mut seeyou = false;
     let src = e.noise.source;
-    if src != NO_MOBJ && src < mobjs.len() && hears(e, mo.sector, e.noise.sector) {
-        let targ = mobjs.at(src);
-        if has(*targ.flags, MF_SHOOTABLE) {
-            mo.target = src;
-            if has(mo.flags, MF_AMBUSH) {
-                seeyou = check_sight_cached(e.w.unbox(), ref mo, targ, e.tic, SIGHT_TTL);
-            } else {
-                seeyou = true;
-            }
+    if src != NO_MOBJ && src < mobjs.len() && hears(e, m.sector, e.noise.sector) {
+        match mobjs.get(src) {
+            Option::Some(b) => {
+                let targ = b.unbox();
+                if has(*targ.flags, MF_SHOOTABLE) {
+                    m.target = src;
+                    if has(m.flags, MF_AMBUSH) {
+                        seeyou = check_sight_cached(e.w.unbox(), ref m, targ, e.tic, SIGHT_TTL);
+                    } else {
+                        seeyou = true;
+                    }
+                }
+            },
+            Option::None => {},
         }
     }
+    mo = BoxTrait::new(m);
     if !seeyou && !look_for_players_in(e, mobjs, ref mo, false) {
         return fsm::NO_ACTION;
     }
-    let base = sound_of(MI_SEESOUND.span(), mo.kind);
+    let woken = mo.unbox();
+    let base = sound_of(MI_SEESOUND.span(), woken.kind);
     if base != SFX_NONE {
         let rnd = e.w.unbox().rndtable;
         let three: NonZero<u8> = 3;
@@ -523,8 +612,8 @@ pub(crate) fn a_look_in(
         }
         ev.append(sound(me, s));
     }
-    ev.append(event(EV_WAKE, me, mo.target, 0));
-    set_state(e.w.unbox(), ref mo, seestate_of(mo.kind))
+    ev.append(event(EV_WAKE, me, woken.target, 0));
+    state_to(e, ref mo, seestate_of(woken.kind))
 }
 
 // ---------------------------------------------------------------------------
@@ -543,7 +632,10 @@ pub fn a_chase(
     patches: Span<Patch>,
     ref ev: Array<MonsterEvent>,
 ) -> u32 {
-    a_chase_in(env_of(ctx), mobjs, ref g, ref rng, ref mo, me, patches, ref ev)
+    let mut b = BoxTrait::new(mo);
+    let r = a_chase_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, patches, ref ev);
+    mo = b.unbox();
+    r
 }
 
 pub(crate) fn a_chase_in(
@@ -551,40 +643,38 @@ pub(crate) fn a_chase_in(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     patches: Span<Patch>,
     ref ev: Array<MonsterEvent>,
 ) -> u32 {
-    if mo.reaction_time != 0 {
-        mo.reaction_time = dec(mo.reaction_time);
+    let mut m = mo.unbox();
+    if m.reaction_time != 0 {
+        m.reaction_time = dec(m.reaction_time);
     }
-    let has_target = mo.target != NO_MOBJ && mo.target < mobjs.len();
+    let has_target = m.target != NO_MOBJ && m.target < mobjs.len();
     let target = if has_target {
-        read_mobj(mobjs, patches, mo.target)
+        read_mobj(mobjs, patches, m.target)
     } else {
-        mo
+        m
     };
     // Modify the target threshold.
-    if mo.threshold != 0 {
+    if m.threshold != 0 {
         if !has_target || target.health <= 0 {
-            mo.threshold = 0;
+            m.threshold = 0;
         } else {
-            mo.threshold = dec(mo.threshold);
+            m.threshold = dec(m.threshold);
         }
     }
     // Turn towards the movement direction if not there yet: the angle is
     // first snapped to a multiple of 45 degrees (`angle &= 7 << 29`), then
     // moved one eighth of a turn the short way round.
-    if mo.move_dir < DI_NODIR {
-        let (octant, _) = DivRem::div_rem(mo.angle, ANG45_NZ);
-        let (_, delta) = DivRem::div_rem(
-            maputl::sub32(add32(octant, DI_NODIR), mo.move_dir), EIGHT,
-        );
-        // One eighth of a turn the short way round, as an octant index:
-        // `bam::sub(ang, ANG45)` is octant - 1 mod 8 and `bam::add` is
-        // octant + 1 mod 8, both of them exact because `ang` is a multiple
-        // of `ANG45`.
+    if m.move_dir < DI_NODIR {
+        let (octant, _) = DivRem::div_rem(m.angle, ANG45_NZ);
+        let (_, delta) = DivRem::div_rem(maputl::sub32(add32(octant, DI_NODIR), m.move_dir), EIGHT);
+        // The same eighth of a turn as an octant index: `bam::sub(ang,
+        // ANG45)` is `octant - 1 mod 8` and `bam::add` is `octant + 1 mod 8`,
+        // both exact because `ang` is a multiple of `ANG45`.
         let turn = if delta == 0 {
             0
         } else if delta < 4 {
@@ -593,48 +683,56 @@ pub(crate) fn a_chase_in(
             1
         };
         let (_, oct) = DivRem::div_rem(add32(octant, turn), EIGHT);
-        mo.angle = rd32(OCTANT_ANGLE.span(), oct);
+        m.angle = rd32(OCTANT_ANGLE.span(), oct);
     }
+    // The three fields the rest of the function reads, read before the one
+    // write-back: `kind` never changes, and `flags` and `move_count` are
+    // read at points that no call in between has reached yet.
+    let kind = m.kind;
+    let flags = m.flags;
+    let move_count = m.move_count;
+    mo = BoxTrait::new(m);
     if !has_target || !has(target.flags, MF_SHOOTABLE) {
         // Look for a new target.
         if look_for_players_in(e, mobjs, ref mo, true) {
             return fsm::NO_ACTION;
         }
-        return set_state(e.w.unbox(), ref mo, spawnstate_of(mo.kind));
+        return state_to(e, ref mo, spawnstate_of(kind));
     }
     // Do not attack twice in a row.
-    if has(mo.flags, MF_JUSTATTACKED) {
-        mo.flags = without(mo.flags, MF_JUSTATTACKED);
+    if has(flags, MF_JUSTATTACKED) {
+        mo = BoxTrait::new(Mobj { flags: without(flags, MF_JUSTATTACKED), ..mo.unbox() });
         new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, @target, ref ev);
         return fsm::NO_ACTION;
     }
     // Melee.
-    let melee = meleestate_of(mo.kind);
+    let melee = meleestate_of(kind);
     if melee != 0 && check_melee_range_in(e, ref mo, @target) {
-        let s = sound_of(MI_ATTACKSOUND.span(), mo.kind);
+        let s = sound_of(MI_ATTACKSOUND.span(), kind);
         if s != SFX_NONE {
             ev.append(sound(me, s));
         }
-        return set_state(e.w.unbox(), ref mo, melee);
+        return state_to(e, ref mo, melee);
     }
     // Missile. Skill 2 is below nightmare, so `movecount` gates it.
-    let missile = missilestate_of(mo.kind);
-    if missile != 0 && mo.move_count == 0 && check_missile_range_in(e, ref rng, ref mo, @target) {
-        mo.flags = mo.flags | MF_JUSTATTACKED;
-        return set_state(e.w.unbox(), ref mo, missile);
+    let missile = missilestate_of(kind);
+    if missile != 0 && move_count == 0 && check_missile_range_in(e, ref rng, ref mo, @target) {
+        let firing = mo.unbox();
+        mo = BoxTrait::new(Mobj { flags: firing.flags | MF_JUSTATTACKED, ..firing });
+        return state_to(e, ref mo, missile);
     }
     // Chase towards the player. Doom's `--movecount < 0` on a signed int:
     // the counter only ever matters by its sign, and `P_TryWalk` re-arms it.
-    if mo.move_count == 0 {
+    if move_count == 0 {
         new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, @target, ref ev);
     } else {
-        mo.move_count = dec(mo.move_count);
+        mo = BoxTrait::new(Mobj { move_count: dec(move_count), ..mo.unbox() });
         if !p_move_in(e, mobjs, ref g, ref mo, me, ref ev) {
             new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, @target, ref ev);
         }
     }
     // Make an active sound.
-    let active = sound_of(MI_ACTIVESOUND.span(), mo.kind);
+    let active = sound_of(MI_ACTIVESOUND.span(), kind);
     if active != SFX_NONE {
         if roll(ref rng, e.w.unbox().rndtable) < 3 {
             ev.append(sound(me, active));
@@ -653,7 +751,9 @@ pub fn a_face_target(ctx: Ctx, ref rng: Prng, ref mo: Mobj, target: @Mobj) {
     face_target(ctx.w.rndtable, ref rng, ref mo, target);
 }
 
-/// [`a_face_target`] on the `rndtable` alone: two felts instead of a context.
+/// [`a_face_target`] on the `rndtable` alone: two felts instead of a
+/// context. The actor travels by `ref` and not boxed here: this is a leaf
+/// its callers reach with an unboxed local in hand.
 pub(crate) fn face_target(rnd: Span<u8>, ref rng: Prng, ref mo: Mobj, target: @Mobj) {
     mo.flags = without(mo.flags, MF_AMBUSH);
     let mut an = point_to_angle2(mo.x, mo.y, *target.x, *target.y);
@@ -670,9 +770,8 @@ fn spread_angle(rnd: Span<u8>, ref rng: Prng, base: Angle) -> Angle {
     reduce_at(base.into() + s * 0x100000 + 0x100000000)
 }
 
-/// `P_Random() - P_Random()` as a felt: `prng::sub_random` without its
-/// `i32` subtraction (which carries an overflow panic path) and without
-/// its two `at` reads.
+/// `P_Random() - P_Random()` as a felt: `prng::sub_random` without its `i32`
+/// subtraction (an overflow panic path) and without its two `at` reads.
 fn sub_roll(rnd: Span<u8>, ref rng: Prng) -> felt252 {
     let a = roll(ref rng, rnd);
     let b = roll(ref rng, rnd);
@@ -773,7 +872,9 @@ pub fn passive(
     run_passive(ctx.w.rndtable, ref rng, ref mo, me, action, ref ev);
 }
 
-/// [`passive`] on the `rndtable` alone.
+/// [`passive`] on the `rndtable` alone. The actor travels by `ref` here:
+/// this is also run on the *target*'s copy by [`hurt_in`], which holds a
+/// plain `Mobj`, and the function has no panic site of its own.
 pub(crate) fn run_passive(
     rnd: Span<u8>, ref rng: Prng, ref mo: Mobj, me: u32, action: u32, ref ev: Array<MonsterEvent>,
 ) {
@@ -824,7 +925,9 @@ pub fn a_pos_attack(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
-    a_pos_attack_in(env_of(ctx), mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
+    let mut b = BoxTrait::new(mo);
+    a_pos_attack_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev);
+    mo = b.unbox();
 }
 
 pub(crate) fn a_pos_attack_in(
@@ -832,15 +935,17 @@ pub(crate) fn a_pos_attack_in(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
     let rnd = e.w.unbox().rndtable;
-    let target = read_mobj(mobjs, patches.span(), mo.target);
-    face_target(rnd, ref rng, ref mo, @target);
-    let base = mo.angle;
+    let mut m = mo.unbox();
+    let target = read_mobj(mobjs, patches.span(), m.target);
+    face_target(rnd, ref rng, ref m, @target);
+    let base = m.angle;
+    mo = BoxTrait::new(m);
     let aim: Aim = aim_line_attack(e.w.unbox(), mobjs, ref g, me, base, MISSILERANGE);
     ev.append(sound(me, SFX_PISTOL));
     let angle = spread_angle(rnd, ref rng, base);
@@ -859,7 +964,9 @@ pub fn a_spos_attack(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
-    a_spos_attack_in(env_of(ctx), mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
+    let mut b = BoxTrait::new(mo);
+    a_spos_attack_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev);
+    mo = b.unbox();
 }
 
 pub(crate) fn a_spos_attack_in(
@@ -867,20 +974,22 @@ pub(crate) fn a_spos_attack_in(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
     let rnd = e.w.unbox().rndtable;
-    let target = read_mobj(mobjs, patches.span(), mo.target);
+    let mut m = mo.unbox();
+    let target = read_mobj(mobjs, patches.span(), m.target);
     ev.append(sound(me, SFX_SHOTGN));
-    face_target(rnd, ref rng, ref mo, @target);
-    let base = mo.angle;
+    face_target(rnd, ref rng, ref m, @target);
+    let base = m.angle;
+    mo = BoxTrait::new(m);
     let aim: Aim = aim_line_attack(e.w.unbox(), mobjs, ref g, me, base, MISSILERANGE);
-    let mut i: u32 = 0;
+    let mut i: u32 = opaque_zero(me);
     while i != 3 {
-        i += 1;
+        i = inc(i);
         let angle = spread_angle(rnd, ref rng, base);
         let damage = roll_damage(rnd, ref rng, FIVE, 3);
         shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev);
@@ -906,9 +1015,11 @@ pub fn a_troop_attack(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) {
+    let mut b = BoxTrait::new(mo);
     a_troop_attack_in(
-        env_of(ctx), mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref spawn_at,
+        env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev, ref spawn_at,
     );
+    mo = b.unbox();
 }
 
 pub(crate) fn a_troop_attack_in(
@@ -916,26 +1027,30 @@ pub(crate) fn a_troop_attack_in(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) {
     let rnd = e.w.unbox().rndtable;
-    let target = read_mobj(mobjs, patches.span(), mo.target);
-    face_target(rnd, ref rng, ref mo, @target);
+    let mut m = mo.unbox();
+    let target_idx = m.target;
+    let target = read_mobj(mobjs, patches.span(), target_idx);
+    face_target(rnd, ref rng, ref m, @target);
+    mo = BoxTrait::new(m);
     if check_melee_range_in(e, ref mo, @target) {
         ev.append(sound(me, SFX_CLAW));
         let damage = roll_damage(rnd, ref rng, EIGHT_U8, 3);
-        hurt_in(e, mobjs, ref rng, mo.target, me, me, damage, ref patches, ref ev);
+        hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev);
         return;
     }
     // Launch a missile.
     let mut moves: Array<MoveEvent> = array![];
     let idx = spawn_at;
+    let shooter = mo.unbox();
     let (missile, _) = spawn_missile(
-        e.w.unbox(), mobjs, ref g, ref rng, @mo, me, @target, FIREBALL, idx, ref moves,
+        e.w.unbox(), mobjs, ref g, ref rng, @shooter, me, @target, FIREBALL, idx, ref moves,
     );
     super::event::drain(moves.span(), idx, ref ev);
     ev.append(sound(me, SFX_FIRSHT));
@@ -953,24 +1068,29 @@ pub fn a_sarg_attack(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
-    a_sarg_attack_in(env_of(ctx), mobjs, ref rng, ref mo, me, ref patches, ref ev);
+    let mut b = BoxTrait::new(mo);
+    a_sarg_attack_in(env_of(ctx), mobjs, ref rng, ref b, me, ref patches, ref ev);
+    mo = b.unbox();
 }
 
 pub(crate) fn a_sarg_attack_in(
     e: Env,
     mobjs: Span<Mobj>,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
     let rnd = e.w.unbox().rndtable;
-    let target = read_mobj(mobjs, patches.span(), mo.target);
-    face_target(rnd, ref rng, ref mo, @target);
+    let mut m = mo.unbox();
+    let target_idx = m.target;
+    let target = read_mobj(mobjs, patches.span(), target_idx);
+    face_target(rnd, ref rng, ref m, @target);
+    mo = BoxTrait::new(m);
     if !check_melee_range_in(e, ref mo, @target) {
         return;
     }
     let damage = roll_damage(rnd, ref rng, TEN, 4);
-    hurt_in(e, mobjs, ref rng, mo.target, me, me, damage, ref patches, ref ev);
+    hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev);
 }

@@ -133,7 +133,7 @@ fn dispatch(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     action: u32,
     may_look: bool,
@@ -154,27 +154,33 @@ fn dispatch(
         }
         return a_look_in(e, mobjs, ref rng, ref mo, me, ref ev);
     }
+    // The four attacks and `A_FaceTarget` need a target that is still in
+    // the list; the read is hoisted out of their five arms.
+    let target = mo.unbox().target;
+    let aimed = target != NO_MOBJ && target < mobjs.len();
     if action == A_FACETARGET {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            let t = read_mobj(mobjs, patches.span(), mo.target);
-            face_target(e.w.unbox().rndtable, ref rng, ref mo, @t);
+        if aimed {
+            let t = read_mobj(mobjs, patches.span(), target);
+            let mut m = mo.unbox();
+            face_target(e.w.unbox().rndtable, ref rng, ref m, @t);
+            mo = BoxTrait::new(m);
         }
         return fsm::NO_ACTION;
     }
     if action == A_POSATTACK {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
+        if aimed {
             a_pos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
     }
     if action == A_SPOSATTACK {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
+        if aimed {
             a_spos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
     }
     if action == A_TROOPATTACK {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
+        if aimed {
             a_troop_attack_in(
                 e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref spawn_at,
             );
@@ -182,7 +188,7 @@ fn dispatch(
         return fsm::NO_ACTION;
     }
     if action == A_SARGATTACK {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
+        if aimed {
             a_sarg_attack_in(e, mobjs, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
@@ -190,7 +196,9 @@ fn dispatch(
     // `A_Pain`, `A_Scream`, `A_XScream`, `A_Fall`: none of them changes the
     // state again. Everything else (the weapon and flash actions) belongs to
     // `doom_player` and is ignored here.
-    run_passive(e.w.unbox().rndtable, ref rng, ref mo, me, action, ref ev);
+    let mut m = mo.unbox();
+    run_passive(e.w.unbox().rndtable, ref rng, ref m, me, action, ref ev);
+    mo = BoxTrait::new(m);
     fsm::NO_ACTION
 }
 
@@ -201,7 +209,7 @@ fn run_chain(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     action: u32,
     may_look: bool,
@@ -240,7 +248,7 @@ fn think_state(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     may_look: bool,
     may_chase: bool,
@@ -248,12 +256,12 @@ fn think_state(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) {
-    if mo.tics == fsm::FOREVER {
+    let m0 = mo.unbox();
+    if m0.tics == fsm::FOREVER {
         return;
     }
-    let (state, tics, action) = fsm::advance(e.w.unbox().states, mo.state, mo.tics);
-    mo.state = state;
-    mo.tics = tics;
+    let (state, tics, action) = fsm::advance(e.w.unbox().states, m0.state, m0.tics);
+    mo = BoxTrait::new(Mobj { state, tics, ..m0 });
     run_chain(
         e,
         mobjs,
@@ -268,10 +276,10 @@ fn think_state(
         ref ev,
         ref spawn_at,
     );
-    if mo.tics == 0 {
-        let (s2, t2, a2) = fsm::advance(e.w.unbox().states, mo.state, 0);
-        mo.state = s2;
-        mo.tics = t2;
+    let m1 = mo.unbox();
+    if m1.tics == 0 {
+        let (s2, t2, a2) = fsm::advance(e.w.unbox().states, m1.state, 0);
+        mo = BoxTrait::new(Mobj { state: s2, tics: t2, ..m1 });
         run_chain(
             e,
             mobjs,
@@ -304,19 +312,22 @@ pub fn mobj_thinker(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) -> bool {
-    mobj_thinker_in(
+    let mut b = BoxTrait::new(mo);
+    let alive = mobj_thinker_in(
         env_of(ctx),
         mobjs,
         ref g,
         ref rng,
-        ref mo,
+        ref b,
         me,
         may_look,
         may_chase,
         ref patches,
         ref ev,
         ref spawn_at,
-    )
+    );
+    mo = b.unbox();
+    alive
 }
 
 /// [`mobj_thinker`] on the narrow [`Env`].
@@ -325,7 +336,7 @@ pub(crate) fn mobj_thinker_in(
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     may_look: bool,
     may_chase: bool,
@@ -333,7 +344,8 @@ pub(crate) fn mobj_thinker_in(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) -> bool {
-    let missile = doom_physics::has(mo.flags, MF_MISSILE);
+    let mut m = mo.unbox();
+    let missile = doom_physics::has(m.flags, MF_MISSILE);
     // Momentum, in `P_MobjThinker`'s order and under its two guards: Doom
     // calls `P_XYMovement` only when there is momentum to spend (or a lost
     // soul in flight) and `P_ZMovement` only when the thing is off its floor
@@ -343,12 +355,12 @@ pub(crate) fn mobj_thinker_in(
     // dormant monster off `xy_movement`'s ~740 steps of argument plumbing on
     // every one of the 700 tics it spends asleep.
     let mut moves: Array<MoveEvent> = array![];
-    let moving = mo.momx != fixed::ZERO
-        || mo.momy != fixed::ZERO
-        || doom_physics::has(mo.flags, doom_physics::MF_SKULLFLY);
+    let moving = m.momx != fixed::ZERO
+        || m.momy != fixed::ZERO
+        || doom_physics::has(m.flags, doom_physics::MF_SKULLFLY);
     let mut xy = XyOutcome::Moved;
     if moving {
-        xy = xy_movement(e.w.unbox(), mobjs, ref g, ref mo, me, false, false, ref moves);
+        xy = xy_movement(e.w.unbox(), mobjs, ref g, ref m, me, false, false, ref moves);
         drain(moves.span(), me, ref ev);
     }
     let mut exploded = false;
@@ -357,28 +369,31 @@ pub(crate) fn mobj_thinker_in(
         if hit != NO_MOBJ {
             // `PIT_CheckThing` damages inline in C; the crate reports it, so
             // the draw happens here — still before anything else draws.
-            let dmg_per: u32 = rd32(MI_DAMAGE.span(), mo.kind);
+            let dmg_per: u32 = rd32(MI_DAMAGE.span(), m.kind);
             let eight: NonZero<u8> = 8;
             let draw = doom_physics::spawn::roll(ref rng, e.w.unbox().rndtable);
             let (_, low) = DivRem::div_rem(draw, eight);
             let r: u32 = low.into();
-            hurt_in(e, mobjs, ref rng, hit, me, mo.target, scale(r, dmg_per), ref patches, ref ev);
+            // `hurt_in` writes a *patch* on another mobj, never on us, so
+            // the actor need not be boxed around it.
+            hurt_in(e, mobjs, ref rng, hit, me, m.target, scale(r, dmg_per), ref patches, ref ev);
         }
         match xy {
             XyOutcome::MissileHit(b) => {
                 let _: Blocker = b;
-                explode_missile(e.w.unbox(), ref rng, ref mo);
+                explode_missile(e.w.unbox(), ref rng, ref m);
                 exploded = true;
             },
             _ => {},
         }
     }
-    if !exploded && (mo.z != mo.floorz || mo.momz != fixed::ZERO) {
-        let z = z_movement(ref mo, Option::None);
+    if !exploded && (m.z != m.floorz || m.momz != fixed::ZERO) {
+        let z = z_movement(ref m, Option::None);
         if missile && z.missile_hit {
-            explode_missile(e.w.unbox(), ref rng, ref mo);
+            explode_missile(e.w.unbox(), ref rng, ref m);
         }
     }
+    mo = BoxTrait::new(m);
     // The state machine, with `A_Look` held back (see below).
     think_state(
         e, mobjs, ref g, ref rng, ref mo, me, false, may_chase, ref patches, ref ev, ref spawn_at,
@@ -413,8 +428,9 @@ pub(crate) fn mobj_thinker_in(
         );
     }
     // `S_NULL` with `FOREVER` is Doom's "remove me".
-    if mo.state == 0 && mo.tics == fsm::FOREVER {
-        unset_thing_position(ref g, @mo, me);
+    let done = mo.unbox();
+    if done.state == 0 && done.tics == fsm::FOREVER {
+        unset_thing_position(ref g, @done, me);
         return false;
     }
     true
@@ -496,12 +512,13 @@ pub fn monsters_ticker(
                 mo.tics = tc;
             }
             if may_look {
+                let mut b = BoxTrait::new(mo);
                 run_chain(
                     e,
                     mobjs,
                     ref g,
                     ref r,
-                    ref mo,
+                    ref b,
                     i,
                     A_LOOK,
                     true,
@@ -510,17 +527,19 @@ pub fn monsters_ticker(
                     ref ev,
                     ref spawn_at,
                 );
+                mo = b.unbox();
             }
             out.append(mo);
             i = inc(i);
             continue;
         }
+        let mut b = BoxTrait::new(mo);
         let alive = mobj_thinker_in(
             e,
             mobjs,
             ref g,
             ref r,
-            ref mo,
+            ref b,
             i,
             may_look,
             may_chase,
@@ -529,7 +548,7 @@ pub fn monsters_ticker(
             ref spawn_at,
         );
         if alive {
-            out.append(mo);
+            out.append(b.unbox());
         } else {
             out.append(removed_mobj());
         }
