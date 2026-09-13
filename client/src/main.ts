@@ -1,5 +1,8 @@
 import { selectPalette } from "@hellproof/wad";
 import { buildAssetStore, type AssetStore } from "./assets/assetStore.js";
+import { loadCairoSpriteNames, type CairoSpriteNames } from "./assets/cairoSprites.js";
+import { cairoAppearance, type CairoAppearance } from "./render/cairoAppearance.js";
+import type { CairoFrame } from "./sim/cairoSnapshot.js";
 import { atlasOccupancy } from "./assets/atlas.js";
 import { chooseProfile, probeCapabilities, probeStorage } from "./caps/capabilities.js";
 import { findDynamicSectors, type LevelJson } from "./map/level.js";
@@ -80,6 +83,7 @@ async function main(): Promise<void> {
     loadingProgress.value = Math.round(fraction * 100);
   };
 
+  const realCairo = new URLSearchParams(location.search).get("sim") !== "demo";
   const caps = await probeStorage(probeCapabilities());
   const profile = chooseProfile(caps);
   renderDiagnostics(diagnosticsEl, caps, profile);
@@ -108,8 +112,11 @@ async function main(): Promise<void> {
   // decode (≈200 ms) blocks the main thread.
   await nextFrame();
   let store: AssetStore;
+  let cairoSprites: CairoSpriteNames | undefined;
   try {
-    store = buildAssetStore(wadBytes, level, (stage, fraction) => say(stage, 0.3 + fraction * 0.5));
+    if (realCairo) cairoSprites = await loadCairoSpriteNames();
+    store = buildAssetStore(wadBytes, level, (stage, fraction) => say(stage, 0.3 + fraction * 0.5), cairoSprites);
+    if (realCairo && store.stats.missing.length) throw new Error(`Missing game assets: ${store.stats.missing.join(", ")}`);
   } catch (err) {
     fail(loading, loadingStatus, `Asset decoding failed: ${(err as Error).message}`);
     return;
@@ -131,7 +138,6 @@ async function main(): Promise<void> {
   }
 
   // The legacy renderer/prover demonstration is an explicit route.
-  const realCairo = new URLSearchParams(location.search).get("sim") !== "demo";
   const cairo = realCairo ? new CairoClient() : null;
   if (cairo) {
     document.body.classList.add("real-play");
@@ -142,6 +148,9 @@ async function main(): Promise<void> {
     profile.snapshotTransport = "copied";
     profile.reasons[0] = "Cairo Worker: transferred ArrayBuffers feed a local renderer ring";
     renderDiagnostics(diagnosticsEl, caps, profile);
+    const attribution = document.createElement("a");
+    attribution.href = cairoSprites!.licenseUrl; attribution.textContent = "Cairo sprite table · GPL-2.0-only";
+    diagnosticsEl.append(attribution);
 
   }
   const ring = cairo?.ring ?? new SnapshotRing();
@@ -273,6 +282,9 @@ async function main(): Promise<void> {
   if (cairo && scheduler instanceof CairoScheduler) bindCairoPageLifecycle(scheduler, cairo);
   loading.hidden = true;
 
+  let appearanceFrame: CairoFrame | undefined;
+  let appearance: CairoAppearance | undefined;
+  let renderError: string | undefined;
   let lastFrameTime = performance.now();
   const loop = (): void => {
     const now = performance.now();
@@ -297,7 +309,26 @@ async function main(): Promise<void> {
         view.latest.player.bonusCount,
         false,
       );
-      renderer.render(view, renderOptions);
+      try {
+        if (cairo) {
+          if (cairo.latest !== appearanceFrame) {
+            appearanceFrame = cairo.latest;
+            appearance = cairoAppearance(appearanceFrame!, cairo.viewMobjId);
+          }
+          // Both values are published synchronously on this thread. Never draw
+          // an old/new appearance combination if that contract is violated.
+        }
+        renderer.render(view, renderOptions, appearance);
+        renderError = undefined;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (scheduler.isRunning) scheduler.stop();
+        if (message !== renderError) {
+          renderError = message; play?.error(`Rendering: ${message}`);
+          console.error("Rendering stopped:", message);
+        }
+        requestAnimationFrame(loop); return;
+      }
 
       // The drawing buffer is discarded once the frame is composited (the
       // context is created without `preserveDrawingBuffer`, which would cost a
@@ -319,7 +350,7 @@ async function main(): Promise<void> {
         if (showAutomap) {
           drawAutomap(overlayCtx, level, view, cssW, cssH, automapOptions, sim?.path ?? [], dynamicSectors);
         }
-        if (showHud) hud.draw(overlayCtx, view.latest, cssW, cssH);
+        if (showHud) hud.draw(overlayCtx, view.latest, cssW, cssH, cairo ? "cairo" : "demo");
         overlayCtx.restore();
       }
 

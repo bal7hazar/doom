@@ -12,8 +12,18 @@ import type { RenderSnapshot } from "../sim/snapshot.js";
  * renderer. The weapon sprite is a *placeholder* in the sense P2.2 allows: it
  * is the real `PISG`-family lump decoded from the WAD and positioned like
  * vanilla, but it does not animate through the firing states - that arrives
- * with P2.4's ticcmd plumbing.
+ * with a future versioned snapshot carrying Cairo psprites.
  */
+export type WeaponNumbering = "demo" | "cairo";
+/** Compact Cairo WeaponId differs from vanilla only after chaingun. */
+export function hudWeapon(weapon: number, numbering: WeaponNumbering = "demo"): number {
+  if (numbering === "demo") return weapon;
+  return [0, 1, 2, 3, 7][weapon] ?? -1;
+}
+export function hudWeaponAmmo(weapon: number, numbering: WeaponNumbering = "demo"): number {
+  return WEAPON_AMMO[hudWeapon(weapon, numbering)] ?? -1;
+}
+
 export interface HudState {
   visible: boolean;
 }
@@ -31,9 +41,9 @@ export class Hud {
     this.store = store;
   }
 
-  draw(ctx: CanvasRenderingContext2D, snapshot: RenderSnapshot, width: number, height: number): void {
+  draw(ctx: CanvasRenderingContext2D, snapshot: RenderSnapshot, width: number, height: number, numbering: WeaponNumbering = "demo"): void {
     const p = snapshot.player;
-    this.drawWeapon(ctx, p.weapon, width, height);
+    this.drawWeapon(ctx, hudWeapon(p.weapon, numbering), width, height);
 
     // Status bar strip along the bottom.
     const barHeight = 56;
@@ -53,7 +63,7 @@ export class Hud {
     this.bigNumber(ctx, `${p.armor}%`, 150, y, p.armorType === 2 ? "ARMOR II" : "ARMOR", "#6ab04c");
 
     // Ammo for the current weapon, then the full tally.
-    const weaponAmmo = WEAPON_AMMO[p.weapon] ?? -1;
+    const weaponAmmo = hudWeaponAmmo(p.weapon, numbering);
     const current = weaponAmmo >= 0 ? `${p.ammo[weaponAmmo]}` : "-";
     this.bigNumber(ctx, current, 280, y, "AMMO", "#d8c020");
 
