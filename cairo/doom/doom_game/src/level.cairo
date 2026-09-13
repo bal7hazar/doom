@@ -68,7 +68,9 @@ pub fn materialise_heights(
 /// Bring the derived arrays up to date after one `specials_ticker`:
 /// `movers_before` is the mover count when the ticker started. A mover that
 /// disappeared latched its height into a slot, so the arrays are rebuilt;
-/// otherwise every live mover's height is written into its sector.
+/// otherwise every live mover's changed height is written into its sector.
+/// Waiting movers usually already match the derived array. Check the current
+/// value, not the phase: changed heights are applied in original mover order.
 pub fn refresh_heights(
     ctx: Ctx, floor: Span<felt252>, ceil: Span<felt252>, movers_before: u32, s: @SpecialsState,
 ) -> (Span<felt252>, Span<felt252>) {
@@ -80,9 +82,13 @@ pub fn refresh_heights(
     let mut c = ceil;
     while let Option::Some(mv) = movers.pop_front() {
         if moves_ceiling(*mv.kind) {
-            c = set_felt(c, *mv.sector, *mv.height.enc);
+            if *c.at(*mv.sector) != *mv.height.enc {
+                c = set_felt(c, *mv.sector, *mv.height.enc);
+            }
         } else {
-            f = set_felt(f, *mv.sector, *mv.height.enc);
+            if *f.at(*mv.sector) != *mv.height.enc {
+                f = set_felt(f, *mv.sector, *mv.height.enc);
+            }
         }
     }
     (f, c)

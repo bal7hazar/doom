@@ -11,6 +11,7 @@ use doom_physics::{
     is_removed, new_grid, removed_mobj, set_thing_position, spawn_mobj,
 };
 use doom_player::{PST_DEAD, PST_LIVE, PlayerEvent, WP_CHAINSAW, env_of};
+use doom_specials::state::{Mover, MoverKind, Phase, set_felt};
 use doom_specials::{SectorBlocking, SpecialsState};
 use doom_things::tables::{KIND_CLIP, KIND_MISC2, KIND_POSSESSED};
 use geom2d::Point;
@@ -724,4 +725,86 @@ fn test_reader_rejects_unsafe_domains_and_grid_corruption() {
         offset += 2 + n;
     }
     assert(tested, 'a shared cell exercised');
+}
+
+#[test]
+fn test_refresh_skips_only_equal_heights() {
+    let mut g = genesis(LevelId::E1M1);
+    let ctx = ctx_of(g.level, g.floor, g.ceil);
+    let sector = 0;
+    let ceiling = *g.ceil.at(sector);
+    let floor = *g.floor.at(sector);
+    // Include an unchanged mover and a changed mover, both plane kinds and
+    // all phases: equality of the actual derived value is the only shortcut.
+    let mut phase_index = 0;
+    while phase_index != 3 {
+        let phase = if phase_index == 0 {
+            Phase::Waiting
+        } else if phase_index == 1 {
+            Phase::Up
+        } else {
+            Phase::Down
+        };
+        g
+            .specials
+            .movers =
+                array![
+                    Mover {
+                        kind: MoverKind::DoorNormal,
+                        phase,
+                        sector,
+                        height: fixed::Fixed { enc: ceiling },
+                        top: fixed::Fixed { enc: ceiling },
+                        bottom: fixed::Fixed { enc: floor },
+                        count: 1,
+                    },
+                    Mover {
+                        kind: MoverKind::PlatDownWaitUpStay,
+                        phase,
+                        sector,
+                        height: fixed::Fixed { enc: floor + 1 },
+                        top: fixed::Fixed { enc: ceiling },
+                        bottom: fixed::Fixed { enc: floor },
+                        count: 1,
+                    },
+                ]
+            .span();
+        let (f, c) = refresh_heights(ctx, g.floor, g.ceil, 2, @g.specials);
+        assert(c == g.ceil, 'equal ceiling');
+        assert(f == set_felt(g.floor, sector, floor + 1), 'changed floor');
+        let (f2, c2) = refresh_heights(ctx, f, c, 2, @g.specials);
+        assert(f2 == f && c2 == c, 'repeat is unchanged');
+        // Reverse the change: a moving plane can return to its old height.
+        let (f3, c3) = refresh_heights(ctx, f, set_felt(c, sector, ceiling + 1), 2, @g.specials);
+        assert(f3 == f && c3 == g.ceil, 'changed ceiling');
+        phase_index += 1;
+    }
+}
+
+#[test]
+fn test_refresh_preserves_sequential_movers_in_the_same_sector() {
+    let mut g = genesis(LevelId::E1M1);
+    let ctx = ctx_of(g.level, g.floor, g.ceil);
+    let sector = 0;
+    let original = *g.ceil.at(sector);
+    let first = Mover {
+        kind: MoverKind::DoorNormal,
+        phase: Phase::Up,
+        sector,
+        height: fixed::Fixed { enc: original + 1 },
+        top: fixed::Fixed { enc: original + 2 },
+        bottom: fixed::Fixed { enc: original },
+        count: 0,
+    };
+    let mut second = first;
+    second.height.enc = original;
+    // Such duplicate plane thinkers are not produced by gameplay. Keeping
+    // sequential write semantics also avoids relying on that invariant here.
+    g.specials.movers = array![first, second].span();
+    let (f, c) = refresh_heights(ctx, g.floor, g.ceil, 2, @g.specials);
+    assert(f == g.floor && c == g.ceil, 'later mover restores original');
+    g.specials.movers = array![second, first].span();
+    let (f2, c2) = refresh_heights(ctx, g.floor, g.ceil, 2, @g.specials);
+    assert(f2 == g.floor, 'floor untouched');
+    assert(c2 == set_felt(g.ceil, sector, original + 1), 'later mover wins');
 }
