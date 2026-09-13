@@ -1,7 +1,7 @@
 export interface SimIdentity {
   version: 1;
   stateSchema: 2;
-  snapshotSchema: 1;
+  snapshotSchema: 1 | 2;
   revision: string;
   hashes: { session: string; genesis: string; step: string; wasm: string };
 }

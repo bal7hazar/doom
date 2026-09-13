@@ -56,7 +56,7 @@ def main():
         shutil.copyfile(source, target)
         hashes[name] = hashlib.sha256(target.read_bytes()).hexdigest()
     hashes["wasm"] = WASM_SHA
-    manifest = dict(version=1, stateSchema=2, snapshotSchema=1,
+    manifest = dict(version=1, stateSchema=2, snapshotSchema=2,
                     revision=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                     hashes=hashes)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

@@ -143,9 +143,9 @@ Les ressources manquantes et métadonnées périmées arrêtent explicitement le
 Seuls les trois flags communs sont transmis au ring : `CORPSE` (8) n'est jamais
 pris pour `TELEPORTED` (8). Les bits corps/missile restent dans les données brutes.
 Le HUD traduit les armes compactes Cairo 0..4 : 4 est la tronçonneuse, sans ammo ;
-la démo conserve ses identifiants classiques. Le snapshot v1 ne contient toujours
-pas les psprites, leurs offsets, le flash, viewz ou les compteurs de palette.
-L'arme reste une image statique, la caméra et certains effets restent approximés :
+la démo conserve ses identifiants classiques. Le snapshot v1 historique ne contient
+pas les psprites ; le snapshot live v2 décrit ci-dessous ajoute arme et flash.
+La caméra et certains effets restent approximés :
 ce lot ne constitue pas un rendu Doom exact ni un MVP visuel achevé.
 Une sortie dépassant les capacités du ring est une erreur, jamais une troncature.
 
@@ -186,3 +186,30 @@ Le smoke test de la production dessine un vrai frame Cairo et conserve les
 quatre tests du renderer de démonstration. Ces mesures ne constituent pas une
 campagne de gameplay complet avec capture, animations finales et preuve
 simultanée sur machine 16 GiB ; aucun GO matériel ou cryptographique n'en découle.
+
+### Live psprites (2026-09-13)
+
+R5 now emits **render schema 2**: the unchanged v1 fields (apart from version)
+followed by two five-felt slots: `state, sprite, frame, sx.enc, sy.enc`. These are
+Cairo's weapon and flash states; state zero hides the slot, frame retains the
+fullbright bit, and flash uses the weapon offsets. No JS weapon state machine
+or wall-clock animation is involved. The ring carries the two slots without
+interpolation so the HUD displays the same tic as the player statistics.
+
+The continuation publishes v2 before the first `hp_poll`, including after loading
+an in-flight shot checkpoint: pause/redraw/restore consumes no extra game tic.
+The manifest advertises schema2 and the backend checks its live frame version.
+The standalone `step_tic` keeps v1, and all six dev/proving game executables,
+state schema2 and proof task identity stay unchanged. The v2 projection is kept
+separate intentionally: sharing its header builder altered the step executable.
+The test compares every legacy field and both slots against the exact state.
+
+Only the audited S14 v1 session can migrate to this v2 session while all other
+executable hashes match. Existing journal provenance is retained; loaded session
+identity is tracked separately. Unknown game versions remain rejected. Existing
+proof exports keep their artifact identity and are still accepted.
+
+HUD selects the exact WAD frame, signed patch offsets and flip for each visible
+slot; unknown frames fail explicitly. Weapon/flash currently use palette0 like
+the previous HUD, without sector-light shading. Legacy v1/demo frames alone keep
+the static weapon fallback. Gameplay/cadence/ammo remain entirely Cairo-owned.

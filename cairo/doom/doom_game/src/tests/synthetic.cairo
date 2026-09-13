@@ -808,3 +808,34 @@ fn test_refresh_preserves_sequential_movers_in_the_same_sector() {
     assert(f2 == g.floor, 'floor untouched');
     assert(c2 == set_felt(g.ceil, sector, original + 1), 'later mover wins');
 }
+
+#[test]
+fn test_live_psprites_are_exact_render_only_projection() {
+    let mut game = genesis(LevelId::E1M1);
+    let mut tic: u32 = 0;
+    while tic < 45 {
+        let before = serialize(@game);
+        let legacy = snapshot(@game);
+        let live = crate::render::snapshot_with_psprites(@game);
+        assert(*live.at(0) == 2, 'v2');
+        assert(live.len() == legacy.len() + 10, 'trailer length');
+        let mut i = 1;
+        while i < legacy.len() {
+            assert(*live.at(i) == *legacy.at(i), 'v1 projection');
+            i += 1;
+        }
+        let states = doom_things::states();
+        let p = @game.player;
+        let expected = array![
+            (*p.psp_state).into(), (*states.sprite.at(*p.psp_state)).into(),
+            (*states.frame.at(*p.psp_state)).into(), *p.psp_sx.enc, *p.psp_sy.enc,
+            (*p.flash_state).into(), (*states.sprite.at(*p.flash_state)).into(),
+            (*states.frame.at(*p.flash_state)).into(), *p.psp_sx.enc, *p.psp_sy.enc,
+        ];
+        assert(live.span().slice(legacy.len(), 10) == expected.span(), 'psprite fields');
+        assert(serialize(@game) == before, 'no state change');
+        let (next, _) = step_tic(game, word(0, 0, 0, 1));
+        game = next;
+        tic += 1;
+    }
+}

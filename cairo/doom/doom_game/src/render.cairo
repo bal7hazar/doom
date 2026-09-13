@@ -219,3 +219,49 @@ fn count_live(mut mobjs: Span<Box<Mobj>>) -> u32 {
     }
     n
 }
+
+/// Live render v2, deliberately separate to preserve the v1 executable identity.
+pub fn snapshot_with_psprites(s: @GameState) -> Array<felt252> {
+    let m = doom_map::load(*s.level);
+    let lm = doom_specials::load(*s.level);
+    let mobjs = *s.mobjs;
+    let p = s.player;
+    let mo = match mobjs.get(*p.mo) {
+        Option::Some(b) => b.unbox().unbox(),
+        Option::None => doom_physics::removed_mobj(),
+    };
+    // The header counts need only a narrow roster scan and three lengths.
+    // Write the final array directly; copying the entire body cost 24k
+    // steps on E1M1's 210 slots.
+    let n_mobjs = count_live(mobjs);
+    let n_sectors = lm.ceil_sectors.len() + lm.floor_sectors.len() + lm.light_sectors.len();
+    let mut out: Array<felt252> = array![
+        2, (*s.leveltime).into(), status_felt(*s.status), n_mobjs.into(), n_sectors.into(),
+    ];
+    push_player(ref out, p, @mo);
+    out.append((*p.killcount).into());
+    out.append((*p.itemcount).into());
+    out.append((*p.secretcount).into());
+    out.append(TOTAL_KILLS.into());
+    out.append(TOTAL_ITEMS.into());
+    out.append(TOTAL_SECRETS.into());
+    out.append((*s.leveltime).into());
+    push_mobjs(ref out, mobjs, doom_things::states());
+    push_sectors(ref out, s.specials, @m, @lm);
+    let states = doom_things::states();
+    push_psprite(ref out, *p.psp_state, *p.psp_sx.enc, *p.psp_sy.enc, states);
+    push_psprite(ref out, *p.flash_state, *p.psp_sx.enc, *p.psp_sy.enc, states);
+    out
+}
+
+/// Render-only v2 trailer: state, sprite, frame (including fullbright), sx, sy.
+/// State zero hides a slot. Flash offsets follow the weapon, as P_MovePsprites.
+fn push_psprite(
+    ref out: Array<felt252>, state: u32, sx: felt252, sy: felt252, states: fsm::StateTables,
+) {
+    out.append(state.into());
+    out.append((*states.sprite.at(state)).into());
+    out.append((*states.frame.at(state)).into());
+    out.append(sx);
+    out.append(sy);
+}

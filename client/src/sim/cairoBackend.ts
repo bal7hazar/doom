@@ -38,7 +38,7 @@ export async function loadCairoBackend(assets = "/sim/"): Promise<CairoBackend> 
   const base = new URL(assets, globalThis.location.href);
   if (base.origin !== globalThis.location.origin || !base.pathname.endsWith("/")) throw new Error("simulation assets must be a same-origin directory");
   const identity = JSON.parse(new TextDecoder().decode(await fetchBytes(new URL("manifest.json", base)))) as SimIdentity;
-  if (identity.version !== 1 || identity.stateSchema !== 2 || identity.snapshotSchema !== 1) throw new Error("unsupported simulation manifest");
+  if (identity.version !== 1 || identity.stateSchema !== 2 || (identity.snapshotSchema !== 1 && identity.snapshotSchema !== 2)) throw new Error("unsupported simulation manifest");
   const [wasm, session, genesis, step] = await Promise.all([
     verified(base, "hellproof_sim_bg.wasm", identity.hashes.wasm),
     verified(base, "session.json", identity.hashes.session),
@@ -56,6 +56,10 @@ export async function loadCairoBackend(assets = "/sim/"): Promise<CairoBackend> 
   catch (error) { genesisProgram.free(); throw error; }
   let sim: Continuation | undefined;
   const current = (): Continuation => { if (!sim) throw new Error("simulation not initialized"); return sim; };
+  const checkedFrame = (bytes: Uint8Array): Uint8Array => {
+    if (decodeFelts(bytes)[0] !== BigInt(identity.snapshotSchema)) throw new Error("Cairo frame schema differs from manifest");
+    return bytes;
+  };
   return {
     identity,
     initialize(initial) {
@@ -76,11 +80,11 @@ export async function loadCairoBackend(assets = "/sim/"): Promise<CairoBackend> 
       if (!sameBytes(state, canonical)) throw new Error("checkpoint changed during zero-tic validation");
       stateTic(canonical);
       sim = mod.SimContinuation.load(sessionJson, canonical);
-      return { state: canonical, frame: encodeFelts(output.slice(count + 3)), status };
+      return { state: canonical, frame: checkedFrame(identity.snapshotSchema === 2 ? sim.snapshot() : encodeFelts(output.slice(count + 3))), status };
     },
     advance: (word, quantum) => current().advance(word, quantum),
     resume: quantum => current().resume(quantum),
-    snapshot: () => current().snapshot(),
+    snapshot: () => checkedFrame(current().snapshot()),
     status: () => current().status(),
     requestCheckpoint: quantum => current().request_checkpoint(quantum),
     checkpoint: () => current().checkpoint(),

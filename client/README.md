@@ -406,8 +406,8 @@ resources stop rendering explicitly. Compact weapon 4 is the chainsaw, with no
 current-ammo counter; the explicit `?sim=demo` route retains classic weapon ids.
 The source sprite-name asset and its GPL-2.0-only license ship together; no client
 state machine consumes the source state tables. See [the simulation notes](src/sim/README.md)
-for the v1 limits: static weapon image, absent psprites/viewz/palette counters and
-approximate visual effects. The historical demonstration measurements below are
+for the live v2 weapon/flash animation and the remaining approximate visual effects.
+Legacy v1/demo snapshots keep their static weapon fallback. The historical demonstration measurements below are
 not measurements of the real Cairo simulation.
 
 **Rendered.** Sector floors and ceilings with per-sector light and moving
