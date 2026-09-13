@@ -42,7 +42,7 @@ export class DoomPreparationClient implements PreparationPort {
   }
 }
 function simulationKey(i: SimIdentity): string {
-  if (i.version !== 1 || i.stateSchema !== 2 || i.snapshotSchema !== 1 || typeof i.revision !== "string"
+  if (i.version !== 1 || i.stateSchema !== 2 || (i.snapshotSchema !== 1 && i.snapshotSchema !== 2) || typeof i.revision !== "string"
       || Object.values(i.hashes).some(h => typeof h !== "string" || !/^[a-f0-9]{64}$/.test(h))) throw new Error("incompatible Cairo journal identity");
   return JSON.stringify([i.version, i.stateSchema, i.snapshotSchema, i.revision,
     i.hashes.session, i.hashes.genesis, i.hashes.step, i.hashes.wasm]);
@@ -73,7 +73,7 @@ export async function createDoomProgram(options: DoomProgramOptions): Promise<Do
       if (saved.run.program !== "doom" || saved.run.programHashFunction !== "blake" || !saved.run.programIdentity
           || normalizeFelt(saved.run.genesis) !== normalizeFelt(ready.genesis)) throw new Error("incompatible persisted Doom run");
       const metadata = JSON.parse(saved.run.programIdentity) as { simulation: string };
-      const fields = JSON.parse(metadata.simulation) as [1, 2, 1, string, string, string, string, string];
+      const fields = JSON.parse(metadata.simulation) as [1, 2, 1 | 2, string, string, string, string, string];
       const sim: SimIdentity = { version: fields[0], stateSchema: fields[1], snapshotSchema: fields[2], revision: fields[3],
         hashes: { session: fields[4], genesis: fields[5], step: fields[6], wasm: fields[7] } };
       if (saved.words.length !== saved.run.ticCount) throw new Error("persisted journal length differs from run");
@@ -87,7 +87,7 @@ export async function createDoomProgram(options: DoomProgramOptions): Promise<Do
     const readJournal = (): number[] => {
       const data = readSource();
       InputJournal.import(data); // Canonical envelope/input packing only; its checkpoint is never a proof root.
-      if (data.identity.version !== 1 || data.identity.stateSchema !== 2 || data.identity.snapshotSchema !== 1
+      if (data.identity.version !== 1 || data.identity.stateSchema !== 2 || (data.identity.snapshotSchema !== 1 && data.identity.snapshotSchema !== 2)
           || data.identity.hashes.genesis !== pins.genesis || data.identity.hashes.step !== pins.step || data.identity.hashes.wasm !== pins.wasm
           || simulationKey(data.identity) !== simulationKey(origin)) throw new Error("incompatible Cairo journal identity");
       if (!exactFelts(data.initial, ready.initial)) throw new Error("proof journal must start at the pinned real genesis; imported checkpoint is not a root");

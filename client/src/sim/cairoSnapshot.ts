@@ -1,5 +1,5 @@
 import { decodeFelts, u32 } from "./felts.js";
-import { MAX_MOBJS, MAX_DYNAMIC_SECTORS, type RenderSnapshot } from "./snapshot.js";
+import { MAX_MOBJS, MAX_DYNAMIC_SECTORS, type PspriteSnapshot, type RenderSnapshot } from "./snapshot.js";
 
 /** Original fields are retained beside the explicitly incomplete renderer view. */
 export interface CairoFrame {
@@ -17,9 +17,9 @@ export function decodeCairoSnapshot(bytes: Uint8Array): CairoFrame {
     if (value === undefined || value < (1n << 31n) || value >= 3n * (1n << 31n)) throw new RangeError("fixed enc outside signed fixed_t");
     return Number(value - (1n << 32n));
   };
-  if (f[0] !== 1n || f.length < 36) throw new RangeError("unsupported Cairo snapshot");
+  if ((f[0] !== 1n && f[0] !== 2n) || f.length < 36) throw new RangeError("unsupported Cairo snapshot");
   const count = n(3), sectors = n(4), status = n(2);
-  if (status > 3 || count > MAX_MOBJS || sectors > MAX_DYNAMIC_SECTORS || f.length !== 36 + count * 11 + sectors * 4) {
+  if (status > 3 || count > MAX_MOBJS || sectors > MAX_DYNAMIC_SECTORS || f.length !== 36 + count * 11 + sectors * 4 + (f[0] === 2n ? 10 : 0)) {
     throw new RangeError("invalid or oversized Cairo snapshot");
   }
   const snapshot: RenderSnapshot = {
@@ -28,7 +28,7 @@ export function decodeCairoSnapshot(bytes: Uint8Array): CairoFrame {
       sector: n(10), health: n(11), armor: n(12), armorType: n(13),
       ammo: [n(14), n(15), n(16), n(17)], maxAmmo: [n(18), n(19), n(20), n(21)],
       weapon: n(22), pendingWeapon: n(23), keys: n(24), damageCount: n(25), bonusCount: n(26),
-      // The render ABI does not contain the psprite FSM. Keep the actual attackdown bit only.
+      // Legacy attackdown is retained; v2 slots below carry the real psprite FSM.
       attackTic: n(27) },
     stats: { kills: n(29), items: n(30), secrets: n(31), totalKills: n(32), totalItems: n(33), totalSecrets: n(34), levelTime: n(35) },
     mobjs: [], sectors: [],
@@ -47,6 +47,10 @@ export function decodeCairoSnapshot(bytes: Uint8Array): CairoFrame {
     const lightLevel = n(at + 3);
     if (lightLevel > 255) throw new RangeError("invalid sector light");
     snapshot.sectors.push({ index: n(at), floorHeight: fixed(at + 1), ceilingHeight: fixed(at + 2), lightLevel });
+  }
+  if (f[0] === 2n) {
+    const at = 36 + count * 11 + sectors * 4;
+    snapshot.player.psprites = [at, at + 5].map(i => ({ state: n(i), sprite: n(i + 1), frame: n(i + 2), x: fixed(i + 3), y: fixed(i + 4) })) as [PspriteSnapshot, PspriteSnapshot];
   }
   return { snapshot, status, playerstate: n(28), actors };
 }

@@ -1,3 +1,5 @@
+import type { SimIdentity } from "./cairoProtocol.js";
+import { compatibleSimulation } from "./simulationCompatibility.js";
 import { InputJournal, type JournalExport } from "../game/inputJournal.js";
 import { encodeCmd, quantize, type TicCmd } from "../prove/ticcmd.js";
 import { decodeCairoSnapshot, type CairoFrame } from "./cairoSnapshot.js";
@@ -24,6 +26,8 @@ export function viewMobjFromValidatedState(state: Uint8Array): number {
 export class CairoClient {
   readonly ring = new SnapshotRing(new ArrayBuffer(RING_BYTES));
   journal?: InputJournal;
+  /** Artifact identity currently loaded, distinct from an imported journal’s provenance. */
+  loadedIdentity?: SimIdentity;
   latest?: CairoFrame;
   lastRawFrame?: Uint8Array;
   viewMobjId = 0;
@@ -72,6 +76,7 @@ export class CairoClient {
 
   private ready(message: ResponseOf<"ready">): void {
     this.sequence = 0; ++this.pauseEpoch;
+    this.loadedIdentity = structuredClone(message.identity);
     this.journal = new InputJournal(message.identity, new Uint8Array(message.state));
     this.viewMobjId = viewMobjFromValidatedState(new Uint8Array(message.state));
     this.ring.resetLocal();
@@ -107,7 +112,7 @@ export class CairoClient {
   async restore(data: JournalExport, assets = "/sim/"): Promise<void> {
     const journal = InputJournal.import(data), plan = journal.boundary(journal.ticEnd);
     await this.init(assets, plan.state);
-    if ((["session", "genesis", "step", "wasm"] as const).some(key => this.journal!.identity.hashes[key] !== journal.identity.hashes[key])) {
+    if (!compatibleSimulation(journal.identity, this.journal!.identity)) {
       throw new Error("journal executable identity differs from loaded simulation");
     }
     await this.resume();

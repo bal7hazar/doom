@@ -69,7 +69,7 @@ export class InputJournal {
   }
   /** Validates the envelope, not cryptographic provenance. Imported play still needs Cairo replay for proof. */
   static import(data: JournalExport): InputJournal {
-    if (data.version !== 1 || data.identity.stateSchema !== 2 || data.identity.snapshotSchema !== 1 || !Number.isSafeInteger(data.ticCount) || data.ticCount < 0) throw new Error("invalid journal envelope");
+    if (data.version !== 1 || data.identity.stateSchema !== 2 || (data.identity.snapshotSchema !== 1 && data.identity.snapshotSchema !== 2) || !Number.isSafeInteger(data.ticCount) || data.ticCount < 0) throw new Error("invalid journal envelope");
     const initial = encodeFelts(data.initial), saved = encodeFelts(data.checkpoint);
     const journal = new InputJournal(data.identity, initial);
     const words = unpackLog(data.inputs, data.ticCount);

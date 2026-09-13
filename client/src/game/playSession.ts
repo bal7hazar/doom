@@ -1,3 +1,4 @@
+import { compatibleSimulation } from "../sim/simulationCompatibility.js";
 import type { CairoClient } from "../sim/cairoClient.js";
 import type { CairoScheduler } from "../sim/cairoScheduler.js";
 import { GameInput } from "./gameInput.js";
@@ -150,7 +151,7 @@ export class PlaySession {
       throw new Error("This save needs too much replay. Export it again with a recent checkpoint.");
     }
     const current = this.client.journal!;
-    if ((["session", "genesis", "step", "wasm"] as const).some(key => data.identity.hashes[key] !== current.identity.hashes[key])) {
+    if (!compatibleSimulation(data.identity, this.client.loadedIdentity ?? current.identity)) {
       throw new Error("This save belongs to a different game version. Your current run is unchanged.");
     }
     await this.client.checkpoint();
