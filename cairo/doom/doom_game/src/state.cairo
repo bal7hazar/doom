@@ -35,7 +35,6 @@
 //! observes it. Schema 2 hashes that order and restores it exactly; the
 //! append-only grid journal itself is not serialized.
 
-use core::dict::{Felt252Dict, Felt252DictEntryTrait};
 use doom_map::{LevelId, LevelMap, genesis as level_genesis};
 use doom_monsters::Noise;
 use doom_physics::{HEALTH_BIAS, MOBJ_FELTS, Mobj, NO_MOBJ, ThingGrid, push_felts as push_mobj};
@@ -233,51 +232,101 @@ fn read_player(ref r: Reader) -> Option<Player> {
     )
 }
 
-fn read_mobj(ref r: Reader) -> Option<Mobj> {
-    let kind = next_u32(ref r)?;
-    let x = next_fixed(ref r)?;
-    let y = next_fixed(ref r)?;
-    let z = next_fixed(ref r)?;
-    let angle = next_u32(ref r)?;
-    let momx = next_fixed(ref r)?;
-    let momy = next_fixed(ref r)?;
-    let momz = next_fixed(ref r)?;
-    let radius = next_fixed(ref r)?;
-    let height = next_fixed(ref r)?;
-    let flags = next_u32(ref r)?;
-    let biased = next(ref r)?;
-    let health: i32 = (biased - HEALTH_BIAS).try_into()?;
+/// A fixed-width record is bounds-checked once before reading its fields.
+/// Field-domain checks remain identical to the scalar reader.
+#[inline(never)]
+fn read_mobj(ref r: Reader) -> Option<Box<Mobj>> {
+    if r.data.len() - r.pos < MOBJ_FELTS {
+        return Option::None;
+    }
+    let record = r.data.slice(r.pos, MOBJ_FELTS);
+    let raw: @Box<[felt252; 27]> = record.try_into()?;
+    r.pos += MOBJ_FELTS;
+    let [
+        kind,
+        x,
+        y,
+        z,
+        angle,
+        momx,
+        momy,
+        momz,
+        radius,
+        height,
+        flags,
+        biased_health,
+        state,
+        tics,
+        target,
+        reaction_time,
+        threshold,
+        move_dir,
+        move_count,
+        cell,
+        subsector,
+        sector,
+        floorz,
+        ceilingz,
+        sight_expires,
+        sight_sector,
+        sight_ok,
+    ] =
+        raw
+        .unbox();
     Option::Some(
-        Mobj {
-            kind,
-            x,
-            y,
-            z,
-            angle,
-            momx,
-            momy,
-            momz,
-            radius,
-            height,
-            flags,
-            health,
-            state: next_u32(ref r)?,
-            tics: next_u32(ref r)?,
-            target: next_u32(ref r)?,
-            reaction_time: next_u32(ref r)?,
-            threshold: next_u32(ref r)?,
-            move_dir: next_u32(ref r)?,
-            move_count: next_u32(ref r)?,
-            cell: next_u32(ref r)?,
-            subsector: next_u32(ref r)?,
-            sector: next_u32(ref r)?,
-            floorz: next_fixed(ref r)?,
-            ceilingz: next_fixed(ref r)?,
-            sight_expires: next_u32(ref r)?,
-            sight_sector: next_u32(ref r)?,
-            sight_ok: next_bool(ref r)?,
-        },
+        BoxTrait::new(
+            Mobj {
+                kind: kind.try_into()?,
+                x: fixed_of(x)?,
+                y: fixed_of(y)?,
+                z: fixed_of(z)?,
+                angle: angle.try_into()?,
+                momx: fixed_of(momx)?,
+                momy: fixed_of(momy)?,
+                momz: fixed_of(momz)?,
+                radius: fixed_of(radius)?,
+                height: fixed_of(height)?,
+                flags: flags.try_into()?,
+                health: (biased_health - HEALTH_BIAS).try_into()?,
+                state: state.try_into()?,
+                tics: tics.try_into()?,
+                target: target.try_into()?,
+                reaction_time: reaction_time.try_into()?,
+                threshold: threshold.try_into()?,
+                move_dir: move_dir.try_into()?,
+                move_count: move_count.try_into()?,
+                cell: cell.try_into()?,
+                subsector: subsector.try_into()?,
+                sector: sector.try_into()?,
+                floorz: fixed_of(floorz)?,
+                ceilingz: fixed_of(ceilingz)?,
+                sight_expires: sight_expires.try_into()?,
+                sight_sector: sight_sector.try_into()?,
+                sight_ok: bool_of(sight_ok)?,
+            },
+        ),
     )
+}
+
+#[inline(always)]
+fn fixed_of(f: felt252) -> Option<Fixed> {
+    let u: u64 = f.try_into()?;
+    if u < FIXED_BOUND {
+        Option::Some(Fixed { enc: f })
+    } else {
+        Option::None
+    }
+}
+
+#[inline(always)]
+fn bool_of(f: felt252) -> Option<bool> {
+    if f == 0 {
+        Option::Some(false)
+    } else if f == 1 {
+        Option::Some(true)
+    } else {
+        Option::None
+    }
 }
 
 fn read_felts(ref r: Reader, n: u32) -> Option<Span<felt252>> {
@@ -465,16 +514,13 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
         || (noise.source != NO_MOBJ && noise.sector >= m.s_floor.len()) {
         return Option::None;
     }
-    let mut mobjs: Array<Mobj> = array![];
-    let mut k: u32 = 0;
-    while k != n_mobjs {
-        let mo = read_mobj(ref r)?;
-        if !valid_mobj(mo, m, n_mobjs) {
-            return Option::None;
-        }
-        mobjs.append(mo);
-        k = k + 1;
-    }
+    let mobjs = read_mobjs(
+        ref r,
+        n_mobjs,
+        MapBounds {
+            sectors: m.s_floor.len(), subsectors: m.ss_sector.len(), cells: m.cell_node.len(),
+        },
+    )?;
     if player.mo >= n_mobjs {
         return Option::None;
     }
@@ -488,27 +534,33 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
     if r.pos - before != n_specials {
         return Option::None;
     }
-    let grid = read_grid(ref r, mobjs.span(), m.cell_node.len())?;
+    let grid = read_grid(ref r, mobjs, m.cell_node.len())?;
     if r.pos != data.len() {
         return Option::None;
     }
     let (floor, ceil) = materialise_heights(@m, @lm, @specials);
     Option::Some(
         GameState {
-            level,
-            leveltime,
-            status,
-            noise,
-            prng,
-            mrng,
-            player,
-            mobjs: mobjs.span(),
-            specials,
-            floor,
-            ceil,
-            grid,
+            level, leveltime, status, noise, prng, mrng, player, mobjs, specials, floor, ceil, grid,
         },
     )
+}
+
+/// Decode and validate the roster outside `from_felts`' wide player/level
+/// live set. The helper returns only the span and reader position (S7 §8).
+#[inline(never)]
+fn read_mobjs(ref r: Reader, n_mobjs: u32, bounds: MapBounds) -> Option<Span<Mobj>> {
+    let mut mobjs: Array<Mobj> = array![];
+    let mut k: u32 = 0;
+    while k != n_mobjs {
+        let mo = read_mobj(ref r)?.unbox();
+        if !valid_mobj(mo, bounds, n_mobjs) {
+            return Option::None;
+        }
+        mobjs.append(mo);
+        k = k + 1;
+    }
+    Option::Some(mobjs.span())
 }
 
 /// `NO_MOBJ`, re-exported for the tests.
@@ -549,16 +601,23 @@ fn valid_player(p: Player, n: u32) -> bool {
         && p.cheats == 0
 }
 
-fn valid_mobj(mo: Mobj, m: LevelMap, n: u32) -> bool {
+#[derive(Copy, Drop)]
+struct MapBounds {
+    sectors: u32,
+    subsectors: u32,
+    cells: u32,
+}
+
+fn valid_mobj(mo: Mobj, bounds: MapBounds, n: u32) -> bool {
     if doom_physics::is_removed(@mo) {
         return mo == doom_physics::removed_mobj();
     }
     mo.kind < doom_things::num_kinds()
         && mo.state < doom_things::num_states()
         && valid_index(mo.target, n)
-        && mo.sector < m.s_floor.len()
-        && mo.subsector < m.ss_sector.len()
-        && (mo.cell == doom_physics::NO_CELL || mo.cell < m.cell_node.len())
+        && mo.sector < bounds.sectors
+        && mo.subsector < bounds.subsectors
+        && (mo.cell == doom_physics::NO_CELL || mo.cell < bounds.cells)
         && mo.move_dir <= 8
         && mo.health > -0x100000
         && mo.health < 0x100000
@@ -603,8 +662,7 @@ fn read_grid(ref r: Reader, mobjs: Span<Mobj>, cells: u32) -> Option<ThingGrid> 
     if n > mobjs.len() {
         return Option::None;
     }
-    let mut seen_cells: Felt252Dict<bool> = Default::default();
-    let mut seen_members: Felt252Dict<bool> = Default::default();
+    let mut seen_members = (0_u64, 0_u64, 0_u64, 0_u64);
     let mut grid = doom_physics::new_grid();
     let mut i: u32 = 0;
     let mut linked: u32 = 0;
@@ -613,31 +671,15 @@ fn read_grid(ref r: Reader, mobjs: Span<Mobj>, cells: u32) -> Option<ThingGrid> 
         if cell >= cells {
             return Option::None;
         }
-        let (entry, duplicate) = seen_cells.entry(cell.into());
-        seen_cells = entry.finalize(true);
-        if duplicate {
-            return Option::None;
-        }
         let count = next_u32(ref r)?;
         if count == 0 || count > mobjs.len() - linked {
             return Option::None;
         }
-        let mut j: u32 = 0;
-        while j < count {
-            let idx = next_u32(ref r)?;
-            let mo = mobjs.get(idx)?.unbox();
-            if !doom_physics::in_blockmap(mo) || *mo.cell != cell {
-                return Option::None;
-            }
-            let (entry, duplicate) = seen_members.entry(idx.into());
-            seen_members = entry.finalize(true);
-            if duplicate {
-                return Option::None;
-            }
-            doom_physics::link(ref grid, cell, idx);
-            linked += 1;
-            j += 1;
+        let members = read_members(ref r, mobjs, cell, count, ref seen_members)?;
+        if !doom_physics::grid::restore_cell(ref grid, cell, members) {
+            return Option::None;
         }
+        linked += count;
         i += 1;
     }
     let mut expected: u32 = 0;
@@ -651,4 +693,67 @@ fn read_grid(ref r: Reader, mobjs: Span<Mobj>, cells: u32) -> Option<ThingGrid> 
         return Option::None;
     }
     Option::Some(grid)
+}
+
+/// Validate one cell outside the outer dict/grid live set. Four 64-bit
+/// words cover all MAX_MOBJS=256 indices without a second dict and squash.
+fn read_members(
+    ref r: Reader, mobjs: Span<Mobj>, cell: u32, count: u32, ref seen: (u64, u64, u64, u64),
+) -> Option<Span<u32>> {
+    let mut members = array![];
+    let mut left = count;
+    while left != 0 {
+        let idx = next_u32(ref r)?;
+        let mo = mobjs.get(idx)?.unbox();
+        if !doom_physics::in_blockmap(mo) || *mo.cell != cell || mark_member(ref seen, idx) {
+            return Option::None;
+        }
+        members.append(idx);
+        left -= 1;
+    }
+    Option::Some(members.span())
+}
+
+const MEMBER_BITS: [u64; 64] = [
+    1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
+    262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864, 134217728,
+    268435456, 536870912, 1073741824, 2147483648, 4294967296, 8589934592, 17179869184, 34359738368,
+    68719476736, 137438953472, 274877906944, 549755813888, 1099511627776, 2199023255552,
+    4398046511104, 8796093022208, 17592186044416, 35184372088832, 70368744177664, 140737488355328,
+    281474976710656, 562949953421312, 1125899906842624, 2251799813685248, 4503599627370496,
+    9007199254740992, 18014398509481984, 36028797018963968, 72057594037927936, 144115188075855872,
+    288230376151711744, 576460752303423488, 1152921504606846976, 2305843009213693952,
+    4611686018427387904, 9223372036854775808,
+];
+
+fn mark_member(ref seen: (u64, u64, u64, u64), idx: u32) -> bool {
+    // `mobjs.get(idx)` succeeded and the roster is bounded by MAX_MOBJS.
+    let size: NonZero<u32> = 64;
+    let (group, bit) = DivRem::div_rem(idx, size);
+    let mask = match MEMBER_BITS.span().get(bit) {
+        Option::Some(v) => *v.unbox(),
+        Option::None => { return true; },
+    };
+    let (a, b, c, d) = seen;
+    let before = if group == 0 {
+        a
+    } else if group == 1 {
+        b
+    } else if group == 2 {
+        c
+    } else {
+        d
+    };
+    let after = before | mask;
+    seen =
+        if group == 0 {
+            (after, b, c, d)
+        } else if group == 1 {
+            (a, after, c, d)
+        } else if group == 2 {
+            (a, b, after, d)
+        } else {
+            (a, b, c, after)
+        };
+    (before & mask) != 0
 }

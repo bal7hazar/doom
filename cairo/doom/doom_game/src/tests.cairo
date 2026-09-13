@@ -3,5 +3,6 @@
 //! coordinate; `synthetic` the level-independent glue tests (the ones the
 //! coverage run executes on the miniature level).
 
+mod boundary;
 mod e1m1;
 mod synthetic;
