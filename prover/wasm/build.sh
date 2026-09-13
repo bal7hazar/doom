@@ -8,6 +8,7 @@
 #   VARIANTS="st" ./build.sh   # build only one variant (st = single-thread, mt = threads)
 #   NATIVE=1 ./build.sh        # also build the native reference binary
 #   NO_SIMD=1 ./build.sh       # build without +simd128 (comparison build)
+# Every artifact receives the Memory64 splat-load compatibility rewrite after optimization.
 #
 # Outputs: dist/hellproof_prover_wasm{,.threads}.wasm + SHA256SUMS, copied to harness/public/ and
 # pkg/wasm/ (the npm package's artifact directory).
@@ -133,6 +134,14 @@ STACK_SIZE=16777216      # main-thread shadow stack; worker stacks are allocated
 
 mkdir -p dist harness/public pkg/wasm
 
+# Liftoff in supported Node/V8 versions truncates Memory64 fused SIMD splat-load addresses.
+# Parse and lower those instructions to scalar loads + splats without changing memory/proof
+# parameters. This runs AFTER optional wasm-opt, which could otherwise fuse them again.
+SPLAT_TARGET_DIR="$CARGO_TARGET_DIR/memory64-splats"
+CARGO_TARGET_DIR="$SPLAT_TARGET_DIR" cargo +"$TOOLCHAIN" build --release --locked --jobs 2 \
+  --manifest-path "$HERE/tools/memory64-splats/Cargo.toml"
+SPLAT_TOOL="$SPLAT_TARGET_DIR/release/hellproof-memory64-splats"
+
 build_variant() {
   local variant="$1" out="$2" extra=""
   local tdir="$CARGO_TARGET_DIR/$variant"
@@ -172,6 +181,8 @@ build_variant() {
       "dist/$out" -o "dist/$out.opt"
     mv "dist/$out.opt" "dist/$out"
   fi
+  "$SPLAT_TOOL" "dist/$out" "dist/$out.lowered"
+  mv "dist/$out.lowered" "dist/$out"
   echo "  $out: $(numfmt --to=iec "$raw_size" 2>/dev/null || echo "$raw_size B") raw -> \
 $(wc -c < "dist/$out" | tr -d ' ') B ($(gzip -9 -c "dist/$out" | wc -c | tr -d ' ') B gzipped)" >&2
   cp "dist/$out" "harness/public/$out"

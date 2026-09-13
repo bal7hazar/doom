@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Hellproof contributors
+**/target/
+**/node_modules/
+vendor/
+dist/
+out/
+*.wasm
+**/*.wasm
+harness/results/

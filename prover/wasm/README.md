@@ -145,18 +145,51 @@ records the patched path source) with their patches. `vendor/rust-std` is a copy
 `library/` tree with `patches/rust-std-*.patch`; `-Z build-std` is pointed at it for the threaded
 variant only. `vendor/` is gitignored and rebuilt by `build.sh vendor`.
 
+**Memory64 SIMD compatibility (S12).** The build now applies
+[`tools/memory64-splats`](tools/memory64-splats/src/main.rs) after linking and after
+optional `wasm-opt`. It parses and validates the module, replacing the four fused
+`v128.load{8,16,32,64}_splat` instructions with scalar loads of the same width plus
+the corresponding splat. The complete memory argument (64-bit offset, alignment,
+memory index), values and trap behavior are preserved; no AIR, protocol, parameter,
+admission or memory ceiling changes. No later optimizer may reintroduce fused loads.
+
+Liftoff in the tested Node 24.16/V8 13.6 and Node 25.2/V8 14.1 truncates these fused
+load addresses above 4 GiB. This is reproduced in a tiny module and the real Stwo
+FFT kernels. Node `--no-liftoff` and Chromium 153.0.8010.12 pass the original test.
+The rewrite supports both affected and fixed engines. Its locked host-only parser
+dependency does not enter the prover's Cargo graph or WASM module. Runtime, high
+address, JIT and exact-width trap tests are documented in
+[`diagnostics/README.md`](diagnostics/README.md).
+
+The corrected four-thread Node proof of the real D33 segment is byte-for-byte
+identical to the original Chromium proof (4,332,446 bytes); both pass independent
+native verification. Corrected Node mono also verifies. This fixes local
+cryptographic verification; it does not make a log21 proof fit the log20 registry.
+
 **Reproducibility (R11-A1).** Two hash files are committed, because the build is bit-reproducible
 *per host*, not across hosts:
 
 | File | Built by | Sizes (st / mt) |
 |---|---|---|
 | `SHA256SUMS` (historical, before the AIR correction) | `./build.sh` on macOS arm64 | 45 035 551 / 45 111 575 B |
-| `SHA256SUMS.linux` (AIR correction) | `docker build --platform linux/arm64 -o out -f Dockerfile .` (Debian bookworm arm64) | 45 034 502 / 45 073 267 B |
+| `SHA256SUMS.linux` (AIR + Memory64 compatibility) | `docker build --platform linux/arm64 -o out -f Dockerfile .` (Debian bookworm arm64) | 45 034 571 / 45 073 335 B |
 
 ```sh
 docker build --platform linux/arm64 -o out -f prover/wasm/Dockerfile prover/wasm
 (cd out && shasum -a 256 -c ../prover/wasm/SHA256SUMS.linux)
 ```
+
+The complete Memory64 compatibility rebuild completed in 763.00 seconds on the pinned
+Linux arm64 image with two Cargo jobs. Both artifacts match the independently
+rewritten and already proved copies byte for byte: mono
+`0524c748f426a867254c9909da18f3d82cae07321558883598b775b9edfc3714`, threads
+`3534ddec473e406654161fd1c5138a27983de12d96a673519bdc24838e7e916c`.
+The immediately preceding AIR-corrected linker outputs were mono
+`3e94a4c0cd8a2e24af374bab733f77e2988b4b93731adea6a0a1b937009479a5`
+(45,034,502 B) and threads
+`fdb977ad4cbe2387a21a7472552b2b70b911252056c88d569e61de15da64277c`
+(45,073,267 B). The compatibility pass changes 69/68 instructions and adds 69/68
+bytes respectively. These previous hashes remain provenance, not current artifacts.
 
 The earlier Linux reference remains in Git history: 45 032 682 / 45 114 562 B,
 `e97232a0…ed48` / `41bba119…1b73` (st / mt). No macOS rebuild was performed for the AIR
