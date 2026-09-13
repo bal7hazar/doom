@@ -8,6 +8,7 @@
 //! `d_items.c`'s five weapon chains can reach.
 
 use bam::{Angle, point_to_angle2};
+use doom_physics::spawn::{roll, state_entry};
 use doom_physics::{
     AIMRANGE, Hit, MELEERANGE, MF_JUSTATTACKED, MISSILERANGE, Mobj, NO_MOBJ, ThingGrid, World,
     aim_line_attack, line_attack,
@@ -18,8 +19,9 @@ use doom_things::tables::{
 };
 use doom_things::{WeaponId, WeaponStates, weapon_states};
 use fixed::{BIAS, Fixed};
-use prng::{Prng, PrngTrait};
+use prng::Prng;
 use super::env::{Env, PlayerEvent};
+use super::num::{add32, dec, fine_of, half_fine, inc, mul32, rd32};
 use super::state::{
     AM_NOAMMO, BT_ATTACK, MAXBOB, PST_DEAD, Player, RAISESPEED, WEAPONBOTTOM, WEAPONTOP,
     WP_CHAINGUN, WP_CHAINSAW, WP_FIST, WP_NOCHANGE, WP_PISTOL, WP_SHOTGUN, ammo_of, owns, set_ammo,
@@ -39,6 +41,14 @@ pub const PS_FLASH: u32 = 1;
 /// three (`A_Lower` → up state → `A_Raise` → ready state → `A_WeaponReady`);
 /// the bound is here so that no input can make the proving path loop (R4-A2).
 pub const MAX_PSPR_DEPTH: u32 = 4;
+
+/// `ANG90 / 20`, the most `A_Saw` turns toward its victim in one tic, and
+/// `ANG90 / 21`, the angle it then snaps to. Folded here (a `/` on `u32` at
+/// the use site keeps a "division by zero" arm, S7 §8 rule 1).
+const SAW_STEP: u32 = 0x40000000 / 20;
+const SAW_SNAP: u32 = 0x40000000 / 21;
+/// `-SAW_STEP` as an unsigned `angle_t`.
+const NEG_SAW_STEP: u32 = 0xFFFFFFFF - SAW_STEP + 1;
 
 /// `S_PLAY`, the player mobj's idle state.
 pub const S_PLAY: u32 = 58;
@@ -127,7 +137,7 @@ pub fn set_psprite(
             set_slot(ref p, slot, 0, 0);
             break;
         }
-        let (tics, action) = fsm::enter(env.states, st);
+        let (tics, action) = state_entry(env.states, st);
         set_slot(ref p, slot, st, tics);
         if action != fsm::NO_ACTION && depth < MAX_PSPR_DEPTH {
             run_action(env, ref g, ref rng, ref p, ref mo, ref events, action, depth + 1);
@@ -141,8 +151,8 @@ pub fn set_psprite(
         if slot_tics(@p, slot) != 0 {
             break;
         }
-        st = *env.states.next_state.at(st);
-        guard += 1;
+        st = rd32(env.states.next_state, st);
+        guard = inc(guard);
         if guard > doom_things::MAX_ZERO_TIC_CHAIN {
             break;
         }
@@ -181,10 +191,10 @@ fn tick_slot(
         return;
     }
     if tics > 1 {
-        set_slot(ref p, slot, st, tics - 1);
+        set_slot(ref p, slot, st, dec(tics));
         return;
     }
-    let next = *env.states.next_state.at(st);
+    let next = rd32(env.states.next_state, st);
     set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, slot, next, 0);
 }
 
@@ -281,7 +291,7 @@ fn fire_weapon(
 /// `P_SetMobjState` on the player's own mobj: `fsm::enter` without the
 /// `doom_physics::set_state` wrapper, which would want the whole `World`.
 fn enter_mobj_state(env: Env, ref mo: Mobj, state: u32) {
-    let (tics, _) = fsm::enter(env.states, state);
+    let (tics, _) = state_entry(env.states, state);
     mo.state = state;
     mo.tics = tics;
 }
@@ -356,10 +366,10 @@ fn a_weapon_ready(
     }
     p.attackdown = false;
     // Bob the weapon with the player's speed.
-    let idx = (128 * env.tic) % 8192;
+    let idx = fine_of(128, env.tic);
     p.psp_sx = fixed::add(fixed::FRACUNIT, fixed::mul(p.bob, bam::finecosine(idx)));
     let top = Fixed { enc: BIAS + WEAPONTOP };
-    p.psp_sy = fixed::add(top, fixed::mul(p.bob, bam::finesine(idx % 4096)));
+    p.psp_sy = fixed::add(top, fixed::mul(p.bob, bam::finesine(half_fine(idx))));
 }
 
 /// `A_ReFire`.
@@ -373,7 +383,7 @@ fn a_refire(
     depth: u32,
 ) {
     if (env.buttons & BT_ATTACK) != 0 && p.pending_weapon == WP_NOCHANGE && p.health != 0 {
-        p.refire += 1;
+        p.refire = inc(p.refire);
         fire_weapon(env, ref g, ref rng, ref p, ref mo, ref events, depth);
     } else {
         p.refire = 0;
@@ -447,7 +457,9 @@ fn a_fire_gun(
 ) {
     enter_mobj_state(env, ref mo, S_PLAY_ATK);
     let ammo = weapon_ammo(p.ready_weapon);
-    p = set_ammo(p, ammo, ammo_of(@p, ammo) - 1);
+    // `P_CheckAmmo` ran first, so the counter is at least one; `dec` is that
+    // subtraction without the underflow panic (S7 §8 rule 1).
+    p = set_ammo(p, ammo, dec(ammo_of(@p, ammo)));
     let flash = chain(p.ready_weapon).flash;
     set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_FLASH, flash, depth);
     let accurate = shots == 1 && p.refire == 0;
@@ -493,20 +505,30 @@ fn shoot(
     let rnd = w.rndtable;
     let mut k: u32 = 0;
     while k != shots {
-        let (r1, roll) = rng.below(rnd, 3);
-        rng = r1;
-        let damage: u32 = 5 * (roll.into() + 1);
+        let three: NonZero<u8> = 3;
+        let (_, r) = DivRem::div_rem(roll(ref rng, rnd), three);
+        let damage: u32 = mul32(5, add32(r.into(), 1));
         let angle = if accurate {
             *mo.angle
         } else {
-            let (r2, sub) = rng.sub_random(rnd);
-            rng = r2;
-            spread(*mo.angle, sub)
+            spread(*mo.angle, sub_roll(ref rng, rnd))
         };
         let hit = line_attack(w, env.mobjs, ref g, env.me, angle, MISSILERANGE, slope);
         events.append(PlayerEvent::Shot((hit, damage)));
-        k += 1;
+        k = inc(k);
     }
+}
+
+/// `P_SubRandom()` as a felt, without a panic path: `doom_physics`' twin of
+/// `PrngTrait::next` twice, subtracted in the field (the `i32` difference
+/// carries an overflow check for a value that is always in `[-255, 255]`).
+/// The two draws happen in Doom's order, so the cursor moves identically.
+fn sub_roll(ref rng: Prng, table: Span<u8>) -> felt252 {
+    let a = roll(ref rng, table);
+    let b = roll(ref rng, table);
+    let x: felt252 = a.into();
+    let y: felt252 = b.into();
+    x - y
 }
 
 /// `P_BulletSlope`: aim straight ahead, then a degree either side.
@@ -526,9 +548,8 @@ pub fn bullet_slope(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, mo: @Mobj, me
 }
 
 /// `angle + (P_SubRandom() << 18)`, reduced once in the field (S1 §7).
-fn spread(angle: Angle, sub: i32) -> Angle {
-    let s: felt252 = sub.into();
-    bam::reduce(angle.into() + s * 262144 + 0x100000000)
+fn spread(angle: Angle, sub: felt252) -> Angle {
+    bam::reduce(angle.into() + sub * 262144 + 0x100000000)
 }
 
 /// `A_Punch` and `A_Saw`: the two melee attacks, which differ in damage,
@@ -544,17 +565,15 @@ fn a_melee(
 ) {
     let w = env.world.unbox();
     let rnd = w.rndtable;
-    let (r1, roll) = rng.below(rnd, 10);
-    rng = r1;
-    let base: u32 = 2 * (roll.into() + 1);
+    let ten: NonZero<u8> = 10;
+    let (_, r) = DivRem::div_rem(roll(ref rng, rnd), ten);
+    let base: u32 = mul32(2, add32(r.into(), 1));
     let damage = if !saw && p.strength != 0 {
-        base * 10
+        mul32(base, 10)
     } else {
         base
     };
-    let (r2, sub) = rng.sub_random(rnd);
-    rng = r2;
-    let angle = spread(mo.angle, sub);
+    let angle = spread(mo.angle, sub_roll(ref rng, rnd));
     let range = if saw {
         Fixed { enc: MELEERANGE.enc + 1 }
     } else {
@@ -566,7 +585,10 @@ fn a_melee(
     if aim.target == NO_MOBJ {
         return;
     }
-    let t = env.mobjs.at(aim.target);
+    let t = match env.mobjs.get(aim.target) {
+        Option::Some(b) => b.unbox(),
+        Option::None => { return; },
+    };
     let facing = point_to_angle2(mo.x, mo.y, *t.x, *t.y);
     if !saw {
         mo.angle = facing;
@@ -574,22 +596,18 @@ fn a_melee(
     }
     // `A_Saw` turns toward the target by at most ANG90/20 a tic.
     let delta = bam::sub(facing, mo.angle);
-    let step: u32 = 0x40000000_u32 / 20;
-    let snap: u32 = 0x40000000_u32 / 21;
-    // `-ANG90/20` as an unsigned angle_t.
-    let neg_step: u32 = 0xFFFFFFFF - step + 1;
     mo
         .angle =
             if delta > 0x80000000 {
-                if delta < neg_step {
-                    bam::add(facing, snap)
+                if delta < NEG_SAW_STEP {
+                    bam::add(facing, SAW_SNAP)
                 } else {
-                    bam::sub(mo.angle, step)
+                    bam::sub(mo.angle, SAW_STEP)
                 }
-            } else if delta > step {
-                bam::sub(facing, snap)
+            } else if delta > SAW_STEP {
+                bam::sub(facing, SAW_SNAP)
             } else {
-                bam::add(mo.angle, step)
+                bam::add(mo.angle, SAW_STEP)
             };
     mo.flags = mo.flags | MF_JUSTATTACKED;
 }

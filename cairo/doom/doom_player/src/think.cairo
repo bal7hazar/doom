@@ -9,24 +9,32 @@
 
 use bam::{ANG90, Angle, point_to_angle2, sin_cos};
 use doom_map::NO_SECTOR;
-use doom_physics::maputl::{line_hp, line_meta, line_opening};
-use doom_physics::{MF_JUSTATTACKED, Mobj, NO_MOBJ, ThingGrid, has, path_traverse, without};
+use doom_physics::maputl::{line_hp, line_meta, line_opening, rd};
+use doom_physics::spawn::state_entry;
+use doom_physics::{
+    Intercept, MF_JUSTATTACKED, Mobj, NO_MOBJ, ThingGrid, has, path_traverse, without,
+};
 use fixed::{BIAS, Fixed};
 use geom2d::{Point, SIDE_BACK, point_side_alone};
 use prng::Prng;
 use super::env::{Env, PlayerEvent};
 use super::inter::damage_player;
+use super::num::{dec, div32, fine_of, inc, rd32};
 use super::state::{
-    BT_CHANGE, BT_USE, BT_WEAPONMASK, BT_WEAPONSHIFT, HALF_VIEWHEIGHT, MAXBOB, MOVE_UNIT, PST_DEAD,
-    PST_LIVE, Player, USERANGE, VIEWHEIGHT, WEAPON_OF_BUTTON, WP_CHAINSAW, WP_FIST, WP_NOCHANGE,
-    owns,
+    BT_CHANGE, BT_USE, BT_WEAPONMASK, BT_WEAPONSHIFT_NZ, HALF_VIEWHEIGHT, MAXBOB, MOVE_UNIT,
+    PST_DEAD, PST_LIVE, Player, USERANGE, VIEWHEIGHT, WEAPON_OF_BUTTON, WP_CHAINSAW, WP_FIST,
+    WP_NOCHANGE, owns,
 };
 use super::weapon::{S_PLAY, move_psprites};
 
 /// `ANG5` = `ANG90 / 18`, the angle a dying player turns toward its killer.
 pub const ANG5: u32 = 0x40000000 / 18;
+/// `-ANG5` as an unsigned `angle_t`, folded here rather than at each tic.
+const NEG_ANG5: u32 = 0xFFFFFFFF - ANG5 + 1;
 /// `S_PLAY_RUN1`.
 pub const S_PLAY_RUN1: u32 = 59;
+/// One past `S_PLAY_RUN4`, written out so the comparison carries no `+`.
+const S_PLAY_RUN_END: u32 = 63;
 /// `0xc800 / 512`: the forward move a chainsaw hit forces for one tic.
 pub const SAW_FORWARD: i64 = 100;
 
@@ -71,7 +79,7 @@ pub fn player_think(
 
     // Reactiontime is used to prevent movement for a bit after a teleport.
     if mo.reaction_time != 0 {
-        mo.reaction_time -= 1;
+        mo.reaction_time = dec(mo.reaction_time);
     } else {
         move_player(env, ref p, ref mo, forward, side, turn);
     }
@@ -79,7 +87,7 @@ pub fn player_think(
 
     // P_PlayerInSpecialSector, decided by the caller.
     if sector_secret {
-        p.secretcount += 1;
+        p.secretcount = inc(p.secretcount);
     }
     if sector_damage != 0 {
         damage_player(
@@ -125,13 +133,13 @@ fn buttons(
 /// berserk palette only).
 fn counters(ref p: Player) {
     if p.strength != 0 {
-        p.strength += 1;
+        p.strength = inc(p.strength);
     }
     if p.damagecount != 0 {
-        p.damagecount -= 1;
+        p.damagecount = dec(p.damagecount);
     }
     if p.bonuscount != 0 {
-        p.bonuscount -= 1;
+        p.bonuscount = dec(p.bonuscount);
     }
 }
 
@@ -153,7 +161,7 @@ pub fn move_player(env: Env, ref p: Player, ref mo: Mobj, forward: i64, side: i6
         thrust(ref mo, bam::sub(mo.angle, ANG90), side);
     }
     if (forward != 0 || side != 0) && mo.state == S_PLAY {
-        let (tics, _) = fsm::enter(env.states, S_PLAY_RUN1);
+        let (tics, _) = state_entry(env.states, S_PLAY_RUN1);
         mo.state = S_PLAY_RUN1;
         mo.tics = tics;
     }
@@ -180,11 +188,12 @@ pub fn thrust(ref mo: Mobj, angle: Angle, move: i64) {
 pub fn calc_height(ref p: Player, mo: @Mobj, tic: u32) {
     // bob = (momx^2 + momy^2) >> 2, capped at MAXBOB.
     let sq = fixed::add(fixed::mul(*mo.momx, *mo.momx), fixed::mul(*mo.momy, *mo.momy));
-    let mag: u128 = (sq.enc - BIAS).try_into().unwrap();
-    let quarter: felt252 = (mag / 4).into();
+    let four: NonZero<u128> = 4;
+    let (mag, _) = DivRem::div_rem(fixed::to_u128(sq.enc - BIAS), four);
+    let quarter: felt252 = mag.into();
     p
         .bob =
-            if fixed::felt_ge(quarter, MAXBOB + 1) {
+            if fixed::felt_ge_narrow(quarter, MAXBOB + 1) {
                 Fixed { enc: BIAS + MAXBOB }
             } else {
                 Fixed { enc: BIAS + quarter }
@@ -196,9 +205,10 @@ pub fn calc_height(ref p: Player, mo: @Mobj, tic: u32) {
         return;
     }
 
-    let idx = (409 * tic) % 8192;
-    let half: u128 = (p.bob.enc - BIAS).try_into().unwrap();
-    let bob = fixed::mul(Fixed { enc: BIAS + (half / 2).into() }, bam::finesine(idx));
+    let idx = fine_of(409, tic);
+    let two: NonZero<u128> = 2;
+    let (half, _) = DivRem::div_rem(fixed::to_u128(p.bob.enc - BIAS), two);
+    let bob = fixed::mul(Fixed { enc: BIAS + half.into() }, bam::finesine(idx));
 
     if p.playerstate == PST_LIVE {
         spring(ref p);
@@ -264,23 +274,30 @@ pub fn death_think(
     p.deltaviewheight = fixed::ZERO;
     calc_height(ref p, @mo, env.tic);
 
-    if p.attacker != NO_MOBJ && p.attacker != p.mo {
-        let mobjs = env.mobjs;
-        let t = mobjs.at(p.attacker);
-        let facing = point_to_angle2(mo.x, mo.y, *t.x, *t.y);
-        let delta = bam::sub(facing, mo.angle);
-        if delta < ANG5 || delta > 0xFFFFFFFF - ANG5 + 1 {
-            mo.angle = facing;
-            if p.damagecount != 0 {
-                p.damagecount -= 1;
+    let target = if p.attacker != NO_MOBJ && p.attacker != p.mo {
+        env.mobjs.get(p.attacker)
+    } else {
+        Option::None
+    };
+    match target {
+        Option::Some(b) => {
+            let t = b.unbox();
+            let facing = point_to_angle2(mo.x, mo.y, *t.x, *t.y);
+            let delta = bam::sub(facing, mo.angle);
+            if delta < ANG5 || delta > NEG_ANG5 {
+                mo.angle = facing;
+                if p.damagecount != 0 {
+                    p.damagecount = dec(p.damagecount);
+                }
+            } else if delta < 0x80000000 {
+                mo.angle = bam::add(mo.angle, ANG5);
+            } else {
+                mo.angle = bam::sub(mo.angle, ANG5);
             }
-        } else if delta < 0x80000000 {
-            mo.angle = bam::add(mo.angle, ANG5);
-        } else {
-            mo.angle = bam::sub(mo.angle, ANG5);
-        }
-    } else if p.damagecount != 0 {
-        p.damagecount -= 1;
+        },
+        Option::None => { if p.damagecount != 0 {
+            p.damagecount = dec(p.damagecount);
+        } },
     }
 }
 
@@ -294,8 +311,8 @@ pub fn death_think(
 /// saw already up" shortcut is kept; the shareware/commercial gates are not
 /// (one game mode, one roster).
 pub fn change_weapon(ref p: Player, buttons: u32) {
-    let requested = (buttons & BT_WEAPONMASK) / BT_WEAPONSHIFT;
-    let mut new = *WEAPON_OF_BUTTON.span().at(requested);
+    let requested = div32(buttons & BT_WEAPONMASK, BT_WEAPONSHIFT_NZ);
+    let mut new = rd32(WEAPON_OF_BUTTON.span(), requested);
     if new == WP_FIST
         && owns(@p, WP_CHAINSAW)
         && !(p.ready_weapon == WP_CHAINSAW && p.strength != 0) {
@@ -329,15 +346,26 @@ pub fn use_lines(env: Env, ref g: ThingGrid, mo: @Mobj, ref events: Array<Player
         x: fixed::add(p1.x, fixed::mul(range, c)), y: fixed::add(p1.y, fixed::mul(range, s)),
     };
     let hits = path_traverse(w, env.mobjs, ref g, p1, p2, false, env.me).span();
-    let n = hits.len();
-    let mut k: u32 = 0;
-    while k != n {
-        let it = *hits.at(k);
-        k += 1;
+    match used_line(w, hits, p1) {
+        Option::Some(u) => { events.append(PlayerEvent::Use(u)); },
+        Option::None => {},
+    }
+}
+
+/// `PTR_UseTraverse`: the first special line the already-sorted crossings
+/// reach, or `None` if a wall or a closed opening stops the trace first.
+///
+/// Split out of [`use_lines`] so that the loop's return is two felts and an
+/// option tag rather than the caller's whole live set (S7 §8 rules 2 and 4),
+/// and iterated by `pop_front` so that no read of the span can panic.
+fn used_line(w: doom_physics::World, mut hits: Span<Intercept>, p1: Point) -> Option<(u32, u8)> {
+    let mut out: Option<(u32, u8)> = Option::None;
+    while let Option::Some(b) = hits.pop_front() {
+        let it = *b;
         if !it.is_line {
             continue;
         }
-        let meta = line_meta(*w.map.l_packed.at(it.id));
+        let meta = line_meta(rd(w.map.l_packed, it.id));
         if meta.special == 0 {
             // Not a special line: keep going unless it is a wall.
             if meta.back == NO_SECTOR || meta.front == NO_SECTOR {
@@ -355,9 +383,10 @@ pub fn use_lines(env: Env, ref g: ThingGrid, mo: @Mobj, ref events: Array<Player
         } else {
             0
         };
-        events.append(PlayerEvent::Use((it.id, side)));
+        out = Option::Some((it.id, side));
         break; // "can't use for more than one special line in a row"
     }
+    out
 }
 
 /// `P_XYMovement`'s last act on a player that stopped: a walking frame goes
@@ -365,8 +394,8 @@ pub fn use_lines(env: Env, ref g: ThingGrid, mo: @Mobj, ref events: Array<Player
 /// `XyOutcome::Stopped` rather than reaching into the state machine, so
 /// `doom_game` calls this when it sees one.
 pub fn player_stopped(env: Env, ref mo: Mobj) {
-    if mo.state >= S_PLAY_RUN1 && mo.state < S_PLAY_RUN1 + 4 {
-        let (tics, _) = fsm::enter(env.states, S_PLAY);
+    if mo.state >= S_PLAY_RUN1 && mo.state < S_PLAY_RUN_END {
+        let (tics, _) = state_entry(env.states, S_PLAY);
         mo.state = S_PLAY;
         mo.tics = tics;
     }

@@ -16,6 +16,7 @@ use doom_things::tables::{
 use fixed::{BIAS, Fixed};
 use prng::Prng;
 use super::env::{Env, PlayerEvent};
+use super::num::{add32, div32, inc, mul32, rd32, sub32};
 use super::state::{
     AM_CELL, AM_CLIP, AM_MISL, AM_NOAMMO, AM_SHELL, BONUSADD, CARD_BLUE, CLIPAMMO, MAXARMOR_BONUS,
     MAXDAMAGECOUNT, MAXHEALTH, MAXHEALTH_BONUS, PST_DEAD, Player, WP_CHAINGUN, WP_CHAINSAW, WP_FIST,
@@ -41,13 +42,14 @@ pub fn give_ammo(ref p: Player, ammo: u32, num: u32) -> bool {
     if old == max {
         return false;
     }
-    let clip = *CLIPAMMO.span().at(ammo);
+    let clip = rd32(CLIPAMMO.span(), ammo);
+    let two: NonZero<u32> = 2;
     let amount = if num != 0 {
-        num * clip
+        mul32(num, clip)
     } else {
-        clip / 2
+        div32(clip, two)
     };
-    let raised = old + amount;
+    let raised = add32(old, amount);
     let now = if raised > max {
         max
     } else {
@@ -102,19 +104,29 @@ pub fn give_body(ref p: Player, ref mo: Mobj, num: u32) -> bool {
     if p.health >= MAXHEALTH {
         return false;
     }
-    let raised = p.health + num;
+    let raised = add32(p.health, num);
     p.health = if raised > MAXHEALTH {
         MAXHEALTH
     } else {
         raised
     };
-    mo.health = p.health.try_into().unwrap();
+    mo.health = health_i32(p.health);
     true
+}
+
+/// `player->health` mirrored into `mo->health`, without the `try_into`
+/// panic: health is capped at 200 by every caller, so the conversion is
+/// exact, and an impossible value reads as `0` rather than aborting a proof.
+fn health_i32(health: u32) -> i32 {
+    match health.try_into() {
+        Option::Some(v) => v,
+        Option::None => 0,
+    }
 }
 
 /// `P_GiveArmor`: `armortype * 100` points, and only if that is an upgrade.
 pub fn give_armor(ref p: Player, armortype: u32) -> bool {
-    let hits = armortype * 100;
+    let hits = mul32(armortype, 100);
     if p.armor_points >= hits {
         return false;
     }
@@ -185,9 +197,9 @@ pub fn touch_special(ref p: Player, ref mo: Mobj, special: @Mobj) -> bool {
         return false;
     }
     if has(*special.flags, MF_COUNTITEM) {
-        p.itemcount += 1;
+        p.itemcount = inc(p.itemcount);
     }
-    p.bonuscount += BONUSADD;
+    p.bonuscount = add32(p.bonuscount, BONUSADD);
     true
 }
 
@@ -270,19 +282,19 @@ fn take_weapon(ref p: Player, ref mo: Mobj, kind: u32, dropped: bool) -> Option<
 
 /// `SPR_BON1` and `SPR_SOUL`: health that may go over 100%, up to 200.
 fn bonus_health(ref p: Player, ref mo: Mobj, num: u32) -> bool {
-    let raised = p.health + num;
+    let raised = add32(p.health, num);
     p.health = if raised > MAXHEALTH_BONUS {
         MAXHEALTH_BONUS
     } else {
         raised
     };
-    mo.health = p.health.try_into().unwrap();
+    mo.health = health_i32(p.health);
     true
 }
 
 /// `SPR_BON2`: one armor point over the cap, and green armor if bare.
 fn bonus_armor(ref p: Player) -> bool {
-    let raised = p.armor_points + 1;
+    let raised = inc(p.armor_points);
     p.armor_points = if raised > MAXARMOR_BONUS {
         MAXARMOR_BONUS
     } else {
@@ -318,17 +330,19 @@ pub fn absorb(ref p: Player, damage: u32) -> u32 {
     if p.armor_type == 0 {
         return damage;
     }
+    let third: NonZero<u32> = 3;
+    let half: NonZero<u32> = 2;
     let mut saved = if p.armor_type == 1 {
-        damage / 3
+        div32(damage, third)
     } else {
-        damage / 2
+        div32(damage, half)
     };
     if p.armor_points <= saved {
         saved = p.armor_points;
         p.armor_type = 0;
     }
-    p.armor_points -= saved;
-    damage - saved
+    p.armor_points = sub32(p.armor_points, saved);
+    sub32(damage, saved)
 }
 
 /// `P_DamageMobj` on the player: armor, `damagecount`, `attacker`, then
@@ -364,10 +378,10 @@ pub fn damage_player(
     p.health = if net >= p.health {
         0
     } else {
-        p.health - net
+        sub32(p.health, net)
     };
     p.attacker = source;
-    let count = p.damagecount + net;
+    let count = add32(p.damagecount, net);
     p.damagecount = if count > MAXDAMAGECOUNT {
         MAXDAMAGECOUNT
     } else {
@@ -385,7 +399,7 @@ pub fn damage_player(
 /// `P_KillMobj`'s `source->player->killcount++`: `doom_game` calls this when
 /// a `DamageOutcome` whose source was the player reports `counts_kill`.
 pub fn count_kill(ref p: Player) {
-    p.killcount += 1;
+    p.killcount = inc(p.killcount);
 }
 
 /// The `NO_MOBJ` sentinel, re-exported so a caller need not depend on

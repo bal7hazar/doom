@@ -14,6 +14,7 @@ use doom_specials::{
 };
 use prng::Prng;
 use super::env::{Env, PlayerEvent};
+use super::num::dec;
 use super::state::{PST_DEAD, Player, has_blue_key};
 use super::think::player_think;
 
@@ -55,11 +56,16 @@ pub fn player_tic(
     player_think(env, ref g, ref rng, ref p, ref mo, word, damage, secret, ref events);
 
     // Apply whatever `P_UseLines` found.
-    let seen = events.span();
-    let n = seen.len();
-    let mut k = before;
-    while k != n {
-        match *seen.at(k) {
+    let mut seen = events.span();
+    let mut skip = before;
+    while skip != 0 {
+        match seen.pop_front() {
+            Option::Some(_) => { skip = dec(skip); },
+            Option::None => { break; },
+        }
+    }
+    while let Option::Some(e) = seen.pop_front() {
+        match *e {
             PlayerEvent::Use((
                 line, side,
             )) => {
@@ -69,16 +75,12 @@ pub fn player_tic(
             },
             _ => {},
         }
-        k += 1;
     }
     (s, cues)
 }
 
-fn append_events(ref out: Array<Event>, more: Span<Event>) {
-    let n = more.len();
-    let mut k: u32 = 0;
-    while k != n {
-        out.append(*more.at(k));
-        k += 1;
+fn append_events(ref out: Array<Event>, mut more: Span<Event>) {
+    while let Option::Some(e) = more.pop_front() {
+        out.append(*e);
     }
 }
