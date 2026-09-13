@@ -11,7 +11,7 @@ test.skip(!existsSync(resolve("public/sim/manifest.json")) || !existsSync(resolv
 test("real keyboard commands, explicit save and reload preserve the Cairo run", async ({ page }) => {
   const errors: string[] = [], proofRequests: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
-  page.on("request", request => { if (request.url().includes("/prover/")) proofRequests.push(request.url()); });
+  page.on("request", request => { if (request.url().includes("/prover/") || request.url().includes("/programs/")) proofRequests.push(request.url()); });
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
   await page.keyboard.press("w"); await page.waitForTimeout(100);
@@ -43,9 +43,11 @@ test("real keyboard commands, explicit save and reload preserve the Cairo run", 
   const pausedTic = await page.evaluate(() => (window as any).hellproof.cairo.latest.snapshot.tic);
   await page.keyboard.down("w"); await page.waitForTimeout(100); await page.keyboard.up("w");
   expect(await page.evaluate(() => (window as any).hellproof.cairo.latest.snapshot.tic)).toBe(pausedTic);
-  await page.keyboard.press("F4"); expect(proofRequests).toEqual([]);
-  // Hide diagnostics so the normal game buttons remain clickable.
-  await page.keyboard.press("F1");
+  expect(proofRequests).toEqual([]);
+  await page.keyboard.press("F4");
+  await expect(page.getByRole("region", { name: "Real game proof" })).toBeVisible();
+  // Close proof controls; resuming the game stays an explicit action.
+  await page.keyboard.press("F4");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Saved on this device");
   const before = await page.evaluate(() => {
@@ -72,7 +74,7 @@ test("real keyboard commands, explicit save and reload preserve the Cairo run", 
   await page.getByRole("button", { name: "Resume", exact: true }).click();
   await page.waitForFunction(tic => (window as any).hellproof.cairo.latest.snapshot.tic > tic, pausedTic);
   await page.keyboard.press("Escape");
-  expect(errors).toEqual([]); expect(proofRequests).toEqual([]);
+  expect(errors).toEqual([]); expect(proofRequests.some(url => url.includes("stub"))).toBe(false);
 });
 
 test("download/import and rejected identity keep the existing game usable", async ({ page }, testInfo) => {

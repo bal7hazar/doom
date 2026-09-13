@@ -315,6 +315,7 @@ export class ProofPipeline {
   start(): void {
     if (this.running) return;
     if (!this.run) throw new Error("call attach() before start()");
+    this.lastError = undefined;
     this.running = true;
     this.stopping = false;
     this.loopPromise = this.loop().catch((error: unknown) => {

@@ -54,13 +54,17 @@ export interface DoomProgramOptions {
   /** Exported .hellproof inputs; reconstruct from pinned genesis, never from stored args/checkpoints. */
   resume?: { run: RunRecord; words: readonly number[] };
   assets?: string;
+  signal?: AbortSignal;
   /** Public execution boundary injected only by tests. */
   preparation?: PreparationPort;
 }
 export interface DoomProgram extends SegmentProgram { dispose(): void; journalWords(): number[] }
 export async function createDoomProgram(options: DoomProgramOptions): Promise<DoomProgram> {
   let port = options.preparation ?? new DoomPreparationClient();
+  const abort = () => port.dispose();
+  options.signal?.addEventListener("abort", abort, { once: true });
   try {
+    if (options.signal?.aborted) throw new Error("Doom preparation cancelled");
     const ready = await port.request<{ initial: Felt[]; genesis: Felt; executable: string }>({ op: "init", assets: options.assets });
     if (Boolean(options.journal) === Boolean(options.resume)) throw new Error("provide exactly one live journal or persisted run");
     let source = options.journal;
@@ -104,6 +108,7 @@ export async function createDoomProgram(options: DoomProgramOptions): Promise<Do
         if (words.length > journal.length || words.some((w, i) => journal[i] !== w)) throw new Error("persisted inputs disagree with the game journal");
       },
       async prepareArgs(request: SegmentRequest): Promise<Felt[]> {
+        options.signal?.throwIfAborted();
         if (disposed) throw new Error("Doom program disposed; reopen the proof session");
         if (active) throw new Error("Cairo proof preparation already running");
         active = true;
@@ -125,7 +130,7 @@ export async function createDoomProgram(options: DoomProgramOptions): Promise<Do
         if (!expected || preimage.length !== 11 || normalizeFelt(preimage[0]!) !== pins.programHash || !exactFelts(preimage.slice(1), expected)) throw new Error("prover D14/D13 differs from the pinned Cairo journal replay");
       },
       releasePreparation() { port.dispose(); released = true; prepared.clear(); },
-      dispose() { disposed = true; port.dispose(); prepared.clear(); },
+      dispose() { disposed = true; options.signal?.removeEventListener("abort", abort); port.dispose(); prepared.clear(); },
     };
-  } catch (error) { port.dispose(); throw error; }
+  } catch (error) { options.signal?.removeEventListener("abort", abort); port.dispose(); throw error; }
 }

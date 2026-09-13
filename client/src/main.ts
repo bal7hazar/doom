@@ -13,6 +13,7 @@ import { createStubSim } from "./sim/stubSim.js";
 import { CairoClient } from "./sim/cairoClient.js";
 import { CairoScheduler } from "./sim/cairoScheduler.js";
 import { bindCairoPageLifecycle } from "./sim/cairoPageLifecycle.js";
+import { mountGameProofUI } from "./prove/gameBridge.js";
 import { PlaySession } from "./game/playSession.js";
 import { DEFAULT_AUTOMAP, drawAutomap, type AutomapOptions } from "./ui/automap.js";
 import { renderDiagnostics } from "./ui/diagnostics.js";
@@ -160,6 +161,8 @@ async function main(): Promise<void> {
   // gitignored wasm that a plain clone does not have, and nothing about it may
   // cost a frame before the player asks for the queue.
   let prove: import("./prove/session.js").ProveSession | null = null;
+  const realProof = cairo ? mountGameProofUI(document.getElementById("stage")!) : null;
+  if (cairo?.journal) realProof!.bridge.observe(cairo.journal);
   let provePending = false;
   let neutralWord = 0;
   let play: PlaySession | undefined;
@@ -172,12 +175,13 @@ async function main(): Promise<void> {
   });
   if (cairo && scheduler instanceof CairoScheduler) {
     play = new PlaySession(cairo, scheduler, canvas, document.getElementById("stage")!);
-    document.getElementById("help")!.textContent = "WASD / ↑↓ move · ←→ turn · Shift run · Mouse / Ctrl fire · E / Space use · 1–4, 7 weapons · Esc / P pause · Tab map";
+    document.getElementById("help")!.textContent = "WASD / ↑↓ move · ←→ turn · Shift run · Mouse / Ctrl fire · E / Space use · 1–4, 7 weapons · Esc / P pause · Tab map · F4 proof / export";
   }
   const toggleProofQueue = async (): Promise<void> => {
     if (cairo) {
-      diagnosticsEl.hidden = false;
-      // Never label the real journal with createStubProgram's executable.
+      play?.pause();
+      if (cairo.journal) realProof!.bridge.observe(cairo.journal);
+      await realProof!.toggle();
       return;
     }
     if (prove) {
@@ -230,6 +234,7 @@ async function main(): Promise<void> {
   resize();
 
   window.addEventListener("keydown", (event) => {
+    if (!event.repeat && event.key === "F4") { event.preventDefault(); void toggleProofQueue(); return; }
     if (event.repeat || (event.target instanceof Element && event.target.closest("input,textarea,select,button,a"))) return;
     switch (event.key) {
       case "F1":
@@ -247,10 +252,6 @@ async function main(): Promise<void> {
       case "F3":
         event.preventDefault();
         renderOptions.flatShading = !renderOptions.flatShading;
-        break;
-      case "F4":
-        event.preventDefault();
-        void toggleProofQueue();
         break;
       case " ":
         if (cairo) break;
@@ -287,6 +288,7 @@ async function main(): Promise<void> {
   let renderError: string | undefined;
   let lastFrameTime = performance.now();
   const loop = (): void => {
+    if (cairo?.journal && !cairo.busy) realProof!.bridge.observe(cairo.journal);
     const now = performance.now();
     frame.frameMs = frame.frameMs === 0 ? now - lastFrameTime : frame.frameMs * 0.9 + (now - lastFrameTime) * 0.1;
     lastFrameTime = now;

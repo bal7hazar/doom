@@ -1,13 +1,16 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { guardWorkers } from "./proofWorkerGuard.js";
 import { expect, test } from "@playwright/test";
 
 test.skip(!existsSync(resolve("public/sim/manifest.json")) || !existsSync(resolve("public/freedoom1.wad")),
   "stage the pinned simulation and WAD artifacts first");
 
 test("production client renders Cairo frames and never opens the stub proof path", async ({ page }) => {
-  const proofRequests: string[] = [], errors: string[] = [];
-  page.on("request", request => { if (request.url().includes("/prover/")) proofRequests.push(request.url()); });
+  await guardWorkers(page);
+  const proofRequests: string[] = [], errors: string[] = [], writes: string[] = [];
+  page.on("request", request => { if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url()); });
+  page.on("request", request => { if (request.url().includes("/prover/") || request.url().includes("/programs/")) proofRequests.push(request.url()); });
   page.on("pageerror", error => errors.push(String(error)));
   await page.goto("/?sim=cairo");
   await page.getByRole("button", { name: "Start", exact: true }).click();
@@ -29,10 +32,12 @@ test("production client renders Cairo frames and never opens the stub proof path
   expect(before.shared).toBe(false);
   expect(before.transport).toBe("copied");
   expect(before.frame.distinct).toBeGreaterThan(20);
+  expect(proofRequests).toEqual([]);
   await page.keyboard.press("F4");
+  await expect(page.getByRole("region", { name: "Real game proof" })).toBeVisible();
   await page.waitForTimeout(100);
   expect(await page.evaluate(() => (window as any).hellproof.cairo.latest.snapshot.tic)).toBe(before.tic);
-  expect(proofRequests).toEqual([]);
+  expect(proofRequests.some(url => url.includes("stub"))).toBe(false);
   await page.evaluate(async () => { await (window as any).hellproof.cairo.restart(); });
   const reset = await page.evaluate(async () => {
     const app = (window as any).hellproof;
@@ -41,7 +46,8 @@ test("production client renders Cairo frames and never opens the stub proof path
   });
   expect(reset.tic).toBe(0); expect(reset.pair).toBeNull(); expect(reset.journal).toBe(0);
   expect(reset.frame.distinct).toBeGreaterThan(20);
-  expect(errors).toEqual([]);
+  expect(errors).toEqual([]); expect(writes).toEqual([]);
+  expect(await page.evaluate(() => (window as any).proofWorkerAudit.proves)).toBe(0);
 });
 
 test("persisted page lifecycle preserves the real Worker journal and pause choice (synthetic events)", async ({ page }) => {

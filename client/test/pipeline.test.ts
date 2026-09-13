@@ -487,3 +487,19 @@ describe("concrete program identity and preparation", () => {
     expect(FakeProver.proves).toBe(before);
   });
 });
+
+
+describe("retry error state", () => {
+  it("clears a transient failure before a successful fresh retry", async () => {
+    const failOn = new Set([0]);
+    const { pipeline } = makePipeline({ failOn });
+    await pipeline.attach(); await pipeline.appendTics([0, 0, 0, 0]);
+    await pipeline.proveAll(); expect(pipeline.state.error).toContain("prover exploded");
+    const executions = FakeProver.executes;
+    failOn.clear(); const retry = pipeline.proveAll();
+    await retry;
+    expect(pipeline.state.error).toBeUndefined(); expect(pipeline.state.proved).toBe(1);
+    expect(FakeProver.executes).toBeGreaterThan(executions);
+    await pipeline.stop(true); store.close();
+  });
+});

@@ -44,6 +44,8 @@ export interface ProveSessionOptions {
   /** Base URL of a wrapper service; without one the submit button explains itself. */
   wrapperUrl?: string | null;
   apiKey?: string;
+  signal?: AbortSignal;
+  onImport?: (file: File) => Promise<void>;
 }
 
 /**
@@ -51,9 +53,9 @@ export interface ProveSessionOptions {
  * answer then is "prove later, or on another machine" (R6-A3) rather than a
  * stack trace.
  */
-export async function proverIsAvailable(url = DEFAULT_PROVER_WORKER_URL): Promise<boolean> {
+export async function proverIsAvailable(url = DEFAULT_PROVER_WORKER_URL, signal?: AbortSignal): Promise<boolean> {
   try {
-    const res = await fetch(url, { method: "HEAD" });
+    const res = await fetch(url, { method: "HEAD", signal });
     return res.ok;
   } catch {
     return false;
@@ -77,11 +79,11 @@ export class ProveSession {
     let session: ProveSession;
     const panel = new ProofQueuePanel({
       actions: {
-        onProve: () => void session.startProving(),
+        onProve: () => void (program.journalWords ? session.finishAndProve() : session.startProving()).catch(error => panel.log(String(error))),
         onVerify: () => void session.verifyLocally(),
         onKeepOffline: (value) => void session.setKeepOffline(value),
-        onExport: () => void session.exportRun(),
-        onImport: (file) => void session.importRun(file),
+        onExport: () => void session.exportRun().catch(error => panel.log(String(error))),
+        onImport: (file) => void session.importRun(file).catch(error => panel.log(`Import refused: ${String(error)}`)),
         onReset: () => void session.reset(),
         onSubmit: () => void session.submit(),
       },
@@ -98,24 +100,36 @@ export class ProveSession {
       },
     });
 
-    const run = await pipeline.attach(options.runId);
-    if (program.journalWords) await pipeline.syncGameJournal();
-    session = new ProveSession(pipeline, store, panel, run, options);
-    options.host.append(panel.element);
-    panel.setKeepOffline(run.keepOffline);
-    panel.update(pipeline.state, pipeline.segmentRecords);
+    const abort = () => { void pipeline.stop(true).catch(() => undefined); program.dispose?.(); panel.element.remove(); };
+    options.signal?.addEventListener("abort", abort, { once: true });
+    try {
+      options.signal?.throwIfAborted();
+      const run = await pipeline.attach(options.runId);
+      options.signal?.throwIfAborted();
+      if (program.journalWords) await pipeline.syncGameJournal();
+      session = new ProveSession(pipeline, store, panel, run, options);
+      options.host.append(panel.element);
+      panel.setKeepOffline(run.keepOffline);
+      panel.update(pipeline.state, pipeline.segmentRecords);
 
-    const available = await proverIsAvailable(workerUrl);
-    if (!available) {
+      const available = await proverIsAvailable(workerUrl, options.signal);
+      options.signal?.throwIfAborted();
+      if (!available) {
+        panel.log(
+          `no local prover at ${workerUrl}: the run is still recorded and can be exported (.hellproof) and proved elsewhere (R6-A3). Stage one with \`npm run prover\`.`,
+        );
+      }
+      const storage = await readStorageStatus();
       panel.log(
-        `no local prover at ${workerUrl}: the run is still recorded and can be exported (.hellproof) and proved elsewhere (R6-A3). Stage one with \`npm run prover\`.`,
+        `run ${run.id} · ${run.segments} segment(s) on disk · storage ${format(storage.usageBytes)} / ${format(storage.quotaBytes)}${storage.persisted ? " (persisted)" : ""}`,
       );
-    }
-    const storage = await readStorageStatus();
-    panel.log(
-      `run ${run.id} · ${run.segments} segment(s) on disk · storage ${format(storage.usageBytes)} / ${format(storage.quotaBytes)}${storage.persisted ? " (persisted)" : ""}`,
-    );
-    return session;
+      options.signal?.throwIfAborted();
+      return session;
+    } catch (error) {
+      try { await pipeline.stop(true); }
+      finally { program.dispose?.(); panel.element.remove(); store.close(); }
+      throw error;
+    } finally { options.signal?.removeEventListener("abort", abort); }
   }
 
   get element(): HTMLElement {
@@ -145,7 +159,8 @@ export class ProveSession {
     if (this.options.program?.journalWords) await this.pipeline.syncGameJournal();
     await requestPersistence();
     const chain = await this.pipeline.proveAll();
-    this.panel.log(chain?.ok ? `run proved: ${chain.tics} tics` : `chain check failed: ${chain?.reason}`);
+    if (this.pipeline.state.error) this.panel.log(`Proof refused: ${this.pipeline.state.error}. Export .hellproof to keep the journal, arguments and resource report. This run is not certified.`);
+    else this.panel.log(chain?.ok ? `proved chain: ${chain.tics} tics` : `No certified chain: ${chain?.reason ?? "no proof produced"}`);
   }
 
   /**
@@ -190,10 +205,12 @@ export class ProveSession {
   /** C6: nothing leaves this machine until the flag is cleared. */
   async setKeepOffline(keepOffline: boolean): Promise<void> {
     this.run = await this.store.updateRun(this.run.id, { keepOffline });
+    this.panel.setKeepOffline(keepOffline);
     this.panel.log(keepOffline ? "run kept offline (C6)" : "run may be submitted");
   }
 
   async exportRun(): Promise<void> {
+    if (this.options.program?.journalWords) await this.pipeline.syncGameJournal();
     const blob = await exportRunBlob(this.store, this.run.id);
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -205,6 +222,7 @@ export class ProveSession {
   }
 
   async importRun(file: File): Promise<void> {
+    if (this.options.onImport) return this.options.onImport(file);
     const result = await importRun(this.store, await file.arrayBuffer());
     this.panel.log(
       `imported run ${result.runId}: ${result.segments} segment(s), ${result.proofs} proof(s)${result.renamed ? " (renamed: the id was taken)" : ""}`,
@@ -213,10 +231,12 @@ export class ProveSession {
 
   /** Close this proof UI and release both Workers; the game journal remains owned by CairoClient. */
   async dispose(): Promise<void> {
-    await this.pipeline.stop(true);
-    this.options.program?.dispose?.();
-    this.panel.element.remove();
-    this.store.close();
+    try { await this.pipeline.stop(true); }
+    finally {
+      this.options.program?.dispose?.();
+      this.panel.element.remove();
+      this.store.close();
+    }
   }
 
   /** The explicit reset C6 demands. */
