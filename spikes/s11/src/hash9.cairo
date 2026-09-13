@@ -2,7 +2,6 @@
 //! S11 candidate only: tagged BLAKE2s-256 over exact nine-byte felt encodings.
 use core::blake::{blake2s_compress, blake2s_finalize};
 use core::box::BoxTrait;
-use core::traits::DivRem;
 
 const IV: [u32; 8] = [
     0x6B08E647, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
@@ -40,19 +39,27 @@ pub fn digest(mut data: Span<felt252>) -> Option<[u32; 8]> {
         return Option::None;
     }
     let mut words: Array<u32> = array![0x532e5048, 0x45544154, 0x5332422e, 0x39, 2, 1, n, 0];
-    let mut carry: u128 = 0;
-    let mut factor: u128 = 1;
+    let mut carry: felt252 = 0;
+    let mut factor: felt252 = 1;
     while let Option::Some(value) = data.pop_front() {
         let x: u128 = (*value).try_into()?;
         if x >= TWO72 {
             return Option::None;
         }
         // At most 72+24=96 bits, strictly within u128.
-        let packed = x * factor + carry;
-        let (upper, lower) = DivRem::div_rem(packed, 0x10000000000000000);
-        let (w1, w0) = DivRem::div_rem(lower, 0x100000000);
-        words.append(w0.try_into().unwrap());
-        words.append(w1.try_into().unwrap());
+        // x < 2^72; factor cycles through 1, 2^8, 2^16, 2^24.
+        // Carry is the preceding high part. Thus packed < 2^96 < p:
+        // field arithmetic is ordinary integer arithmetic here. The checked
+        // conversion retains an explicit u128 bound before division.
+        let packed: u128 = (x.into() * factor + carry).try_into()?;
+        // Masks constrain the low parts; subtraction is nonnegative and
+        // exactly divisible by the constant in ordinary integer arithmetic.
+        let lower = packed & 0xFFFFFFFFFFFFFFFF;
+        let upper = core::felt252_div(packed.into() - lower.into(), 0x10000000000000000);
+        let w0: u32 = (lower & 0xFFFFFFFF).try_into().unwrap();
+        let w1: u32 = core::felt252_div(lower.into() - w0.into(), 0x100000000).try_into().unwrap();
+        words.append(w0);
+        words.append(w1);
         if factor == 0x1000000 {
             words.append(upper.try_into().unwrap());
             carry = 0;

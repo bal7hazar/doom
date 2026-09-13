@@ -1,6 +1,11 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # S11 — comparaison isolée Poseidon / BLAKE9-v1
 
+Cette page et `results.json` conservent la **référence initiale au commit `4936c23`**.
+La passe suivante, sans changement d'encodage, est documentée dans
+[optimization/README.md](optimization/README.md). Reproduire les commandes de cette
+page depuis `4936c23` ; le source courant contient l'optimisation mesurée séparément.
+
 Le prototype réduit fortement les composants Poseidon, mais **augmente le coût VM et le
 bytecode**, sans réduire la hauteur AIR maximale des segments mesurés. Il ne justifie pas
 une migration en production. Aucune preuve, mesure de preuve ou prédiction de RAM n'est
