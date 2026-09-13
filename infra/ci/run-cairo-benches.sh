@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Runs every cairo/crates/*/bench/measure.py, so the per-crate step-cost
+# Runs every cairo/crates/*/bench/measure.py cairo/doom/*/bench/measure.py, so the per-crate step-cost
 # budgets (PLAN.md §3.1 rule 4) are enforced on every merge, not just when a
 # developer happens to run them locally. Each script already builds its own
 # standalone bench package and fails (exit 1) if any operation is more than
@@ -16,7 +16,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 status=0
 found=0
 
-for bench in "$REPO_ROOT"/cairo/crates/*/bench/measure.py; do
+for bench in "$REPO_ROOT"/cairo/crates/*/bench/measure.py cairo/doom/*/bench/measure.py; do
   [ -f "$bench" ] || continue
   found=1
   crate="$(basename "$(dirname "$(dirname "$bench")")")"
@@ -29,7 +29,7 @@ for bench in "$REPO_ROOT"/cairo/crates/*/bench/measure.py; do
 done
 
 if [ "$found" -eq 0 ]; then
-  echo "no cairo/crates/*/bench/measure.py found -- nothing to run"
+  echo "no cairo/crates/*/bench/measure.py cairo/doom/*/bench/measure.py found -- nothing to run"
 fi
 
 exit $status
