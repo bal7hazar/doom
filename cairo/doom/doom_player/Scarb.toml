@@ -4,12 +4,16 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bam = { path = "../../crates/bam" }
 fixed = { path = "../../crates/fixed" }
+fsm = { path = "../../crates/fsm" }
+geom2d = { path = "../../crates/geom2d" }
+prng = { path = "../../crates/prng" }
 ticcmd = { path = "../../crates/ticcmd" }
 doom_map = { path = "../doom_map" }
 doom_things = { path = "../doom_things" }
 doom_physics = { path = "../doom_physics" }
-geom2d = { path = "../../crates/geom2d" }
+doom_specials = { path = "../doom_specials" }
 
 [dev-dependencies]
 cairo_test.workspace = true

@@ -4,7 +4,9 @@
 //! canonical serialization/hash.
 
 use doom_map::{LevelId, genesis as level_genesis};
-use doom_player::{PlayerState, spawn as spawn_player, think as player_think};
+// P1.7 renamed the skeleton's `spawn`/`think` to `spawn_skeleton`/`think_skeleton`
+// (`doom_player::compat`, D17); the real `Player` is wired in with P1.9.
+use doom_player::{PlayerState, spawn_skeleton as spawn_player, think_skeleton as player_think};
 use segment::{SegmentOutput, chain_commands};
 use state_hash::hash_state;
 use ticcmd::TicCmd;

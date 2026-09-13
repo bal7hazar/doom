@@ -1,80 +1,70 @@
 // SPDX-License-Identifier: GPL-2.0-only
-//! **Skeleton** (rewritten in P1.7 on top of `doom_physics`): a player is a
-//! position and a health, moved along `y` by `cmd.forward` with no collision.
+//! The player of a Doom-like tic: `p_user.c`, `p_pspr.c` and the player's
+//! half of `p_inter.c` from linuxdoom-1.10 (GPL-2.0-only; semantics derived,
+//! no C copied), over `doom_physics`' geometry and `doom_things`' tables.
+//!
+//! # Shape
+//!
+//! * A [`Player`] is a value — 36 felts once serialized ([`push_felts`]) —
+//!   next to the `Mobj` it drives, which `doom_physics` owns. Every entry
+//!   point takes both by `ref` and returns nothing.
+//! * An [`Env`] is what a tic reads and never writes. Its `World` is
+//!   **boxed**: a world is ~56 felts and Cairo copies a struct at every call
+//!   boundary, so the psprite chain would pay for it on every idle tic (D24).
+//! * A function that would touch *another* mobj reports it instead
+//!   ([`PlayerEvent`]), exactly as `doom_physics` does: a shot is a
+//!   `doom_physics::Hit` plus its damage, a pickup is the index to remove, a
+//!   use is the line for `doom_specials`.
+//!
+//! # Entry points
+//!
+//! | | |
+//! |---|---|
+//! | [`spawn`] | `G_PlayerReborn` + `P_SpawnPlayer` |
+//! | [`player_think`] | `P_PlayerThink` for one already-decoded ticcmd word (D15) |
+//! | [`player_tic`] | the same, with `doom_specials`' two triggers wired in |
+//! | [`touch_special`] | `P_TouchSpecialThing`, from `MoveEvent::Touch` |
+//! | [`damage_player`] | `P_DamageMobj` with the armor absorption |
+//! | [`push_felts`] | the serialization schema `doom_game` splices in |
+//!
+//! # Cost discipline
+//!
+//! Felt-first arithmetic below 2^72, planar `const` spans instead of
+//! if-tree tables, no generic monomorphisation (the use-line trace goes
+//! through `doom_physics::path_traverse`, not through a second instance of
+//! its generic `traverse`), and no `#[inline(always)]` — `bench/measure.py`
+//! asserts the per-function budgets and the bytecode the README lists.
 
-use doom_things::tables::KIND_PLAYER;
-use doom_things::thing_info;
-use fixed::{add, from_int};
-use geom2d::Point;
-use ticcmd::TicCmd;
-
-#[derive(Copy, Drop, Serde, PartialEq, Debug)]
-pub struct PlayerState {
-    pub position: Point,
-    pub health: u32,
-}
-
-pub fn spawn(position: Point) -> PlayerState {
-    PlayerState { position, health: thing_info(KIND_PLAYER).spawnhealth }
-}
-
-/// One tic of movement: `cmd.forward` map units along `y`. Collision is
-/// `doom_physics::try_move`'s job and is wired in by P1.7.
-pub fn think(player: PlayerState, cmd: TicCmd) -> PlayerState {
-    let delta = from_int(cmd.forward);
-    PlayerState {
-        position: Point { x: player.position.x, y: add(player.position.y, delta) },
-        health: player.health,
-    }
-}
-
-/// Apply `amount` damage, saturating at zero health (never underflows).
-pub fn apply_damage(player: PlayerState, amount: u32) -> PlayerState {
-    let health = if amount >= player.health {
-        0
-    } else {
-        player.health - amount
-    };
-    PlayerState { position: player.position, health }
-}
+pub mod compat;
+pub mod env;
+pub mod inter;
+pub mod state;
 
 #[cfg(test)]
-mod tests {
-    use fixed::from_int;
-    use geom2d::Point;
-    use ticcmd::TicCmd;
-    use super::{apply_damage, spawn, think};
+mod tests;
+pub mod think;
+pub mod tic;
+pub mod weapon;
 
-    fn origin() -> Point {
-        Point { x: from_int(0), y: from_int(0) }
-    }
-
-    fn cmd(forward: i64) -> TicCmd {
-        TicCmd { forward, side: 0, angle_turn: 0, buttons: 0 }
-    }
-
-    #[test]
-    fn test_spawn_has_doom_health() {
-        assert(spawn(origin()).health == 100, 'spawns with 100');
-    }
-
-    #[test]
-    fn test_think_moves_forward() {
-        let moved = think(spawn(origin()), cmd(10));
-        assert(moved.position.y == from_int(10), 'moved forward');
-    }
-
-    #[test]
-    fn test_apply_damage_saturates_at_zero() {
-        let player = spawn(origin());
-        let dead = apply_damage(player, player.health + 1000);
-        assert(dead.health == 0, 'saturates at zero');
-    }
-
-    #[test]
-    fn test_apply_damage_monotonically_decreases() {
-        let player = spawn(origin());
-        let hurt = apply_damage(player, 5);
-        assert(hurt.health <= player.health, 'health does not increase');
-    }
-}
+pub use compat::{PlayerState, apply_damage, spawn as spawn_skeleton, think as think_skeleton};
+pub use env::{Env, PlayerEvent, env_of};
+pub use inter::{
+    absorb, count_kill, damage_player, give_ammo, give_armor, give_body, give_card, give_strength,
+    give_weapon, touch_special,
+};
+pub use state::{
+    AM_CELL, AM_CLIP, AM_MISL, AM_NOAMMO, AM_SHELL, BONUSADD, BT_ATTACK, BT_CHANGE, BT_USE,
+    BT_WEAPONMASK, CARD_BLUE, CLIPAMMO, MAXAMMO, MAXARMOR_BONUS, MAXBOB, MAXHEALTH, MAXHEALTH_BONUS,
+    PLAYER_FELTS, PST_DEAD, PST_LIVE, Player, USERANGE, VIEWHEIGHT, WP_CHAINGUN, WP_CHAINSAW,
+    WP_FIST, WP_NOCHANGE, WP_PISTOL, WP_SHOTGUN, ammo_of, fields, has_blue_key, max_ammo, owns,
+    push_felts, set_ammo, spawn, weapon_ammo, weapon_bit,
+};
+pub use think::{
+    calc_height, change_weapon, death_think, move_player, onground, player_stopped, player_think,
+    thrust, use_lines,
+};
+pub use tic::player_tic;
+pub use weapon::{
+    MAX_PSPR_DEPTH, PS_FLASH, PS_WEAPON, S_PLAY, S_PLAY_ATK, bring_up_weapon, bullet_slope, chain,
+    check_ammo, drop_weapon, hit_thing, move_psprites, set_psprite,
+};
