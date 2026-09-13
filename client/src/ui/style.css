@@ -298,3 +298,34 @@ body.prove-page #status {
   max-height: 60vh;
   overflow: auto;
 }
+
+.play-session {
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 90px);
+  overflow: auto;
+}
+.play-session h1 { margin: 0 0 8px; font-size: 22px; }
+.play-session p { margin: 6px 0; }
+.play-session.playing { top: 12px; left: 12px; transform: none; width: min(500px, calc(100vw - 24px)); }
+.play-session.playing .play-note, .play-session.playing a { display: none; }
+.play-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.play-actions button { font: inherit; color: var(--fg); background: #28221c; border: 1px solid #8d8578; padding: 6px 12px; border-radius: 3px; cursor: pointer; }
+.play-actions button:focus-visible { outline: 2px solid var(--ok); outline-offset: 2px; }
+.play-actions button:disabled { opacity: 0.45; cursor: default; }
+.play-note, .play-session a { color: var(--dim); font-size: 11px; }
+.play-message { min-height: 1.5em; }
+.diagnostics { z-index: 3; }
+.help { max-width: calc(100vw - 24px); }
+.play-session.playing { width: auto; max-width: min(500px, calc(100vw - 24px)); padding: 8px 10px; pointer-events: none; }
+.play-session.playing h1 { font-size: 14px; margin: 0; }
+.play-session.playing .play-actions { display: none; }
+.play-session.playing .play-message { font-size: 11px; }
+.real-play .help { bottom: 48px; background: rgba(0,0,0,.7); padding: 3px 6px; pointer-events: none; }
+.play-session.playing .play-actions { display: flex; position: absolute; right: 8px; top: 8px; margin: 0; pointer-events: auto; }
+.play-session.playing .play-actions button { display: none; }
+.play-session.playing .play-actions button:nth-child(2) { display: block; padding: 2px 8px; }
+.play-session.playing h1 { padding-right: 70px; }
