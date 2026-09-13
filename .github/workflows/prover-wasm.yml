@@ -36,8 +36,9 @@ concurrency:
 
 jobs:
   docker-build:
-    name: reproducible build (Docker, Linux)
-    runs-on: ubuntu-latest
+    name: reproducible build (Docker, Linux arm64)
+    # SHA256SUMS.linux was measured on arm64; the rustc host affects WASM code layout.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +46,7 @@ jobs:
       - name: Build both wasm64 artifacts in the pinned container
         working-directory: prover/wasm
         run: |
-          docker build --progress=plain -o out -f Dockerfile .
+          docker build --platform linux/arm64 --progress=plain -o out -f Dockerfile .
           ls -l out
 
       - name: Compare with the committed SHA256SUMS.linux
@@ -86,6 +87,16 @@ jobs:
           # them at compile time).
           node-version: "24"
 
+      - name: Set up Scarb for the smoke program
+        uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: "2.16.0"
+          cache: false
+
+      - name: Build the smoke program from its tracked Cairo source
+        working-directory: prover/wasm/harness/programs/steps_k
+        run: scarb build
+
       - name: The leaf parameters still match the recursion registry
         # `prove_leaf` takes the registry's `cairo_prover_params` verbatim and hardcodes the
         # Blake2sM31 channel, so every field but `channel_hash` must be identical to
@@ -122,13 +133,13 @@ jobs:
       - name: Build the package
         working-directory: prover/wasm/pkg
         run: |
-          npm ci || npm install
+          npm ci
           npm run build
 
       - name: Install the harness and Chromium
         working-directory: prover/wasm/harness
         run: |
-          npm ci || npm install
+          npm ci
           npx playwright install --with-deps chromium
 
       - name: Node smoke test (1 thread and 4 threads)
