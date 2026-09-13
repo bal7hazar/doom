@@ -62,7 +62,7 @@ const EIGHTH: Fixed = Fixed { enc: BIAS + 8192 };
 /// reports for it; on an invalid input the state comes back untouched with
 /// `Abort` (R4-A2: never a panic).
 pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
-    if state.status != Status::Running {
+    if state.status != Status::Running || state.leveltime >= segment::MAX_TIC {
         return (state, Status::Abort);
     }
     let cmd = match ticcmd::try_decode(word) {
@@ -391,6 +391,14 @@ pub fn apply_move_events(
 /// Step 6: the one list pass of this crate. Writes the player's mobj at
 /// `me`, every patch at its index, and height-clips the things standing in
 /// a sector whose plane moved last tic.
+///
+/// S7 §8 in practice: a Cairo loop carries its whole live set through
+/// every iteration, so a per-mobj loop holding the 67-felt `World` cost
+/// 450 steps a slot (94 000 a tic). The patches are sorted (they are a
+/// handful) and the unpatched runs between them are copied with
+/// `append_span`, whose loop carries two spans; the clip case first finds
+/// the things to clip by reading one felt per slot, then joins the patch
+/// list.
 pub fn rebuild_list(
     w: World,
     mobjs: Span<Mobj>,
@@ -400,32 +408,99 @@ pub fn rebuild_list(
     patches: Span<Patch>,
     clip: Span<u32>,
 ) -> Span<Mobj> {
-    let n = mobjs.len();
-    let np = patches.len();
-    let nc = clip.len();
-    let mut out: Array<Mobj> = array![];
-    let mut i: u32 = 0;
-    while i != n {
-        let mut m = *mobjs.at(i);
-        if i == me {
-            m = mo;
-        } else {
-            let mut k: u32 = 0;
-            while k != np {
-                let pt = *patches.at(k);
-                if pt.idx == i {
-                    m = pt.mo;
-                }
-                k = k.wrapping_add(1);
-            }
-            if nc != 0 && !is_removed(@m) && contains(clip, m.sector) {
-                height_clip(w, mobjs, ref g, ref m, i);
+    let mut sorted = insert_patch(array![], Patch { idx: me, mo });
+    let mut ps = patches;
+    while let Option::Some(pt) = ps.pop_front() {
+        sorted = insert_patch(sorted, *pt);
+    }
+    if clip.len() != 0 {
+        sorted = clip_patches(BoxTrait::new(w), mobjs, ref g, sorted, clip, me);
+    }
+    copy_patched(mobjs, sorted.span())
+}
+
+/// `sorted` with `pt` inserted at its index (replacing an entry with the
+/// same index: the later patch of a tic composes the earlier one).
+fn insert_patch(sorted: Array<Patch>, pt: Patch) -> Array<Patch> {
+    let mut out: Array<Patch> = array![];
+    let mut placed = false;
+    let mut src = sorted.span();
+    while let Option::Some(cur) = src.pop_front() {
+        if !placed && pt.idx <= *cur.idx {
+            out.append(pt);
+            placed = true;
+            if pt.idx == *cur.idx {
+                continue;
             }
         }
-        out.append(m);
-        i = i.wrapping_add(1);
+        out.append(*cur);
+    }
+    if !placed {
+        out.append(pt);
+    }
+    out
+}
+
+/// The list with the sorted `patches` written in: the unpatched runs are
+/// `append_span`ed, the patched slots appended one by one.
+fn copy_patched(mobjs: Span<Mobj>, mut patches: Span<Patch>) -> Span<Mobj> {
+    let n = mobjs.len();
+    let mut out: Array<Mobj> = array![];
+    let mut from: u32 = 0;
+    while let Option::Some(pt) = patches.pop_front() {
+        let idx = *pt.idx;
+        if idx < n && idx >= from {
+            out.append_span(mobjs.slice(from, idx - from));
+            out.append(*pt.mo);
+            from = idx + 1;
+        }
+    }
+    if from < n {
+        out.append_span(mobjs.slice(from, n - from));
     }
     out.span()
+}
+
+/// `P_ThingHeightClip` on every thing (other than the player, already
+/// done) whose centre is in a `clip` sector, as patches merged into
+/// `sorted`. One felt read per slot to find them.
+fn clip_patches(
+    w: Box<World>,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    sorted: Array<Patch>,
+    clip: Span<u32>,
+    me: u32,
+) -> Array<Patch> {
+    let mut out = sorted;
+    let n = mobjs.len();
+    let mut i: u32 = doom_physics::maputl::opaque_zero(n);
+    while i != n {
+        let sector = *mobjs.at(i).sector;
+        if i != me && contains(clip, sector) {
+            let mut cur = match patch_at(out.span(), i) {
+                Option::Some(p) => p,
+                Option::None => *mobjs.at(i),
+            };
+            if !is_removed(@cur) {
+                height_clip(w.unbox(), mobjs, ref g, ref cur, i);
+                out = insert_patch(out, Patch { idx: i, mo: cur });
+            }
+        }
+        i = i.wrapping_add(1);
+    }
+    out
+}
+
+/// The patch for slot `i`, if any.
+fn patch_at(mut patches: Span<Patch>, i: u32) -> Option<Mobj> {
+    let mut found: Option<Mobj> = Option::None;
+    while let Option::Some(pt) = patches.pop_front() {
+        if *pt.idx == i {
+            found = Option::Some(*pt.mo);
+        }
+    }
+    found
 }
 
 /// Step 8: what the monsters did to the world outside their own list.
