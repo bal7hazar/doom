@@ -1,0 +1,27 @@
+{
+  "name": "@hellproof/indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DoomRuns event indexer (P4.4): follows RunSubmitted/AttemptRecorded/MemberRejected/Replay/VersionAdded/GenesisSet/Frozen into SQLite and serves a small read API for the leaderboard page.",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "doomruns-indexer": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "starknet": "10.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vitest": "^2.1.8"
+  }
+}
