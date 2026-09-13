@@ -1,0 +1,58 @@
+name: Game regression
+
+on:
+  pull_request:
+    paths:
+      - 'cairo/**'
+      - 'infra/ci/run-game-regression.sh'
+      - '.github/workflows/game-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cairo/**'
+      - 'infra/ci/run-game-regression.sh'
+      - '.github/workflows/game-regression.yml'
+  schedule:
+    - cron: '23 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-regression-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    env:
+      RAYON_NUM_THREADS: '2'
+      CARGO_BUILD_JOBS: '2'
+      ASDF_SCARB_VERSION: '2.16.0'
+      # Every CI run has a recorded, reproducible seed; reruns preserve this number.
+      GAME_FUZZ_SEED: ${{ github.run_number }}
+      REGRESSION_MODE: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'nightly' || 'corpus' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: cairo/doom/doom_game/regression/requirements.txt
+      - name: Install independent Poseidon oracle
+        run: python3 -m pip install -r cairo/doom/doom_game/regression/requirements.txt
+      - uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: '2.16.0'
+      - name: Exact corpus, nightly counted fuzz, strict D29 budget
+        run: bash infra/ci/run-game-regression.sh "$RUNNER_TEMP/game-regression" "$REGRESSION_MODE"
+      - name: Preserve counts, hashes and reproducible counterexamples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-regression-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/game-regression
+          if-no-files-found: error
+          retention-days: 14
