@@ -529,3 +529,43 @@ it("hard stop owns an initializing prover and cannot resurrect it after a late i
   expect(FakeProver.executes).toBe(0); expect(FakeProver.proves).toBe(0);
   expect(FakeProver.terminations).toBe(1);
 });
+
+
+it.each(["reject", "late success"])("hard stop during threaded prove prevents retry and persistence (%s)", async outcome => {
+  let notify!: () => void, release!: () => void;
+  const started = new Promise<void>(resolve => { notify = resolve; });
+  let calls = 0;
+  const { pipeline } = makePipeline({}, { createProver: () => {
+    const p = new FakeProver({ seen: new Set() }), prove = p.prove.bind(p), terminate = p.terminate.bind(p);
+    p.prove = input => {
+      calls++; notify();
+      return new Promise((resolve, reject) => {
+        release = () => outcome === "reject" ? reject(new Error("intentional hard stop")) : void prove(input).then(resolve, reject);
+      });
+    };
+    p.terminate = () => { terminate(); release?.(); }; return p;
+  } });
+  const run = await pipeline.attach(); await pipeline.appendTics([0]);
+  const proving = pipeline.proveAll(); await started;
+  await pipeline.stop(true); await proving;
+  expect(FakeProver.instances).toBe(1); expect(FakeProver.terminations).toBe(1); expect(calls).toBe(1);
+  expect(pipeline.segmentRecords[0]?.stage).toBe("failed");
+  expect(pipeline.segmentRecords[0]?.retriedSingleThread).toBe(false);
+  expect(await store.getProof(run.id, 0)).toBeUndefined(); expect(pipeline.state.proved).toBe(0);
+});
+
+
+it("soft stop finishes and persists the segment already in flight", async () => {
+  let notify!: () => void, release!: () => void;
+  const started = new Promise<void>(resolve => { notify = resolve; });
+  const { pipeline } = makePipeline({}, { createProver: () => {
+    const p = new FakeProver({ seen: new Set() }), prove = p.prove.bind(p);
+    p.prove = input => { notify(); return new Promise((resolve, reject) => { release = () => { void prove(input).then(resolve, reject); }; }); };
+    return p;
+  } });
+  const run = await pipeline.attach(); await pipeline.appendTics([0]); const proving = pipeline.proveAll();
+  await started; const stopped = pipeline.stop(false); expect(FakeProver.terminations).toBe(0);
+  release(); await Promise.all([proving, stopped]);
+  expect(pipeline.segmentRecords[0]?.stage).toBe("proved"); expect(await store.getProof(run.id, 0)).toBeDefined();
+  expect(FakeProver.instances).toBe(1); expect(FakeProver.proves).toBe(1);
+});
