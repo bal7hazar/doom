@@ -1,10 +1,8 @@
-# Prompt d'orchestration — reprise du projet Hellproof
+# Handoff d’orchestration — Hellproof
 
-> À coller tel quel comme instruction système/initiale d'un orchestrateur (ChatGPT Astra ou équivalent)
-> disposant d'un accès au dépôt, d'un shell et de la capacité à lancer des sous-agents. Rédigé le
-> 2026-09-13 par l'orchestrateur précédent (Claude) à la demande du sponsor.
-
----
+> État actualisé le **2026-09-13**, après la passe de calculs Cairo S14.
+> Ce document remplace le handoff initial de Claude. Les mesures historiques
+> détaillées restent dans `docs/STATUS.md` ; ne pas les confondre avec le moteur courant.
 
 ## Rôle
 
@@ -18,84 +16,153 @@ documentation de pilotage à jour**. Le sponsor (bal7hazar) t'a délégué les d
 critère : *maximiser les chances de réussite sans dégrader l'expérience utilisateur finale ; itérer si
 un scénario échoue*. Tu lui rends compte en français, de façon concise, avec les chiffres qui comptent.
 
-## Première tâche : audit (avant tout lancement)
+## État exact à reprendre
 
-1. Lis dans cet ordre : `README.md`, `docs/STATUS.md` (état exact et checklist de reprise),
-   `docs/G0.md` §3 (décisions D1–D11), `docs/DECISIONS.md` (D12–D29), `PLAN.md` (phases, §3.1 règles de
-   crates et de bytecode), `RISKS.md` (actions `R<n>-A<m>`), `ROADMAP.md` (WBS, chemin critique),
-   `CONTEXT.md` (faits mesurés, sources), puis les notes de spikes `docs/spikes/S0…S7.md` et les designs
-   `docs/design/*.md`. Les README de chaque crate/paquet font foi pour les API et les coûts mesurés.
-2. Vérifie l'état réel : `git status`, `git log --oneline | head -40`, `git branch --list`, CI GitHub
-   (`gh run list --limit 5`), et fais tourner les suites locales (commandes en annexe A).
-3. **Merge d'abord les branches en vol** laissées par la session précédente (voir §« Branches en vol »),
-   après relecture de leur rapport final (dans le message de commit ou le README de la crate) et
-   exécution des tests. Résous les conflits en faveur des crates réelles contre les squelettes.
-4. Produis un court rapport d'audit au sponsor : écarts entre docs et code, tests rouges, risques que tu
-   requalifies, et la vague que tu proposes de lancer. Mets `docs/STATUS.md` à jour.
+- Dépôt : `/Users/bal7hazar/git/doom`.
+- `main` : dernier commit avant ce handoff `8763426` (documentation S14), poussé.
+  **Le jeu complet n’est pas sur main** : `doom_game` / `doom_run` y restent des squelettes.
+- Jeu complet : branche locale **`codex/game-integration`**, worktree
+  `.claude/worktrees/codex-game-integration`, HEAD avant ce handoff **`2eef9ea`**.
+  Fusion fonctionnelle S14 **`49f2a66`**, assemblage **`d17b3be`**, moteur **`ee5f819`**.
+  La synchronisation ultérieure de documentation peut changer HEAD sans changer le moteur.
+- Aucun sous-agent ni campagne de preuve encore en cours à la fin de S14.
+  Les agents Claude arrêtés pour quota ne sont plus attendus. Préserver leurs
+  anciennes modifications non commitées ; ne pas nettoyer aveuglément les worktrees.
+- CI générale : verte sur `34d7b93` (run `34769473077`) ; run `34771558289`
+  de `8763426` encore en cours lors de cette rédaction. Reconsulter GitHub.
+  CI WASM de référence verte `34764805318`.
 
-## État au 2026-09-13 (fin de session)
+**Ne pas fusionner le jeu complet dans main avant résolution des gates D2/D29.**
+Les passes moteur sont intégrées dans la branche du jeu ; les documents de
+pilotage sont commités et poussés sur main, puis synchronisés dans cette branche.
 
-Terminé et mergé (CI verte) :
-- Phase 0 complète (spikes S0–S7, tous GO) ; socle (workspace Cairo de 18 crates, REUSE, CI 6 jobs +
-  `prover-wasm.yml`, graphe de dépendances vérifié).
-- 10 crates génériques (`cairo/crates/*`) : 238+ tests, budgets de steps mesurés et gardés en CI.
-- Crates Doom : `doom_map` (E1M1 Freedoom, 15,6 k mots), `doom_things`, `doom_physics` (post-S7 : 36 k
-  mots), `doom_specials`, `doom_player` (40 k mots, avant passe de style), `doom_monsters` (34 k mots,
-  avant passe de style). `doom_game`/`doom_run` = squelettes (P1.9 en vol).
-- Outils : `@hellproof/wad` (133 tests), `infra/sierra_words` + `bench/attribute.py` (attribution du
-  bytecode), `infra/ci/run-cairo-benches.sh`.
-- Client : renderer WebGL2 + assets Freedoom + `RenderSnapshot`, pipeline de preuve (planificateur par
-  `resources()`, Worker prouveur, persistance IndexedDB, export `.hellproof`, upload par segment),
-  orchestration on-chain + écran de coût (`client/src/chain`, CLI `infra/submit`), page leaderboard.
-- Prouveur : `prover/sim` (cairo-vm wasm temps réel, 2 289 tics/s), `@hellproof/prover-wasm` (WASM64,
-  threads ×3, `resources()`), `prover/wrapper` (feuilles, arbre récursif, lots, mode `from_proof`,
-  upload par segment, Docker), `infra/indexer`.
-- On-chain (devnet) : vérifieur de circuit résumable en calldata **5 tx, 1,54e9 L2 gas, ≈ 47 STRK par
-  fait** (P4.1), `DoomRuns` (53 tests), validation bout en bout avec de vraies racines à 10 felts.
+## Le jeu est-il jouable ?
 
-Manque pour le MVP (PLAN §0, critères C1–C7) : `doom_game` + `doom_run` (P1.9), replays dorés et fuzz
-(P1.10), Worker de simulation Cairo + contrôles + écrans dans le client (P2.3/P2.4/P2.6), E2E « partie
-complète prouvée » (P3.7, C3), déploiement Sepolia + campagne (P4.5 ; le sponsor fournira un compte
-financé ≈ 300 STRK **hors chat**, voir §Sécurité), durcissement (Phase 5, mainnet hors MVP).
+**Oui, en prototype local sur la branche du jeu.** La route `/` utilise le moteur
+Cairo réel via le Worker R5 ; `/?sim=demo` est seulement la démonstration du renderer.
+Déplacements, visée souris, tir, interactions, objets, monstres, portes/ascenseurs,
+pause, sauvegarde/reprise, mort et sortie sont raccordés. Le journal conserve les
+commandes réellement consommées. F4 ouvre la file de preuve et l’export récupérable.
 
-## Branches en vol au moment de l'arrêt (à merger en premier)
+Validation récente : dix smokes Chromium headed (dont contrôles et verrou souris),
+259 tests client et replay navigateur jusqu’à **EXIT au tic 677**, santé 29,
+quatre objets. Ce replay est piloté par l’API du client, pas une partie entière
+jouée manuellement. La simulation conserve **35 tics/s** ; le rendu utilise rAF.
+Cela ne constitue pas une mesure garantissant 35 FPS sur tout matériel.
 
-| Ligne | Branche(s) possibles | Ce qu'il faut vérifier avant merge |
-|---|---|---|
-| Passe de style S7 sur `doom_monsters` (cible ≤ 15 k mots, API figée) | `s7-monsters-bytecode` ou `worktree-agent-a6ac67f3ed7fc7f8f` | 55 tests et checksum 700 tics inchangés ; `bench/size` ≤ 15 k |
-| Passe de style S7 sur `doom_player` (cible ≤ 20 k mots, API figée) | `worktree-agent-ae639d60352cb6412` | 132 tests et checksum 350 tics inchangés ; proposition de politique de visée (à décider, D10) |
-| P1.9 `doom_game` + `doom_run` + profil d'un tic (`docs/spikes/S8-tic-profile.md`) | `worktree-agent-a3f0a4e676dba3186` | replays dorés, associativité des segments, preuve native d'un vrai segment, bytecode `doom_run` ≤ 100 k (D29), classement des leviers pour le budget steps/tic |
+Limites : image d’arme statique / psprites incomplets, certains effets visuels
+approximatifs ; aucune partie complète prouvée de bout en bout ni validation
+jeu + preuve simultanés sur machine physique de 16 GiB. Le refus AIR est explicite
+et laisse l’export disponible. Le prototype jouable ne vaut pas validation du MVP.
 
-Les sous-agents commitent sur leur branche mais **ne poussent jamais** ; c'est toi qui merges
-(`git merge --no-ff`) après tests, puis `git push origin main`. Les worktrees vivent sous
-`.claude/worktrees/` (ignoré par Git) ; nettoie ceux dont la branche est mergée.
+Sur cette machine, assets et WASM validés sont déjà présents (ignorés par Git),
+et le build client a été refait après fusion. Pour ouvrir le jeu :
 
-## Risque principal à piloter : le budget de calcul (R2)
+```sh
+cd /Users/bal7hazar/git/doom/.claude/worktrees/codex-game-integration
+export PATH=/Users/bal7hazar/.asdf/installs/nodejs/22.22.2/bin:$PATH
+npm run dev --workspace client -- --host 127.0.0.1
+```
 
-Mesures actuelles : ≈ 17,5 k steps/tic avec 5 monstres éveillés, ≈ 30 k avec 8 (cible D2 : 12 k) ; un
-tir de pistolet manqué ≈ 114 k steps (trois traces d'auto-visée) ; bytecode total ≈ 100–150 k mots
-avant les passes de style (budget D29 : 100 k). Le rapport S8 (P1.9) doit classer les leviers ; décide
-ensuite, dans cet ordre de préférence UX : cache de visée / traces latérales réduites, plafond de
-monstres éveillés 6 puis 4, classe « ne bloque jamais la vue » par ligne, et en dernier recours 17,5 Hz
-(R2-A7). Consigne la décision dans `docs/DECISIONS.md` (D30…) et mets à jour `docs/G0.md` D2.
+Ouvrir l’URL locale indiquée par Vite, puis Start. Contrôles : WASD / ↑↓ pour
+bouger, ←→ pour tourner, souris / Ctrl pour tirer, E / Espace pour utiliser,
+Shift pour courir, 1–4 et 7 pour les armes, Esc / P pour pause, Tab pour la carte.
+Aucun serveur permanent n’est lancé par ce handoff. Sur un nouveau checkout,
+préparer les assets et les artefacts selon les scripts du client ; ne pas utiliser
+les anciens exemples stub comme preuve du fonctionnement du jeu réel. Certains
+paragraphes historiques du README client sont encore obsolètes.
 
-## Prochaines étapes (ordre du chemin critique)
+## Mesures courantes et validations
 
-1. Merger les trois branches en vol ; appliquer les décisions du profil S8.
-2. P1.10 : ≥ 20 replays dorés, fuzz de prouvabilité nocturne (10 000 tics aléatoires, zéro panique,
-   felts < 2^72), test CI de bytecode `doom_run`.
-3. P2.3/P2.4/P2.6 : Worker sim (cairo-vm wasm, `prover/sim`, triple buffer `SharedArrayBuffer` déjà
-   spécifié dans `client/src/sim/snapshot.ts`), contrôles → ticcmd (quantisation D12), écrans (titre,
-   fin, file de preuve), états d'arme et HUD réels, `client/src/prove/program.ts` branché sur `doom_run`.
-4. P3.7 (C3) : une partie complète jouée dans Chrome, prouvée en tâche de fond, vérifiée localement,
-   repliée par le wrapper, vérifiée sur devnet, enregistrée par `DoomRuns` ; mesurer temps résiduel de
-   preuve après la fin de partie (objectif ≤ 5 min sur 16 GB, sinon itérer sur R2).
-5. P4.5 : déploiement Sepolia (declares ≈ 270 STRK + `DoomRuns` 36 STRK), 10 parties, écart estimation/
-   reçu < 20 % (C5) ; re-mesurer avec la classe de compte Cartridge Controller.
-6. Phase 5 : tests externes, gel des versions et hashes, doc utilisateur, runbook wrapper.
-Optionnel, sur décision du sponsor : « mode souverain » (wrapper local + soumission par le joueur) ;
-spike récursion dans le navigateur (< 16 GB ?) ; cache de vue ; PR upstream des patches (`prover/wasm/
-patches`, `prover/wrapper/patches`, `cairo/doom_contracts/vendor/patches`).
+| Sujet | Résultat courant |
+|---|---|
+| Cairo | **573 tests / 23 cibles**, aucun ignoré ; format, builds dev/proving et graphe verts |
+| `run_segment` proving | **107 018 mots**, +163 depuis `0c8a3a8` |
+| Profil de 2 946 tics | moyenne **48 543,68 steps/tic**, p99 **122 942**, max **166 315** |
+| Gain S14 | moyenne **−1,98 %** ; chaque tic mesuré améliore son coût |
+| Corpus moteur courant | **26/26 cas dev + 26/26 proving**, 7 575 tics logiques par profil, 1 365,78 s |
+| Frontières | 149 coupes / 123 frontières sérialisées / 175 D14 indépendants par profil ; sorties et goldens exacts |
+| Microbench S14 | 258 exécutions avec oracles ; 16 384 angles pour `sin_cos` |
+| Client | **259 tests**, dix smokes headed et replay EXIT677 ; build après fusion vert |
+| Licences après fusion fonctionnelle | REUSE **1 785/1 785** |
+
+S14 partage le pliage trigonométrique, remplace certains modulos IA par des
+masques exacts et évite/réduit les copies de hauteurs. Les règles arithmétiques
+sont mesurées sur Cairo 2.16 : aucune préférence universelle division/bitwise.
+Voir [le rapport S14](design/cairo-calculation-costs.md) pour les sources et coûts.
+
+Le coût fixe augmente avec le bytecode : execute WASM sur quatre tics de marche
+passe de 2 193 266 à 2 195 222 steps (+1 956) ; sur 32 tics, de 3 083 596 à
+3 081 268 (−2 328). Les entrées du prouveur grandissent dans les deux cas.
+**Aucune nouvelle preuve n’a été générée avec ce moteur** ; pas de gain de durée
+ou de mémoire de preuve revendiqué. Les sorties D14 restent identiques.
+
+Trois budgets du bench global étaient déjà rouges et restent inchangés : hash
+idle 120 441 / budget 76 686, serde 207 974 / 172 573, hash fight 122 618 / 76 684.
+Ne pas rebaseliner les seuils pour rendre la suite verte.
+
+Le fuzz de **10 000 tics / 158 cas / 11 épisodes** avec zéro divergence et la
+preuve réelle quatre tics en **41,55 s** (WASM + native vérifiés, ~11,64 GB de
+mémoire linéaire) concernent **l’ancien moteur `0c8a3a8`**, pas `ee5f819`.
+Le nightly durable reste à mettre en place.
+
+### Identités à préserver
+
+- `run_segment` proving SHA256 :
+  `18100435ee3882f0ae98d2b3fd89ee89c8dc365333a8cb3c0f74bed23f94b3bb`.
+- Task hash mesuré par execute :
+  `0x55fb48519602ba0310b362e11cfd040f3afad418cca2e37e2b3c069b251fc22`.
+- R5 session : `dcb7193cbb8d77cdb08c66517e1c5e68453b15687808e40ea2abb5acbc4a0cac`.
+- VM sim R5 : `dd73ce152f44a9e00368e195c6de36d40b2948b0740794f056b2e557c94b67c5`.
+- Schéma état 2, D14 à dix felts, RNG, D3 et cadence inchangés.
+  Les anciens exports ne sont pas réétiquetés ; migration client explicite.
+
+Les artefacts d’audit locaux sont dans `/tmp/hellproof-cairo-pass/`
+(`comparison.json`, `corpus-report.md`, `corpus-final-validation.json`, logs
+client/build/REUSE), et `/tmp/hellproof-cairo-cost-client/` pour execute WASM.
+Ils sont temporaires : les faits durables sont consignés dans les docs et les
+micro-harnais versionnés. Ne pas supposer leur présence sur une autre machine.
+
+## Blocages et prochaine exécution
+
+1. **D2** : cible moyenne ≤12 000 / p99 ≤25 000 steps/tic, encore manquée.
+   Profiler les postes dominants en conservant le gameplay et mesurer le programme
+   complet avant d’adopter une micro-optimisation.
+2. **D29** : cible 100 000 mots, plafond projet 120 000 ; programme actuel +7 018
+   au-dessus de la cible. C’est un budget de performance du projet, pas une limite
+   intrinsèque Cairo. Le bootloader réel utilise Blake (~14,75 steps/mot), pas
+   l’ancienne hypothèse Poseidon. S13 compression de carte a été rejeté car le
+   chargement coûtait plus que le hachage économisé ; ne pas le réintroduire tel quel.
+3. **Admission** : composant AIR `blake_g` exige log21, registre `doom` log20.
+   Les caps 1,5 M threads / 2,3 M mono restent inchangés. Résoudre et valider le
+   prouveur/registre avant de revendiquer la preuve complète.
+4. **P3.7 / C3** : partie complète, preuve concurrente, wrapper, devnet et DoomRuns ;
+   résiduel PLAN ≤10 min, objectif opérationnel ≤5 min. Matériel 16 GiB à valider.
+5. Nightly de prouvabilité, psprites et finition visuelle ; puis P4.5 Sepolia,
+   campagne et frais mesurés. Mainnet hors MVP.
+
+À la reprise, lire STATUS, DECISIONS et le rapport S14 ; contrôler Git, les
+worktrees, la CI et les agents avant lancement. Ne pas refaire toutes les longues
+campagnes sans changement justifiant de les répéter. Les sous-agents doivent
+recevoir un périmètre indépendant, livrer leurs commits et ne jamais pousser.
+
+## Sepolia et coûts on-chain
+
+Le sponsor indique **350 STRK sur Sepolia**, avec `SEPOLIA_ACCOUNT_ADDRESS`,
+`SEPOLIA_PRIVATE_KEY`, `SEPOLIA_RPC_URL` (Infura) dans **`~/.hellproof`**.
+L’emplacement exact à l’intérieur de ce chemin et le solde ne sont pas vérifiés.
+Aucun secret lu ou affiché, aucune transaction envoyée dans la passe S14.
+Les scripts peuvent charger la configuration sans l’exposer ; ne jamais afficher
+la clé ni l’URL RPC contenant un identifiant. La mise à disposition du compte
+ne clôt pas les gates et aucun déploiement n’a été décidé dans cette passe.
+
+P4.1 mesuré sur devnet : vérification d’un fait en **5 transactions**, **1 540 234 480
+L2 gas**, environ **47 STRK au prix historique**. Ce n’est pas un devis Sepolia
+actuel, ni un tarif calculé directement sur les 100 k mots du programme. Déclarations,
+déploiement, wrapper et enregistrement DoomRuns sont des coûts séparés. Refaire
+une estimation de la séquence réelle avant P4.5 ; ne pas présumer que 350 STRK
+couvrent le déploiement et toute la campagne. D28 `[2]` est déjà appliquée au
+client et à la CLI sur main (`b00c90b`).
 
 ## Règles de travail (non négociables)
 
@@ -119,47 +186,19 @@ patches`, `prover/wrapper/patches`, `cairo/doom_contracts/vendor/patches`).
   chiffré ; les scripts lisent les variables, aucune sortie de commande ne les affiche.
 - Licences : `cairo/doom/*` GPL-2.0-only (dérivé de linuxdoom-1.10), le reste Apache-2.0, assets Freedoom
   BSD jamais commités ; `reuse lint` doit rester vert.
-- Après chaque merge : tests, `git push origin main`, mise à jour de `docs/STATUS.md` et, si un fait
+- Après chaque merge : validation adaptée, publication de `main` uniquement pour les changements qui y sont intégrés, mise à jour de `docs/STATUS.md` et, si un fait
   mesuré change, de `CONTEXT.md`/`RISKS.md`/`docs/DECISIONS.md`.
 
-## Format de compte rendu au sponsor
+## Outillage et compte rendu
 
-Après chaque vague : ce qui est mergé (commit), les chiffres clés (tests, coûts, tailles), ce qui change
-dans le plan, les décisions prises (numérotées), les agents en cours, et une estimation de reste à faire
-en runs d'agents et en tokens quand il la demande (référence : ~30 runs ≈ 12 M tokens de sous-agents ont
-produit l'état actuel ; reste estimé 15–20 runs, 6–10 M tokens, 2–4 jours ouvrés, avec un aléa de
-1–2 jours sur R2).
-
----
-
-## Annexe A — outillage et commandes
-
-- Versions (asdf) : Scarb **2.16.0** pour `cairo/` (`export ASDF_SCARB_VERSION=2.16.0`), **2.18.0** pour
-  `cairo/doom_contracts/` et `spikes/s4/recursion_outputs/`, 2.19.4 pour les programmes du monorepo ;
-  starknet-foundry 0.61.0 ; starknet-devnet 0.10.0 ; Node 22.22.2 (workspaces npm racine), Node 24.16.0
-  pour charger le wasm64 ; Rust nightly géré par `rust-toolchain.toml` ; cairo-profiler ≥ 0.17.
-- Cairo : `cd cairo && scarb fmt --check && scarb build && scarb test && python3 ../infra/check_crate_graph.py
-  && bash ../infra/ci/run-cairo-benches.sh` ; taille de bytecode : `bench/size` + `infra/sierra_words`.
-- Contrats : `cd cairo/doom_contracts && scarb build && snforge test` (mode `cairo-steps`) ; drives devnet
-  dans `tools/` ; coûts dans `results/`.
-- Node : `npm ci` à la racine puis `npm test --workspace client|tools/wad`, `cd infra/submit && npm test`,
-  `cd infra/indexer && npm test`.
-- Rust : `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test` dans `prover/sim`,
-  `prover/wrapper` ; `prover/wasm/build.sh` (long, artefacts non commités).
-- Monorepo StarkWare épinglé : `starkware-libs/proving@cd7bc5f` (clones dans le scratchpad
-  `$SCRATCH/proving*`, à recloner si absent) ; registre de circuits `spikes/s4/registry/doom` (production
-  aujourd'hui) et `doom_fold4_min` (cible, D11).
-- Freedoom : `tools/wad/scripts/fetch-freedoom.sh` (jamais commité).
-
-## Annexe B — chiffres de référence
-
-| Sujet | Valeur |
-|---|---|
-| Preuve navigateur 2^20 steps | 11,7 s à 4 threads / 36 s mono, 3,05 GiB ; plafond de segment ≈ 2,3 M steps (composant AIR), 1,5 M avec threads |
-| Leaf proof | 755 500 felts / 4,2 MB bincode, indépendant de la taille du segment |
-| Wrapper | feuille 19–22 s / 32 GB (`doom`), 13 s / 22 GB (`doom_fold4_min`) ; N = 2 : 65 s bout en bout |
-| Racine | 94–96 k felts ; vérifieur 5,3 M steps ; on-chain 5 tx / 1,54e9 gas / 47 STRK (P4.1) |
-| `DoomRuns.submit_batch` | 16,7 M gas pour 3 feuilles, 0,4 % d'un fait |
-| Estimation de frais | `starknet_simulateTransactions` séquence, écart −0,012 % ; bornes ×1,15 / ×1,30 |
-| Sim temps réel | cairo-vm wasm 9 M steps/s ; 2 289 tics/s à 4 k steps/tic |
-| Bootloader | poseidon : 1 969 + 5,5 × mots ; blake : 2 340 + 14,75 × mots |
+- Scarb 2.16.0 pour `cairo/`, 2.18.0 pour les contrats ; Node 22.22.2 pour npm,
+  Node 24.16.0 pour WASM64 ; Rust selon les fichiers du dépôt.
+- Limiter les campagnes CPU : `RAYON_NUM_THREADS=1 CARGO_BUILD_JOBS=1` si adapté.
+  Toute vraie preuve lourde utilise le verrou et un timeout explicite.
+- Ici les accès complets sont accordés et la politique d’approbation est `never` :
+  ne pas ajouter `sandbox_permissions`, ni redemander une autorisation pour les
+  audits, tests, corrections réversibles et fusions déjà délégués.
+- Attribution des commits : `Co-authored-by: Codex <noreply@openai.com>`.
+- Après une vague, rapport concis en français : intégré où/commit, métriques,
+  tests, limites, agents réellement actifs et prochain blocage. Ne jamais annoncer
+  un agent, un serveur ou une preuve en cours sans en avoir vérifié l’état.
