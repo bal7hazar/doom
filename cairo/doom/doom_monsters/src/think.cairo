@@ -24,7 +24,7 @@ use super::actions::{
     face_boxed, hurt_in, run_passive,
 };
 use super::event::{MonsterEvent, drain, missile_hit};
-use super::{Ctx, Env, Noise, Patch, WINDOW, env_of, read_boxed, read_mobj};
+use super::{Ctx, Env, EnvData, Noise, Patch, WINDOW, env_of, read_boxed, read_mobj};
 
 /// [`super::LOOK_CADENCE`] as a `NonZero` literal: `%` on a `u32` keeps a "division
 /// by zero" panic path that the compiler does not fold away, even against a
@@ -69,30 +69,14 @@ pub fn awake_count(w: World, mobjs: Span<Mobj>) -> u32 {
     // out here (D24): passing the ~20-span `World` through a call boundary
     // once per mobj costs more than the test itself.
     let actions = w.states.action_id;
-    let n = mobjs.len();
-    // `opaque_zero`, not `0`: a literal as a loop-carried start makes the
-    // compiler emit a second, specialised copy of the loop body (S7 §8
-    // rule 4). `get` + `match` and `inc` keep the pass panic-free (rule 1).
-    let mut i: u32 = opaque_zero(n);
-    let mut c: u32 = opaque_zero(n);
-    while i != n {
-        match mobjs.get(i) {
-            Option::Some(b) => {
-                let m = b.unbox();
-                // In this order: the bit test is the cheapest and rejects
-                // everything that is not a monster, the state test rejects
-                // every sleeper (the common case), and the signed `health`
-                // comparison — the dear one — runs only for the few that
-                // are left.
-                if doom_physics::has(*m.flags, MF_COUNTKILL)
-                    && rd32(actions, *m.state) != A_LOOK
-                    && *m.health > 0 {
-                    c = inc(c);
-                }
-            },
-            Option::None => {},
+    let mut remaining = mobjs;
+    let mut c: u32 = opaque_zero(mobjs.len());
+    while let Option::Some(m) = remaining.pop_front() {
+        if doom_physics::has(*m.flags, MF_COUNTKILL)
+            && rd32(actions, *m.state) != A_LOOK
+            && *m.health > 0 {
+            c = inc(c);
         }
-        i = inc(i);
     }
     c
 }
@@ -483,10 +467,82 @@ pub(crate) fn mobj_thinker_in(
     true
 }
 
+/// Mutable data of a monster pass. Inactive slots carry only this pointer;
+/// the full record is opened only when an actor actually runs its thinker.
+#[derive(Destruct)]
+struct Pass {
+    grid: ThingGrid,
+    rng: Prng,
+    patches: Array<Patch>,
+    events: Array<MonsterEvent>,
+    spawn_at: u32,
+    defense: Box<PlayerDefense>,
+}
+
+// Box has no built-in Destruct forwarding. Preserve ThingGrid's dictionary
+// squash if a panic destroys a pass; the successful path unpacks it once.
+impl BoxPassDestruct of Destruct<Box<Pass>> {
+    fn destruct(self: Box<Pass>) nopanic {
+        Destruct::destruct(self.unbox());
+    }
+}
+
+fn tick_actor(
+    e: Env,
+    mobjs: Span<Mobj>,
+    ref pass: Box<Pass>,
+    mut mo: Box<Mobj>,
+    me: u32,
+    may_look: bool,
+    may_chase: bool,
+    look_only: bool,
+) -> Box<Mobj> {
+    let Pass {
+        mut grid, mut rng, mut patches, mut events, mut spawn_at, mut defense,
+    } = pass.unbox();
+    if look_only {
+        run_chain(
+            e,
+            mobjs,
+            ref grid,
+            ref rng,
+            ref mo,
+            me,
+            A_LOOK,
+            true,
+            may_chase,
+            ref patches,
+            ref events,
+            ref spawn_at,
+            ref defense,
+        );
+    } else {
+        let alive = mobj_thinker_in(
+            e,
+            mobjs,
+            ref grid,
+            ref rng,
+            ref mo,
+            me,
+            may_look,
+            may_chase,
+            ref patches,
+            ref events,
+            ref spawn_at,
+            ref defense,
+        );
+        if !alive {
+            mo = BoxTrait::new(removed_mobj());
+        }
+    }
+    pass = BoxTrait::new(Pass { grid, rng, patches, events, spawn_at, defense });
+    mo
+}
+
 /// One tic of every monster and missile in `mobjs`, under the D3 schedule.
 ///
 /// Returns the rebuilt list, the advanced RNG and the tic's events. The
-/// thing grid is updated in place (it is derived data and is not hashed).
+/// thing grid is updated in place; its canonical order is hashed (schema 2).
 fn monsters_ticker_in(
     w: World,
     mobjs: Span<Mobj>,
@@ -497,10 +553,7 @@ fn monsters_ticker_in(
     rng: Prng,
     ref defense: Box<PlayerDefense>,
 ) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
-    let e = Env { w: BoxTrait::new(w), players, noise, tic };
-    let mut r = rng;
-    let mut ev: Array<MonsterEvent> = array![];
-    let mut patches: Array<Patch> = array![];
+    let e = BoxTrait::new(EnvData { w: BoxTrait::new(w), players, noise, tic });
     let mut out: Array<Mobj> = array![];
     let n = mobjs.len();
     let awake = awake_count(w, mobjs);
@@ -515,6 +568,9 @@ fn monsters_ticker_in(
             spawn_at = free;
         }
     }
+    let mut pass = BoxTrait::new(
+        Pass { grid: g, rng, patches: array![], events: array![], spawn_at, defense },
+    );
     let (_, look_phase) = DivRem::div_rem(tic, CADENCE);
     // The classification below is `is_ours`, `is_awake` and `is_dormant`
     // spelled out (D24), reading the two state columns *through the boxed
@@ -524,22 +580,15 @@ fn monsters_ticker_in(
     // rule 4). A read through the box is free.
     let mut i: u32 = opaque_zero(n);
     let mut rank: u32 = opaque_zero(n);
-    while i != n {
-        // The classification reads the slot through the list's snapshot;
-        // the 27 felts are materialised only where the mobj is about to be
-        // written, which is one copy per slot per tic instead of two
-        // (S7 §8 rule 3 applied to the ticker's own pass).
-        let m = match mobjs.get(i) {
-            Option::Some(b) => b.unbox(),
-            Option::None => { break; },
-        };
+    let mut remaining = mobjs;
+    while let Option::Some(m) = remaining.pop_front() {
         let flags = *m.flags;
-        let countkill = doom_physics::has(flags, MF_COUNTKILL);
-        if *m.kind == KIND_NONE || !(countkill || doom_physics::has(flags, MF_MISSILE)) {
+        if *m.kind == KIND_NONE || !doom_physics::has(flags, MF_COUNTKILL + MF_MISSILE) {
             out.append(*m);
             i = inc(i);
             continue;
         }
+        let countkill = doom_physics::has(flags, MF_COUNTKILL);
         let dormant = countkill && rd32(e.w.unbox().states.action_id, *m.state) == A_LOOK;
         let mut may_chase = true;
         if countkill && !dormant && *m.health > 0 {
@@ -575,50 +624,29 @@ fn monsters_ticker_in(
                 i = inc(i);
                 continue;
             }
-            let mut b = BoxTrait::new(Mobj { state: st, tics: tc, ..*m });
-            run_chain(
+            let b = tick_actor(
                 e,
                 mobjs,
-                ref g,
-                ref r,
-                ref b,
+                ref pass,
+                BoxTrait::new(Mobj { state: st, tics: tc, ..*m }),
                 i,
-                A_LOOK,
                 true,
                 may_chase,
-                ref patches,
-                ref ev,
-                ref spawn_at,
-                ref defense,
+                true,
             );
             out.append(b.unbox());
             i = inc(i);
             continue;
         }
-        let mut b = BoxTrait::new(*m);
-        let alive = mobj_thinker_in(
-            e,
-            mobjs,
-            ref g,
-            ref r,
-            ref b,
-            i,
-            may_look,
-            may_chase,
-            ref patches,
-            ref ev,
-            ref spawn_at,
-            ref defense,
-        );
-        if alive {
-            out.append(b.unbox());
-        } else {
-            out.append(removed_mobj());
-        }
+        let b = tick_actor(e, mobjs, ref pass, BoxTrait::new(*m), i, may_look, may_chase, false);
+        out.append(b.unbox());
         i = inc(i);
     }
+    let Pass { grid, rng, patches, events, spawn_at: _, defense: final_defense } = pass.unbox();
+    g = grid;
+    defense = final_defense;
     let final_list = apply(out, patches.span(), n);
-    (final_list, r, ev)
+    (final_list, rng, events)
 }
 
 /// Write the tic's backward patches (damaged mobjs, spawned missiles) into

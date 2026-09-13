@@ -134,8 +134,8 @@ and return types of 30 to 41 for functions that answer a `bool`. So:
 
 * the **public API is the boundary** — every public function still takes
   `Ctx` and the actor by `ref` — and each of them converts once and calls an
-  `_in` twin that carries the six-felt [`Env`] (the `World` behind one
-  pointer, since a field read through a `Box` is free) and the actor as a
+  `_in` twin that carries the one-pointer `Env` (a boxed six-felt payload,
+  with `World` itself boxed too) and the actor as a
   `Box<Mobj>`, unboxed into a local at the top of a function and re-boxed
   once, where it is written;
 * what only needs a `P_Random` takes the `rndtable` span, what only needs
@@ -198,7 +198,7 @@ all for a mobj that is not this crate's.
 ```cairo
 // One tic. `players` are the mobj indices of the players; `noise` is the
 // last P_NoiseAlert. Returns the rebuilt list, the advanced RNG and the
-// tic's events; `g` is updated in place (derived data, never hashed).
+// tic's events; `g` is updated in place (canonical order is hashed in schema 2).
 pub fn monsters_ticker(
     w: World, mobjs: Span<Mobj>, ref g: ThingGrid, players: Span<u32>,
     noise: Noise, tic: u32, rng: Prng,
@@ -527,3 +527,88 @@ emit if it cannot find one. A changed `SCENARIO_CHECKSUM` in
   crate that ticks a list gains.
 * **`MF_SHADOW`.** The spectre never spawns at skill 2, so `A_FaceTarget`'s
   spread against a shadow target is implemented but only reached by a test.
+
+
+### R2: fixed ticker cost on the complete roster
+
+The 2026-09-13 pass keeps the same public functions, actor visitation order,
+D3 ranks/cadence, physics guards and event order. Its reference is `b11fd7f`,
+which already includes canonical grid serialization and per-impact player
+armor. `Env` is now one pointer to its six-felt payload. A linear boxed
+`Pass` owns the grid, RNG, pending patches, events, spawn cursor and player
+defense; an inactive slot carries that pointer, and an acting monster opens
+and rebuilds the record once. Its destructor forwards the grid's dictionary
+squash on panic. The two roster scans use `Span::pop_front`, keeping the
+same slot index for D3 while removing the separate bounds-checked lookup.
+A combined `MF_COUNTKILL | MF_MISSILE` mask rejects non-actors in one test.
+
+Measured inside the real `doom_run::step_tic` consumer, Scarb 2.16.0 proving
+profile, with identical serialized inputs and complete profiler stacks:
+
+| Fixture | Before | After | Change |
+|---|---:|---:|---:|
+| E1M1 idle tic 300, all 210 slots: monster subtree | 46,802 | 34,765 | -25.72% |
+| Fight tic 493: monster subtree | 136,183 | 123,418 | -9.37% |
+| Ticker's own disjoint cost, idle | 29,888 | 22,503 | -24.71% |
+| `awake_count` disjoint cost, idle | 6,732 | 3,581 | -46.81% |
+| Ticker-only attributed code, proving | 14,574 | 14,101 | -473 words |
+| Complete `run_segment` program, proving | 116,287 | 115,814 | -473 words |
+
+Direct CASM counters in the ticker loop explain the reduction: `store_temp`
+falls from 20,244 to 13,620 executed instructions, copies of `Env` from
+2,508 to 219, `ThingGrid` from 1,230 to 27, and each of the patch/event array
+headers from 820 to 18. Mobj copies (6,696) and output `array_append`
+instructions (5,670 = 210 × 27) remain identical. Those counters exclude
+out-of-line callees and are not added to the disjoint profiler costs.
+
+The first-pass 25% idle reduction is met. The 15,000-word ticker allocation
+is still met; the whole-program 100,000-word target and whole-tic 12,000-step
+target remain open. Traversal algorithms and the mandatory output Mobj
+copies remain; the combat spike still spends most of its cost in physics.
+No replay hash or budget is raised by this pass. Across complete proving
+replays, including input loading and final serialization/snapshot, total
+execution cost falls by 22.52% (idle), 13.60% (walk), 11.35% (door), 12.05%
+(fight) and 14.98% (death). These whole-execution percentages are separate
+from the single-tic subtree figures above.
+
+`bench/profile_loop.py` derives a real pre-tic state from a golden replay,
+or accepts an existing arguments file to use exactly the same state across
+revisions. It runs the real executable, then `cairo-profiler` at depth 512
+(default depth 100 truncates this recursive loop). The report records the
+executable/input SHA-256 and checks the observed depth is below the limit.
+For example, from this package's directory:
+
+```sh
+ASDF_SCARB_VERSION=2.16.0 scarb --manifest-path ../../Scarb.toml --profile proving build -p doom_run
+python3 bench/profile_loop.py --scenario idle --tic 300 --out /tmp/monster-idle
+python3 bench/profile_loop.py --scenario fight --tic 493 --out /tmp/monster-fight
+```
+
+Use `--profiler /path/to/cairo-profiler` if the pinned 0.17.0 binary is not
+selected by the shell. To compare a revision, preserve its executables,
+Sierra files and `arguments.json`, then use `--arguments` with that file.
+`--keep-trace` preserves the trace for the game's `statement_costs.py` tool.
+
+`bench/compare_replays.py` compares every output felt of the five game
+replays against a preserved baseline workspace, both whole and resumed
+from serialized states every 25 tics. The companion `bench/ticker_probe`
+executes the raw monster API on those real boundary states and returns
+all Mobj fields, RNG, defense, every event payload/position and the canonical
+grid order. These raw passes cover the boundary scenes; they are not a log
+of `step_tic`'s unexposed internal cues. Reports contain output digests only
+after exact array equality has passed, never replacement expectations.
+
+Build `doom_run` and an identical copy of `bench/ticker_probe` against both
+workspaces before comparing. With `reference/cairo` an archived baseline:
+
+```sh
+ASDF_SCARB_VERSION=2.16.0 scarb --manifest-path bench/ticker_probe/Scarb.toml --profile proving build
+python3 bench/compare_replays.py --reference /tmp/reference/cairo --json /tmp/monster-equivalence.json
+```
+
+The same harness accepts `--profile dev` after building both workspaces and
+probes under dev. The validation run passed 247 exact comparisons per
+profile across all five logs, 118 serialized cuts and 47 raw probe events;
+every output digest also matched between dev and proving. The existing
+56 monster tests, including their 700-tic checksum, remain unchanged; `bench/measure.py` continues to enforce every
+recorded operation and code-size budget.
