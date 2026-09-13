@@ -5,11 +5,11 @@
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
 > AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
 > D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
-> Correctif WASM S12 intégré `e274bec` : preuves réelles mono/quatre threads valides, build Docker reproduit ; CI distante à revérifier.
+> Correctif WASM S12 intégré `e274bec` : preuves réelles mono/quatre threads valides, build Docker reproduit ; CI distante verte (`34762719280`) ; garde runtime ajouté `163c9e1`.
 > CI générale verte sur `67f618c` (run `34754644282`) ; reconstruction WASM GitHub indépendante verte.
 > P1.9 en intégration `8ae7f1c` : 565 tests verts, 106 878 mots ; preuve quatre tics valide en 42,16 s, D2/D29 non atteints.
 > Simulation avec continuation + D33 : 8,8–16,6 ms/tic, 512 MiB, 386 tics exacts ; latence par frame et client restants (S10).
-> P1.10 livré sur branche : 25 replays × deux profils, fuzz 10 000 tics exacts ; validation finale D29 en cours, EXIT absent.
+> P1.10 livré sur branche : 25 replays × deux profils, fuzz 10 000 tics exacts ; validation D29 25/25 dans les deux profils, EXIT absent.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -70,11 +70,13 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : revalidation des 25 pins sur les six exécutables D29 figés (agent
-`ci_recovery`) et Worker Cairo réel/journal d’inputs (agent `game_finalize`,
-`codex/client-cairo-worker`), ainsi que garde CI runtime WASM (agent
-`player_finalize`, `codex/wasm-runtime-ci`). Les précédentes missions ont terminé ; elles ne
-restent pas actives automatiquement après livraison.
+Vague active : revue indépendante du Worker Cairo livré `10bcd875`, nouvelle passe
+bornée D29 (`codex/d29-final-pass`) et recherche d’un trajet réel genesis→EXIT.
+Les trois missions précédentes sont terminées. Le corpus est assemblé sur
+`codex/game-integration` par `2307f37`, sans changement des exécutables D29.
+La CI générale `34762719274` et WASM `34762719280` sont vertes sur `67014df`.
+Le contrôle runtime ajouté `163c9e1` a passé après fusion 1 200 072 assertions
+et l’idempotence des deux modules ; sa propre CI distante reste à vérifier.
 
 **S12 résolu localement, intégré `e274bec`** : quatre chargements SIMD tronquaient
 les adresses Memory64 dans Liftoff des versions V8 de Node testées. Chromium 153
@@ -101,7 +103,8 @@ couverture mort/ramassage/combat ; pas d’EXIT. Fuzz : **10 000 tics réellemen
 avancés**, 158 cas / 11 épisodes, trois morts, 57 mots non consommés exclus,
 zéro panique/ABORT/divergence. Contrôles aux frontières : 493 états et 492 rendus
 exposés, pas 10 000 snapshots intermédiaires. Onze tests du harnais verts.
-La campagne sur D29 utilise ces mêmes pins sans les réécrire ; le garde CI 100k
+La campagne finale D29 a passé 25/25 cas dans chaque profil en 1 244 s,
+avec six empreintes exécutables inchangées et sans réécrire les pins ; le garde CI 100k
 reste strict et rouge, le workflow ne le contourne pas.
 
 **S11 livré puis optimisé `4936c2` / `0e3ca8c`**, isolé sans migration : le hash

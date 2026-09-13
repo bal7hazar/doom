@@ -2,7 +2,7 @@
 
 État au 2026-09-13 : **cause identifiée, correction intégrée `e274bec` et validée localement**. Ce diagnostic
 ne modifie ni le programme Cairo, ni les paramètres cryptographiques, ni les
-plafonds de segments D26. La CI distante du nouveau build reste à vérifier. La matrice initiale ci-dessous conserve les essais avant correction.
+plafonds de segments D26. La CI distante du nouveau build est verte (`34762719280`, commit `67014df`). Le garde runtime CI ajouté ensuite par `163c9e1` reste à vérifier sur GitHub. La matrice initiale ci-dessous conserve les essais avant correction.
 
 ## Entrée contrôlée
 

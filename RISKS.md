@@ -101,7 +101,8 @@
   et CI sept jobs verts sur `c383f14`. Aucun nouveau reçu ; coûts P4.1 historiques seulement.
 - **R1/R11 : défaut runtime S12 corrigé `e274bec`** : preuve D33 valide en mono et
   quatre threads, modules Docker reconstruits identiques ; validation runtime root verte.
-  La CI distante reste à contrôler. Le registre log20 et les plafonds restent inchangés.
+  La CI distante du build corrigé est verte (`34762719280`) ; le garde runtime ajouté
+  `163c9e1` reste à valider sur GitHub. Le registre log20 et les plafonds restent inchangés.
 - **D29 après passe bornée** : 106 878 mots, 565 tests verts, mêmes sorties ; la preuve
   réelle quatre tics est vérifiée, mais ne clôt ni le budget 100k ni le scénario P3.7.
 - **S11 après optimisation** : BLAKE9 373 349 steps/hash contre Poseidon 66 867 ;
