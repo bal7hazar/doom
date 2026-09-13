@@ -4,6 +4,7 @@
 > CI : oracle Python installé explicitement ; reproductibilité WASM ARM64 réparée (`30f8d77`).
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
 > AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
+> D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
 > CI générale verte sur `73d0c0e` (7 jobs, leaf-verify compris) ; reconstruction WASM GitHub indépendante verte.
 > P1.9 en intégration `91719f8` : 563 tests verts, 110 848 mots ; budgets D2/D29 non atteints.
 > Simulation Chromium réelle : 17–21 tics/s sur cinq scènes, cible 35 Hz manquée (S10).
@@ -69,7 +70,7 @@ Branches récupérées :
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
 Vague active : représentation des acteurs (`codex/boxed-roster`, D33), simulation Cairo conservée
-entre tics (`codex/sim-continuation`, S10) et défaut client/CLI cinq transactions (`codex/five-tx-default`, D28).
+entre tics (`codex/sim-continuation`, S10) et corpus/fuzz nocturne (`codex/golden-fuzz`, P1.10).
 Les compteurs AIR et l’admission wrapper sont intégrés sur `main` ; les deux passes frontière
 et le parcours monstres sont assemblés dans `codex/game-integration`.
 Les passes frontière et armure sont relues et assemblées sur la branche
@@ -219,6 +220,18 @@ autonome avec le lock et le nightly épinglés.
 Même sans tic, il dépasse le plafond threads 1,5 M ; quatre tics dépassent aussi 2,3 M mono.
 Les 15 456 compressions Blake imposent log21
 à `blake_g`. Une migration de registre seule ne résout donc ni le découpage ni le temps réel.
+
+**D28 appliquée sur `main` par `b00c90b`** (`06b4394`) : `[2]` devient le défaut client/CLI,
+soit **cinq transactions vérifieur, plus une transaction consommateur**. Coupes explicites,
+replis calldata/gaz et marges R7-A1 conservés ; `--single` reste `register_member` après repli.
+La coupe FRI est sauvegardée avant envoi, liée à l’id/routeur/appelant, puis restaurée avant
+estimation. Une reprise ancienne sans coupe identifiable est refusée avant envoi ; son tag seul
+ne suffit pas à choisir les couches FRI restantes. Revalidation root : **95 tests submit + 195
+client**, typecheck/build et REUSE **1 593 fichiers** verts ; calldata complète comparée à Python
+sur trois racines réelles, dont `n4` P4.1. Le test devnet reste ignoré, aucune nouvelle transaction.
+Les reçus P4.1 existants totalisent 1 540 234 480 L2 gas ; pire consommation 38,55 % du cap,
+borne dérivée ×1,15 à 44,33 %. Ces mesures exigent le vérifieur optimisé ; une classe ancienne
+reste soumise à sa propre simulation. La CI de cette intégration reste à vérifier après push.
 
 ## Terminé (mergé sur `main`)
 

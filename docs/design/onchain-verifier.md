@@ -353,8 +353,8 @@ What is left, in order of value:
 - **Emitter / submitter (P4.1)**: the calldata format and the router ABI are unchanged, so
   `client/src/chain/calldata.ts` and `infra/submit` need **no format change**. What changes is
   the plan and the bounds: the recommended cut is `--fri-split 2` (5 transactions, every one
-  under 40 % of the cap); the 6-tx default of `infra/submit` (`--fri-split 1,3`) still works
-  (+1 envelope) but is no longer required by the 90 % rule; the R7-A1 bounds (`l2_gas` =
+  under 40 % of the cap). Since `b00c90b`, this is also the client/CLI default; the former
+  6-tx cut (`--fri-split 1,3`) remains available, including saved resumptions. The R7-A1 bounds (`l2_gas` =
   estimate × 1.15) should be re-derived from the P4.1 receipts (`answers` 466 M is the largest
   transaction now, `fri1` 295 M). The phase class hashes change (new declares, §7): a new router
   deployment, as for any verifier version (§6). Lever 2 of §8, if taken, would change the plan

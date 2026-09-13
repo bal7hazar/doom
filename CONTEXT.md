@@ -90,6 +90,11 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   sur main. Preuve réelle existante vérifiée en ~25 ms, version corrompue et mauvais bootloader rejetés.
   [CI générale 34752596592](https://github.com/bal7hazar/doom/actions/runs/34752596592) verte sur
   `73d0c0e` : sept jobs, dont le nouveau vérifieur autonome épinglé.
+- D28 appliquée `b00c90b` : cinq transactions vérifieur `[2]` par défaut, puis consommateur séparé.
+  Coupes et marges conservées, reprise de la coupe sauvegardée ou refus d’une ancienne reprise
+  ambiguë avant envoi. **95 tests submit + 195 client**, build/typecheck/REUSE verts ; trois
+  racines réelles comparées intégralement à Python. Aucun nouveau reçu réseau ; P4.1 reste
+  1 540 234 480 L2 gas, pire consommation 38,55 % et borne calculée ×1,15 à 44,33 % du cap.
 
 ## 1. Vision et périmètre
 
