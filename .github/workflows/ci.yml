@@ -414,7 +414,37 @@ jobs:
         run: cargo test
 
   # ---------------------------------------------------------------------
-  # 6. REUSE license compliance (unchanged).
+  # The native admission verifier is an independent workspace. Service tests
+  # do not compile its pinned cairo-air dependency or validate its lock file.
+  # No path filter: this gate runs on every main push and pull request above.
+  # ---------------------------------------------------------------------
+  leaf-verify:
+    name: leaf-verify (pinned nightly, locked build + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: 2
+    defaults:
+      run:
+        working-directory: prover/wrapper/leaf-verify
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the verifier's pinned toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-01-15
+          components: rustfmt, clippy
+      - name: Cache the independent verifier workspace
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: prover/wrapper/leaf-verify
+      - run: cargo fmt --check
+      - run: cargo check --all-targets --locked
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+
+  # ---------------------------------------------------------------------
+  # 7. REUSE license compliance (unchanged).
   # ---------------------------------------------------------------------
   reuse:
     name: REUSE license compliance

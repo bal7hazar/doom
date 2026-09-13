@@ -47,9 +47,13 @@ check_preimage_binding = true
 
 # Mount the compiled Scarb executables at /opt/hellproof/programs and list them here.
 [[programs]]
-id = "segment_stub"
-executable = "/opt/hellproof/programs/segment_stub.executable.json"
+id = "segment_stub10"
+output_layout = "d14"
+executable = "/opt/hellproof/programs/segment_stub10.executable.json"
 hash_function = "blake"
+# Exact committed client/public/programs/segment_stub10.executable.json, SHA-256
+# 7617a62d9ea3cf6968a24442c246f6c96c4a1018414fd71360ee42dbb9240a4a.
+program_hash = "0x6715c525e90af7cf1df88ebcae1d7556ebbbbf1da79a2a322408b3593a9786a"
 
 # API keys: set WRAPPER_API_KEY to add an admin key without editing this file.
 [[api_keys]]

@@ -11,12 +11,20 @@
 
 ## 0. Verdict
 
+**D28 update (2026-09-13, `b00c90b`)**: the client and CLI now default to five verifier
+transactions (`--fri-split 2`) with the optimized P4.1 classes, plus one separate consumer.
+P4.1 receipts total 1,540,234,480 L2 gas; the worst consumption is 38.55 % of the invoke cap,
+or 44.33 % after applying the unchanged ×1.15 margin. Those derived bounds are not new receipts.
+Every actual deployment/account is still simulated before sending. The P4.0 measurements below
+remain historical. A saved FRI cut is restored before estimating a resumed sequence; legacy
+resumes without a known original cut fail before sending. The checkpoint tag alone is ambiguous.
+
 | Target | Result |
 |---|---|
 | **C5** — estimate within 20 % of the receipt | **−0.012 %** on the sequence total, **−1.04 %** on the worst of the **16 transactions** sent across three plans and two batches |
 | R7-A1 — simulate the ordered sequence, from the signing account, bounds ×1.15 / ×1.30 | done; the whole gap is a **constant 50 240 gas per transaction** (§4.2) |
 | R7-A2 — STRK + timestamped fiat, per transaction, "> 2× the 24 h median" warning | done, with a documented limitation: a fresh client has no history and says so (§5) |
-| R7-A5 — every transaction under 90 % of the invoke cap | **the P4.0 five-transaction plan cannot carry an R7-A1 bound** (§4.3); default is 6 tx, `--fri-split 1,2,4` is fully compliant at +0.3 % |
+| R7-A5 — every transaction under 90 % of the invoke cap | D28 defaults to five with P4.1; worst derived ×1.15 bound 44.33 %. The older P4.0 deployment needs the finer cuts measured in §4.3 |
 | **C6** — submit now / wait / keep offline | the three answers are the cost screen's three buttons (§6) |
 | resumable by `proof_id` | verified by killing the process mid-sequence *and* deleting the local state (§3) |
 | D20 — the wrapper submits whole batches | one `Signer` interface, same orchestrator in the browser and in `infra/submit` (§8) |
@@ -85,7 +93,7 @@ transactions were already paid for. `checkBatch` does the same for the cheap bat
 two questions that change what should be paid for at all:
 
 * `DoomRuns.batch_fact(version_id, leaves)` + `router.is_valid(fact)` — **is the fact already
-  registered?** If it is, the six verifier transactions are skipped and the submission costs
+  registered?** If it is, all verifier transactions are skipped and the submission costs
   0.08 STRK instead of 117 (measured: `B2_doom`, §4.1).
 * `run_id_of` + `is_run_registered` per member — **is this run already recorded?** (R10-A1). It
   will be skipped on chain with `already registered` (D18); the player should be told before
@@ -183,7 +191,7 @@ modified key, the receipt 2, plus 2 for the nonce). That is the right direction,
 margin here is ×1.30 rather than ×1.15: under-provisioning `l1_data_gas` **reverts** and burns the
 fee, while over-provisioning costs nothing.
 
-### 4.3 The five-transaction plan cannot carry an R7-A1 bound
+### 4.3 Historical P4.0 bounds, superseded by P4.1 for the current default
 
 P4.0's 5-transaction plan puts `fri1` at 90.3 % of the invoke cap. **The sequencer checks the
 bound, not the consumption** (S5 §6), so ×1.15 asks for 1 257 075 488 — 3.9 % *over* the cap, and
@@ -193,12 +201,13 @@ the transaction is refused before execution. The 5-tx plan is only sendable with
 | plan | verifier tx | worst consumption | worst **bound** | total L2 gas | verdict |
 |---|---:|---:|---:|---:|---|
 | `--fri-split 2` (P4.0) | 5 | 90.3 % | **103.9 %** | 3.81e9 | refused |
-| `--fri-split 1,3` (**default**) | 6 | 84.5 % | 97.1 % | 3.83e9 | sendable, above the 90 % rule |
+| `--fri-split 1,3` (former default) | 6 | 84.5 % | 97.1 % | 3.83e9 | sendable, above the 90 % rule |
 | `--fri-split 1,2,4` | 7 | 75.3 % | **86.5 %** | 3.84e9 | fully R7-A5-compliant, +0.3 % |
 
-`planPhasesAuto` therefore defaults to six transactions, and the CLI **re-plans and re-estimates
-automatically** when a bound comes out over the cap — but only before the first transaction is
-sent, because a started sequence's plan is pinned by its checkpoint. `results/dryrun_B2-1_doom_5tx.json`
+At P4.0, `planPhasesAuto` defaulted to six transactions. Since D28 it defaults to five; the CLI
+still **re-plans and re-estimates automatically** when a bound comes out over the cap, only for
+a fresh automatic sequence. A started sequence requires its saved or explicit original FRI cut.
+`results/dryrun_B2-1_doom_5tx.json`
 and `_7tx.json` hold the three estimates; the seven-transaction plan was also **sent** on a fresh
 deployment (`results/devnet_B2-1_doom_7tx.json`): 3 854 361 440 L2 gas, 117.46 STRK, the same
 fact, total gap **−0.014 %**, and the same 50 240-gas constant on all eight transactions — which

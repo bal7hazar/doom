@@ -18,7 +18,7 @@ import {
   type Member,
   type WrapperBatch,
 } from "./batch.js";
-import { planPhases, planPhasesAuto, type PhasePlan, type PlanOptions } from "./calldata.js";
+import { planPhasesAuto, type PhasePlan, type PlanOptions } from "./calldata.js";
 import { parseProof } from "./proof.js";
 import { buildSequence, type SubmissionSequence } from "./sequence.js";
 import type { RpcClient } from "./rpc.js";
@@ -38,7 +38,7 @@ export interface PrepareArgs {
   replay?: boolean;
   /** Root proof felts, when not already on `batch`. */
   rootProofFelts?: bigint[];
-  /** FRI cut; 6 transactions by default (the 5-tx plan cannot carry an R7-A1 bound). */
+  /** FRI cut; five verifier transactions by default with the optimized P4.1 router (D28). */
   plan?: PlanOptions & { preferFewestTransactions?: boolean };
   /** Submit one member instead of the whole batch (the per-player fallback). */
   singleMember?: Member;
@@ -60,9 +60,7 @@ export function prepareSubmission(args: PrepareArgs): PreparedSubmission {
     throw new Error("no root proof felts: fetch the batch with `?include=proof`");
   }
   const sections = parseProof(felts);
-  const phases = args.plan?.friSplit
-    ? planPhases(sections, { ...args.plan, proofId: args.proofId })
-    : planPhasesAuto(sections, { ...args.plan, proofId: args.proofId });
+  const phases = planPhasesAuto(sections, { ...args.plan, proofId: args.proofId });
 
   const members = args.singleMember
     ? [args.singleMember]
@@ -94,7 +92,9 @@ export function prepareSubmission(args: PrepareArgs): PreparedSubmission {
     doomRuns: args.doomRuns,
     phases,
     submitCalldata,
+    explicitFriSplit: args.plan?.friSplit !== undefined,
   });
+  sequence.friPlan = { sections, maxCalldata: args.plan?.maxCalldata };
   if (args.singleMember) sequence.consumer.call.entrypoint = "register_member";
 
   return {
@@ -102,7 +102,9 @@ export function prepareSubmission(args: PrepareArgs): PreparedSubmission {
     phases,
     members,
     consumerCalldataFelts: sequence.consumer.call.calldata.length,
-    payloadSlots: phases.reduce((a, p) => a + p.payloadSlots, 0),
+    get payloadSlots() {
+      return phases.reduce((a, p) => a + p.payloadSlots, 0);
+    },
   };
 }
 

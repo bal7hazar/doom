@@ -5,7 +5,9 @@
 //! The browser (`prover/wasm`) produces a **bincode-serialized extended `CairoProof`** for each
 //! segment. Before the wrapper spends 22 s and 32.5 GB on a leaf circuit proof, it runs this
 //! binary on the submitted proof: `cairo_air::verifier::verify_cairo_ex` takes ~0.05 s and tells
-//! us whether the proof is real, which program it proves, and what that program output.
+//! us whether the proof is real, which bootloader it proves, and its output cells.
+//! The task hash is output_preimage[0], bound separately by the service; it is not
+//! recoverable from those two digest cells.
 //!
 //! Output: one JSON object on stdout. Exit code 0 = accepted, 2 = rejected (with `error`),
 //! 1 = usage/IO problem.
@@ -23,6 +25,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
 use cairo_air::CairoProof;
+use cairo_air::air::PublicMemory;
 use cairo_air::utils::get_verification_output;
 use cairo_air::verifier::verify_cairo_ex;
 use clap::Parser;
@@ -46,10 +49,14 @@ struct Cli {
     /// sets it to true.
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     include_all_preprocessed_columns: bool,
-    /// Optional: fail unless the program hash in the proof's public memory equals this felt
-    /// (hex or decimal). This is what pins *which* program the segment ran.
+    /// Optional: pin the proven bootloader's Blake hash (hex or decimal).
+    /// This is NOT the task hash in output_preimage[0].
     #[arg(long)]
     expect_program_hash: Option<String>,
+    /// Derive the expected bootloader hash from this configured Cairo 0 program's bytecode.
+    /// Prevents a valid proof of another program from reaching an expensive leaf circuit.
+    #[arg(long, conflicts_with = "expect_program_hash")]
+    expect_bootloader: Option<PathBuf>,
 }
 
 /// What the wrapper reads back.
@@ -59,7 +66,7 @@ struct Report {
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
     verify_ms: f64,
-    /// Blake2s program hash of the proven program, from the public memory.
+    /// Blake2s hash of the proven bootloader, from public memory (not the task hash).
     #[serde(skip_serializing_if = "Option::is_none")]
     program_hash: Option<String>,
     /// The program's output cells, as felts. The leaf format requires exactly 2 (the 256-bit
@@ -74,13 +81,17 @@ struct Report {
     proof_bytes: Option<usize>,
 }
 
-fn verify_generic<MC>(bytes: &[u8], include_all: bool, expect_program_hash: Option<&str>) -> Result<Report>
+fn verify_generic<MC>(
+    bytes: &[u8],
+    include_all: bool,
+    expect_program_hash: Option<&str>,
+) -> Result<Report>
 where
     MC: MerkleChannel,
     MC::H: MerkleHasherLifted + DeserializeOwned,
 {
-    let proof: CairoProof<MC::H> =
-        bincode::deserialize(&decompress_if_needed(bytes)?).context("not a bincode extended CairoProof")?;
+    let proof: CairoProof<MC::H> = bincode::deserialize(&decompress_if_needed(bytes)?)
+        .context("not a bincode extended CairoProof")?;
 
     let cfg = proof.extended_stark_proof.proof.0.config;
     let trace_log_size = cfg.trace_lifting_log_size - cfg.fri_config.log_blowup_factor;
@@ -134,17 +145,54 @@ fn parse_felt(s: &str) -> Result<starknet_ff::FieldElement> {
     }
 }
 
+/// Use the pinned verifier's own encoding/hash, rather than a separately maintained constant.
+fn bootloader_hash(bytes: &[u8]) -> Result<String> {
+    #[derive(serde::Deserialize)]
+    struct Program {
+        data: Vec<String>,
+    }
+    let program: Program = serde_json::from_slice(bytes).context("invalid bootloader JSON")?;
+    if program.data.is_empty() {
+        bail!("bootloader has no bytecode");
+    }
+    let mut memory = PublicMemory::default();
+    for word in program.data {
+        let felt = parse_felt(&word).context("invalid bootloader bytecode felt")?;
+        let bytes = felt.to_bytes_be();
+        let mut limbs = [0u32; 8];
+        for (i, chunk) in bytes.chunks_exact(4).enumerate() {
+            limbs[7 - i] = u32::from_be_bytes(chunk.try_into().unwrap());
+        }
+        memory.program.push((0, limbs));
+    }
+    Ok(format!(
+        "0x{:x}",
+        get_verification_output(&memory).program_hash
+    ))
+}
+
 fn run(cli: &Cli) -> Result<Report> {
     let bytes = std::fs::read(&cli.proof)
         .with_context(|| format!("cannot read {}", cli.proof.display()))?;
-    let expect = cli.expect_program_hash.as_deref();
+    let expected = if let Some(path) = &cli.expect_bootloader {
+        Some(bootloader_hash(&std::fs::read(path).with_context(
+            || format!("cannot read bootloader {}", path.display()),
+        )?)?)
+    } else {
+        cli.expect_program_hash.clone()
+    };
+    let expect = expected.as_deref();
     match cli.channel_hash.as_str() {
-        "blake2s_m31" | "Blake2sM31" => {
-            verify_generic::<Blake2sM31MerkleChannel>(&bytes, cli.include_all_preprocessed_columns, expect)
-        }
-        "blake2s" | "Blake2s" => {
-            verify_generic::<Blake2sMerkleChannel>(&bytes, cli.include_all_preprocessed_columns, expect)
-        }
+        "blake2s_m31" | "Blake2sM31" => verify_generic::<Blake2sM31MerkleChannel>(
+            &bytes,
+            cli.include_all_preprocessed_columns,
+            expect,
+        ),
+        "blake2s" | "Blake2s" => verify_generic::<Blake2sMerkleChannel>(
+            &bytes,
+            cli.include_all_preprocessed_columns,
+            expect,
+        ),
         other => bail!("unsupported channel hash {other} (blake2s_m31 | blake2s)"),
     }
 }
@@ -170,5 +218,35 @@ fn main() -> ExitCode {
             // 2 = the proof was read but rejected; the wrapper turns this into a run rejection.
             ExitCode::from(2)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn raw_and_bzip2_proof_encodings_decode_to_identical_bytes() {
+        let raw = b"extended CairoProof bytes";
+        let mut encoder = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
+        encoder.write_all(raw).unwrap();
+        let compressed = encoder.finish().unwrap();
+        assert_eq!(decompress_if_needed(raw).unwrap().as_ref(), raw);
+        assert_eq!(decompress_if_needed(&compressed).unwrap().as_ref(), raw);
+        assert!(decompress_if_needed(b"BZhbroken").is_err());
+    }
+
+    #[test]
+    fn bootloader_pin_parses_without_losing_felt_precision() {
+        assert_eq!(
+            parse_felt("9007199254740993").unwrap(),
+            parse_felt("0x20000000000001").unwrap()
+        );
+        assert!(parse_felt("not-a-hash").is_err());
+        assert!(
+            parse_felt("0x800000000000011000000000000000000000000000000000000000000000001")
+                .is_err()
+        );
     }
 }

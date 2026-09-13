@@ -6,7 +6,7 @@
 
 ## État mesuré à la reprise du 2026-09-13
 
-Cette section et les décisions D26–D32 remplacent les hypothèses de dimensionnement initiales
+Cette section et les décisions D26–D33 remplacent les hypothèses de dimensionnement initiales
 dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STATUS](docs/STATUS.md).
 
 - `main` après intégration monstres `8471b7e` : **511 tests Cairo** ; la suite spécifique conserve
@@ -61,21 +61,40 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   en **40,167–48,128 s / 11,524 GiB**. Mono : un essai interrompu à 150 s, puis une preuve vérifiée
   en **136,425 s / 11,449 GiB**. Préimages identiques, machine 64 GiB, sans partie concurrente.
   Cette campagne isolée ne justifie pas de relever les plafonds de précaution ([S9](docs/spikes/S9-proof-sizing.md)).
-- Programme intégré, bootloader Blake : **2 224 712 / 2 297 659 / 2 505 814 steps pour 0 / 1 / 4 tics**.
-  La taxe fixe dépasse à elle seule 1,5 M steps. `blake_g` atteint log21 (16 137 × 80 lignes),
+- Programme intégré `91719f8`, bootloader Blake : **2 134 627 / 2 194 469 / 2 363 470 steps pour 0 / 1 / 4 tics**.
+  Exécution et ressources seules, sans nouvelle preuve. La taxe fixe dépasse à elle seule 1,5 M steps.
+  `blake_g` atteint log21 (15 456 × 80 lignes),
   donc registre candidat et correction du planificateur sont nécessaires, sans suffire à lever R2/R5.
   Les plafonds actuels et les paramètres cryptographiques restent inchangés.
 - Correction AIR intégrée `d848951` : les nouveaux WASM Linux reproduisent les **43 hauteurs**
   de la preuve réelle ; `blake_g` est annoncé log21 et refusé par le registre courant. Les anciens
   compteurs incomplets sont refusés, y compris avant une preuve reprise. **193 tests client et build
   verts** sur `main` ; cinq smokes k14 vérifiés après rebuild ARM64 (779,2 s). Les hashes Linux
-  correspondent au changement de source ; reconstruction GitHub indépendante restante.
+  correspondent au changement de source ; [reconstruction GitHub indépendante 34751692540](https://github.com/bal7hazar/doom/actions/runs/34751692540)
+  et smokes Node/Chromium/fallback verts sur `d4924d9`.
 - Intégration monstres `883efbb` : idle du ticker **34 765 steps** (−25,7 %), combat tic 493
   **123 418** (−9,4 %), programme **115 814 mots**. 247 comparaisons exactes par profil ; tests
   root monstres 56/game 57 et build proving verts. D2/D29 restent ouverts.
 - Fuzz ponctuel de la référence `b11fd7f` : **10 000 tics**, 157 séquences, dix épisodes, seed
   `20260913`, aucun écart état/rendu/statut entre exécution continue et frontières aléatoires.
   Felts état/rendu < 2^72, aucun ABORT ; campagne nocturne et vingt goldens encore à livrer en P1.10.
+- Intégration finale des passes locales `91719f8` : **563 tests / 23 cibles verts** ; run
+  **110 848 mots**, step 112 334, genesis 47 426. D29 encore dépassé de 10 848 mots ; trois
+  budgets hash/serde restent rouges. D33 lance une représentation boxée des acteurs sans changer le wire.
+- [S10](docs/spikes/S10-live-simulation.md) : même programme `step_tic` dans un Worker Chromium,
+  386 tics, cinq sorties finales complètes exactes face à Scarb ; **17,3–21,4 tics/s** contre 35 visés,
+  **46,6–57,8 ms moyens/tic**, ~67 MiB linéaires. La VM domine, le JS prend <0,1 ms. Un prototype
+  conserve l’exécution Cairo entre les tics ; aucune baisse de cadence ni regroupement d’inputs.
+- Wrapper `14cce87` : identité task/bootloader, D14 et reprises contrôlées avant circuit ; lock du
+  vérifieur autonome réparé et gate CI ajoutée. **76 tests service, 2 leaf-verify, 195 client verts**
+  sur main. Preuve réelle existante vérifiée en ~25 ms, version corrompue et mauvais bootloader rejetés.
+  [CI générale 34752596592](https://github.com/bal7hazar/doom/actions/runs/34752596592) verte sur
+  `73d0c0e` : sept jobs, dont le nouveau vérifieur autonome épinglé.
+- D28 appliquée `b00c90b` : cinq transactions vérifieur `[2]` par défaut, puis consommateur séparé.
+  Coupes et marges conservées, reprise de la coupe sauvegardée ou refus d’une ancienne reprise
+  ambiguë avant envoi. **95 tests submit + 195 client**, build/typecheck/REUSE verts ; trois
+  racines réelles comparées intégralement à Python. Aucun nouveau reçu réseau ; P4.1 reste
+  1 540 234 480 L2 gas, pire consommation 38,55 % et borne calculée ×1,15 à 44,33 % du cap.
 
 ## 1. Vision et périmètre
 

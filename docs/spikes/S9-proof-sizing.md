@@ -115,6 +115,15 @@ ni la taxe de hash du programme ni le besoin de revoir le découpage après une
 campagne navigateur. Ces compteurs sont dans `integration-sizing.json` ; la
 chaîne de preuve complète ci-dessus porte sur la référence antérieure 117 531 mots.
 
+Après la seconde passe frontière et le parcours monstres, l’intégration `91719f8`
+atteint **110 848 mots**. Une nouvelle exécution avec les compteurs AIR corrigés donne
+**2 134 627 / 2 194 469 / 2 363 470 steps** pour 0 / 1 / 4 tics. Les **15 456**
+compressions Blake génèrent **1 236 480** lignes G ; les trois cas annoncent correctement
+log21 et `fits_leaf_registry=false`. Le seuil threads reste dépassé dès zéro tic et
+le cas quatre tics dépasse encore le seuil mono. Mesure de ressources uniquement,
+aucune nouvelle preuve : `integration-final-sizing.json`, Node 24.16.0,
+exécutable SHA-256 `663028863fef87341e215928abd4e738817104167292655193e448544a57b021`.
+
 ## Reproduction et traces
 
 Les artefacts de cette session sont dans

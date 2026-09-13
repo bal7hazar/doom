@@ -3,8 +3,11 @@
 > Mis à jour le 2026-09-13 : monstres `8471b7e`, contrôles CI `375f092`, joueur `06058b1` intégrés.
 > CI : oracle Python installé explicitement ; reproductibilité WASM ARM64 réparée (`30f8d77`).
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
-> AIR complet et admission des reprises intégrés (`d848951`), 193 tests client verts ; nouvelle reconstruction GitHub à vérifier.
-> P1.9 en intégration : workspace 554 tests verts, puis suite game portée à 57 tests verts ; budgets D2/D29 non atteints.
+> AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
+> D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
+> CI générale verte sur `73d0c0e` (7 jobs, leaf-verify compris) ; reconstruction WASM GitHub indépendante verte.
+> P1.9 en intégration `91719f8` : 563 tests verts, 110 848 mots ; budgets D2/D29 non atteints.
+> Simulation Chromium réelle : 17–21 tics/s sur cinq scènes, cible 35 Hz manquée (S10).
 > Fuzz ponctuel : 10 000 tics réels sans divergence sur la référence `b11fd7f` ; campagne nocturne P1.10 restante.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
@@ -66,9 +69,10 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : nouvelle passe frontière/bytecode (`codex/game-boundary-sizing`) et admission du
-wrapper (`codex/wrapper-admission` : hash programme, D14, vérifieur natif autonome). Les compteurs
-AIR sont intégrés sur `main` ; le parcours monstres est assemblé dans `codex/game-integration`.
+Vague active : représentation des acteurs (`codex/boxed-roster`, D33), simulation Cairo conservée
+entre tics (`codex/sim-continuation`, S10) et corpus/fuzz nocturne (`codex/golden-fuzz`, P1.10).
+Les compteurs AIR et l’admission wrapper sont intégrés sur `main` ; les deux passes frontière
+et le parcours monstres sont assemblés dans `codex/game-integration`.
 Les passes frontière et armure sont relues et assemblées sur la branche
 d’intégration ; `main` conserve encore les squelettes. Le complément P1.9 `50e3c2f` ajoute six
 régressions de frontières : **57 tests game verts** après intégration, smoke CI `genesis 0`,
@@ -164,7 +168,9 @@ verts sans saut et build vert**, revérifiés par l’orchestrateur sur `main`. 
 779,2 s : nouveaux hashes Linux mono `3e94a4c0…479a5`, threads `fdb977ad…4277c`, vérifiés par
 l’orchestrateur ; hashes macOS historiques conservés. Les deux nouveaux modules reproduisent
 les compteurs du programme réel et ses 43 hauteurs. Cinq preuves k14 vérifiées : Node mono/4 threads,
-Chromium mono/4 threads et fallback sans isolation. Reconstruction GitHub indépendante restante.
+Chromium mono/4 threads et fallback sans isolation. **Reconstruction GitHub indépendante verte** :
+[run 34751692540](https://github.com/bal7hazar/doom/actions/runs/34751692540), sur `d4924d9`,
+reproduit les deux hashes ARM64 et vérifie les smokes Node/Chromium et le repli sans isolation.
 
 **Parcours monstres optimisé en intégration** (`a2343cb`, merge `883efbb`) : ticker idle
 46 802 → **34 765 steps** (−25,7 %), combat au tic 493 136 183 → **123 418** (−9,4 %).
@@ -180,15 +186,57 @@ restent < 2^72. Contrôles périodiques de frontière vide et de chaînage D14 v
 Ce passage porte sur la référence antérieure à l’optimisation du parcours monstres, conserve cinq
 replays et n’installe pas encore le fuzz nocturne P1.10. Traces : `/tmp/hellproof-audit-20260913/fuzz/`.
 
-**Taxe fixe encore bloquante** : sur cet exécutable intégré, le WASM Blake exécute **2 224 712 /
-2 297 659 / 2 505 814 steps pour 0 / 1 / 4 tics**. Même sans tic, il dépasse le plafond threads
-1,5 M ; quatre tics dépassent aussi 2,3 M mono. Les 16 137 compressions Blake imposent log21
+**Seconde passe frontière assemblée** (`f3858bb`, intégration finale `91719f8`) : lecteur consommant
+un span, lecture de blocs contrôlés, contextes partagés par pointeur et sérialisation genesis réutilisée.
+Seule : run 111 321 mots, frontière native 275 020 steps ; avec les monstres : **run 110 848,
+step 112 334, genesis 47 426 mots**. Revalidation root : **563 tests / 23 cibles**, format, build
+dev/proving, graphe et REUSE **1 638 fichiers** verts. La passe conserve les cinq goldens et les
+70 comparaisons ABI par profil (48 frontières), plus les enveloppes invalides. Les trois échecs
+historiques hash/serde et le dépassement D29 de 10 848 mots restent visibles. La dette du journal
+de grille croît de 25 steps par entrée ; elle est remise à plat aux frontières, pas bornée dans le tic.
+
+**Simulation navigateur réelle (S10)** : sur l’intégration finale, 386 appels dans un Worker Chromium
+mesurent **46,6–57,8 ms moyens/tic, soit 17,3–21,4 tics/s**. Les cinq sorties finales complètes
+correspondent exactement aux références Scarb, mort au tic 846 comprise. Tous les appels dépassent
+28,57 ms ; la copie JS prend moins de 0,1 ms en moyenne. Mémoire linéaire ~67 MiB, sans rendu ni
+preuve simultanés. La frontière reste dominante ; un prototype de VM conservée entre tics est lancé
+sans modifier les entrypoints prouvés. [S10](spikes/S10-live-simulation.md) détaille méthode et limites.
+
+**Admission wrapper intégrée par `14cce87`** : pin du task obligatoire en subprocess/from_proof,
+pin du bootloader dérivé du fichier configuré, décodeur D14 commun aux deux routes, ancien layout
+disponible uniquement via configuration explicite. Une reprise revalide le fichier de preuve réellement
+envoyé au circuit, même si un ancien enregistrement disait `verified=true`. Les felts hors du corps et
+le faux hex Unicode sont rejetés sans panic. Le lock autonome leaf-verify retrouve les dépendances Git
+épinglées et un nouveau job CI le compile/teste. Revalidation root : **76 tests wrapper + 2 leaf-verify +
+195 client**, Clippy/format/build/actionlint et REUSE **1 590 fichiers** verts. Preuve réelle S9 vérifiée
+en ~25 ms ; bzip2 admis, corruption et mauvais bootloader rejetés. Aucune preuve nouvelle ni modification
+de registre/paramètres. Ce contrôle d’identité ne certifie pas à lui seul l’admissibilité AIR/mémoire.
+La [CI générale 34752596592](https://github.com/bal7hazar/doom/actions/runs/34752596592), sur
+`73d0c0e`, est entièrement verte : **sept jobs**, dont compilation, Clippy et tests du vérifieur
+autonome avec le lock et le nightly épinglés.
+
+**Taxe fixe encore bloquante** : sur l’intégration `91719f8` de 110 848 mots, le WASM Blake exécute
+**2 134 627 / 2 194 469 / 2 363 470 steps pour 0 / 1 / 4 tics** (ressources seules, sans nouvelle preuve).
+Même sans tic, il dépasse le plafond threads 1,5 M ; quatre tics dépassent aussi 2,3 M mono.
+Les 15 456 compressions Blake imposent log21
 à `blake_g`. Une migration de registre seule ne résout donc ni le découpage ni le temps réel.
+
+**D28 appliquée sur `main` par `b00c90b`** (`06b4394`) : `[2]` devient le défaut client/CLI,
+soit **cinq transactions vérifieur, plus une transaction consommateur**. Coupes explicites,
+replis calldata/gaz et marges R7-A1 conservés ; `--single` reste `register_member` après repli.
+La coupe FRI est sauvegardée avant envoi, liée à l’id/routeur/appelant, puis restaurée avant
+estimation. Une reprise ancienne sans coupe identifiable est refusée avant envoi ; son tag seul
+ne suffit pas à choisir les couches FRI restantes. Revalidation root : **95 tests submit + 195
+client**, typecheck/build et REUSE **1 593 fichiers** verts ; calldata complète comparée à Python
+sur trois racines réelles, dont `n4` P4.1. Le test devnet reste ignoré, aucune nouvelle transaction.
+Les reçus P4.1 existants totalisent 1 540 234 480 L2 gas ; pire consommation 38,55 % du cap,
+borne dérivée ×1,15 à 44,33 %. Ces mesures exigent le vérifieur optimisé ; une classe ancienne
+reste soumise à sa propre simulation. La CI de cette intégration reste à vérifier après push.
 
 ## Terminé (mergé sur `main`)
 
 - Phase 0 : spikes S0–S5 + S4b (tous GO), revue G0, décisions D1–D24 (`docs/G0.md`, `docs/DECISIONS.md`).
-- Socle : workspace Cairo (18 crates), licences REUSE, CI 6 jobs + `prover-wasm.yml`, graphe de dépendances.
+- Socle : workspace Cairo (18 crates), licences REUSE, CI 7 jobs + `prover-wasm.yml`, graphe de dépendances.
 - Crates génériques (10) : `fixed`, `bam`, `geom2d`, `bsp`, `blockmap`, `prng`, `ticcmd`, `fsm`, `state_hash`,
   `segment` — 238+ tests, budgets de steps mesurés.
 - Crates Doom : `doom_map` (E1M1, 18,3 k mots, `CELL_NODE`), `doom_things` (mobjinfo/états/rndtable).

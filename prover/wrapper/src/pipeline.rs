@@ -130,6 +130,7 @@ pub struct VerifyReport {
     pub error: Option<String>,
     #[serde(default)]
     pub verify_ms: f64,
+    /// Hash of the proven bootloader, not the task pin at output_preimage[0].
     #[serde(default)]
     pub program_hash: Option<String>,
     #[serde(default)]
@@ -168,6 +169,13 @@ pub fn verify_segment_proof(
         .arg(channel_hash)
         .arg("--include-all-preprocessed-columns")
         .arg(include_all.to_string());
+    // The native verifier checks the configured bootloader before circuit construction.
+    // This is independent of admission's task pin at output_preimage[0].
+    cmd.arg("--expect-bootloader").arg(
+        cfg.leaf_bootloader
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("leaf_bootloader is not configured"))?,
+    );
     // Verification is cheap but not free; it does not take the circuit-proof lock.
     let report: VerifyReport = match run_child(cmd, None) {
         Ok((stdout, _, _)) => serde_json::from_str(stdout.trim())

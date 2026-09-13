@@ -5,8 +5,8 @@
  *
  * Two properties drive the whole design.
  *
- * **One phase = one transaction.** Not a choice: the worst phase is at 90 % of the 1.21e9
- * per-invoke L2-gas cap (`onchain-verifier.md` §3), so two phases can never share an invoke.
+ * **One phase = one transaction.** The router returns the checkpoint echo after each phase;
+ * this plan keeps those transaction boundaries with the optimized P4.1 classes (D28).
  * The transactions are therefore *dependent* — each one echoes the checkpoint state the previous
  * one returned — which is also why they must be estimated as an ordered array (S5 §3).
  *
@@ -18,7 +18,8 @@
  * `Step` transaction's trace.
  */
 
-import { phaseCalldata, type PhasePlan } from "./calldata.js";
+import { phaseCalldata, planPhases, type PhasePlan } from "./calldata.js";
+import type { ProofSections } from "./proof.js";
 import { getSelectorFromName } from "./selector.js";
 import type { Signer } from "./signer.js";
 import type { Call, ResourceBounds, RpcClient } from "./rpc.js";
@@ -38,6 +39,10 @@ export interface SubmissionSequence {
   router: string;
   doomRuns: string;
   phases: PhasePlan[];
+  /** An explicit cut may resume an old sequence whose local plan was never recorded. */
+  explicitFriSplit?: boolean;
+  /** Offline sections allow an automatic client to restore its saved cut before estimation. */
+  friPlan?: { sections: ProofSections; maxCalldata?: number };
   consumer: ConsumerStep;
 }
 
@@ -58,12 +63,15 @@ export function buildSequence(args: {
   doomRuns: string;
   phases: PhasePlan[];
   submitCalldata: string[];
+  explicitFriSplit?: boolean;
 }): SubmissionSequence {
   return {
     proofId: args.proofId,
     router: args.router,
     doomRuns: args.doomRuns,
     phases: args.phases,
+    // Callers supplying phases directly chose their plan; prepareSubmission marks auto plans.
+    explicitFriSplit: args.explicitFriSplit ?? true,
     consumer: {
       label: "submit_batch",
       call: {
@@ -185,6 +193,65 @@ export interface EchoStore {
   set(proofId: bigint, phaseIndex: number, echo: string[]): void;
 }
 
+/**
+ * Reserved EchoStore slot for a versioned FRI plan, never a checkpoint echo. Existing file
+ * and browser stores already preserve string arrays at this key, so their old echoes survive.
+ * Bind the metadata to the router and caller, since proof ids are local to that pair.
+ */
+const PLAN_SLOT = -1;
+const PLAN_VERSION = "hellproof.fri-plan.v1";
+const canonicalFelt = (value: string): string => "0x" + BigInt(value).toString(16);
+
+export function storedFriSplit(
+  store: EchoStore | undefined,
+  proofId: bigint,
+  router: string,
+  caller: string,
+): number[] | null {
+  const data = store?.get(proofId, PLAN_SLOT);
+  if (
+    !Array.isArray(data) || data[0] !== PLAN_VERSION ||
+    data[1] !== canonicalFelt(router) || data[2] !== canonicalFelt(caller)
+  ) return null;
+  const cuts = data.slice(3).map(Number);
+  if (cuts.some((c, i) => !Number.isSafeInteger(c) || c <= 0 || (i > 0 && c <= cuts[i - 1]!))) {
+    return null;
+  }
+  return cuts;
+}
+
+function friSplitOf(seq: SubmissionSequence): number[] | null {
+  const fri = seq.phases.filter((p) => p.entrypoint === "fri");
+  if (!fri.length || fri.some((p) => !p.meta.layers?.length)) return null;
+  return fri.slice(1).map((p) => p.meta.layers![0]!);
+}
+
+function checkResumePlan(seq: SubmissionSequence, caller: string, store?: EchoStore): void {
+  const saved = storedFriSplit(store, seq.proofId, seq.router, caller);
+  if (saved) {
+    if (JSON.stringify(saved) !== JSON.stringify(friSplitOf(seq))) {
+      if (!seq.explicitFriSplit && seq.friPlan) {
+        const phases = planPhases(seq.friPlan.sections, {
+          proofId: seq.proofId,
+          friSplit: saved,
+          maxCalldata: seq.friPlan.maxCalldata,
+        });
+        // Preserve the array shared with PreparedSubmission; both views must use this plan.
+        seq.phases.splice(0, seq.phases.length, ...phases);
+      } else {
+        throw new Error(
+          `proof id ${seq.proofId}: stored FRI plan differs; resume with --fri-split ${saved.join(",")}`,
+        );
+      }
+    }
+  } else if (!seq.explicitFriSplit) {
+    throw new Error(
+      `proof id ${seq.proofId}: original FRI split is unknown; resume with --fri-split <original cut> ` +
+        `(use --fri-split 1,3 for the former six-transaction default), or use a fresh proof id`,
+    );
+  }
+}
+
 /** In-memory `EchoStore`; the UI backs it with `localStorage`, the CLI with a JSON file. */
 export class MemoryEchoStore implements EchoStore {
   private readonly map = new Map<string, string[]>();
@@ -202,9 +269,9 @@ export class MemoryEchoStore implements EchoStore {
  * The tag alone does not say which phase is next — `begin` and `merkle` both leave `MERKLE`, and
  * every FRI chunk but the last leaves `FRI` — so the *number of `Step` events* is what counts
  * the completed phases. The tag is then used as a consistency check against the plan, which
- * catches the case that matters: resuming a proof id with a differently-cut plan (a 5-tx plan on
- * a sequence started with 6, say) would send a valid-looking transaction that the router
- * rejects on the state echo after the whole calldata was already paid for.
+ * catches obvious disagreement. It cannot distinguish cuts while both plans are inside FRI:
+ * restore the saved plan first, or require an explicit original cut for a legacy sequence.
+ * An automatic five-tx default must never silently replace an unknown six-tx resume plan.
  */
 export async function resumePoint(
   rpc: RpcClient,
@@ -231,6 +298,7 @@ export async function resumePoint(
     };
   }
 
+  checkResumePlan(seq, caller, store);
   const steps = await stepEvents(rpc, seq.router, caller, seq.proofId, fromBlock);
   const nextPhase = steps.length;
   if (nextPhase >= seq.phases.length) {
@@ -307,6 +375,16 @@ export async function runSequence(
 ): Promise<RunResult> {
   const { signer, bounds, store, onProgress } = options;
   const resume = await resumePoint(rpc, seq, signer.address, store);
+  // Persist before sending, including an explicit legacy resume or a lost receipt/echo.
+  const split = friSplitOf(seq);
+  if (!resume.factRegistered && store && split) {
+    store.set(seq.proofId, PLAN_SLOT, [
+      PLAN_VERSION,
+      canonicalFelt(seq.router),
+      canonicalFelt(signer.address),
+      ...split.map(String),
+    ]);
+  }
   const progress: StepProgress[] = [];
   let echo = resume.echo;
   let fact: string | undefined;

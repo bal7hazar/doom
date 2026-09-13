@@ -29,7 +29,11 @@ verifier front end (~1 min), the service (seconds).
 (bind-mounted read-only at `/opt/hellproof/programs`) and are listed in the `[[programs]]` entries
 of the configuration. The service refuses to start when a listed executable is missing — that is
 deliberate: a wrapper that accepts a program it cannot prove would fail at 32 GB instead of at
-startup.
+startup. Subprocess/from_proof also requires a valid measured `program_hash` for
+every task. The default config pins the committed client `segment_stub10` artifact;
+copy it to the programs directory. A path does not bind a submitted proof to a
+task, because from_proof never reruns that executable. See the service README's
+task-identity section before configuring another artifact.
 
 **A real API key.** `WRAPPER_API_KEY` adds an admin key without editing the config file. The baked
 `change-me` key is not usable in the open: bind the service to localhost (the compose file does)

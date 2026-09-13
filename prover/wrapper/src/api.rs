@@ -787,21 +787,10 @@ async fn complete_run(
         let args: Vec<Felt> = parse_felt_json(&seg.args_json).map_err(internal)?;
         let preimage: Vec<Felt> = parse_felt_json(&seg.preimage_json).map_err(internal)?;
 
-        if preimage.len() >= 3 {
-            if let Some(prev) = prev_h_out {
-                if preimage[1] != prev {
-                    return Err(fail(
-                        StatusCode::UNPROCESSABLE_ENTITY,
-                        format!(
-                            "segment {i}: h_in {} does not continue the previous segment's h_out {}",
-                            preimage[1].to_hex(),
-                            prev.to_hex()
-                        ),
-                    ));
-                }
-            }
-            prev_h_out = Some(preimage[2]);
-        }
+        prev_h_out = Some(
+            validate::continue_chain(seg.idx, &preimage, &program, prev_h_out)
+                .map_err(|e| fail(StatusCode::UNPROCESSABLE_ENTITY, format!("{e:#}")))?,
+        );
 
         let leaf_key = validate::bind_segment_to_program(
             seg.idx,

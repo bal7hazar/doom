@@ -76,20 +76,35 @@ pub struct RegistryConfig {
 }
 
 /// A program the wrapper is willing to prove leaves for. Clients never upload code: they name a
-/// program id, and the wrapper uses the compiled executable it has pinned on disk.
+/// program id. `rerun` uses its executable; `from_proof` requires the measured task hash
+/// because it consumes the submitted proof without executing that file.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProgramEntry {
     pub id: String,
     /// Absolute path to the Scarb `*.executable.json`.
     pub executable: PathBuf,
-    /// Optional: the program hash of the *task* (`preimage[0]`), under `hash_function`. When set,
-    /// a submission whose preimage does not start with it is rejected without any proving work.
+    /// Hash of the *task* (`preimage[0]`), measured from this exact executable under
+    /// `hash_function`. Required for subprocess/from_proof, optional for test stubs and rerun.
+    /// This is distinct from the proven bootloader hash reported by leaf-verify.
     #[serde(default)]
     pub program_hash: Option<String>,
-    /// Hash the bootloader computes the task's program hash with (G0 D4: `poseidon` in
-    /// production, `blake` in the S4/S4b measurements). A submission may not choose another one.
+    /// Hash the bootloader computes the task's program hash with (D31: `blake`, matching
+    /// the browser runtime). A submission may not choose another one.
     #[serde(default)]
     pub hash_function: crate::model::HashFunction,
+    /// Task output layout. D14 is the product default; only old spike fixtures use legacy_stub.
+    #[serde(default)]
+    pub output_layout: OutputLayout,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OutputLayout {
+    /// [task_hash, version=1, h_in, h_out, tic_start, tic_end, status, commitment, kills, items, secrets].
+    #[default]
+    D14,
+    /// Historical S4 segment_stub only: [task_hash, h_in, h_out, n, status].
+    LegacyStub,
 }
 
 /// One API key (R8-A2). The Controller session-signature scheme that will replace this is
@@ -389,8 +404,37 @@ impl Config {
         self.api_keys.iter().map(|k| (k.key.as_str(), k)).collect()
     }
 
+    /// Parse the explicit task pin, enforcing it where no executable is rerun (D19).
+    /// Shared by startup and admission so library callers cannot bypass the startup check.
+    pub fn pinned_task_hash(
+        &self,
+        program: &ProgramEntry,
+    ) -> anyhow::Result<Option<crate::felt::Felt>> {
+        match &program.program_hash {
+            Some(hash) => crate::felt::Felt::parse(hash).map(Some).map_err(|e| {
+                anyhow::anyhow!(
+                    "config: program `{}` program_hash is not a felt: {e}",
+                    program.id
+                )
+            }),
+            None if self.backend == Backend::Subprocess
+                && self.leaf_mode == LeafMode::FromProof =>
+            {
+                anyhow::bail!(
+                    "config: program `{}` requires program_hash with backend=subprocess and \
+                     leaf_mode=from_proof; pin the measured task hash (output_preimage[0])",
+                    program.id
+                )
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Fails fast on a configuration that cannot run the real pipeline.
     pub fn check_runnable(&self) -> anyhow::Result<()> {
+        for program in &self.programs {
+            self.pinned_task_hash(program)?;
+        }
         if self.backend == Backend::Stub {
             return Ok(());
         }
@@ -550,6 +594,75 @@ mod tests {
         assert_eq!(
             cfg.registry.multiverifier_hash.as_deref(),
             Some("a59897152377c07ac6d1e84454f0a04d8be65a7dfd73c2619078e728973f680f")
+        );
+    }
+
+    #[test]
+    fn d14_is_the_default_and_legacy_layout_is_explicit() {
+        let program: ProgramEntry =
+            serde_json::from_str(r#"{"id":"p","executable":"p.json"}"#).unwrap();
+        assert_eq!(program.output_layout, OutputLayout::D14);
+        let legacy: ProgramEntry = serde_json::from_str(
+            r#"{"id":"p","executable":"p.json","output_layout":"legacy_stub"}"#,
+        )
+        .unwrap();
+        assert_eq!(legacy.output_layout, OutputLayout::LegacyStub);
+        assert!(serde_json::from_str::<ProgramEntry>(
+            r#"{"id":"p","executable":"p.json","output_layout":"unknown"}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn task_pin_is_required_before_subprocess_startup() {
+        let mut cfg = Config::default();
+        cfg.programs.push(ProgramEntry {
+            id: "p".into(),
+            executable: "/dev/null".into(),
+            program_hash: None,
+            hash_function: Default::default(),
+            output_layout: OutputLayout::D14,
+        });
+        let error = cfg.check_runnable().unwrap_err().to_string();
+        assert!(error.contains("requires program_hash"), "{error}");
+        cfg.backend = Backend::Stub;
+        cfg.check_runnable().unwrap();
+        cfg.backend = Backend::Subprocess;
+        cfg.leaf_mode = LeafMode::Rerun;
+        assert!(cfg.pinned_task_hash(&cfg.programs[0]).unwrap().is_none());
+    }
+
+    #[test]
+    fn configured_task_pin_is_a_field_element_even_in_stub_mode() {
+        let mut cfg = Config {
+            backend: Backend::Stub,
+            ..Default::default()
+        };
+        cfg.programs.push(ProgramEntry {
+            id: "p".into(),
+            executable: "/dev/null".into(),
+            program_hash: None,
+            hash_function: Default::default(),
+            output_layout: OutputLayout::D14,
+        });
+        for invalid in [
+            "0x",
+            "oops",
+            "-1",
+            "0x800000000000011000000000000000000000000000000000000000000000001",
+        ] {
+            cfg.programs[0].program_hash = Some(invalid.into());
+            let error = cfg.check_runnable().unwrap_err().to_string();
+            assert!(error.contains("program_hash is not a felt"), "{error}");
+        }
+        cfg.programs[0].program_hash = Some("9007199254740993".into());
+        cfg.check_runnable().unwrap();
+        assert_eq!(
+            cfg.pinned_task_hash(&cfg.programs[0])
+                .unwrap()
+                .unwrap()
+                .to_hex(),
+            "0x20000000000001"
         );
     }
 

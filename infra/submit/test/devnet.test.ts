@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The integration test: the real orchestrator against a real router on a real (local) devnet.
+ * The integration test: the real orchestrator against an optimized P4.1 router on a real (local) devnet.
  *
  * Skipped — not failed — when `SUBMIT_TEST_RPC` is unset or nothing answers there, so a clone
  * with no devnet still has a green `npm test`. To run it:
@@ -71,7 +71,7 @@ describe.runIf(RPC && ROUTER && RUNS && ACCOUNT)("devnet", () => {
       levelIds: loaded.levelIds,
       replay: true,
     });
-    expect(prepared.phases).toHaveLength(6);
+    expect(prepared.phases).toHaveLength(5);
 
     const resume = await resumePoint(rpc, prepared.sequence, address!);
     expect(resume.nextPhase).toBe(0);
@@ -91,7 +91,7 @@ describe.runIf(RPC && ROUTER && RUNS && ACCOUNT)("devnet", () => {
     expect(result.fact).toBe(EXPECTED_FACT);
 
     const accepted = result.steps.filter((s) => s.state === "accepted");
-    expect(accepted).toHaveLength(7);
+    expect(accepted).toHaveLength(6);
     for (const step of accepted) {
       const e = est.steps.find((s) => s.label === step.label)!;
       const gap = Math.abs(Number(e.estimate.l2GasConsumed - step.l2Gas!)) / Number(step.l2Gas!);
