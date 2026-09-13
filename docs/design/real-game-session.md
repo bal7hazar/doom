@@ -72,3 +72,18 @@ avancés et la mémoire pendant une partie complète. La campagne suivante ajout
 concurrente sur matériel 16 GiB et mesure le temps résiduel C3. Le débit moyen du prototype
 S10 ne clôt pas ces critères. Aucun défaut de registre, de preuve ou de budget n’est levé
 par le seul branchement du Worker.
+
+## Suite décidée après audit du rendu v1
+
+Les acteurs v1 contiennent déjà sprite/frame/flags réels. La prochaine livraison
+corrige leur sélection et les sept familles absentes de l’atlas, ainsi que le HUD :
+WeaponId compact 4 est la tronçonneuse, tandis que 4 désigne le lance-roquettes en
+démonstration. Les métadonnées doivent correspondre au même tic que le ring et être
+indexées par identifiant ; le mobj de la vue provient du player.mo de l’état validé,
+pas d’un id zéro supposé. Aucun changement des pins ou du format v1 n’est nécessaire.
+
+Les psprites animés exigent ensuite une projection Cairo explicite. L’audit propose
+13 felts supplémentaires dans un harnais v2 isolé, avec coexistence v1 et migration
+épinglée ; cette seconde livraison n’est pas encore implémentée. Le client ne doit
+pas reconstruire les transitions d’arme en JavaScript. L’adaptateur de preuve reste
+un chantier séparé, avec replay depuis genesis et refus AIR conservant le journal.

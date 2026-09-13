@@ -7,7 +7,7 @@
 > D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
 > Correctif WASM S12 intégré `e274bec` : preuves réelles mono/quatre threads valides, build Docker reproduit ; CI distante verte (`34762719280`) ; garde runtime ajouté `163c9e1`.
 > CI générale verte sur `67f618c` (run `34754644282`) ; reconstruction WASM GitHub indépendante verte.
-> P1.9 en intégration `8ae7f1c` : 565 tests verts, 106 878 mots ; preuve quatre tics valide en 42,16 s, D2/D29 non atteints.
+> P1.9 en intégration `0c8a3a8` : candidat validé par 567 tests, 106 855 mots ; preuve quatre tics valide en 41,55 s, D2/D29 non atteints.
 > Simulation avec continuation + D33 : 8,8–16,6 ms/tic, 512 MiB, 386 tics exacts ; latence par frame et client restants (S10).
 > P1.10 livré sur branche : 25 replays × deux profils, fuzz 10 000 tics exacts ; validation D29 25/25 dans les deux profils ; 26e cas EXIT677 intégré et vérifié.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
@@ -70,11 +70,29 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : optimisation du parcours des acteurs (`codex/idle-actor-pass`),
-adaptateur réel du programme de preuve (`codex/real-proof-adapter`) et audit des
-champs de rendu (`codex/render-abi-audit`). Les contrôles et le nouveau cas EXIT
-sont assemblés par `8cf6d97`, documentation harmonisée `9bccbc1`, sur
-`codex/game-integration`. Les six exécutables D29 de consensus restent inchangés.
+Vague active : validation du moteur assemblé `0c8a3a8`, adaptateur réel du
+programme de preuve (`codex/real-proof-adapter`) et corrections client des acteurs,
+atlas et HUD v1 après audit (`codex/render-abi-audit`). Les contrôles et EXIT sont
+assemblés depuis `8cf6d97`. Le moteur passif `9b130df` est maintenant fusionné ;
+les nouveaux artefacts de simulation doivent être reconstruits avant validation
+navigateur sur cette version.
+
+**Parcours des acteurs passifs** : 106 878 → **106 855 mots**, 567 tests Cairo,
+35 ABI et 70 comparaisons de replays/coupes par profil verts. Root a revalidé
+EXIT677 avec 17 mots terminaux exclus et 14 coupes par profil. Deux frames exactes :
+idle300 **30 012 → 26 298 steps** (−12,37 %), fight493 **170 333 → 166 596**
+(−2,19 %). Frontières et allocations inchangées. Petit roster de 29 monstres
+dormants : **+3,07 %** de coût brut, dans les seuils existants. Les quantiles
+complets de la version assemblée sont en cours ; aucun gain global n’en est déduit.
+
+Preuve root du même exécutable SHA256 `5a3817dc…57b28`, quatre tics de marche :
+**2 193 266 steps** selon execute, **41,553 s**, **11 643 256 832 B** linéaires,
+**4 375 790 B** de preuve, **log21**. Vérification WASM et native/bzip2 réussies ;
+altération et mauvais bootloader rejetés ; dix sorties D14 identiques à D29.
+La preuve précédente mesurait 2 208 390 steps selon le même compteur execute
+(2 208 389 dans le compteur antérieurement cité). Le temps isolé ne constitue pas
+une accélération statistique. D29 dépasse toujours la cible de **6 855 mots** ;
+registre, plafonds et validation de partie complète C3 restent inchangés.
 
 Worker/journal et contrôles après fusion : **222 tests client sans skip**, 13 tests
 du harnais, types/build/REUSE et **neuf smokes Chromium verts**, dont vrai verrou
@@ -92,7 +110,11 @@ ni un oracle par tic, ni une mesure RSS/16 GiB/preuve concurrente.
 La CI générale **`34764805296`** (sept jobs) et WASM **`34764805318`** (deux jobs)
 sont vertes sur `7415869`. L’artefact GitHub confirme **1 200 072 assertions**
 runtime, zéro erreur, puis les deux modules reconstruits identiques aux SHA
-commités et inchangés après réapplication de la transformation Memory64.
+commités et inchangés après réapplication de la transformation Memory64. Le run
+suivant `34766545806` sur `ce964a0` a échoué uniquement sur le test Rust
+`identical_leaves_are_proven_once` : deux feuilles prouvées comme attendu, mais
+compteur de cache 3 au lieu de 2. Le réordonnancement asynchrone est à auditer ;
+relance ciblée en cours, sans assimiler un éventuel vert à une correction.
 
 
 **S12 résolu localement, intégré `e274bec`** : quatre chargements SIMD tronquaient

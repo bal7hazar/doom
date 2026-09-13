@@ -128,6 +128,14 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   avec 39 mesures stables à 258 801 664 B et restauration exacte. Pas de mesure RSS
   ou 16 GiB, ni de preuve concurrente. Contrôles utilisateur intégrés `8cf6d97` : 222 tests client et neuf smokes verts.
 
+- Parcours passif intégré `0c8a3a8` (candidat `9b130df`) : **106 855 mots**, 567 tests
+  Cairo ; ABI et replays exacts deux profils. Root revalide EXIT677 et ses coupes.
+  idle300 26 298 steps (−12,37 %), fight493 166 596 (−2,19 %) ; frontières inchangées,
+  contrepartie petit roster dormant +3,07 %. Quantiles assemblés encore à mesurer.
+  Preuve quatre tics : **2 193 266 steps execute, 41,553 s, 11 643 256 832 B**
+  linéaires, **4 375 790 B**, log21. Vérifications native/bzip2 et négatifs verts ;
+  dix sorties D14 exactes. Ce succès isolé ne ferme ni D2/D29 ni C3/16 GiB.
+
 ## 1. Vision et périmètre
 
 Objectif : une version de Doom dont le **cœur de jeu (simulation) est réécrit en Cairo**, jouable
