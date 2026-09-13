@@ -4,7 +4,7 @@
 > CI : oracle Python installé explicitement ; reproductibilité WASM ARM64 réparée (`30f8d77`).
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
 > AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
-> CI générale verte sur `d4924d9` ; reconstruction WASM et nouveau job leaf-verify à vérifier après push.
+> CI générale verte sur `73d0c0e` (7 jobs, leaf-verify compris) ; reconstruction WASM GitHub indépendante verte.
 > P1.9 en intégration `91719f8` : 563 tests verts, 110 848 mots ; budgets D2/D29 non atteints.
 > Simulation Chromium réelle : 17–21 tics/s sur cinq scènes, cible 35 Hz manquée (S10).
 > Fuzz ponctuel : 10 000 tics réels sans divergence sur la référence `b11fd7f` ; campagne nocturne P1.10 restante.
@@ -167,7 +167,9 @@ verts sans saut et build vert**, revérifiés par l’orchestrateur sur `main`. 
 779,2 s : nouveaux hashes Linux mono `3e94a4c0…479a5`, threads `fdb977ad…4277c`, vérifiés par
 l’orchestrateur ; hashes macOS historiques conservés. Les deux nouveaux modules reproduisent
 les compteurs du programme réel et ses 43 hauteurs. Cinq preuves k14 vérifiées : Node mono/4 threads,
-Chromium mono/4 threads et fallback sans isolation. Reconstruction GitHub indépendante restante.
+Chromium mono/4 threads et fallback sans isolation. **Reconstruction GitHub indépendante verte** :
+[run 34751692540](https://github.com/bal7hazar/doom/actions/runs/34751692540), sur `d4924d9`,
+reproduit les deux hashes ARM64 et vérifie les smokes Node/Chromium et le repli sans isolation.
 
 **Parcours monstres optimisé en intégration** (`a2343cb`, merge `883efbb`) : ticker idle
 46 802 → **34 765 steps** (−25,7 %), combat au tic 493 136 183 → **123 418** (−9,4 %).
@@ -208,16 +210,20 @@ le faux hex Unicode sont rejetés sans panic. Le lock autonome leaf-verify retro
 195 client**, Clippy/format/build/actionlint et REUSE **1 590 fichiers** verts. Preuve réelle S9 vérifiée
 en ~25 ms ; bzip2 admis, corruption et mauvais bootloader rejetés. Aucune preuve nouvelle ni modification
 de registre/paramètres. Ce contrôle d’identité ne certifie pas à lui seul l’admissibilité AIR/mémoire.
+La [CI générale 34752596592](https://github.com/bal7hazar/doom/actions/runs/34752596592), sur
+`73d0c0e`, est entièrement verte : **sept jobs**, dont compilation, Clippy et tests du vérifieur
+autonome avec le lock et le nightly épinglés.
 
-**Taxe fixe encore bloquante** : sur cet exécutable intégré, le WASM Blake exécute **2 224 712 /
-2 297 659 / 2 505 814 steps pour 0 / 1 / 4 tics**. Même sans tic, il dépasse le plafond threads
-1,5 M ; quatre tics dépassent aussi 2,3 M mono. Les 16 137 compressions Blake imposent log21
+**Taxe fixe encore bloquante** : sur l’intégration `91719f8` de 110 848 mots, le WASM Blake exécute
+**2 134 627 / 2 194 469 / 2 363 470 steps pour 0 / 1 / 4 tics** (ressources seules, sans nouvelle preuve).
+Même sans tic, il dépasse le plafond threads 1,5 M ; quatre tics dépassent aussi 2,3 M mono.
+Les 15 456 compressions Blake imposent log21
 à `blake_g`. Une migration de registre seule ne résout donc ni le découpage ni le temps réel.
 
 ## Terminé (mergé sur `main`)
 
 - Phase 0 : spikes S0–S5 + S4b (tous GO), revue G0, décisions D1–D24 (`docs/G0.md`, `docs/DECISIONS.md`).
-- Socle : workspace Cairo (18 crates), licences REUSE, CI 6 jobs + `prover-wasm.yml`, graphe de dépendances.
+- Socle : workspace Cairo (18 crates), licences REUSE, CI 7 jobs + `prover-wasm.yml`, graphe de dépendances.
 - Crates génériques (10) : `fixed`, `bam`, `geom2d`, `bsp`, `blockmap`, `prng`, `ticcmd`, `fsm`, `state_hash`,
   `segment` — 238+ tests, budgets de steps mesurés.
 - Crates Doom : `doom_map` (E1M1, 18,3 k mots, `CELL_NODE`), `doom_things` (mobjinfo/états/rndtable).
