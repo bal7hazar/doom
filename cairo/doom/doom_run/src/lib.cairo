@@ -15,7 +15,7 @@
 //! never a trap (R4-A2).
 
 mod wire;
-use doom_game::{GameState, from_felts, hash, serialize, snapshot};
+use doom_game::{GameState, from_felts, serialize, snapshot};
 use doom_map::LevelId;
 use segment::{SegmentOutput, Stats, Status, status_felt};
 use state_hash::{inputs_seed, seal};
@@ -128,7 +128,9 @@ pub fn genesis_impl(level: u32) -> (Array<felt252>, felt252) {
     match level_of(level) {
         Option::Some(id) => {
             let g = doom_game::genesis(id);
-            (serialize(@g), hash(@g))
+            let state = serialize(@g);
+            let h = seal(state.span());
+            (state, h)
         },
         Option::None => (array![], 0),
     }

@@ -26,16 +26,8 @@ pub(crate) impl FeltsSerde of Serde<Felts> {
 }
 
 fn append(ref output: Array<felt252>, mut data: Span<felt252>) {
-    while data.len() >= 64 {
-        let head = data.slice(0, 64);
-        let block: @Box<[felt252; 64]> = match head.try_into() {
-            Option::Some(block) => block,
-            // Unreachable for a 64-felt slice; retaining the tail path also
-            // makes this total if the compiler representation ever changes.
-            Option::None => { break; },
-        };
+    while let Option::Some(block) = data.multi_pop_front::<64>() {
         append_block(ref output, block);
-        data = data.slice(64, data.len() - 64);
     }
     while let Option::Some(value) = data.pop_front() {
         output.append(*value);
