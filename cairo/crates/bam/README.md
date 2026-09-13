@@ -84,31 +84,32 @@ operation appears to cost 1 step.
 | `finecosine` | 58 | 7 | `finesine` plus the quarter-turn wrap |
 | `sine` | 51 | 6 | |
 | `cosine` | 64 | 9 | |
-| `sin_cos` | 109 | 12 | only 6 steps cheaper than `sine` + `cosine` |
+| `sin_cos` | 76 | 8 | shared quarter-wave fold; previously 109 / 12 |
 | `slope_div` | 45 | 12 | two `u128` divisions (Doom's `SlopeDiv`) |
 | `point_to_angle` | 126 | 24 | S1 §5.6 measured 138 in the prototype; 118 before S7 |
 | `point_to_angle2` | 130 | 24 | one `fixed::sub` more |
-| turn + `sin_cos` (player step) | 125 | 15 | representative composite |
+| turn + `sin_cos` (player step) | 86 | 10 | representative composite; previously 121 / 14 |
 
-Bytecode: **8 689 words** for the benchmark executable, the two tables
-(2 048 + 2 049 felts) and `fixed` included — well inside the 16 k-word
-budget D4 sets for the whole `doom_run` program, but it is the single
-biggest constant block of the geometry stack, which is why the packing
-arbitrage above matters.
+Bytecode: **8 681 words** for the benchmark executable, the two tables
+(2 048 + 2 049 felts) and `fixed` included; this harness is not the D29 full-program budget. The shared-fold change
+reduces this harness by 8 words but increases the proving `doom_run` program
+by 62 words (106 855 → 106 917), so complete-game integration must account
+for that fixed program-hash cost as well as the steps saved per call.
 
 Two results that correct S1's expectations:
 
-* **`sin_cos` is not worth 14 steps, only 6.** S1 §7 assumed the index
-  reduction cost ~30 steps (`(angle >> 19) & 8191` as two `u32` divisions);
-  on a `u32` the mask is unnecessary and the single division costs 8.
-  Consumers should keep the *fine index* in the mobj state (the other half of
-  S1's advice) rather than call `sin_cos` to save the reduction.
+* **Share the quarter-wave fold, not just the index division.** S1's old
+  pair saved only six steps because it still folded two independent lookups.
+  The shared fold now saves 33 steps on the existing differential workload;
+  opaque four-quadrant comparisons also improve in both dev and proving.
+  The magnitudes use complementary indices `q` and `2047 - q`; tables and
+  public angle representation stay unchanged. See `spikes/s14-cairo-costs`.
 * **`add` is 10 steps, not 25.** S1 measured 25 for a `u64` round trip;
   keeping the wrap inside `u32` (`limit = 0xFFFFFFFF - b`) is 10.
 
 ## Tests
 
-`scarb test -p bam` — 19 unit tests (`src/tests.cairo`) + 2 integration
+`scarb test -p bam` — 20 unit tests (`src/tests.cairo`) + 2 integration
 tests (`tests/lib.cairo`):
 
 * **reference values**: 161 `finesine` and 92 `tantoangle` samples taken from
@@ -118,6 +119,9 @@ tests (`tests/lib.cairo`):
   vectors are asserted **exactly**, and the generator additionally checks its
   own Python transcription against `atan2` on all 1 000 points (worst
   deviation 328 453 BAM = 0.0275°, the `tantoangle` granularity).
+* **shared-fold equivalence**: the first and last angle of all 8 192 fine
+  buckets (16 384 angles, including `u32::MAX`) match the unchanged separate
+  sine and cosine paths exactly.
 * **properties**: `add`/`sub` inverse and commutative over a deterministic
   sweep, wrap at a full turn, `sin(x) = -sin(x + 180°)` and
   `sin(x) = sin(180° - x)` over all 8 192 indices, `sin² + cos² = 1` within
