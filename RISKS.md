@@ -37,10 +37,16 @@
 - **R11 réparé localement, validation GitHub attendue** (`30f8d77`) : le build était x86_64 face à
   une référence arm64. Rebuild ARM64 sur image épinglée conforme aux deux hashes existants ; cinq
   smokes Node/Chromium vérifiés, y compris repli sans isolation. Aucune référence de hash remplacée.
-- **R1 bloquant sur le jeu réel** : quatre tics, 1 499 208 steps bootloader compris, 65 138 instances
+- **R1 bloquant avec hash programme Poseidon** (hypothèse D4/D29 ; WASM actuel en **Blake**) :
+  quatre tics, 1 499 208 steps bootloader compris, 65 138 instances
   Poseidon ; preuve native interrompue à 180 s et environ 32 GiB RSS observés. Aucune preuve valide.
   L'estimation de hauteur `resources()` ne suffit pas : mesurer aussi les composants auxiliaires et
-  la largeur des traces. Le succès S2 sur microprogrammes ne clôt pas R1 pour `doom_run`.
+  la largeur des traces. **D31** retient Blake, déjà utilisé par le navigateur : même segment prouvé
+  et vérifié en **53,50 s / 11,73 GiB**, 2 681 208 steps, 765 202 felts. R1 reste ouvert pour la
+  concurrence avec le jeu ; un succès natif ne clôt pas P3.7. WASM Node : preuve valide 42,225 s /
+  11,524 GiB mais **log21 réel (`blake_g`) contre log20 annoncé**, donc registre `doom` incompatible.
+  `doom_21` expérimental construit le circuit ; vérifier le repli final et corriger le dimensionnement.
+  S4b généralisait à tort le manque de `seq_21` à tout composant : le cas réel invalide ce NO-GO.
 - **R4 / armure** : absorption après somme des dégâts des monstres, avec arrondis incorrects et
   effets de mort possibles avant réduction par l'armure. Corriger par impact avant douleur/mort ;
   tests de deux attaquants, épuisement d'armure et continuité RNG requis avant intégration P1.9.
@@ -52,7 +58,7 @@
   un tic idle atteint 585 777 avant dernier style joueur. R5 devient P0. Optimiser cette frontière
   en préservant toutes les validations et les hashes avant tout changement de cadence ou de gameplay.
 
-Les constats datés ci-dessous conservent l'historique des spikes ; les décisions D26–D30 et cette
+Les constats datés ci-dessous conservent l'historique des spikes ; les décisions D26–D31 et cette
 requalification priment sur leurs anciens budgets. Voir [STATUS](docs/STATUS.md) pour les suites.
 
 ---

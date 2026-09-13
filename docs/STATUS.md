@@ -86,8 +86,8 @@ artefacts : Node mono/4 threads **37,82/11,99 s**, Chromium mono/4 threads **33,
 sans isolation repli mono **33,4 s** ; **cinq preuves vérifiées**, 755 280 felts chacune (programme
 arithmétique k14). Chromium utilise 1,83/1,96 GiB. Le smoke construit désormais son exécutable Cairo
 et rapporte le hash du fichier réellement chargé. `actionlint`, syntaxe JS et REUSE verts.
-La validation GitHub reste à obtenir : dernier run `34748732776` en `startup_failure`, aucun job
-créé ; le run précédent avait exposé l'oracle Python manquant, maintenant corrigé.
+**CI générale entièrement verte sur `83af5dd`**, run `34749101091` : les six jobs passent,
+y compris les nouvelles suites et E2E. Workflow WASM `34749101097` encore en build ARM64. L'échec de démarrage sans job `34748732776` n'est pas reproduit.
 
 Joueur intégré par **`06058b1`** : 132 tests inchangés, checksum **4760390154965462** sur 350 tics,
 couverture agent **93,7 %** (hors adaptateur `player_tic`, dont les tests ordinaires passent),
@@ -105,13 +105,30 @@ Ces chiffres ne sont pas un p99 ni une mesure navigateur. Le coût fixe place **
 critique : une ligne dédiée optimise sérialisation, parseur et snapshot sans réduire la validation,
 changer les hashes ou le gameplay. C2 : cas 101/101 et replay de combat avec 28 frontières passent.
 
-**R1 requalifié sur le jeu réel** : preuve native de quatre tics de marche, mêmes paramètres feuille
-que le navigateur, programme de 117 531 mots. Exécution directe **850 629 steps**, bootloader
+**R1 requalifié sur le jeu réel** : preuve native de quatre tics de marche, programme de 117 531 mots,
+paramètres feuille du navigateur mais **hash de programme Poseidon**. Cet essai suit l'ancienne
+hypothèse D4/D29 ; le WASM actuel emploie déjà **Blake** (`prover/wasm/src/core.rs`). Exécution directe **850 629 steps**, bootloader
 **1 499 208**, dont **65 138 instances Poseidon** (6 367 hors bootloader). La preuve atteint
 **environ 32 GiB RSS observés** et expire à **180 s**, groupe arrêté et verrou libéré ; **aucune preuve
 vérifiée produite**. Logs : `/tmp/game-p19-native-segment/`. Le plafond de steps D26 et les seules
 hauteurs estimées par `resources()` ne garantissent pas la mémoire : les composants auxiliaires et
-la largeur totale des traces doivent être mesurés. Pas de relance identique ; diagnostic AIR en cours.
+la largeur totale des traces doivent être mesurés. Pas de relance identique. Comparaison **Blake réussie (D31)** : même programme et mêmes arguments,
+**2 681 208 steps**, **6 368 Poseidon**, **53,50 s**, **11,73 GiB RSS max**, **765 202 felts**, preuve
+native vérifiée. Les dix sorties publiques sont identiques. Le WASM actuel exécute ces mêmes
+compteurs en 1,49 s sous Node (mémoire d'exécution 0,673 GiB, hors preuve). Les traces auxiliaires
+omises par `resources()` expliquent le mauvais dimensionnement. **WASM Node 4 threads : preuve
+vérifiée en 42,225 s / 11,524 GiB linéaires**, mais `trace_log_size = 21` réel contre 20 annoncé par
+`resources()`. Le composant fautif est **`blake_g`**, confirmé par décodage de la preuve bincode ;
+**incompatible avec le registre `doom` actuel** malgré validité locale. Le registre expérimental
+`doom_21` construit le circuit correspondant (75,83 s / 17,90 GiB RSS max ; 25,99 GiB empreinte
+mémoire macOS). Validation du repli final en cours, aucun défaut production modifié. Logs Blake :
+`/tmp/hellproof-audit-20260913/hash-cost/`.
+
+**Profil exact baseline P1.9** : coûts par itération VM, frontière exclue, sans moyenne de chunks.
+Idle 700 tics : moyenne/p99 **52 414/56 260** ; marche 350 : **87 126/131 418** ; porte 350 :
+**105 347/208 981** ; combat 700 : **102 196/194 236** ; mort 846 : **79 851/145 099**. D2 reste
+hors cible indépendamment de l'optimisation ABI. Les copies de contexte et reconstructions doivent
+être distinguées des traversées de gameplay dans les leviers S8 avant arbitrage UX.
 
 **Correction de gameplay en cours dans P1.9** : l'armure était appliquée après agrégation des dégâts
 des monstres. Cela change l'arrondi par impact et peut déclencher une mort avant absorption, puis

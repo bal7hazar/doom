@@ -6,7 +6,7 @@
 
 ## État mesuré à la reprise du 2026-09-13
 
-Cette section et les décisions D26–D30 remplacent les hypothèses de dimensionnement initiales
+Cette section et les décisions D26–D31 remplacent les hypothèses de dimensionnement initiales
 dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STATUS](docs/STATUS.md).
 
 - `main` après intégration monstres `8471b7e` : **511 tests Cairo** ; la suite spécifique conserve
@@ -23,7 +23,8 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   ces exécutables ; la recommandation générale de version identique du README sim est conservatrice.
   R2/R5 nécessitent une optimisation des frontières avant validation navigateur à 35 Hz.
 - D29 : programme prouvé cible **100 k mots**, plafond dur 120 k, profil `proving`, bootloader
-  poseidon (1 969 + 5,5 × mots). Les coûts par crate partagent des dépendances et ne s'additionnent pas.
+  **Blake après D31** (l'hypothèse Poseidon de D29 est abandonnée). Les coûts par crate partagent
+  des dépendances et ne s'additionnent pas.
 - D26 : découpage selon le plus gros composant AIR (≤ 2^20 lignes, cible 80 %), avec plafonds de
   précaution de 1,5 M steps avec threads / 2,3 M mono. Le nombre de tics par segment reste dynamique.
 - P4.1 / D28 : vérifieur à **5 transactions et 1,540234480e9 L2 gas**, pire transaction à 38,5 % du
@@ -36,11 +37,19 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   Linux existants sont reproduits bit à bit. Cinq smokes locaux vérifiés avec ces artefacts : Node
   mono/4 threads 37,82/11,99 s ; Chromium 33,09/10,19 s (1,83/1,96 GiB), repli sans isolation 33,4 s.
   Validation des workflows GitHub en attente ; oracle Python du nouveau contrôle submit corrigé.
-- **Jeu réel : R1 reste bloquant.** Quatre tics de marche avec `run_segment` 117 531 mots donnent
+- **Jeu réel : R1 reste ouvert.** Quatre tics avec `run_segment` 117 531 mots et **hash programme
+  Poseidon** (hypothèse D4/D29, différente du WASM actuel en **Blake**) donnent
   1 499 208 steps sous bootloader et 65 138 instances Poseidon. Preuve native interrompue à 180 s,
   RSS observé proche de 32 GiB, aucune preuve vérifiée. Les microprogrammes S2 ne prédisent pas
   ce coût ; `resources()` estime des hauteurs, sans encore borner toute la largeur ni les composants
-  auxiliaires des traces. Diagnostic requis avant nouvelle preuve lourde.
+  auxiliaires des traces. Comparaison **Blake** avec mêmes sorties publiques : **2 681 208 steps,
+  53,50 s, 11,73 GiB RSS max, 765 202 felts**, preuve native vérifiée. Le WASM emploie déjà Blake
+  et reproduit exactement ces compteurs (1,49 s d'exécution Node, 0,673 GiB hors preuve). D31 aligne
+  les décisions et scripts sur le code. WASM Node 4 threads : **42,225 s / 11,524 GiB**, preuve
+  vérifiée. **Le `blake_g` réel atteint log21**, contre log20 estimé par `resources()` : incompatible
+  avec `doom`, faux positif confirmé. `doom_21` expérimental construit le circuit feuille ; repli
+  final en cours de validation. Le NO-GO universel de S4b §3.2 est infirmé : l'absence de `seq_21`
+  bloque certains composants seulement, et notre preuve `canonical_small` log21 est valide.
 - P1.9 corrige l'ordre `ThingGrid` dans l'état engagé (schema 2), indispensable au déterminisme des
   ramassages après frontière. L'audit détecte aussi une absorption d'armure agrégée trop tard :
   correction par impact avant douleur/mort en cours, sans changer le schéma d'état.
