@@ -1,11 +1,11 @@
 # STATUS — point d'avancement
 
-> Mis à jour le 2026-09-13 : jeu réel assemblé sur `codex/game-integration` (`48b9dc7`), moteur figé `0c8a3a8` ; `main` conserve les squelettes du jeu.
-> P1.9 : 567 tests Cairo, **106 855 mots** ; moyenne exacte **49 524,87 steps/tic**, p99 **125 157**. D2/D29 restent manqués.
-> P1.10 : **26/26 replays dans chacun des deux profils**, EXIT677 compris ; nouveau fuzz **10 000 tics**, 158 cas, zéro divergence. Nightly durable restant.
-> Client : rendu v1, contrôles, sauvegarde et F4 preuve réelle raccordés ; **259 tests unitaires verts**, refus AIR exportable. Psprites et partie complète prouvée restent ouverts.
-> Preuve réelle quatre tics RUNNING : **41,55 s**, vérification WASM/native verte ; log21 incompatible avec le registre de production log20. Aucun GO C3/16 GiB.
-> CI générale verte sur `92edde5` (run `34768352897`) ; correctif WASM S12 et garde runtime couverts par CI WASM verte `34764805318`.
+> Mis à jour le 2026-09-13 : jeu réel assemblé sur `codex/game-integration` (`49f2a66`), moteur `ee5f819` ; `main` conserve les squelettes du jeu.
+> P1.9 : **573 tests Cairo**, **107 018 mots** ; moyenne exacte **48 543,68 steps/tic**, p99 **122 942**. D2/D29 restent manqués.
+> P1.10 : **26/26 replays dans chacun des deux profils** sur ce moteur, EXIT677 compris ; fuzz 10 000 tics validé sur le moteur précédent `0c8a3a8`. Nightly durable restant.
+> Client : rendu v1, contrôles, sauvegarde et F4 preuve réelle raccordés ; **259 tests unitaires verts**, migration explicite des identités. Psprites et partie complète prouvée restent ouverts.
+> Preuve réelle historique quatre tics (`0c8a3a8`) : **41,55 s**, vérification WASM/native verte. Nouveau moteur contrôlé par execute, sans nouvelle preuve ; log21 reste incompatible avec le registre log20. Aucun GO C3/16 GiB.
+> Dernière CI générale vérifiée verte : `34d7b93` (run `34769473077`) ; garde runtime WASM couverte par CI verte `34764805318`.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -485,3 +485,38 @@ headed en 8,1 s, sans erreur console. Tous les agents de cette vague ont termin�
 Prochain chemin critique : réduire D29/D2 et rendre l’admission AIR compatible
 avec le registre, puis mesurer la partie complète et la concurrence sur 16 GiB.
 Aucun changement de plafond, de cadence ou de gameplay n’est adopté ici.
+
+
+### Préparation Sepolia signalée par le sponsor
+
+Le sponsor indique disposer de 350 STRK sur un compte Sepolia et des variables
+`SEPOLIA_ACCOUNT_ADDRESS`, `SEPOLIA_PRIVATE_KEY`, `SEPOLIA_RPC_URL` (Infura)
+dans `~/.hellproof`. Solde non vérifié par l’orchestrateur ; aucun accès aux
+credentials ni transaction dans cette passe d’optimisation Cairo. Cette
+information prépare P4.5, sans lever les gates techniques du jeu prouvé.
+
+### Passe de calculs Cairo S14 intégrée
+
+Fusion `49f2a66` sur `codex/game-integration`, après revue croisée et validation
+complète. Trois changements : pliage partagé de `sin_cos`, masques sur deux
+modulos de cadence/rotation IA, copies de hauteurs évitées ou réduites. Le détail
+et les sources sont dans [le rapport de calculs](design/cairo-calculation-costs.md).
+
+Sur 2 946 tics mesurés, chacun améliore son coût ; moyenne −1,98 %, p99 122 942.
+Le programme proving passe de 106 855 à 107 018 mots (+163). Le segment de marche
+à quatre tics coûte 1 956 steps de plus ; à 32 tics, 2 328 de moins. Les entrées
+prouveur grandissent dans les deux cas. Aucun gain de durée de preuve n’est déduit.
+
+Validation : 573 tests Cairo, 258 micro-exécutions avec oracle, 259 tests client,
+10 smokes Chromium headed et replay navigateur EXIT677. Corpus complet terminé
+en 1 365,78 s : 26 cas par profil, 7 575 tics logiques, 149 coupes et 175 enveloppes
+D14 indépendantes par profil ; goldens et six SHA exécutables inchangés. Le
+formatage reconstruit les mêmes exécutables. Les trois dépassements de budgets
+historiques du bench global sont inchangés, sans réenregistrement des seuils.
+
+La cadence reste 35 Hz. D2/D29, admission AIR et C3 restent ouverts ; aucun
+relèvement de plafond ni déploiement. Tous les agents de cette passe ont terminé.
+
+Après fusion, les 259 tests client sont rejoués sans cas ignoré ; build
+TypeScript/Vite et REUSE 1 785/1 785 passent. L’arbre suivi est identique à
+l’assemblage validé avant ajout des documents de pilotage.

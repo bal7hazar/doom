@@ -157,6 +157,18 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   complètes / 40 coupes ; 493 états et 492 snapshots aux frontières publiques,
   57 mots terminaux exclus. Les contrôles <2^72 portent sur les felts décodés.
 
+- Passe de calculs S14 intégrée par `49f2a66`, moteur `ee5f819` : **573 tests Cairo**,
+  profil exact de 2 946 tics **49 524,87 → 48 543,68 steps/tic (−1,98 %)**,
+  p99 **125 157 → 122 942** ; aucun tic mesuré ne régresse. Le formatage `ae2feac`
+  conserve strictement les six SHA d’exécutables.
+  Proving **106 855 → 107 018 mots (+163)** : coût fixe Blake accru.
+  Execute réel : quatre tics de marche **2 193 266 → 2 195 222** ; 32 tics
+  **3 083 596 → 3 081 268**, D14 exact, log21 et refus registre inchangés.
+  Pas de gain de temps de preuve revendiqué ; tailles d’entrée du prouveur en
+  hausse malgré certains gains VM. Revue croisée, 259 tests client, 10 smokes
+  headed et EXIT677 navigateur verts.
+  [Méthode, mesures et limites](docs/design/cairo-calculation-costs.md).
+
 ## 1. Vision et périmètre
 
 Objectif : une version de Doom dont le **cœur de jeu (simulation) est réécrit en Cairo**, jouable
@@ -722,3 +734,8 @@ L'analyse détaillée des risques et les actions associées sont dans [RISKS.md]
 - Doom : https://doomwiki.org/wiki/Doomgeneric , https://doomwiki.org/wiki/Demo ,
   https://www.gamers.org/docs/FAQ/lmp.faq.html , https://github.com/ozkl/doomgeneric , https://freedoom.github.io/
 - awesome-stwo : https://github.com/keep-starknet-strange/awesome-stwo
+
+
+Validation finale S14 : 26 cas exacts dans chacun des profils dev/proving,
+7 575 tics logiques par profil, en 1 365,78 s. Le fuzz de 10 000 tics cité plus
+haut porte sur `0c8a3a8`, pas sur ce nouveau moteur.

@@ -479,3 +479,13 @@ résultats réduisent le risque de régression de frontière, sans clore le nigh
 Le panneau réel (`3cb97c1`) conserve les exports lors du refus AIR ; trois défauts
 d’arrêt/possession des Workers sont corrigés et revus. L’incompatibilité log21/log20
 et la validation concurrente sur 16 GiB restent ouvertes, sans relèvement des caps.
+
+### Passe calculs S14 — comparaison du jeu et du segment
+
+Le moteur `ee5f819`, intégré par `49f2a66`, réduit les steps de chacun des 2 946 tics du profil
+mesuré, moyenne −1,98 %, p99 122 942. Il ajoute 163 mots proving (107 018), soit
+un hachage de programme plus cher à chaque segment. La marche de quatre tics
+coûte 1 956 steps de plus ; 32 tics économisent 2 328 steps. Les entrées du prouveur
+restent plus grandes dans ces deux cas. R1/D29 et l’admission log21/log20 ne sont
+pas clos ; les plafonds de ressources restent inchangés. L’optimisation du calcul
+par tic ne vaut pas validation C3 ni réduction garantie de la facture de preuve.
