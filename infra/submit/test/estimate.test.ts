@@ -3,6 +3,8 @@
  * Bounds (R7-A1) and the 24 h price median (R7-A2), against the numbers S5 and P4.3 measured.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -69,17 +71,34 @@ describe("R7-A1 bounds", () => {
     expect(b.overCap).toBe(true);
   });
 
-  it("accepts the six-transaction plan's heaviest phase, above the 90 % rule", () => {
+  it("accepts the historical P4.0 six-transaction plan's heaviest phase, above the 90 % rule", () => {
     const b = boundsFor(step("fri2", 1_021_952_320n), PRICES);
     expect(b.overCap).toBe(false);
     expect(b.over90PctRule).toBe(true);
     expect(b.pctOfCap).toBeLessThan(100);
   });
 
-  it("keeps the seven-transaction plan's heaviest phase under the 90 % rule", () => {
+  it("keeps the historical P4.0 seven-transaction plan's heaviest phase under the 90 % rule", () => {
     const b = boundsFor(step("fri3", 910_606_080n), PRICES);
     expect(b.over90PctRule).toBe(false);
     expect(b.pctOfCap).toBeLessThan(100 * CAP_SAFETY);
+  });
+
+  it("applies unchanged R7-A1 margins to the observed P4.1 five-transaction consumption", () => {
+    const receipts = JSON.parse(readFileSync(join(
+      import.meta.dirname, "../../../cairo/doom_contracts/results/p41_receipts.json",
+    ), "utf8"));
+    const bounds = receipts.txs.map((r: any) => boundsFor(
+      step(r.label, BigInt(r.l2_gas), BigInt(r.l1_data_gas)), PRICES,
+    ));
+    // Derived from receipt consumption, not a fresh simulation or the fixed bounds sent by
+    // the historical Python drive. Sending still requires simulateSequence for this account.
+    expect(bounds.map((b: any) => b.l2GasBound)).toEqual([
+      347_858_808n, 268_532_912n, 536_381_712n, 338_801_040n, 279_695_180n,
+    ]);
+    expect(bounds.every((b: any) => !b.overCap && !b.over90PctRule)).toBe(true);
+    expect(Math.max(...bounds.map((b: any) => b.pctOfCap))).toBeCloseTo(44.329067, 5);
+    expect(receipts.total_l2_gas).toBe(1_540_234_480);
   });
 
   it("prices the bounds at the block's prices, with headroom for a tick", () => {

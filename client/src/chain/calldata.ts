@@ -11,9 +11,10 @@
  *
  * Plan shapes (`onchain-verifier.md` §3):
  *   begin(head, trees 0+1) → merkle(trees 2+3) → answers(sampled + the 4 queried sets)
- *   → fri(layers …) × 2 or 3
- * The FRI cut is the only degree of freedom: `--fri-split 2` gives 5 transactions (worst at
- * 90.4 % of the invoke cap), `1,3` gives 6 (worst 84.0 %, the R7-A5-clean plan).
+ *   → fri(layers …) × 2 or more
+ * D28: `--fri-split 2` gives five verifier transactions with the optimized P4.1 classes.
+ * Their recorded worst consumption is 38.55 % of the invoke cap (p41_receipts.json).
+ * Fees and R7-A1 bounds still come from simulation with the actual router and sender.
  */
 
 import {
@@ -167,22 +168,20 @@ export function planPhases(sec: ProofSections, options: PlanOptions = {}): Phase
 }
 
 /**
- * The default plan: **six** transactions (`friSplit = [1, 3]`), falling back to other cuts when
- * a section does not fit the calldata cap.
- *
- * Why not the five-transaction plan, which is what P4.0 measured and 0.3 % cheaper: its `fri1`
- * consumes 90.3 % of the 1.21e9 invoke cap, and a *bound* is what the sequencer checks, so the
- * R7-A1 margin turns it into 1.257e9 — **over the cap, rejected before execution** (measured in
- * P4.3, `docs/design/submission.md` §4). The 5-tx plan is only sendable with a margin below
- * ×1.107, which is not a margin. `preferFewestTransactions` selects it anyway, for measurement.
+ * D28: five verifier transactions (`friSplit = [2]`) with the optimized P4.1 router,
+ * falling back to finer cuts if calldata does not fit. Gas bounds are checked separately
+ * after simulation; the old P4.0 deployment can still require more transactions.
+ * An explicit cut is authoritative: a cap failure must not silently change that plan.
  */
 export function planPhasesAuto(
   sec: ProofSections,
-  options: PlanOptions & { preferFewestTransactions?: boolean } = {},
+  options: PlanOptions & {
+    /** Compatibility option: fewest transactions is now the default, even when false. */
+    preferFewestTransactions?: boolean;
+  } = {},
 ): PhasePlan[] {
-  const candidates = options.preferFewestTransactions
-    ? [[2], [1, 3], [1, 2, 4]]
-    : [[1, 3], [1, 2, 4], [2]];
+  if (options.friSplit !== undefined) return planPhases(sec, options);
+  const candidates = [[2], [1, 3], [1, 2, 4]];
   let last: unknown;
   for (const friSplit of candidates) {
     try {

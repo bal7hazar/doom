@@ -317,6 +317,23 @@ persisted so a reload knows what is left. `GET /v1/runs/{id}` and
 felt count); the transactions that follow are **P4.3**, and the hook is
 `ProveSession.submit()`.
 
+## On-chain submission (D28)
+
+`src/chain/prepareSubmission` selects five verifier transactions by default with the optimized
+P4.1 router: FRI cut `[2]`, followed by a separate `DoomRuns` consumer transaction. Explicit
+cuts and calldata-cap fallback remain supported. The cost screen simulates the ordered
+sequence from the signing account before sending; R7-A1 margins are unchanged.
+
+The chosen FRI cut is saved with checkpoint echoes before the first send. A saved plan is
+restored before estimation, including the former six-transaction default. An older active
+checkpoint with no saved cut requires the original explicit plan; the shared resume code
+refuses to guess it from the FRI tag. The CLI recovery command for the former default is
+`--fri-split 1,3`. No extra planning control is added to the game UI.
+
+P4.1 needs its newly deployed router classes; an older deployment still has its historical
+costs. Measurements, compatibility and offline regression tests live in
+[`infra/submit/README.md`](../infra/submit/README.md).
+
 ## Leaderboard (P4.4)
 
 `leaderboard.html` (`src/leaderboardMain.ts`, `src/leaderboard/`) is the read side of `DoomRuns`:
