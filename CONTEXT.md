@@ -739,3 +739,10 @@ L'analyse détaillée des risques et les actions associées sont dans [RISKS.md]
 Validation finale S14 : 26 cas exacts dans chacun des profils dev/proving,
 7 575 tics logiques par profil, en 1 365,78 s. Le fuzz de 10 000 tics cité plus
 haut porte sur `0c8a3a8`, pas sur ce nouveau moteur.
+
+
+Animation arme intégrée par `6eec3e7` (`5f1da8b`) : snapshot live v2 avec deux
+slots psprites Cairo, sans modification des six exécutables dev/proving ni du
+programme prouvé (107 018 mots). Session R5 seule changée, publication initiale
+sans tic supplémentaire. 63 tests doom_game ciblés, 262 tests client et 13 smokes
+headed passent. Visée automatique classique conservée à la demande du sponsor.
