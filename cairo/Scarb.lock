@@ -56,6 +56,7 @@ dependencies = [
 name = "doom_monsters"
 version = "0.1.0"
 dependencies = [
+ "bam",
  "doom_map",
  "doom_physics",
  "doom_things",
