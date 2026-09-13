@@ -12,6 +12,11 @@
 //! query positions, random coefficients and folding alphas are checkpointed and the calldata of
 //! later phases is either self-authenticating (Merkle/FRI witnesses) or bound by a Poseidon
 //! digest taken in `begin` (sampled values) or by the Merkle phase (queried values).
+//!
+//! Sections after the head arrive **packed** (7 u32 limbs per felt, `pack.cairo`) and are
+//! decoded straight into the verifier's types (`decode.cairo`, P4.1): the digests are taken
+//! over the packed slots, which determine the decoded values (decoding is a function of the
+//! slots and every value is range-checked to its type).
 use core::box::BoxImpl;
 use core::num::traits::Zero;
 use core::poseidon::poseidon_hash_span;
@@ -51,6 +56,10 @@ use stwo_verifier_core::utils::SpanExTrait;
 use stwo_verifier_core::vcs::blake2s_hasher::Blake2sMerkleHasher;
 use stwo_verifier_core::vcs::verifier::{MerkleDecommitment, MerkleVerifier, MerkleVerifierTrait};
 use stwo_verifier_core::verifier::{Air, try_extract_composition_eval};
+use crate::decode::{
+    end, read_decommitment, read_fri_layers, read_m31_span, read_sampled_values, unpack_limbs,
+};
+use crate::pack::pack_u32_unchecked;
 
 /// Number of commitment trees of a circuit proof (preprocessed, trace, interaction, composition).
 pub const N_TREES: u32 = 4;
@@ -112,7 +121,7 @@ pub struct Params {
     pub output_hash: [u32; 8],
     /// Merkle roots of the 4 trees (transcript-bound in `begin`).
     pub tree_roots: Array<Hash>,
-    /// `poseidon(sampled_values section felts)`: binds the re-supply in `answers`.
+    /// `poseidon(fast-path packed sampled_values section)`: binds the re-supply in `answers`.
     pub d_sampled: felt252,
     pub oods_point_x: QM31,
     pub oods_point_y: QM31,
@@ -133,7 +142,7 @@ pub struct MerkleState {
     pub params: Params,
     /// Bit `i` set once tree `i` has been decommitted.
     pub trees_done: u32,
-    /// `poseidon(queried_values felts)` per tree, filled by the Merkle phase.
+    /// `poseidon(packed queried_values section)` per tree, filled by the Merkle phase.
     pub d_queried: Array<felt252>,
 }
 
@@ -215,7 +224,11 @@ pub fn begin(head: Span<felt252>) -> MerkleState {
     let sampled_values: Span<Span<Span<QM31>>> = Serde::deserialize(ref span)
         .expect('head: sampled values');
     let sampled_len = head.len() - span.len() - sampled_start;
-    let d_sampled = poseidon_hash_span(head.slice(sampled_start, sampled_len));
+    // Digest of the section as `answers` receives it: its fast-path packing (`pack_u32`,
+    // the emitter packs every section independently).
+    let d_sampled = poseidon_hash_span(
+        pack_u32_unchecked(head.slice(sampled_start, sampled_len)).span(),
+    );
     let proof_of_work_nonce: u64 = Serde::deserialize(ref span).expect('head: pow nonce');
     let fri_head: FriHead = Serde::deserialize(ref span).expect('head: fri head');
     let channel_salt: u32 = Serde::deserialize(ref span).expect('head: salt');
@@ -416,23 +429,28 @@ pub fn begin(head: Span<felt252>) -> MerkleState {
 // Phase 2: `merkle` (one call per tree; a transaction may carry several trees)
 // ---------------------------------------------------------------------------------------------
 
-/// Verifies the Merkle decommitment of tree `tree_idx` (`queried_values`: cairo-serde
-/// `Span<M31>`; `decommitment`: cairo-serde `MerkleDecommitment`) at the checkpointed query
-/// positions and records `poseidon(queried_values felts)` for the `answers` phase.
+/// Verifies the Merkle decommitment of tree `tree_idx` at the checkpointed query positions and
+/// records `poseidon(queried_values slots)` for the `answers` phase. `queried_values` /
+/// `decommitment`: the fast-path packed cairo-serde `Span<M31>` / `MerkleDecommitment` sections
+/// of `n_qv` / `n_dec` felts.
 pub fn merkle(
-    ref state: MerkleState, tree_idx: u32, queried_values: Span<felt252>, decommitment: Span<felt252>,
+    ref state: MerkleState,
+    tree_idx: u32,
+    queried_values: Span<felt252>,
+    n_qv: u32,
+    decommitment: Span<felt252>,
+    n_dec: u32,
 ) {
     assert!(tree_idx < N_TREES, "merkle: bad tree index");
     let bit = pow2_u32(tree_idx);
     assert!(state.trees_done & bit == 0, "merkle: tree already done");
 
-    let mut qv_span = queried_values;
-    let values: Span<M31> = Serde::deserialize(ref qv_span).expect('merkle: queried values');
-    assert(qv_span.is_empty(), 'merkle: trailing queried');
-    let mut dec_span = decommitment;
-    let decommitment: MerkleDecommitment<Blake2sMerkleHasher> = Serde::deserialize(ref dec_span)
-        .expect('merkle: decommitment');
-    assert(dec_span.is_empty(), 'merkle: trailing witness');
+    let mut qv_limbs = unpack_limbs(queried_values, n_qv);
+    let values = read_m31_span(ref qv_limbs);
+    end(qv_limbs);
+    let mut dec_limbs = unpack_limbs(decommitment, n_dec);
+    let decommitment_parsed = read_decommitment(ref dec_limbs);
+    end(dec_limbs);
 
     let commitment_scheme = rebuild_commitment_scheme(state.params.tree_roots.span());
     let tree = commitment_scheme.trees.span().at(tree_idx);
@@ -444,7 +462,7 @@ pub fn merkle(
     } else {
         query_positions
     };
-    tree.verify(positions, values, decommitment);
+    tree.verify(positions, values, decommitment_parsed);
 
     // Record the binding digest and the done bit.
     let d = poseidon_hash_span(queried_values);
@@ -476,28 +494,33 @@ fn pow2_u32(n: u32) -> u32 {
 
 /// Computes the FRI first-layer evaluations at the query positions from the (digest-bound)
 /// sampled values and the (Merkle-verified, digest-bound) queried values of every tree.
-/// `queried_values_per_tree`: the 4 per-tree cairo-serde `Span<M31>` sections, in tree order.
+/// `sampled_values`: the fast-path packed sampled-values section of `n_sampled` felts;
+/// `queried_values_per_tree` / `n_qv`: the 4 packed per-tree cairo-serde `Span<M31>` sections
+/// and their felt counts, in tree order.
 pub fn answers(
-    state: MerkleState, sampled_values: Span<felt252>, queried_values_per_tree: Span<Span<felt252>>,
+    state: MerkleState,
+    sampled_values: Span<felt252>,
+    n_sampled: u32,
+    queried_values_per_tree: Span<Span<felt252>>,
+    n_qv: Span<u32>,
 ) -> FriState {
     let MerkleState { params, trees_done, d_queried } = state;
     assert!(trees_done == pow2_u32(N_TREES) - 1, "answers: merkle phase incomplete");
     assert!(poseidon_hash_span(sampled_values) == params.d_sampled, "answers: sampled digest");
     assert!(queried_values_per_tree.len() == N_TREES, "answers: need 4 trees");
+    assert!(n_qv.len() == N_TREES, "answers: need 4 lengths");
 
-    let mut sv_span = sampled_values;
-    let sampled: Span<Span<Span<QM31>>> = Serde::deserialize(ref sv_span)
-        .expect('answers: sampled values');
-    assert(sv_span.is_empty(), 'answers: trailing sampled');
+    let mut sv_limbs = unpack_limbs(sampled_values, n_sampled);
+    let sampled = read_sampled_values(ref sv_limbs);
+    end(sv_limbs);
 
     let mut queried: Array<Span<M31>> = array![];
     let mut i = 0;
     for section in queried_values_per_tree {
         assert!(poseidon_hash_span(*section) == *d_queried.at(i), "answers: queried digest");
-        let mut s = *section;
-        let values: Span<M31> = Serde::deserialize(ref s).expect('answers: queried values');
-        assert(s.is_empty(), 'answers: trailing queried');
-        queried.append(values);
+        let mut limbs = unpack_limbs(*section, *n_qv.at(i));
+        queried.append(read_m31_span(ref limbs));
+        end(limbs);
         i += 1;
     }
 
@@ -533,15 +556,16 @@ pub fn answers(
 // Phase 4..: `fri_layers` (the decommit walk, chunked at layer boundaries)
 // ---------------------------------------------------------------------------------------------
 
-/// Decommits and folds the next `layers` (cairo-serde `Array<FriLayerProof>`, in layer order,
-/// starting at layer `state.layers_done`: index 0 is the first (circle) layer, 1.. the inner
-/// layers). Each layer's commitment must equal the transcript-bound one in the checkpoint.
-/// When the last inner layer is folded, the last-layer check runs and the function returns
-/// `Some(output_hash)`: the proof is valid.
-pub fn fri_layers(ref state: FriState, layers: Span<felt252>) -> Option<[u32; 8]> {
-    let mut span = layers;
-    let layer_proofs: Array<FriLayerProof> = Serde::deserialize(ref span).expect('fri: layers');
-    assert(span.is_empty(), 'fri: trailing data');
+/// Decommits and folds the next `layers` (the fast-path packed cairo-serde
+/// `Array<FriLayerProof>` of `n_values` felts, in layer order, starting at layer
+/// `state.layers_done`: index 0 is the first (circle) layer, 1.. the inner layers). Each layer's
+/// commitment must equal the transcript-bound one in the checkpoint. When the last inner layer
+/// is folded, the last-layer check runs and the function returns `Some(output_hash)`: the proof
+/// is valid.
+pub fn fri_layers(ref state: FriState, layers: Span<felt252>, n_values: u32) -> Option<[u32; 8]> {
+    let mut limbs = unpack_limbs(layers, n_values);
+    let layer_proofs = read_fri_layers(ref limbs);
+    end(limbs);
     assert!(layer_proofs.len() > 0, "fri: empty chunk");
 
     let fri_config = circuit_pcs_config().fri_config;
