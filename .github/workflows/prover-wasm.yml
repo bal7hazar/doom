@@ -8,6 +8,8 @@ name: prover-wasm
 #    container build lands on the same bytes. `SHA256SUMS` (macOS) is printed next to it for
 #    reference: the build is bit-reproducible on a given host, but rustc is not byte-identical
 #    across hosts (see prover/wasm/README.md).
+#    It also tests the locked Memory64 lowering tool in three Node runtime modes,
+#    then requires both rebuilt binaries to be byte-identical after another lowering pass.
 # 2. `browser-smoke` takes those artifacts, builds the npm package and proves a 2^14-step program
 #    in headless Chromium through Playwright (single-threaded *and* with 4 threads), verifying the
 #    proof in the browser, then checks the no-isolation fallback.
@@ -43,11 +45,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          # Keep the runtime regression reproducible, including the affected Liftoff tier.
+          node-version: "24.16.0"
+
+      - name: Install the pinned Rust toolchain for the Memory64 tool
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("prover/wasm/rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          echo "MEMORY64_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
+          rustup toolchain install "$toolchain" --profile minimal --component clippy
+
+      - name: Build, test and lint the locked Memory64 tool
+        timeout-minutes: 15
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/memory64-tool-target
+        run: |
+          mkdir -p "$RUNNER_TEMP/memory64-runtime"
+          manifest=prover/wasm/tools/memory64-splats/Cargo.toml
+          cargo "+$MEMORY64_TOOLCHAIN" build --release --locked --jobs 2 --manifest-path "$manifest" \
+            2>&1 | tee "$RUNNER_TEMP/memory64-runtime/cargo-build.log"
+          cargo "+$MEMORY64_TOOLCHAIN" test --release --locked --jobs 2 --manifest-path "$manifest" \
+            2>&1 | tee "$RUNNER_TEMP/memory64-runtime/cargo-test.log"
+          cargo "+$MEMORY64_TOOLCHAIN" clippy --release --locked --all-targets --jobs 2 --manifest-path "$manifest" -- -D warnings \
+            2>&1 | tee "$RUNNER_TEMP/memory64-runtime/cargo-clippy.log"
+
+      - name: Memory64 runtime regression (default, Liftoff, optimized)
+        timeout-minutes: 5
+        run: |
+          python3 prover/wasm/diagnostics/ci_memory64.py runtime \
+            --tool "$RUNNER_TEMP/memory64-tool-target/release/hellproof-memory64-splats" \
+            --results "$RUNNER_TEMP/memory64-runtime"
+
       - name: Build both wasm64 artifacts in the pinned container
         working-directory: prover/wasm
         run: |
           docker build --platform linux/arm64 --progress=plain -o out -f Dockerfile .
           ls -l out
+
+      - name: Both rebuilt binaries contain no affected Memory64 splat loads
+        timeout-minutes: 5
+        run: |
+          python3 prover/wasm/diagnostics/ci_memory64.py artifacts \
+            --tool "$RUNNER_TEMP/memory64-tool-target/release/hellproof-memory64-splats" \
+            --results "$RUNNER_TEMP/memory64-runtime" --artifacts prover/wasm/out
 
       - name: Compare with the committed SHA256SUMS.linux
         working-directory: prover/wasm
@@ -72,6 +116,13 @@ jobs:
             prover/wasm/out/SHA256SUMS
           retention-days: 14
           compression-level: 9
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: memory64-runtime-results
+          path: ${{ runner.temp }}/memory64-runtime/
+          retention-days: 14
 
   browser-smoke:
     name: prove 2^14 steps in headless Chromium (R11-A3)
