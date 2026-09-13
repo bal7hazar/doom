@@ -44,7 +44,7 @@ pub mod tables;
 #[cfg(test)]
 mod tests;
 pub mod think;
-use doom_physics::{Mobj, World};
+use doom_physics::{Mobj, World, maputl};
 pub use event::{
     EV_BLOOD, EV_CROSS, EV_DROP, EV_KILLED, EV_PUFF, EV_SOUND, EV_USE, EV_WAKE, MonsterEvent,
 };
@@ -129,19 +129,44 @@ pub(crate) fn env_of(ctx: Ctx) -> Env {
     Env { w: BoxTrait::new(ctx.w), players: ctx.players, noise: ctx.noise, tic: ctx.tic }
 }
 
+/// Slot `i` of the list, or a removed slot past its end.
+///
+/// `get` + `match` instead of `at`: an `at` is a panic site, and a panic
+/// site costs the enclosing function its whole return width in bytecode and
+/// makes every caller up the stack panicking too (S7 §8 rule 1). `i` is
+/// always in range here — every caller has compared it with `mobjs.len()`.
+///
+/// Inlined: out of line it is a call that copies 27 felts back, ~30 steps
+/// per mobj per tic on the ticker's own pass.
+#[inline(always)]
+pub fn mobj_at(mobjs: Span<Mobj>, i: u32) -> Mobj {
+    match mobjs.get(i) {
+        Option::Some(b) => *b.unbox(),
+        Option::None => doom_physics::removed_mobj(),
+    }
+}
+
 /// Mobj `i` as it stands *now*: the pending patch if the tic has already
 /// rewritten it, the list otherwise. The patch list holds at most a handful
 /// of entries per tic, so the scan is cheaper than any index.
 pub fn read_mobj(mobjs: Span<Mobj>, patches: Span<Patch>, i: u32) -> Mobj {
     let n = patches.len();
-    let mut k: u32 = 0;
-    let mut found = *mobjs.at(i);
+    // `opaque_zero`, not `0`: a literal as a loop-carried start makes the
+    // compiler emit a second, specialised copy of the loop body (S7 §8
+    // rule 4).
+    let mut k: u32 = maputl::opaque_zero(n);
+    let mut found = mobj_at(mobjs, i);
     while k != n {
-        let p = *patches.at(k);
-        if p.idx == i {
-            found = p.mo;
+        match patches.get(k) {
+            Option::Some(b) => {
+                let p = *b.unbox();
+                if p.idx == i {
+                    found = p.mo;
+                }
+            },
+            Option::None => {},
         }
-        k += 1;
+        k = maputl::inc(k);
     }
     found
 }

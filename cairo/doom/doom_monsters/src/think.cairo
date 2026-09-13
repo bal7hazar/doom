@@ -8,22 +8,28 @@
 //! (D15: Cairo has no function pointers, and an `if`-tree over ids costs 18
 //! bytecode words per value against 1 for a table, S1 §5.9).
 
+use doom_physics::maputl::{inc, opaque_zero, rd32};
 use doom_physics::{
     Blocker, KIND_NONE, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, Mobj, MoveEvent, NO_MOBJ, ThingGrid,
-    World, XyOutcome, explode_missile, first_free, removed_mobj, unset_thing_position, xy_movement,
-    z_movement,
+    World, XyOutcome, explode_missile, first_free, maputl, removed_mobj, unset_thing_position,
+    xy_movement, z_movement,
 };
 use doom_things::tables::{
     A_CHASE, A_FACETARGET, A_LOOK, A_POSATTACK, A_SARGATTACK, A_SPOSATTACK, A_TROOPATTACK,
     MI_DAMAGE,
 };
-use prng::{Prng, PrngTrait};
+use prng::Prng;
 use super::actions::{
     a_chase_in, a_look_in, a_pos_attack_in, a_sarg_attack_in, a_spos_attack_in, a_troop_attack_in,
     face_target, hurt_in, run_passive,
 };
 use super::event::{MonsterEvent, drain, missile_hit};
-use super::{Ctx, Env, LOOK_CADENCE, Noise, Patch, WINDOW, env_of, read_mobj};
+use super::{Ctx, Env, Noise, Patch, WINDOW, env_of, mobj_at, read_mobj};
+
+/// [`super::LOOK_CADENCE`] as a `NonZero` literal: `%` on a `u32` keeps a "division
+/// by zero" panic path that the compiler does not fold away, even against a
+/// constant divisor (S7 §8 rule 1).
+const CADENCE: NonZero<u32> = 4;
 
 /// How many actions may chain off one state change before the dispatcher
 /// gives up. Doom's `P_SetMobjState` runs the action of every state it
@@ -45,7 +51,7 @@ fn is_ours(mo: @Mobj) -> bool {
 /// fooled by `A_Look` having set `target` from a sound it then refused
 /// (`MF_AMBUSH`).
 pub fn is_dormant(w: World, mo: @Mobj) -> bool {
-    *w.states.action_id.at(*mo.state) == A_LOOK
+    rd32(w.states.action_id, *mo.state) == A_LOOK
 }
 
 /// A monster the round-robin window has to visit: alive, countable, awake.
@@ -64,16 +70,29 @@ pub fn awake_count(w: World, mobjs: Span<Mobj>) -> u32 {
     // once per mobj costs more than the test itself.
     let actions = w.states.action_id;
     let n = mobjs.len();
-    let mut i: u32 = 0;
-    let mut c: u32 = 0;
+    // `opaque_zero`, not `0`: a literal as a loop-carried start makes the
+    // compiler emit a second, specialised copy of the loop body (S7 §8
+    // rule 4). `get` + `match` and `inc` keep the pass panic-free (rule 1).
+    let mut i: u32 = opaque_zero(n);
+    let mut c: u32 = opaque_zero(n);
     while i != n {
-        let m = mobjs.at(i);
-        if *m.health > 0
-            && doom_physics::has(*m.flags, MF_COUNTKILL)
-            && *actions.at(*m.state) != A_LOOK {
-            c += 1;
+        match mobjs.get(i) {
+            Option::Some(b) => {
+                let m = b.unbox();
+                // In this order: the bit test is the cheapest and rejects
+                // everything that is not a monster, the state test rejects
+                // every sleeper (the common case), and the signed `health`
+                // comparison — the dear one — runs only for the few that
+                // are left.
+                if doom_physics::has(*m.flags, MF_COUNTKILL)
+                    && rd32(actions, *m.state) != A_LOOK
+                    && *m.health > 0 {
+                    c = inc(c);
+                }
+            },
+            Option::None => {},
         }
-        i += 1;
+        i = inc(i);
     }
     c
 }
@@ -90,8 +109,17 @@ pub fn in_window(rank: u32, tic: u32, n: u32) -> bool {
     if n <= WINDOW {
         return true;
     }
-    let start = (WINDOW * tic) % n;
-    (rank + n - start) % n < WINDOW
+    // `n > WINDOW >= 1`, so the `NonZero` conversion always succeeds; the
+    // `match` is what keeps the function without a panic site, and `8 t` is
+    // folded in the field rather than through `u32`'s overflow-checked
+    // multiplication (S7 §8 rule 1).
+    let nz: NonZero<u32> = match n.try_into() {
+        Option::Some(v) => v,
+        Option::None => 1,
+    };
+    let (_, start) = DivRem::div_rem(maputl::low32(fixed::to_u128(WINDOW.into() * tic.into())), nz);
+    let (_, k) = DivRem::div_rem(maputl::add32(maputl::sub32(rank, start), n), nz);
+    k < WINDOW
 }
 
 /// Run one action id on `mo`, and return the action of the state it entered
@@ -183,7 +211,7 @@ fn run_chain(
     ref spawn_at: u32,
 ) {
     let mut a = action;
-    let mut depth: u32 = 0;
+    let mut depth: u32 = opaque_zero(action);
     while a != fsm::NO_ACTION && depth != MAX_ACTION_CHAIN {
         a =
             dispatch(
@@ -200,7 +228,7 @@ fn run_chain(
                 ref ev,
                 ref spawn_at,
             );
-        depth += 1;
+        depth = inc(depth);
     }
 }
 
@@ -329,11 +357,12 @@ pub(crate) fn mobj_thinker_in(
         if hit != NO_MOBJ {
             // `PIT_CheckThing` damages inline in C; the crate reports it, so
             // the draw happens here — still before anything else draws.
-            let dmg_per: u32 = *MI_DAMAGE.span().at(mo.kind);
-            let (next, roll) = rng.next(e.w.unbox().rndtable);
-            rng = next;
-            let r: u32 = (roll % 8).into();
-            hurt_in(e, mobjs, ref rng, hit, me, mo.target, (r + 1) * dmg_per, ref patches, ref ev);
+            let dmg_per: u32 = rd32(MI_DAMAGE.span(), mo.kind);
+            let eight: NonZero<u8> = 8;
+            let draw = doom_physics::spawn::roll(ref rng, e.w.unbox().rndtable);
+            let (_, low) = DivRem::div_rem(draw, eight);
+            let r: u32 = low.into();
+            hurt_in(e, mobjs, ref rng, hit, me, mo.target, scale(r, dmg_per), ref patches, ref ev);
         }
         match xy {
             XyOutcome::MissileHit(b) => {
@@ -422,30 +451,31 @@ pub fn monsters_ticker(
             spawn_at = free;
         }
     }
-    let look_phase = tic % LOOK_CADENCE;
+    let (_, look_phase) = DivRem::div_rem(tic, CADENCE);
     // Hoisted out of the loop (D24): the classification below is `is_ours`,
     // `is_awake` and `is_dormant` spelled out, so that the ~20-span `World`
     // does not cross a call boundary once per mobj per tic.
     let states = w.states;
     let actions = states.action_id;
-    let mut i: u32 = 0;
-    let mut rank: u32 = 0;
+    let mut i: u32 = opaque_zero(n);
+    let mut rank: u32 = opaque_zero(n);
     while i != n {
-        let mut mo = *mobjs.at(i);
+        let mut mo = mobj_at(mobjs, i);
         let flags = mo.flags;
         let countkill = doom_physics::has(flags, MF_COUNTKILL);
         if mo.kind == KIND_NONE || !(countkill || doom_physics::has(flags, MF_MISSILE)) {
             out.append(mo);
-            i += 1;
+            i = inc(i);
             continue;
         }
-        let dormant = countkill && *actions.at(mo.state) == A_LOOK;
+        let dormant = countkill && rd32(actions, mo.state) == A_LOOK;
         let mut may_chase = true;
-        if countkill && mo.health > 0 && !dormant {
+        if countkill && !dormant && mo.health > 0 {
             may_chase = in_window(rank, tic, awake);
-            rank += 1;
+            rank = inc(rank);
         }
-        let may_look = dormant && i % LOOK_CADENCE == look_phase;
+        let (_, phase) = DivRem::div_rem(i, CADENCE);
+        let may_look = dormant && phase == look_phase;
         // **The dormant fast path.** A monster asleep with no momentum, on
         // its floor and not due to look has exactly one thing left to do
         // this tic: count its idle frame down. Doing it here rather than
@@ -482,7 +512,7 @@ pub fn monsters_ticker(
                 );
             }
             out.append(mo);
-            i += 1;
+            i = inc(i);
             continue;
         }
         let alive = mobj_thinker_in(
@@ -503,7 +533,7 @@ pub fn monsters_ticker(
         } else {
             out.append(removed_mobj());
         }
-        i += 1;
+        i = inc(i);
     }
     let final_list = apply(out, patches.span(), n);
     (final_list, r, ev)
@@ -520,27 +550,45 @@ fn apply(out: Array<Mobj>, patches: Span<Patch>, n: u32) -> Array<Mobj> {
     }
     let src = out.span();
     let mut res: Array<Mobj> = array![];
-    let mut i: u32 = 0;
+    let mut i: u32 = opaque_zero(n);
     while i != n {
-        let mut m = *src.at(i);
-        let mut k: u32 = 0;
+        let mut m = mobj_at(src, i);
+        let mut k: u32 = opaque_zero(np);
         while k != np {
-            let p = *patches.at(k);
-            if p.idx == i {
-                m = p.mo;
+            match patches.get(k) {
+                Option::Some(b) => {
+                    let p = *b.unbox();
+                    if p.idx == i {
+                        m = p.mo;
+                    }
+                },
+                Option::None => {},
             }
-            k += 1;
+            k = inc(k);
         }
         res.append(m);
-        i += 1;
+        i = inc(i);
     }
-    let mut k: u32 = 0;
+    let mut k: u32 = opaque_zero(np);
     while k != np {
-        let p = *patches.at(k);
-        if p.idx >= n && res.len() < MAX_MOBJS {
-            res.append(p.mo);
+        match patches.get(k) {
+            Option::Some(b) => {
+                let p = *b.unbox();
+                if p.idx >= n && res.len() < MAX_MOBJS {
+                    res.append(p.mo);
+                }
+            },
+            Option::None => {},
         }
-        k += 1;
+        k = inc(k);
     }
     res
+}
+
+/// `(r + 1) * mul`, the shape of every damage roll of `p_enemy.c`, in the
+/// field: `u32`'s `+` and `*` both carry an overflow panic path, and both
+/// operands here are bounded by a table (S7 §8 rule 1).
+#[inline(always)]
+pub(crate) fn scale(r: u32, mul: u32) -> u32 {
+    maputl::low32(fixed::to_u128((r.into() + 1) * mul.into()))
 }

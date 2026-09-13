@@ -21,10 +21,12 @@
 
 use bam::{ANG270, ANG90, Angle, point_to_angle2};
 use doom_map::reject_of;
+use doom_physics::maputl::{add32, dec, inc, low32, opaque_zero, rd, rd32};
+use doom_physics::spawn::roll;
 use doom_physics::{
     Aim, DamageOutcome, FIREBALL, Hit, MELEERANGE, MF_AMBUSH, MF_JUSTATTACKED, MF_JUSTHIT,
     MF_SHADOW, MF_SHOOTABLE, MF_SOLID, MISSILERANGE, Mobj, MoveEvent, NO_MOBJ, ThingGrid, Verdict,
-    aim_line_attack, bleeds, check_sight_cached, damage_mobj, has, line_attack, set_state,
+    aim_line_attack, bleeds, check_sight_cached, damage_mobj, has, line_attack, maputl, set_state,
     spawn_missile, try_move, without,
 };
 use doom_things::tables::{
@@ -32,7 +34,7 @@ use doom_things::tables::{
 };
 use fixed::{BIAS, Fixed};
 use geom2d::approx_distance;
-use prng::{Prng, PrngTrait};
+use prng::Prng;
 use super::event::{
     EV_BLOOD, EV_DROP, EV_KILLED, EV_PUFF, EV_USE, EV_WAKE, MonsterEvent, event, sound,
 };
@@ -42,7 +44,37 @@ use super::tables::{
     SFX_PODTH1, SFX_PODTH3, SFX_POSIT1, SFX_POSIT3, SFX_SHOTGN, SFX_SLOP, SOUND_KINDS, XSPEED,
     YSPEED,
 };
+use super::think::scale;
 use super::{Ctx, Env, Patch, SIGHT_TTL, env_of, read_mobj};
+
+/// The eight angles `A_Chase` snaps to, `octant * ANG45`.
+///
+/// A table instead of `bam::add`/`bam::sub` around a multiplication: those
+/// three carry `u32` overflow and `try_into` panic paths, and the value is
+/// one of eight constants (S7 §8 rule 1, and S1 §5.9 on tables against
+/// `if`-trees).
+const OCTANT_ANGLE: [u32; 8] = [
+    0, 0x20000000, 0x40000000, 0x60000000, 0x80000000, 0xA0000000, 0xC0000000, 0xE0000000,
+];
+
+/// `ANG45` as a divisor and `DI_NODIR` as a modulus, as `NonZero` literals:
+/// the `/` and `%` operators keep an unfolded "division by zero" panic path
+/// even against a constant (S7 §8 rule 1).
+const ANG45_NZ: NonZero<u32> = 0x20000000;
+const EIGHT: NonZero<u32> = 8;
+const SIXTEEN: NonZero<u8> = 16;
+const TWO: NonZero<u8> = 2;
+const UNIT: NonZero<u128> = 65536;
+const TURN: NonZero<u128> = 0x100000000;
+const FIVE: NonZero<u8> = 5;
+const EIGHT_U8: NonZero<u8> = 8;
+const TEN: NonZero<u8> = 10;
+
+/// `bam::reduce` without its two `try_into().unwrap()`s: `x mod 2^32`.
+fn reduce_at(x: felt252) -> Angle {
+    let (_, r) = DivRem::div_rem(fixed::to_u128(x), TURN);
+    low32(r)
+}
 
 /// One eighth of a turn, `ANG90 / 2`: what `A_Chase` turns by per tic.
 const ANG45: Angle = 0x20000000;
@@ -66,27 +98,27 @@ const MISSILE_FAR: Fixed = Fixed { enc: BIAS + 128 * 65536 };
 // callers to do.
 
 fn speed_of(kind: u32) -> u32 {
-    *MI_SPEED.span().at(kind)
+    rd32(MI_SPEED.span(), kind)
 }
 
 fn seestate_of(kind: u32) -> u32 {
-    *MI_SEESTATE.span().at(kind)
+    rd32(MI_SEESTATE.span(), kind)
 }
 
 fn spawnstate_of(kind: u32) -> u32 {
-    *MI_SPAWNSTATE.span().at(kind)
+    rd32(MI_SPAWNSTATE.span(), kind)
 }
 
 fn meleestate_of(kind: u32) -> u32 {
-    *MI_MELEESTATE.span().at(kind)
+    rd32(MI_MELEESTATE.span(), kind)
 }
 
 fn missilestate_of(kind: u32) -> u32 {
-    *MI_MISSILESTATE.span().at(kind)
+    rd32(MI_MISSILESTATE.span(), kind)
 }
 
 fn radius_of(kind: u32) -> Fixed {
-    Fixed { enc: *MI_RADIUS.span().at(kind) }
+    Fixed { enc: rd(MI_RADIUS.span(), kind) }
 }
 
 /// One of the five sound columns of [`super::tables`]; `SFX_NONE` for a kind
@@ -95,7 +127,7 @@ fn sound_of(column: Span<u32>, kind: u32) -> u32 {
     if kind >= SOUND_KINDS {
         SFX_NONE
     } else {
-        *column.at(kind)
+        rd32(column, kind)
     }
 }
 
@@ -132,8 +164,8 @@ pub(crate) fn p_move_in(
         return false;
     }
     let sp: felt252 = speed_of(mo.kind).into();
-    let tryx = Fixed { enc: mo.x.enc + sp * *XSPEED.span().at(dir) };
-    let tryy = Fixed { enc: mo.y.enc + sp * *YSPEED.span().at(dir) };
+    let tryx = Fixed { enc: mo.x.enc + sp * rd(XSPEED.span(), dir) };
+    let tryy = Fixed { enc: mo.y.enc + sp * rd(YSPEED.span(), dir) };
     let mut moves: Array<MoveEvent> = array![];
     let v: Verdict = try_move(e.w.unbox(), mobjs, ref g, ref mo, me, tryx, tryy, ref moves);
     if !v.ok {
@@ -165,9 +197,8 @@ fn try_walk(
     if !p_move_in(e, mobjs, ref g, ref mo, me, ref ev) {
         return false;
     }
-    let (next, roll) = rng.next(e.w.unbox().rndtable);
-    rng = next;
-    mo.move_count = (roll % 16).into();
+    let (_, low) = DivRem::div_rem(roll(ref rng, e.w.unbox().rndtable), SIXTEEN);
+    mo.move_count = low.into();
     true
 }
 
@@ -197,7 +228,7 @@ pub(crate) fn new_chase_dir_in(
 ) {
     let rnd = e.w.unbox().rndtable;
     let olddir = mo.move_dir;
-    let turnaround = *OPPOSITE.span().at(olddir);
+    let turnaround = rd32(OPPOSITE.span(), olddir);
     let deltax = fixed::sub(*target.x, mo.x);
     let deltay = fixed::sub(*target.y, mo.y);
     let ten = Fixed { enc: BIAS + 10 * 65536 };
@@ -232,16 +263,15 @@ pub(crate) fn new_chase_dir_in(
             } else {
                 0
             };
-        mo.move_dir = *DIAGS.span().at(idx);
+        mo.move_dir = rd32(DIAGS.span(), idx);
         if mo.move_dir != turnaround && try_walk(e, mobjs, ref g, ref rng, ref mo, me, ref ev) {
             return;
         }
     }
 
     // Swap the two candidates, sometimes.
-    let (next, roll) = rng.next(rnd);
-    rng = next;
-    if roll > 200 || fixed::gt(fixed::abs(deltay), fixed::abs(deltax)) {
+    let swap = roll(ref rng, rnd);
+    if swap > 200 || fixed::gt(fixed::abs(deltay), fixed::abs(deltax)) {
         let t = d1;
         d1 = d2;
         d2 = t;
@@ -272,17 +302,18 @@ pub(crate) fn new_chase_dir_in(
         }
     }
     // Then sweep the eight directions, in a randomly chosen order.
-    let (next, roll) = rng.next(rnd);
-    rng = next;
-    let mut k: u32 = 0;
+    let order = roll(ref rng, rnd);
+    let (_, parity) = DivRem::div_rem(order, TWO);
+    let forward = parity == 1;
+    let mut k: u32 = opaque_zero(olddir);
     let mut done = false;
     while k != DI_NODIR {
-        let tdir = if roll % 2 == 1 {
+        let tdir = if forward {
             k
         } else {
-            DI_NODIR - 1 - k
+            maputl::sub32(DI_NODIR - 1, k)
         };
-        k += 1;
+        k = inc(k);
         if tdir == turnaround {
             continue;
         }
@@ -355,17 +386,14 @@ pub(crate) fn check_missile_range_in(e: Env, ref rng: Prng, ref mo: Mobj, target
     // cannot apply.
     let mut n: u32 = 0;
     if !fixed::is_neg(dist) {
-        let raw: u128 = fixed::to_raw(dist).try_into().unwrap();
-        let units = raw / 65536;
+        let (units, _) = DivRem::div_rem(fixed::to_u128(fixed::to_raw(dist)), UNIT);
         n = if units > 200 {
             200
         } else {
-            units.try_into().unwrap()
+            low32(units)
         };
     }
-    let (next, roll) = rng.next(e.w.unbox().rndtable);
-    rng = next;
-    let roll32: u32 = roll.into();
+    let roll32: u32 = roll(ref rng, e.w.unbox().rndtable).into();
     roll32 >= n
 }
 
@@ -408,12 +436,15 @@ pub(crate) fn look_for_players_in(
     e: Env, mobjs: Span<Mobj>, ref mo: Mobj, all_around: bool,
 ) -> bool {
     let n = e.players.len();
-    let mut k: u32 = 0;
+    let mut k: u32 = opaque_zero(n);
     let mut found = false;
     while k != n {
-        let pi = *e.players.at(k);
-        k += 1;
-        let p = mobjs.at(pi);
+        let pi = rd32(e.players, k);
+        k = inc(k);
+        let p = match mobjs.get(pi) {
+            Option::Some(b) => b.unbox(),
+            Option::None => { continue; },
+        };
         if *p.health <= 0 {
             continue;
         }
@@ -442,14 +473,15 @@ pub(crate) fn look_for_players_in(
 ///
 /// Takes the `rndtable` span, not the context: this needs four felts, not
 /// six (S7 §8 rule 3).
-fn pick_sound(rnd: Span<u8>, ref rng: Prng, base: u32, low: u32, high: u32, span: u8) -> u32 {
+fn pick_sound(
+    rnd: Span<u8>, ref rng: Prng, base: u32, low: u32, high: u32, span: NonZero<u8>,
+) -> u32 {
     if base < low || base > high {
         return base;
     }
-    let (next, roll) = rng.next(rnd);
-    rng = next;
-    let pick: u32 = (roll % span).into();
-    low + pick
+    let (_, r) = DivRem::div_rem(roll(ref rng, rnd), span);
+    let pick: u32 = r.into();
+    add32(low, pick)
 }
 
 /// `A_Look`: wake on the sector's `soundtarget` (subject to `MF_AMBUSH`) or
@@ -483,9 +515,11 @@ pub(crate) fn a_look_in(
     let base = sound_of(MI_SEESOUND.span(), mo.kind);
     if base != SFX_NONE {
         let rnd = e.w.unbox().rndtable;
-        let mut s = pick_sound(rnd, ref rng, base, SFX_POSIT1, SFX_POSIT3, 3);
+        let three: NonZero<u8> = 3;
+        let two: NonZero<u8> = 2;
+        let mut s = pick_sound(rnd, ref rng, base, SFX_POSIT1, SFX_POSIT3, three);
         if s == base {
-            s = pick_sound(rnd, ref rng, base, SFX_BGSIT1, SFX_BGSIT2, 2);
+            s = pick_sound(rnd, ref rng, base, SFX_BGSIT1, SFX_BGSIT2, two);
         }
         ev.append(sound(me, s));
     }
@@ -523,7 +557,7 @@ pub(crate) fn a_chase_in(
     ref ev: Array<MonsterEvent>,
 ) -> u32 {
     if mo.reaction_time != 0 {
-        mo.reaction_time -= 1;
+        mo.reaction_time = dec(mo.reaction_time);
     }
     let has_target = mo.target != NO_MOBJ && mo.target < mobjs.len();
     let target = if has_target {
@@ -536,24 +570,30 @@ pub(crate) fn a_chase_in(
         if !has_target || target.health <= 0 {
             mo.threshold = 0;
         } else {
-            mo.threshold -= 1;
+            mo.threshold = dec(mo.threshold);
         }
     }
     // Turn towards the movement direction if not there yet: the angle is
     // first snapped to a multiple of 45 degrees (`angle &= 7 << 29`), then
     // moved one eighth of a turn the short way round.
     if mo.move_dir < DI_NODIR {
-        let octant = mo.angle / ANG45;
-        let mut ang = octant * ANG45;
-        let delta = (octant + DI_NODIR - mo.move_dir) % DI_NODIR;
-        if delta != 0 {
-            ang = if delta < 4 {
-                bam::sub(ang, ANG45)
-            } else {
-                bam::add(ang, ANG45)
-            };
-        }
-        mo.angle = ang;
+        let (octant, _) = DivRem::div_rem(mo.angle, ANG45_NZ);
+        let (_, delta) = DivRem::div_rem(
+            maputl::sub32(add32(octant, DI_NODIR), mo.move_dir), EIGHT,
+        );
+        // One eighth of a turn the short way round, as an octant index:
+        // `bam::sub(ang, ANG45)` is octant - 1 mod 8 and `bam::add` is
+        // octant + 1 mod 8, both of them exact because `ang` is a multiple
+        // of `ANG45`.
+        let turn = if delta == 0 {
+            0
+        } else if delta < 4 {
+            7
+        } else {
+            1
+        };
+        let (_, oct) = DivRem::div_rem(add32(octant, turn), EIGHT);
+        mo.angle = rd32(OCTANT_ANGLE.span(), oct);
     }
     if !has_target || !has(target.flags, MF_SHOOTABLE) {
         // Look for a new target.
@@ -588,7 +628,7 @@ pub(crate) fn a_chase_in(
     if mo.move_count == 0 {
         new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, @target, ref ev);
     } else {
-        mo.move_count -= 1;
+        mo.move_count = dec(mo.move_count);
         if !p_move_in(e, mobjs, ref g, ref mo, me, ref ev) {
             new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, @target, ref ev);
         }
@@ -596,9 +636,7 @@ pub(crate) fn a_chase_in(
     // Make an active sound.
     let active = sound_of(MI_ACTIVESOUND.span(), mo.kind);
     if active != SFX_NONE {
-        let (next, roll) = rng.next(e.w.unbox().rndtable);
-        rng = next;
-        if roll < 3 {
+        if roll(ref rng, e.w.unbox().rndtable) < 3 {
             ev.append(sound(me, active));
         }
     }
@@ -620,20 +658,27 @@ pub(crate) fn face_target(rnd: Span<u8>, ref rng: Prng, ref mo: Mobj, target: @M
     mo.flags = without(mo.flags, MF_AMBUSH);
     let mut an = point_to_angle2(mo.x, mo.y, *target.x, *target.y);
     if has(*target.flags, MF_SHADOW) {
-        let (next, spread) = rng.sub_random(rnd);
-        rng = next;
-        let s: felt252 = spread.into();
-        an = bam::reduce(an.into() + s * 0x200000 + 0x100000000);
+        let s = sub_roll(rnd, ref rng);
+        an = reduce_at(an.into() + s * 0x200000 + 0x100000000);
     }
     mo.angle = an;
 }
 
 /// `(P_Random() - P_Random()) << 20` added to an angle: the hitscan spread.
 fn spread_angle(rnd: Span<u8>, ref rng: Prng, base: Angle) -> Angle {
-    let (next, spread) = rng.sub_random(rnd);
-    rng = next;
-    let s: felt252 = spread.into();
-    bam::reduce(base.into() + s * 0x100000 + 0x100000000)
+    let s = sub_roll(rnd, ref rng);
+    reduce_at(base.into() + s * 0x100000 + 0x100000000)
+}
+
+/// `P_Random() - P_Random()` as a felt: `prng::sub_random` without its
+/// `i32` subtraction (which carries an overflow panic path) and without
+/// its two `at` reads.
+fn sub_roll(rnd: Span<u8>, ref rng: Prng) -> felt252 {
+    let a = roll(ref rng, rnd);
+    let b = roll(ref rng, rnd);
+    let af: felt252 = a.into();
+    let bf: felt252 = b.into();
+    af - bf
 }
 
 /// One hitscan of `damage` from `me` along `angle` at `slope`, with the
@@ -659,7 +704,10 @@ fn shoot(
         Hit::Thing((
             idx, p, _,
         )) => {
-            let bleed = bleeds(mobjs.at(idx));
+            let bleed = match mobjs.get(idx) {
+                Option::Some(b) => bleeds(b.unbox()),
+                Option::None => false,
+            };
             let kind = if bleed {
                 EV_BLOOD
             } else {
@@ -756,9 +804,11 @@ pub(crate) fn scream(
     if base == SFX_NONE {
         return;
     }
-    let mut s = pick_sound(rnd, ref rng, base, SFX_PODTH1, SFX_PODTH3, 3);
+    let three: NonZero<u8> = 3;
+    let two: NonZero<u8> = 2;
+    let mut s = pick_sound(rnd, ref rng, base, SFX_PODTH1, SFX_PODTH3, three);
     if s == base {
-        s = pick_sound(rnd, ref rng, base, SFX_BGDTH1, SFX_BGDTH1 + 1, 2);
+        s = pick_sound(rnd, ref rng, base, SFX_BGDTH1, SFX_BGDTH1 + 1, two);
     }
     ev.append(sound(me, s));
 }
@@ -794,7 +844,7 @@ pub(crate) fn a_pos_attack_in(
     let aim: Aim = aim_line_attack(e.w.unbox(), mobjs, ref g, me, base, MISSILERANGE);
     ev.append(sound(me, SFX_PISTOL));
     let angle = spread_angle(rnd, ref rng, base);
-    let damage = roll_damage(rnd, ref rng, 5, 3);
+    let damage = roll_damage(rnd, ref rng, FIVE, 3);
     shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev);
 }
 
@@ -832,18 +882,16 @@ pub(crate) fn a_spos_attack_in(
     while i != 3 {
         i += 1;
         let angle = spread_angle(rnd, ref rng, base);
-        let damage = roll_damage(rnd, ref rng, 5, 3);
+        let damage = roll_damage(rnd, ref rng, FIVE, 3);
         shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev);
     }
 }
 
 /// `((P_Random() % n) + 1) * mul`, the damage roll of every melee and
 /// hitscan attack in `p_enemy.c`.
-fn roll_damage(rnd: Span<u8>, ref rng: Prng, n: u8, mul: u32) -> u32 {
-    let (next, roll) = rng.next(rnd);
-    rng = next;
-    let r: u32 = (roll % n).into();
-    (r + 1) * mul
+fn roll_damage(rnd: Span<u8>, ref rng: Prng, n: NonZero<u8>, mul: u32) -> u32 {
+    let (_, r) = DivRem::div_rem(roll(ref rng, rnd), n);
+    scale(r.into(), mul)
 }
 
 /// `A_TroopAttack`: the imp's claw, or its fireball.
@@ -879,7 +927,7 @@ pub(crate) fn a_troop_attack_in(
     face_target(rnd, ref rng, ref mo, @target);
     if check_melee_range_in(e, ref mo, @target) {
         ev.append(sound(me, SFX_CLAW));
-        let damage = roll_damage(rnd, ref rng, 8, 3);
+        let damage = roll_damage(rnd, ref rng, EIGHT_U8, 3);
         hurt_in(e, mobjs, ref rng, mo.target, me, me, damage, ref patches, ref ev);
         return;
     }
@@ -892,7 +940,7 @@ pub(crate) fn a_troop_attack_in(
     super::event::drain(moves.span(), idx, ref ev);
     ev.append(sound(me, SFX_FIRSHT));
     patches.append(Patch { idx, mo: missile });
-    spawn_at = idx + 1;
+    spawn_at = inc(idx);
 }
 
 /// `A_SargAttack`: the demon's (and the spectre's) bite.
@@ -923,6 +971,6 @@ pub(crate) fn a_sarg_attack_in(
     if !check_melee_range_in(e, ref mo, @target) {
         return;
     }
-    let damage = roll_damage(rnd, ref rng, 10, 4);
+    let damage = roll_damage(rnd, ref rng, TEN, 4);
     hurt_in(e, mobjs, ref rng, mo.target, me, me, damage, ref patches, ref ev);
 }
