@@ -10,6 +10,7 @@ test("production client renders Cairo frames and never opens the stub proof path
   page.on("request", request => { if (request.url().includes("/prover/")) proofRequests.push(request.url()); });
   page.on("pageerror", error => errors.push(String(error)));
   await page.goto("/?sim=cairo");
+  await page.getByRole("button", { name: "Start", exact: true }).click();
   await page.waitForFunction(() => Boolean((window as any).hellproof?.cairo?.journal?.length));
   await page.evaluate(() => (window as any).hellproof.scheduler.stop());
   await page.waitForFunction(() => !(window as any).hellproof.cairo.busy);
@@ -45,6 +46,7 @@ test("production client renders Cairo frames and never opens the stub proof path
 
 test("persisted page lifecycle preserves the real Worker journal and pause choice (synthetic events)", async ({ page }) => {
   await page.goto("/?sim=cairo");
+  await page.getByRole("button", { name: "Start", exact: true }).click();
   await page.waitForFunction(() => Boolean((window as any).hellproof?.cairo?.journal?.length));
   await page.evaluate(() => {
     const app = (window as any).hellproof;

@@ -10,7 +10,7 @@ import { createStubSim } from "./sim/stubSim.js";
 import { CairoClient } from "./sim/cairoClient.js";
 import { CairoScheduler } from "./sim/cairoScheduler.js";
 import { bindCairoPageLifecycle } from "./sim/cairoPageLifecycle.js";
-import { encodeCmd } from "./prove/ticcmd.js";
+import { PlaySession } from "./game/playSession.js";
 import { DEFAULT_AUTOMAP, drawAutomap, type AutomapOptions } from "./ui/automap.js";
 import { renderDiagnostics } from "./ui/diagnostics.js";
 import { Hud } from "./ui/hud.js";
@@ -130,20 +130,19 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Keep the existing renderer/prover demo available. P2.3 is an explicit real
-  // simulation mode until the sprite/psprite render seam and P2.4 capture land.
-  const realCairo = new URLSearchParams(location.search).get("sim") === "cairo";
+  // The legacy renderer/prover demonstration is an explicit route.
+  const realCairo = new URLSearchParams(location.search).get("sim") !== "demo";
   const cairo = realCairo ? new CairoClient() : null;
   if (cairo) {
+    document.body.classList.add("real-play");
+    statsEl.hidden = true;
     say("loading real Cairo simulation…", 0.95);
     try { await cairo.init(); }
     catch (error) { cairo.dispose(); fail(loading, loadingStatus, String(error)); return; }
     profile.snapshotTransport = "copied";
     profile.reasons[0] = "Cairo Worker: transferred ArrayBuffers feed a local renderer ring";
     renderDiagnostics(diagnosticsEl, caps, profile);
-    const notice = document.createElement("p");
-    notice.textContent = "Cairo simulation · neutral inputs until P2.4 capture · sprites and weapon animation incomplete · proof adapter pending";
-    diagnosticsEl.prepend(notice);
+
   }
   const ring = cairo?.ring ?? new SnapshotRing();
   const sim = cairo ? null : createStubSim(level);
@@ -154,13 +153,18 @@ async function main(): Promise<void> {
   let prove: import("./prove/session.js").ProveSession | null = null;
   let provePending = false;
   let neutralWord = 0;
+  let play: PlaySession | undefined;
   const scheduler = cairo ? new CairoScheduler(cairo,
-    () => encodeCmd({ forward: 0, side: 0, turn: 0, buttons: 0 })) : new TicScheduler(ring, (tic) => {
+    () => play!.input.sample(), error => play?.error(error)) : new TicScheduler(ring, (tic) => {
     // Until P2.4 captures real input there is no command to record; the journal
     // takes the neutral one, so the wiring - and only the wiring - is exercised.
     if (prove) prove.recordTic(neutralWord);
     return sim!.stepTic(tic);
   });
+  if (cairo && scheduler instanceof CairoScheduler) {
+    play = new PlaySession(cairo, scheduler, canvas, document.getElementById("stage")!);
+    document.getElementById("help")!.textContent = "WASD / ↑↓ move · ←→ turn · Shift run · Mouse / Ctrl fire · E / Space use · 1–4, 7 weapons · Esc / P pause · Tab map";
+  }
   const toggleProofQueue = async (): Promise<void> => {
     if (cairo) {
       diagnosticsEl.hidden = false;
@@ -217,6 +221,7 @@ async function main(): Promise<void> {
   resize();
 
   window.addEventListener("keydown", (event) => {
+    if (event.repeat || (event.target instanceof Element && event.target.closest("input,textarea,select,button,a"))) return;
     switch (event.key) {
       case "F1":
         event.preventDefault();
@@ -239,6 +244,7 @@ async function main(): Promise<void> {
         void toggleProofQueue();
         break;
       case " ":
+        if (cairo) break;
         event.preventDefault();
         if (scheduler.isRunning) scheduler.stop();
         else scheduler.start();
@@ -263,7 +269,7 @@ async function main(): Promise<void> {
     }
   });
 
-  scheduler.start();
+  if (!cairo) scheduler.start();
   if (cairo && scheduler instanceof CairoScheduler) bindCairoPageLifecycle(scheduler, cairo);
   loading.hidden = true;
 
@@ -280,6 +286,7 @@ async function main(): Promise<void> {
       frame.windowStart = now;
     }
 
+    play?.refresh();
     resize();
     const latest = ring.readLatest();
     const pair = ring.readPair() ?? (latest ? { previous: latest, current: latest } : null);
@@ -334,6 +341,7 @@ async function main(): Promise<void> {
     level,
     ring,
     cairo,
+    play,
     resetFpsWindow(): void {
       frame.frames = 0;
       frame.windowFrames = 0;

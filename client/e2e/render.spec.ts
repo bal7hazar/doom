@@ -72,7 +72,7 @@ async function boot(page: Page): Promise<void> {
   });
   page.on("pageerror", (err) => consoleErrors.push(String(err)));
 
-  await page.goto("/");
+  await page.goto("/?sim=demo");
   // The WAD is 27 MB; decoding takes a few hundred ms on top of the download.
   await expect(page.locator("#loading")).toBeHidden({ timeout: 120_000 });
   await page.waitForFunction(() => (window as never as { hellproof?: unknown }).hellproof !== undefined);
@@ -118,7 +118,7 @@ async function sample(page: Page): Promise<Diagnostics> {
 test("serves the cross-origin isolation headers the SharedArrayBuffer ring needs", async ({
   page,
 }) => {
-  const response = await page.goto("/");
+  const response = await page.goto("/?sim=demo");
   expect(response, "no response for /").not.toBeNull();
   const headers = response!.headers();
   expect(headers["cross-origin-embedder-policy"]).toBe("require-corp");
