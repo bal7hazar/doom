@@ -1,8 +1,32 @@
 # CONTEXT — Hellproof, un Doom prouvable (Cairo + Stwo + Starknet)
 
 > État de l'art et résultats de l'étude de faisabilité. Document de référence à maintenir :
-> chaque fait daté ici a été vérifié le **2026-09-12** contre les sources listées en fin de document.
+> Étude initiale du **2026-09-12** ; mesures de reprise actualisées le **2026-09-13** ci-dessous.
 > Le plan d'exécution qui en découle est dans [PLAN.md](PLAN.md).
+
+## État mesuré à la reprise du 2026-09-13
+
+Cette section et les décisions D26–D29 remplacent les hypothèses de dimensionnement initiales
+dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STATUS](docs/STATUS.md).
+
+- `main` après intégration monstres `8471b7e` : **511 tests Cairo** ; la suite spécifique conserve
+  ses 55 tests et son replay de 700 tics. Le ticker compile à **14 209 mots proving / 16 241 dev** ;
+  l'API complète à **17 963 / 21 220**. À 5, 8 et 20 éveillés, les micro-scénarios mesurent
+  respectivement **13 359, 30 711 et 61 425 steps/tic**. Le programme réel reste à mesurer en P1.9.
+- D29 : programme prouvé cible **100 k mots**, plafond dur 120 k, profil `proving`, bootloader
+  poseidon (1 969 + 5,5 × mots). Les coûts par crate partagent des dépendances et ne s'additionnent pas.
+- D26 : découpage selon le plus gros composant AIR (≤ 2^20 lignes, cible 80 %), avec plafonds de
+  précaution de 1,5 M steps avec threads / 2,3 M mono. Le nombre de tics par segment reste dynamique.
+- P4.1 / D28 : vérifieur à **5 transactions et 1,540234480e9 L2 gas**, pire transaction à 38,5 % du
+  plafond mesuré. Les ≈ 47 STRK utilisent le prix historique S5. L'audit relève encore un défaut à
+  6 transactions dans le client/CLI ; l'optimisation du contrat est déjà intégrée.
+- Les 7 E2E rendu/leaderboard passent. Les performances de rendu seul et les références de preuve
+  sur M2 Max 64 GB ne valident pas encore une partie complète avec preuve concurrente sur 16 GB.
+  **C3 PLAN : ≤ 10 min** résiduelles après partie de 3 min ; **D2 : objectif opérationnel ≤ 5 min**.
+- La CI générale est verte au début de l'audit ; la CI WASM échoue sur les hashes avant le smoke
+  navigateur. La réparation de la reproductibilité par plateforme est en cours. P1.9 corrige aussi
+  un défaut de déterminisme des frontières : l'ordre des objets dans `ThingGrid` doit faire partie
+  de l'état engagé, car il affecte les collisions et ramassages.
 
 ## 1. Vision et périmètre
 

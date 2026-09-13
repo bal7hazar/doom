@@ -1,6 +1,6 @@
 # RISKS — Analyse approfondie des risques et plan d'actions
 
-> Complète [PLAN.md](PLAN.md) §6 et [CONTEXT.md](CONTEXT.md). Version du 2026-09-12.
+> Complète [PLAN.md](PLAN.md) §6 et [CONTEXT.md](CONTEXT.md). Audit actualisé le 2026-09-13.
 > Chaque risque : constat chiffré, cause racine, impact, actions concrètes (identifiant **R<n>-A<m>**,
 > phase, effort, critère de sortie), risque résiduel et indicateurs de surveillance.
 > Efforts en jours-personne (jp). Les phases/spikes renvoient au PLAN.
@@ -10,9 +10,9 @@
 | Id | Risque | Gravité | Probabilité | Priorité | Où il se lève |
 |----|--------|---------|-------------|----------|---------------|
 | R1 | Mémoire du prouveur dans le navigateur | Bloquant | Élevée sans action, faible avec | **P0** | S0, S2 |
-| R2 | Budget de steps par tic | Fort | Moyenne | **P0** | S1, Phase 1 |
+| R2 | Budget de steps par tic | Fort | Élevée, dépassement mesuré | **P0** | S8, Phase 1 |
 | R3 | Route on-chain : dimensionnement des circuits, couplage de versions | Fort | Élevée | **P0** | S4, Phase 4 |
-| R4 | Exécutions non prouvables (panics, valeurs hors domaine) | Fort | Moyenne | P1 | S0, Phase 1 |
+| R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | Défaut C2 confirmé dans P1.9 | **P0** | P1.9, P1.10 |
 | R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Moyen | Moyenne | P1 | S3 |
 | R6 | UX de la preuve : durée, contention CPU, perte de travail | Moyen | Élevée | P1 | Phase 2–3 |
 | R7 | Coûts on-chain et limites protocolaires mouvants | Moyen | Moyenne | P1 | S5, Phase 4 |
@@ -22,6 +22,27 @@
 | R11 | Toolchain : forks wasm64, nightly, build-std | Moyen | Élevée | P2 | S2, Phase 3 |
 | R12 | Soundness du prouveur « non garantie » | Faible (MVP) | Faible | P3 | Phase 5 |
 | R13 | Charge et séquencement de l'équipe | Moyen | Moyenne | P2 | Continu |
+
+---
+
+### Requalification du 2026-09-13
+
+- **R2 reste ouvert après S7** : monstres intégrés (`8471b7e`), ticker 14 209 mots `proving` sous
+  la cible 15 k, mais 30 711 steps/tic à 8 éveillés dans le micro-scénario. S8 doit mesurer un tic
+  complet avant tout arbitrage de gameplay. D29 remplace le budget initial de 32 k mots par
+  100 k (plafond dur 120 k) ; D26 pilote les segments par AIR, pas par une longueur fixe en tics.
+- **R4 / C2 prioritaire** : P1.9 omet l'ordre des listes `ThingGrid` de l'état canonique. Un cas
+  reproduit donne santé 101 en continu contre 100 après désérialisation. Le test d'associativité
+  en mémoire ne suffisait pas. Correction et preuve native requises avant clôture de P1.9.
+- **R11 non clos** : workflow WASM en échec sur la comparaison des hashes, navigateur non exécuté.
+  L'audit identifie un build GitHub x86_64 comparé à une référence Linux arm64 ; la correction doit
+  vérifier le build sur la plateforme annoncée et conserver une comparaison de hashes effective.
+- **R1/R5/R6** : il manque la partie réelle avec jeu et preuve concurrents sur matériel 16 GB.
+  C3 PLAN ≤ 10 min après partie ; objectif opérationnel D2 ≤ 5 min. Aucun succès sur les seules
+  micro-mesures ne ferme ces risques.
+
+Les constats datés ci-dessous conservent l'historique des spikes ; les décisions D26–D29 et cette
+requalification priment sur leurs anciens budgets. Voir [STATUS](docs/STATUS.md) pour les suites.
 
 ---
 
@@ -177,6 +198,7 @@ Risque résiduel : un changement upstream incompatible juste avant une saison �
 | R4-A3 | **Fuzzing de prouvabilité** : 10 000 tics d'inputs aléatoires (et adverses : coins de murs, portes en mouvement, mort pendant un tir) par nuit ; chaque état sérialisé vérifie `∀ felt < 2^128` ; les ressources (`--print-resource-usage`) vérifient l'absence de builtins interdits. | Phase 1 | 3 jp | 0 panique sur 30 nuits consécutives avant Phase 5. |
 | R4-A4 | Preuve « à blanc » périodique côté client : le Worker prover valide (exécution + adaptation, sans FRI) le segment courant dès qu'il est clos ; en cas d'échec, l'utilisateur est averti **pendant** la partie et la partie continue en mode « non prouvable » (aucune perte silencieuse). | Phase 3 | 2 jp | Test : segment invalide injecté → alerte < 5 s. |
 | R4-A5 | Encodage des nombres signés sans négatifs : offset fixe (2^40) ou couple (magnitude, signe) selon le domaine, décidé par crate (`fixed`, `bam`) et testé par propriétés. | Phase 1 (crates) | inclus R2-A4 | Sérialisation d'états sans valeur ≥ 2^128 sur tout le corpus. |
+| R4-A6 | Engager et restaurer toutes les données qui influencent le tic, y compris l'ordre des listes de grille ; valider le schéma entrant et sa version. Comparer l'exécution continue à plusieurs découpes passant réellement par serialize/from_felts. Couvrir aussi la fenêtre D3 près de `MAX_TIC`. | P1.9, puis corpus P1.10 | Prioritaire | Cas synthétique de ramassage, replays découpés, hashes canoniques et ABORT invalides passent ; preuve native d'un vrai segment. |
 
 ---
 

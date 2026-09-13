@@ -1,9 +1,76 @@
 # STATUS — point d'avancement
 
-> Mis à jour le 2026-09-13 (arrêt pour limite d'usage du sponsor). `main` est poussé sur `origin`, CI verte.
+> Mis à jour le 2026-09-13 : audit de reprise Codex ; monstres intégrés sur `main` @ `8471b7e`.
+> La CI générale est verte ; le dernier workflow **prover-wasm est rouge** (comparaison des hashes).
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
-> Trois agents étaient encore en vol à l'arrêt (passes de style `doom_monsters`/`doom_player`, P1.9
-> `doom_game`+`doom_run`) : leurs branches sont listées dans le handoff et doivent être mergées en premier.
+> Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
+> non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
+
+## Audit de reprise — 2026-09-13
+
+Contrôles locaux sur `82e52db` (Scarb 2.16.0 / contrats 2.18.0, Foundry 0.61.0, Node 22.22.2) :
+
+| Suite | Résultat |
+|---|---|
+| Cairo : format, build, tests, graphe, 16 benches | **511 tests / 23 cibles**, verts ; seuils de non-régression respectés |
+| Contrats, fixtures décompressées | **147 tests** : phases 68, routeur 6, recomposition 20, DoomRuns 53 ; verts |
+| Client, assets et fixtures Freedoom présents | **183 tests**, verts ; build vert |
+| Client Playwright, rendu et leaderboard | **7 tests**, verts ; rendu SwiftShader 640×400 à 49,4 fps, CPU 0,29 ms/frame (sans jeu Cairo ni preuve simultanée) |
+| WAD | **133 tests**, typecheck vert |
+| Soumission | **73 tests**, 1 intégration devnet ignorée ; typecheck vert |
+| Indexeur | **24 tests**, 1 intégration devnet ignorée ; typecheck vert |
+| Rust sim | **7 tests**, format vert ; **Clippy rouge** (`is_multiple_of` exige Rust 1.87, MSRV déclaré 1.85) |
+| Rust wrapper | **65 tests**, 5 tests de pipeline réel ignorés ; format et Clippy verts. Un échec intermittent de `metrics_and_health_are_exposed` au premier passage, puis test isolé et suite complète verts |
+| REUSE 6.2.0 local | **4 expressions SPDX invalides**, dans des chaînes de générateurs Python ; la CI REUSE ne reproduit pas ce résultat |
+
+Les premières erreurs de cache Scarb et de serveurs locaux provenaient du sandbox ; les relances
+avec les accès nécessaires passent. Les preuves lourdes, le build WASM et les drives de déploiement
+n'ont pas été relancés pendant cet audit. Les logs locaux sont dans `/tmp/hellproof-audit-20260913/`.
+
+Écarts à traiter :
+
+- [CI générale](https://github.com/bal7hazar/doom/actions/runs/34745984783) verte sur `82e52db`, mais
+  [CI WASM](https://github.com/bal7hazar/doom/actions/runs/34707523047) en échec : build Docker réussi,
+  comparaison `SHA256SUMS.linux` échouée, test Chromium non exécuté. **R11 reste ouvert.**
+- La CI ne lance pas directement `doom_runs`, `recursion_outputs`, `infra/submit` ou `infra/indexer` ;
+  Clippy est non bloquant. Les tests client dépendant des assets peuvent être ignorés silencieusement.
+- **D28 n'est pas appliquée au défaut client/CLI** : `planPhasesAuto` choisit encore 6 transactions
+  (`[1,3]`) ; le vérifieur optimisé et l'émetteur Python recommandent 5 (`[2]`).
+- **R2 reste prioritaire** : les benches verts gardent les mesures existantes, pas les objectifs
+  D2/D29. Mesuré sur ce `main` : physique 35 873 mots (32 678 sans slide vanilla), monstres 33 046,
+  joueur 36 631 selon les harnais actuels ; tir de pistolet 100 790 steps, vue 6 172–8 059 steps.
+  Ces contributions ne doivent pas être additionnées pour prédire la taille du programme intégré.
+- `doom_game`/`doom_run` sont encore des squelettes sur `main` ; profil `proving` et test de taille
+  du programme réel sont dans P1.9. Les ≥ 20 replays et le fuzz nocturne restent P1.10.
+- **C2 / R4 : défaut confirmé dans P1.9 en cours** : deux ordres de listes `ThingGrid` donnent le
+  même état sérialisé, mais le tic de ramassage donne 101 points de santé sans frontière et 100
+  après reconstruction. Correction en cours : engager et restaurer l'ordre exact des listes ;
+  nouveau schéma d'état version 2, sans changer le format public D14 à 10 felts.
+- Les chiffres anciens des documents de pilotage sont historiques : D26 fixe les segments par AIR
+  (plafonds de précaution 1,5 M steps avec threads / 2,3 M mono), D29 le programme à 100 k mots
+  (plafond dur 120 k), D28 le vérifieur à 5 tx / 1,54e9 gas. Les ≈ 47 STRK sont au prix S5,
+  pas une cotation actuelle. **C3 : critère PLAN ≤ 10 min, objectif opérationnel D2 ≤ 5 min** après partie.
+- R1/R5 : mesures favorables sur M2 Max 64 GB et programmes de référence ; le vrai jeu, la contention
+  jeu/preuve et le matériel 16 GB restent à valider en P3.7. Pas de nouveau changement de gameplay
+  ni de décision D30 avant le profil S8.
+
+Branches récupérées :
+
+| Branche / worktree Claude | État | Suite |
+|---|---|---|
+| `s7-monsters-bytecode` / `agent-a6ac67f3ed7fc7f8f` | **intégrée par `8471b7e`** ; 55 tests et replay 700 tics inchangé validés ; ticker 14 209 mots sous `proving` | format/build/511 tests/graphe verts après merge ; limite de domaine D3 à `tic ≥ 2^29` confiée à P1.9 |
+| `s8-player-bytecode` / `agent-ae639d60352cb6412` | `70df603` + README et harnais de taille non commités ; 132 tests annoncés, visée à arbitrer | agent Codex : terminer les mesures, vérifier les fixtures et finaliser la passe sans changer le gameplay |
+| `worktree-agent-a3f0a4e676dba3186` | `79f2180` + tic, instrumentation et script de preuve non commités ; cinq replays annoncés | agent Codex : terminer P1.9, profil S8 et preuve native ; remesurer après intégration joueur/monstres |
+
+Vague de reprise : finalisation joueur et P1.9 en parallèle ; réparation des contrôles CI dans un
+troisième worktree. L'orchestrateur valide et intègre les monstres, puis les autres branches, et
+tranche les leviers R2 à partir du programme complet. Ensuite : P1.10 et Worker/contrôles/écrans client,
+puis P3.7. Sepolia nécessite toujours une décision explicite du sponsor.
+
+Mesures monstres intégrées : API complète **21 220 mots dev / 17 963 proving** ; chemin ticker
+**16 241 dev / 14 209 proving**. Les 55 tests et leurs références n'ont pas été modifiés par la passe
+de style. Moyennes des micro-scénarios : 13 359 steps/tic à 5 éveillés, 30 711 à 8 et 61 425 à 20 ;
+29 dormants sans cible : 10 183. Ces mesures ne représentent pas un tic complet du jeu.
 
 ## Terminé (mergé sur `main`)
 
