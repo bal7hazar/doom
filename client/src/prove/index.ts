@@ -39,3 +39,6 @@ export {
   type ProverClientOptions,
 } from "./proverClient.js";
 export { ProofPipeline, autoThreadCount, type PipelineOptions, type PipelineState } from "./pipeline.js";
+
+export { createDoomProgram, DoomPreparationClient, type DoomProgram, type DoomProgramOptions } from "./doomProgram.js";
+export { D29_PROOF_ARTIFACTS } from "./doomArtifacts.js";

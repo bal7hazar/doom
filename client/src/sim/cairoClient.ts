@@ -3,7 +3,7 @@ import { encodeCmd, quantize, type TicCmd } from "../prove/ticcmd.js";
 import { decodeCairoSnapshot, type CairoFrame } from "./cairoSnapshot.js";
 import type { SimRequest, SimResponse } from "./cairoProtocol.js";
 import { RING_BYTES, SnapshotRing } from "./snapshot.js";
-import { word32 } from "./felts.js";
+import { decodeFelts, u32, word32 } from "./felts.js";
 
 type ResponseOf<T extends SimResponse["type"]> = Extract<SimResponse, { type: T }>;
 type Request = SimRequest extends infer R ? R extends { id: number } ? Omit<R, "id"> : never : never;
@@ -14,11 +14,19 @@ interface WorkerPort {
   terminate(): void;
 }
 
+/** Player.mo in an already Cairo-validated schema-2 state (3 header + 7 scalars).
+ * Read only this field; never derive the camera actor from list order or position.
+ */
+export function viewMobjFromValidatedState(state: Uint8Array): number {
+  return u32(decodeFelts(state.subarray(10 * 32, 11 * 32))[0]);
+}
+
 export class CairoClient {
   readonly ring = new SnapshotRing(new ArrayBuffer(RING_BYTES));
   journal?: InputJournal;
   latest?: CairoFrame;
   lastRawFrame?: Uint8Array;
+  viewMobjId = 0;
   paused = true;
   terminal = false;
   /** Operation status; an unchanged ABORT need not equal the state's snapshot status. */
@@ -65,9 +73,14 @@ export class CairoClient {
   private ready(message: ResponseOf<"ready">): void {
     this.sequence = 0; ++this.pauseEpoch;
     this.journal = new InputJournal(message.identity, new Uint8Array(message.state));
+    this.viewMobjId = viewMobjFromValidatedState(new Uint8Array(message.state));
     this.ring.resetLocal();
     this.publish(message.frame);
     this.paused = true; this.status = message.status; this.terminal = message.status !== 0; this.memoryBytes = message.memoryBytes;
+  }
+  private acceptCheckpoint(state: Uint8Array): void {
+    if (viewMobjFromValidatedState(state) !== this.viewMobjId) throw new Error("Cairo view actor changed within a session");
+    this.journal!.checkpoint(state);
   }
   private publish(frame: ArrayBuffer): void {
     this.lastRawFrame = new Uint8Array(frame);
@@ -125,7 +138,7 @@ export class CairoClient {
         this.journal.abort(message.word, message.tic);
       }
       this.sequence++;
-      if (message.state) this.journal.checkpoint(new Uint8Array(message.state));
+      if (message.state) this.acceptCheckpoint(new Uint8Array(message.state));
       this.publish(message.frame);
       this.status = message.status; this.terminal = message.status !== 0;
       if (this.terminal) this.paused = true;
@@ -140,7 +153,7 @@ export class CairoClient {
     try {
       const message = await this.request({ type: "checkpoint" }, "checkpoint");
       const state = new Uint8Array(message.state);
-      this.journal!.checkpoint(state);
+      this.acceptCheckpoint(state);
       return state;
     } finally { this.busy = false; }
   }

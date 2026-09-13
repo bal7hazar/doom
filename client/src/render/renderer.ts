@@ -12,6 +12,7 @@ import { findDynamicSectors, SKY_FLAT, type LevelJson } from "../map/level.js";
 import { mobjInfoFor } from "../map/mobjInfo.js";
 import { buildWallQuads, quadCorners, type WallQuad } from "../map/walls.js";
 import { MobjRenderFlag, pointToAngle, type InterpolatedView } from "../sim/snapshot.js";
+import { assertAppearanceTic, selectCairoSprite, type CairoAppearance } from "./cairoAppearance.js";
 import { cameraBasis, multiply, perspective, pitchRadians, viewMatrix } from "./camera.js";
 import {
   bindInterleaved,
@@ -343,7 +344,11 @@ export class Renderer {
     this.viewportHeight = Math.max(1, height);
   }
 
-  render(view: InterpolatedView, options: RenderOptions): void {
+  render(view: InterpolatedView, options: RenderOptions, appearance?: CairoAppearance): void {
+    if (this.store.cairoSprites) {
+      if (!appearance) throw new Error("Cairo rendering requires appearance from the current frame");
+      assertAppearanceTic(appearance, view.tic);
+    }
     const t0 = performance.now();
     const gl = this.gl;
     this.stats.drawCalls = 0;
@@ -377,7 +382,7 @@ export class Renderer {
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, dynamicData);
 
     // 3. Billboards.
-    const spriteVertices = this.buildSprites(view);
+    const spriteVertices = this.buildSprites(view, appearance);
 
     // 4. Draw.
     const aspect = this.viewportWidth / this.viewportHeight;
@@ -504,7 +509,7 @@ export class Renderer {
    * left edge sits `leftOffset` to the left of the thing's position along the
    * screen-x axis, and its top edge `topOffset` above the thing's z.
    */
-  private buildSprites(view: InterpolatedView): number {
+  private buildSprites(view: InterpolatedView, appearance?: CairoAppearance): number {
     const gl = this.gl;
     const scratch = this.spriteScratch;
     scratch.reset();
@@ -512,17 +517,28 @@ export class Renderer {
     let count = 0;
 
     for (const mo of view.mobjs) {
-      const info = mobjInfoFor(mo.type);
-      if (!info) continue;
-      const def = this.store.spriteDefs.get(info.sprite);
-      if (!def) continue;
-      const frame = def.frames[mo.frame] ?? def.frames.find(Boolean);
-      if (!frame) continue;
       const viewToThing = pointToAngle(mo.x - view.x, mo.y - view.y);
-      const pick = selectSpriteLump(frame, viewToThing, mo.angle);
-      if (!pick) continue;
-      const rect = this.store.spriteAtlas.rects.get(spriteKey(pick.lump));
-      if (!rect) continue;
+      let rect: AtlasRect, flip: boolean, fullbright: boolean, shadow: boolean;
+      if (appearance) {
+        if (mo.id === appearance.viewMobjId) continue;
+        const pick = selectCairoSprite(this.store, appearance, mo, viewToThing);
+        ({ rect, flip, fullbright, shadow } = pick);
+      } else {
+        // Preserve the preview's spawn-family animation contract separately.
+        const info = mobjInfoFor(mo.type);
+        if (!info) continue;
+        const def = this.store.spriteDefs.get(info.sprite);
+        if (!def) continue;
+        const frame = def.frames[mo.frame] ?? def.frames.find(Boolean);
+        if (!frame) continue;
+        const pick = selectSpriteLump(frame, viewToThing, mo.angle);
+        if (!pick) continue;
+        const found = this.store.spriteAtlas.rects.get(spriteKey(pick.lump));
+        if (!found) continue;
+        rect = found; flip = pick.flip;
+        fullbright = info.fullbright || (mo.flags & MobjRenderFlag.FULLBRIGHT) !== 0;
+        shadow = (mo.flags & MobjRenderFlag.SHADOW) !== 0;
+      }
 
       const leftDist = -rect.leftOffset;
       const rightDist = leftDist + rect.width;
@@ -536,11 +552,11 @@ export class Renderer {
 
       const light = this.lightLevels[mo.sector] ?? 255;
       let flags = 0;
-      if (info.fullbright || (mo.flags & MobjRenderFlag.FULLBRIGHT) !== 0) flags |= 1;
-      if ((mo.flags & MobjRenderFlag.SHADOW) !== 0) flags |= 2;
+      if (fullbright) flags |= 1;
+      if (shadow) flags |= 2;
 
-      const u0 = pick.flip ? rect.width : 0;
-      const u1 = pick.flip ? 0 : rect.width;
+      const u0 = flip ? rect.width : 0;
+      const u1 = flip ? 0 : rect.width;
       const corners: [number, number, number, number, number][] = [
         [lx, ly, bottomZ, u0, rect.height],
         [rxw, ryw, bottomZ, u1, rect.height],
