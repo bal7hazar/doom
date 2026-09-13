@@ -7,6 +7,7 @@
 //
 // Sizes are the files in programs/steps_k/args (k14 … k20, m2 … m4 = millions of steps).
 import { createServer } from "vite";
+import { createHash } from "node:crypto";
 import { chromium } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
@@ -34,7 +35,8 @@ const initialPages = Number(opt("initial-pages", 512));
 const label = opt("label", "");
 const ci = flag("ci");
 
-for (const name of ["hellproof_prover_wasm.wasm", "hellproof_prover_wasm.threads.wasm"]) {
+const wasmNames = ["hellproof_prover_wasm.wasm", "hellproof_prover_wasm.threads.wasm"];
+for (const name of wasmNames) {
   const p = path.join(here, "..", "pkg", "wasm", name);
   if (!fs.existsSync(p)) {
     console.error(`missing ${p}: run ../build.sh first`);
@@ -45,9 +47,12 @@ if (!fs.existsSync(path.join(here, "..", "pkg", "dist", "index.js"))) {
   console.error("missing ../pkg/dist: run `npm run build` in prover/wasm/pkg first");
   process.exit(2);
 }
-const wasmSha = fs.existsSync(path.join(here, "..", "SHA256SUMS"))
-  ? fs.readFileSync(path.join(here, "..", "SHA256SUMS"), "utf8").trim()
-  : "";
+// Record the bytes actually exercised. SHA256SUMS is the macOS baseline, while CI
+// downloads Linux-built artifacts, so copying that manifest would mislabel the run.
+const wasmSha = wasmNames.map((name) => {
+  const bytes = fs.readFileSync(path.join(here, "..", "pkg", "wasm", name));
+  return `${createHash("sha256").update(bytes).digest("hex")}  ${name}`;
+}).join("\n");
 
 const server = await createServer({ root: here, configFile: path.join(here, "vite.config.js"), logLevel: "warn" });
 await server.listen();

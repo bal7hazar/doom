@@ -151,10 +151,11 @@ variant only. `vendor/` is gitignored and rebuilt by `build.sh vendor`.
 | File | Built by | Sizes (st / mt) |
 |---|---|---|
 | `SHA256SUMS` | `./build.sh` on macOS arm64 | 45 035 551 / 45 111 575 B |
-| `SHA256SUMS.linux` | `docker build -o out -f Dockerfile .` (Debian bookworm arm64) | 45 032 682 / 45 114 562 B |
+| `SHA256SUMS.linux` | `docker build --platform linux/arm64 -o out -f Dockerfile .` (Debian bookworm arm64) | 45 032 682 / 45 114 562 B |
 
 ```sh
-docker build -o out -f prover/wasm/Dockerfile prover/wasm   # both artifacts + SHA256SUMS in ./out
+docker build --platform linux/arm64 -o out -f prover/wasm/Dockerfile prover/wasm
+(cd out && shasum -a 256 -c ../prover/wasm/SHA256SUMS.linux)
 ```
 
 Evidence: the macOS build has been reproduced bit-for-bit three times (S2's artifact
@@ -169,8 +170,34 @@ because its `std` comes from `vendor/rust-std`). Cross-host bit-identity would n
 reproducible-builds work upstream in rustc; it is not required by R11-A1's "two independent builds
 → same hash", which is satisfied per platform.
 
-`.github/workflows/prover-wasm.yml` rebuilds in the container on every change and diffs against
-`SHA256SUMS.linux`, printing the macOS hashes next to it.
+`.github/workflows/prover-wasm.yml` rebuilds on `ubuntu-24.04-arm` with an explicit
+`--platform linux/arm64` and diffs against `SHA256SUMS.linux`. The WASM output remains portable;
+only the **compiler host** is fixed. The Dockerfile rejects other host architectures before
+compiling, pins the base image index to
+`sha256:ebd900bae66fd508b466cef82d64a83a5fb34682e4c8b2797a42908bddc95a57`
+(the arm64 manifest is `sha256:aedeeec296c1880a094f5fedafd95c981a953fcec11e530d12e83ae44e29ae75`),
+and limits Cargo to two build jobs. Debian package repositories still supply the auxiliary
+fetch/patch tools; the Rust nightly, crate lockfile, upstream commit and patches are fixed.
+
+[CI run 34707523047](https://github.com/bal7hazar/doom/actions/runs/34707523047) compiled
+successfully on **amd64**, then failed this comparison: its single/threaded artifacts were
+45 037 410 / 45 108 496 B, hashes `3283de44…eaf41` / `8c1f6231…5ac29`.
+The logs explicitly show the `nightly-2026-01-15-x86_64-unknown-linux-gnu` sysroot, whereas the
+committed baseline above was generated with the arm64 compiler. That mismatch is a host
+architecture mismatch, not a new proof parameter set. The base tag was also floating; its
+resolved digest from that run is now committed. No amd64 byte-identity claim is made.
+GitHub's [standard runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+lists `ubuntu-24.04-arm` for public repositories, including this repository.
+
+Audit reproduction on 2026-09-13: a fresh build with the pinned image and **two Cargo jobs**
+recreated both existing Linux hashes byte for byte; `SHA256SUMS.linux` was not changed.
+The container's build step took 754 s (single: 386 s; threaded: 350 s). These exact Linux-built
+artifacts then proved and verified the 16 271-step `k14` program on macOS arm64 in Node
+24.16.0 (1/4 threads: 37.82/11.99 s) and Chromium 153.0.8010.12 (33.09/10.19 s, 1.83/1.96 GiB).
+The non-isolated Chromium page requested four threads, fell back to one, and verified too
+(33.4 s). Benchmark reports now hash the actual files in `pkg/wasm`, so Linux artifacts are not
+mislabelled with the macOS baseline. GitHub execution of the repaired jobs remains a separate
+check after merge.
 
 ### Versions (pinned)
 
@@ -460,20 +487,25 @@ Sizes are the files in `harness/programs/steps_k/args`: `k14 … k20` (≈ 2^k t
 take the shared proof lock (`$SCRATCH/.proof-lock`, ROADMAP §4).
 
 The test program (`programs/steps_k`, Scarb 2.16.0) is a felt-first loop, `steps = 11·n + 38`, plus
-≈ 4 881 bootloader steps; its compiled `main.executable.json` is committed (4 KB) so CI can prove
-without Scarb. Rebuild with `ASDF_SCARB_VERSION=2.16.0 scarb build` in that directory.
+≈ 4 881 bootloader steps. Its Cairo source and arguments are tracked; the executable lives in
+ignored `target/dev/main.executable.json`. Before running the smoke tests, build it with
+`ASDF_SCARB_VERSION=2.16.0 scarb build` in `harness/programs/steps_k`. CI installs Scarb 2.16.0
+and performs this build explicitly.
 
 ## CI (`.github/workflows/prover-wasm.yml`)
 
-1. **`docker-build`** — rebuilds both artifacts in the pinned container and diffs their hashes
-   against the committed `SHA256SUMS` (R11-A1), then uploads them.
-2. **`browser-smoke`** — downloads those artifacts, builds the package, proves a 2^14-step program
+1. **`docker-build`** — rebuilds both artifacts in the pinned Linux arm64 container and diffs
+   their hashes against the committed `SHA256SUMS.linux` (R11-A1), then uploads them.
+2. **`browser-smoke`** — compiles the Cairo smoke program, downloads the WASM artifacts, builds
+   the package, proves a 2^14-step program
    in headless Chromium through Playwright with 1 and with 4 threads and verifies it in the
    browser (R11-A3), plus the same two runs in Node 24.
 
-Neither job has run yet: the workflow file is new and Docker is not available on the development
-machine. `harness/bench.mjs --ci` exits 1 on any failure, and the hash comparison is a plain
-`diff`, so both jobs fail loudly rather than silently.
+The first GitHub run built successfully but failed the cross-architecture hash comparison
+(see Reproducibility above), so its dependent `browser-smoke` job was skipped. The hash gate
+continues to block publishing artifacts with unexpected bytes. `harness/bench.mjs --ci` exits 1
+on any failure, and the hash comparison is a plain `diff`. Both npm installations use `npm ci`
+and fail on lockfile drift.
 
 ## What the module does (ABI)
 
