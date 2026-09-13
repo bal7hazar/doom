@@ -45,8 +45,8 @@ enable-gas = false
 # code with the compiler's panic machinery removed. `scarb --profile proving
 # build` must stay green for every member; `doom_run`'s bytecode budget
 # (bench/size.py) is measured on it. `unstable-add-statements-functions-
-# debug-info` only annotates the Sierra (no bytecode change; checked by
-# bench/size.py) and is what bench/attribute.py attributes words with.
+# debug-info` annotates the Sierra and is what bench/attribute.py attributes
+# words with; bench/size.py checks the executable budget.
 [profile.proving]
 inherits = "release"
 

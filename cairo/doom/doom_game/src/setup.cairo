@@ -90,3 +90,24 @@ pub fn status_from(exit: bool, playerstate: u32) -> Status {
         Status::Running
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_initial_pistol_raise_does_not_mutate_player_mobj() {
+        let level = doom_map::LevelId::E1M1;
+        let map = doom_map::load(level);
+        let ctx = crate::ctx_of(level, map.s_floor, map.s_ceil);
+        let start = doom_map::genesis(level);
+        let (mut player, mut mo) = doom_player::spawn(ctx.w, 0, start.start, start.angle);
+        let before = mo;
+        let mobjs = array![mo].span();
+        let env = doom_player::env_of(ctx.w, mobjs, 0, 0, 0);
+        let mut grid = doom_physics::rebuild(mobjs);
+        let mut rng = prng::from_index(1);
+        let mut events = array![];
+        doom_player::bring_up_weapon(env, ref grid, ref rng, ref player, ref mo, ref events, 0);
+        assert(mo == before, 'pistol raise leaves mobj');
+        assert(rng.index == 1 && events.len() == 0, 'no RNG or world events');
+    }
+}
