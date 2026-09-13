@@ -30,6 +30,12 @@
       "budget": 17540
     },
     {
+      "name": "monsters_ticker, 8 awake monsters (D3's cap)",
+      "op": 16,
+      "base": 0,
+      "budget": 0
+    },
+    {
       "name": "monsters_ticker, 20 awake monsters",
       "op": 6,
       "base": 0,
@@ -41,6 +47,12 @@
       "base": 1,
       "budget": 5123,
       "task_budget": 1800
+    },
+    {
+      "name": "P_Move alone (the physics in a chase step)",
+      "op": 17,
+      "base": 1,
+      "budget": 0
     },
     {
       "name": "A_Look, one sight traversal",

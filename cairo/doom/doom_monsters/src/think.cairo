@@ -478,17 +478,24 @@ pub fn monsters_ticker(
     let mut i: u32 = opaque_zero(n);
     let mut rank: u32 = opaque_zero(n);
     while i != n {
-        let mut mo = mobj_at(mobjs, i);
-        let flags = mo.flags;
+        // The classification reads the slot through the list's snapshot;
+        // the 27 felts are materialised only where the mobj is about to be
+        // written, which is one copy per slot per tic instead of two
+        // (S7 §8 rule 3 applied to the ticker's own pass).
+        let m = match mobjs.get(i) {
+            Option::Some(b) => b.unbox(),
+            Option::None => { break; },
+        };
+        let flags = *m.flags;
         let countkill = doom_physics::has(flags, MF_COUNTKILL);
-        if mo.kind == KIND_NONE || !(countkill || doom_physics::has(flags, MF_MISSILE)) {
-            out.append(mo);
+        if *m.kind == KIND_NONE || !(countkill || doom_physics::has(flags, MF_MISSILE)) {
+            out.append(*m);
             i = inc(i);
             continue;
         }
-        let dormant = countkill && rd32(actions, mo.state) == A_LOOK;
+        let dormant = countkill && rd32(actions, *m.state) == A_LOOK;
         let mut may_chase = true;
-        if countkill && !dormant && mo.health > 0 {
+        if countkill && !dormant && *m.health > 0 {
             may_chase = in_window(rank, tic, awake);
             rank = inc(rank);
         }
@@ -504,38 +511,43 @@ pub fn monsters_ticker(
         // The suppressed action can only be `A_Look` — that *is* what makes
         // the monster dormant — so nothing is lost.
         if dormant
-            && mo.momx == fixed::ZERO
-            && mo.momy == fixed::ZERO
-            && mo.momz == fixed::ZERO
-            && mo.z == mo.floorz {
-            if mo.tics != fsm::FOREVER {
-                let (st, tc, _) = fsm::advance(states, mo.state, mo.tics);
-                mo.state = st;
-                mo.tics = tc;
+            && *m.momx == fixed::ZERO
+            && *m.momy == fixed::ZERO
+            && *m.momz == fixed::ZERO
+            && *m.z == *m.floorz {
+            let (st, tc) = if *m.tics != fsm::FOREVER {
+                let (st, tc, _) = fsm::advance(states, *m.state, *m.tics);
+                (st, tc)
+            } else {
+                (*m.state, *m.tics)
+            };
+            if !may_look {
+                // Nothing else to do this tic: the countdown goes straight
+                // into the rebuilt list, one 27-felt write and no copy.
+                out.append(Mobj { state: st, tics: tc, ..*m });
+                i = inc(i);
+                continue;
             }
-            if may_look {
-                let mut b = BoxTrait::new(mo);
-                run_chain(
-                    e,
-                    mobjs,
-                    ref g,
-                    ref r,
-                    ref b,
-                    i,
-                    A_LOOK,
-                    true,
-                    may_chase,
-                    ref patches,
-                    ref ev,
-                    ref spawn_at,
-                );
-                mo = b.unbox();
-            }
-            out.append(mo);
+            let mut b = BoxTrait::new(Mobj { state: st, tics: tc, ..*m });
+            run_chain(
+                e,
+                mobjs,
+                ref g,
+                ref r,
+                ref b,
+                i,
+                A_LOOK,
+                true,
+                may_chase,
+                ref patches,
+                ref ev,
+                ref spawn_at,
+            );
+            out.append(b.unbox());
             i = inc(i);
             continue;
         }
-        let mut b = BoxTrait::new(mo);
+        let mut b = BoxTrait::new(*m);
         let alive = mobj_thinker_in(
             e,
             mobjs,
