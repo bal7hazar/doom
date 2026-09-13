@@ -50,8 +50,9 @@ pub struct DamageOutcome {
 
 /// `h >> 2` on a positive height.
 fn quarter(h: Fixed) -> Fixed {
-    let v = to_u128(h.enc - BIAS);
-    let q: felt252 = (v / 4).into();
+    let four: NonZero<u128> = 4;
+    let (v, _) = DivRem::div_rem(to_u128(h.enc - BIAS), four);
+    let q: felt252 = v.into();
     Fixed { enc: q + BIAS }
 }
 

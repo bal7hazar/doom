@@ -86,7 +86,7 @@ fn before(a: Intercept, b: Intercept) -> bool {
 /// the closest remaining". Returns its position bit and the intercept.
 fn next_intercept(mut list: Span<Intercept>, taken: u32) -> Option<(u32, Intercept)> {
     let mut best: Option<(u32, Intercept)> = Option::None;
-    let mut bit: u32 = 1;
+    let mut bit: u32 = inc(opaque_zero(taken));
     while let Option::Some(item) = list.pop_front() {
         let it = *item;
         let this = bit;
@@ -324,8 +324,9 @@ fn trace_end(p: Point, angle: Angle, range: Fixed) -> Point {
 
 /// `t1->z + (t1->height >> 1) + 8 * FRACUNIT`: the gun's height.
 fn shoot_z(t: @Mobj) -> Fixed {
-    let h = to_u128(*t.height.enc - BIAS);
-    let half: felt252 = (h / 2).into();
+    let two: NonZero<u128> = 2;
+    let (h, _) = DivRem::div_rem(to_u128(*t.height.enc - BIAS), two);
+    let half: felt252 = h.into();
     Fixed { enc: *t.z.enc + half + 8 * 65536 }
 }
 

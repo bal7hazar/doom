@@ -18,7 +18,7 @@
 //! tic); here the dict is touched a few times per tic, and the alternative —
 //! scanning every mobj on every `P_TryMove` — is O(n) at ~25 steps per mobj.
 
-use core::dict::Felt252Dict;
+use core::dict::{Felt252Dict, Felt252DictEntryTrait};
 use core::nullable::{FromNullableResult, NullableTrait, match_nullable};
 use super::maputl::{inc, opaque_zero};
 use super::mobj::{Mobj, in_blockmap};
@@ -37,7 +37,10 @@ pub fn new_grid() -> ThingGrid {
 
 /// The mobj indices linked into `cell` (empty when none).
 pub fn things_in(ref g: ThingGrid, cell: u32) -> Span<u32> {
-    match match_nullable(g.cells.get(cell.into())) {
+    // `entry` + `finalize` are the explicitly panic-free form of `get`.
+    let (entry, value) = g.cells.entry(cell.into());
+    g.cells = entry.finalize(value);
+    match match_nullable(value) {
         FromNullableResult::Null => array![].span(),
         FromNullableResult::NotNull(v) => v.unbox(),
     }

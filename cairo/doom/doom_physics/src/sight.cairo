@@ -38,8 +38,9 @@ use super::world::{Level, World, level_of};
 
 /// `t1->z + t1->height - (t1->height >> 2)`: the eyes of the looker.
 fn sight_z(t: @Mobj) -> Fixed {
-    let h = to_u128(*t.height.enc - BIAS); // heights are positive
-    let quarter: felt252 = (h / 4).into();
+    let four: NonZero<u128> = 4;
+    let (h, _) = DivRem::div_rem(to_u128(*t.height.enc - BIAS), four); // heights are positive
+    let quarter: felt252 = h.into();
     Fixed { enc: *t.z.enc + *t.height.enc - BIAS - quarter }
 }
 

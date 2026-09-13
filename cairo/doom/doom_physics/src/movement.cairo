@@ -365,7 +365,9 @@ fn things_in_range(
         if cy > wide.y1 {
             break NO_MOBJ;
         }
-        let hit = check_things_in_cell(mobjs, ref g, cell_at(grid, cx, cy), mo, me, x, y, ref events);
+        let hit = check_things_in_cell(
+            mobjs, ref g, cell_at(grid, cx, cy), mo, me, x, y, ref events,
+        );
         if hit != NO_MOBJ {
             break hit;
         }

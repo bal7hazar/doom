@@ -262,13 +262,17 @@ pub struct UnitBox {
 /// `floor((enc - COORD_OFFSET) / 65536)`: the biased unit at or below `enc`.
 #[inline(always)]
 fn units_floor(enc: felt252) -> u128 {
-    to_u128(enc - COORD_OFFSET) / 65536
+    let w16: NonZero<u128> = 65536;
+    let (q, _) = DivRem::div_rem(to_u128(enc - COORD_OFFSET), w16);
+    q
 }
 
 /// `ceil((enc - COORD_OFFSET) / 65536)`: the biased unit at or above `enc`.
 #[inline(always)]
 fn units_ceil(enc: felt252) -> u128 {
-    (to_u128(enc - COORD_OFFSET) + 65535) / 65536
+    let w16: NonZero<u128> = 65536;
+    let (q, _) = DivRem::div_rem(to_u128(enc - COORD_OFFSET + 65535), w16);
+    q
 }
 
 /// The unit-rounded bounding box of a *trace*, for the early reject of the
