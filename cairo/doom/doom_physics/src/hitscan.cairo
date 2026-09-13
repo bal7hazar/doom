@@ -33,10 +33,12 @@
 use bam::Angle;
 use core::num::traits::WrappingAdd;
 use doom_map::ML_TWOSIDED;
-use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
+use fixed::{BIAS, Fixed, felt_ge_narrow};
 use geom2d::{DivLine, Point, intercept_fraction};
 use super::grid::{ThingGrid, things_in};
-use super::maputl::{inc, line_box_misses, line_hp, line_opening, line_sides, opaque_zero, rd, rd32};
+use super::maputl::{
+    inc, line_box_misses, line_hp, line_opening, line_sides, opaque_zero, rd, rd32, to_u128,
+};
 use super::mobj::{MF_NOBLOOD, MF_SHOOTABLE, Mobj, NO_MOBJ, has};
 use super::ray::{
     Cursor, Trace, crosses, crossing_fraction, ray_advance, ray_cell, ray_next_entry, ray_start,

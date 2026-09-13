@@ -114,7 +114,7 @@ def main() -> int:
     owner: dict[int, str] = {}
     for k, (ep, f) in enumerate(entries):
         end = entries[k + 1][0] if k + 1 < len(entries) else len(stmts)
-        name = f["id"].get("debug_name", str(f["id"]["id"]))
+        name = f["id"].get("debug_name") or str(f["id"]["id"])
         for i in range(ep, end):
             owner[i] = name
 
@@ -204,7 +204,7 @@ def main() -> int:
     print("%6s %5s %5s  %s" % ("words", "param", "ret", "function"))
     rows = []
     for ep, f in entries:
-        name = f["id"].get("debug_name", "")
+        name = f["id"].get("debug_name") or ""
         if not name.startswith(CRATE):
             continue
         p = sum(tsize(x["ty"]["id"]) for x in f["params"])
@@ -214,7 +214,7 @@ def main() -> int:
     for w, p, r, name in rows[:top]:
         print("%6d %5d %5d  %s" % (w, p, r, name[:110]))
 
-    spec = [f["id"].get("debug_name", "") for f in s["funcs"] if "{" in f["id"].get("debug_name", "")]
+    spec = [name for f in s["funcs"] if "{" in (name := f["id"].get("debug_name") or "")]
     print("\n== constant-argument specialisations (%d)" % len(spec))
     for n in spec:
         print("  ", n[:150])

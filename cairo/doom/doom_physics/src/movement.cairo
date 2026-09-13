@@ -24,14 +24,14 @@
 use blockmap::{CELL_RAW, CellRange, Grid, cells_of_box};
 use doom_map::{ML_BLOCKING, ML_BLOCKMONSTERS, ML_TWOSIDED, NO_SECTOR};
 use doom_things::tables::KIND_PLAYER;
-use fixed::{BIAS, FRACUNIT_RAW, Fixed, felt_ge_narrow, to_u128};
+use fixed::{BIAS, FRACUNIT_RAW, Fixed, felt_ge_narrow};
 use geom2d::{
     Box as BBox, Point, SIDE_BACK, SIDE_CROSS, box_around, box_on_line_side, hoist, point_side,
 };
 use super::grid::{ThingGrid, things_in};
 use super::maputl::{
     UnitBox, dec, inc, line_box_misses, line_box_rejects, line_diagonal, line_hp, line_meta,
-    line_opening, rd, rd32, unit_box,
+    line_opening, rd, rd32, to_u128, unit_box,
 };
 use super::mobj::{
     MF_CORPSE, MF_DROPOFF, MF_FLOAT, MF_INFLOAT, MF_MISSILE, MF_NOCLIP, MF_NOGRAVITY, MF_PICKUP,

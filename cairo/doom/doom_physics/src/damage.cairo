@@ -17,9 +17,10 @@
 use bam::point_to_angle2;
 use doom_things::ThingInfo;
 use doom_things::tables::{KIND_CLIP, KIND_PLAYER, KIND_POSSESSED, KIND_SHOTGUN, KIND_SHOTGUY};
-use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
+use fixed::{BIAS, Fixed, felt_ge_narrow};
 use fsm::StateTables;
 use prng::Prng;
+use super::maputl::to_u128;
 use super::mobj::{
     MF_CORPSE, MF_COUNTKILL, MF_DROPOFF, MF_DROPPED, MF_FLOAT, MF_JUSTHIT, MF_NOCLIP, MF_NOGRAVITY,
     MF_SHOOTABLE, MF_SKULLFLY, MF_SOLID, Mobj, NO_MOBJ, has, without,

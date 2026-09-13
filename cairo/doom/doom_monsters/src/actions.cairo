@@ -94,7 +94,7 @@ const TEN: NonZero<u8> = 10;
 
 /// `bam::reduce` without its two `try_into().unwrap()`s: `x mod 2^32`.
 fn reduce_at(x: felt252) -> Angle {
-    let (_, r) = DivRem::div_rem(fixed::to_u128(x), TURN);
+    let (_, r) = DivRem::div_rem(doom_physics::maputl::to_u128(x), TURN);
     low32(r)
 }
 
@@ -105,6 +105,7 @@ fn reduce_at(x: felt252) -> Angle {
 /// `mo.move_dir = dir`, out of line: every `BoxTrait::new` writes the 27
 /// felts of a `Mobj`, and `P_NewChaseDir` has eight such assignments
 /// (S7 §8 rule 6).
+#[inline(never)]
 fn set_dir(ref mo: Box<Mobj>, dir: u32) {
     mo = BoxTrait::new(Mobj { move_dir: dir, ..mo.unbox() });
 }
@@ -460,7 +461,7 @@ pub(crate) fn check_missile_range_in(
     // cannot apply.
     let mut n: u32 = 0;
     if !fixed::is_neg(dist) {
-        let (units, _) = DivRem::div_rem(fixed::to_u128(fixed::to_raw(dist)), UNIT);
+        let (units, _) = DivRem::div_rem(doom_physics::maputl::to_u128(fixed::to_raw(dist)), UNIT);
         n = if units > 200 {
             200
         } else {

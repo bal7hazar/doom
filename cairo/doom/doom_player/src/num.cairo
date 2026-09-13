@@ -31,7 +31,7 @@ pub use doom_physics::maputl::{add32, dec, inc, low32, opaque_zero, rd32, sub32}
 #[inline(always)]
 pub fn mul32(a: u32, b: u32) -> u32 {
     let p: felt252 = a.into() * b.into();
-    low32(fixed::to_u128(p))
+    low32(doom_physics::maputl::to_u128(p))
 }
 
 /// `a / d` on `u32` for a divisor the caller writes as a literal, without
@@ -51,7 +51,7 @@ pub fn div32(a: u32, d: NonZero<u32>) -> u32 {
 #[inline(always)]
 pub fn fine_of(m: felt252, tic: u32) -> u32 {
     let n: NonZero<u128> = 8192;
-    let (_, r) = DivRem::div_rem(fixed::to_u128(m * tic.into()), n);
+    let (_, r) = DivRem::div_rem(doom_physics::maputl::to_u128(m * tic.into()), n);
     low32(r)
 }
 
