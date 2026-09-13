@@ -60,6 +60,12 @@ function fakeServer(options: { perSegment?: boolean; failFirst?: number } = {}):
     if (url.pathname === "/v1/runs" && method === "POST") {
       if (failures-- > 0) return json(503, { error: "busy" });
       const parsed = JSON.parse(body) as RunSubmission;
+      if (parsed.segments.length === 0) {
+        // An old wrapper rejects an empty run; a per-segment-capable one opens a
+        // `collecting` run (this is what the client's 404 probe relies on).
+        if (!options.perSegment) return json(400, { error: "no segments" });
+        return json(202, { run_id: parsed.run_id ?? "wrapper-run", status: "collecting", segments: 0 });
+      }
       return json(202, {
         run_id: parsed.run_id ?? "wrapper-run",
         status: "verifying",
@@ -170,7 +176,9 @@ describe("WrapperSubmitter", () => {
     const response = await submitter.submit(runId, { solo: true });
     expect(response.status).toBe("verifying");
 
-    const posts = server.calls.filter((c) => c.method === "POST" && c.path === "/v1/runs");
+    const posts = server.calls
+      .filter((c) => c.method === "POST" && c.path === "/v1/runs")
+      .filter((c) => (JSON.parse(c.body) as RunSubmission).segments.length > 0);
     expect(posts).toHaveLength(1);
     const body = JSON.parse(posts[0]!.body) as RunSubmission;
     expect(body.program).toBe("segment_stub10");
