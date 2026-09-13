@@ -80,6 +80,11 @@ fn parse_hex(hex: &str) -> Result<[u32; 8]> {
     if hex.is_empty() {
         bail!("empty hex felt");
     }
+    // Reject non-ASCII input before splitting byte chunks; a UTF-8 boundary must
+    // never turn an invalid submitted/configured felt into a panic.
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        bail!("not hex");
+    }
     let hex = hex.trim_start_matches('0');
     if hex.len() > 64 {
         bail!("felt too long");
@@ -194,6 +199,8 @@ mod tests {
     fn rejects_non_felts() {
         assert!(Felt::parse("").is_err());
         assert!(Felt::parse("0xzz").is_err());
+        assert!(Felt::parse("0x😀").is_err());
+        assert!(Felt::parse("0x000é").is_err());
         assert!(Felt::parse("12a").is_err());
         // 2^252 has bit 252 set.
         assert!(
