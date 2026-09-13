@@ -18,7 +18,7 @@
 //!   player, who has enough health to survive the benchmark.
 
 use doom_map::{LevelId, genesis, load, num_things, thing};
-use doom_monsters::actions::{a_chase, a_look, check_missile_range, new_chase_dir};
+use doom_monsters::actions::{a_chase, a_look, check_missile_range, new_chase_dir, p_move};
 use doom_monsters::event::MonsterEvent;
 use doom_monsters::think::awake_count;
 use doom_monsters::{Ctx, Noise, Patch, monsters_ticker, silence};
@@ -323,6 +323,34 @@ fn main(op: u32, n: u32) -> felt252 {
             i += 1;
         }
         acc += mobjs.len().into();
+    } else if op == 16 {
+        // 8 awake monsters: D3's own ceiling, the window exactly full
+        let mut mobjs = awake_scene(w, ref g, 8);
+        let mut rng: Prng = from_index(1);
+        while i != n {
+            let (next, r, _ev) = monsters_ticker(
+                w, mobjs.span(), ref g, players, silence(), i, rng,
+            );
+            mobjs = next;
+            rng = r;
+            i += 1;
+        }
+        acc += rng.index.into() + awake_count(w, mobjs.span()).into();
+    } else if op == 17 {
+        // The physics inside `A_Chase`'s walking step: `P_Move` on the same
+        // chaser as op 7 and nothing else, so that op 7 minus this one is
+        // the AI's own share of a chase step.
+        while i != n {
+            let (p, mut mo) = one_chaser(w, ref g, i);
+            let mobjs = array![p, mo].span();
+            let mut ev: Array<MonsterEvent> = array![];
+            let ctx = Ctx { w, players, noise: silence(), tic: i };
+            if p_move(ctx, mobjs, ref g, ref mo, 1, ref ev) {
+                acc += 1;
+            }
+            acc += mo.x.enc;
+            i += 1;
+        }
     } else if op == 15 {
         // the floor: rebuilding the 30-mobj list, one materialised copy per
         // slot, with no thinking at all. Everything above stands on this.

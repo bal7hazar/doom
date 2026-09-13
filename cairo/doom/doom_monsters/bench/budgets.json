@@ -1,82 +1,94 @@
 {
   "crate": "doom_monsters",
-  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 is the bare loop, 1 builds a linked chaser pair). Measured by measure.py on Scarb 2.16.0; a run over the recorded 'budget' by more than 10 % fails (PLAN.md 3.1 rule 4). 'task_budget' is the figure P1.8 set out to hit, printed for the record. 'code_words' is the compiled size of this crate's own code, measured against bench/baseline (D23 budget 5 000).",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 is the bare loop, 1 builds a linked chaser pair). Measured by measure.py on Scarb 2.16.0; a run over the recorded 'budget' by more than 10 % fails (PLAN.md 3.1 rule 4). 'task_budget' is the figure P1.8 set out to hit, printed for the record. The four 'code_words*' figures are this crate's compiled size against bench/baseline: the whole public surface and the ticker alone (bench/size without its default 'full_api' feature, i.e. what doom_game links), each under the dev and the proving profile (unsafe-panic = true). docs/DECISIONS.md D29 budgets the crate at 15 000 words and the figure it is about is 'code_words_game_proving'; measure.py fails at +10 % over it, and all four are guarded against regression.",
   "iterations": 20,
-  "code_words": 34014,
+  "code_words": 21220,
   "operations": [
     {
       "name": "monsters_ticker, player only (overhead)",
       "op": 2,
       "base": 0,
-      "budget": 598
+      "budget": 530
     },
     {
       "name": "monsters_ticker, 1 dormant monster",
       "op": 3,
       "base": 2,
-      "budget": 740,
+      "budget": 439,
       "task_budget": 60
     },
     {
       "name": "monsters_ticker, 29 dormant monsters",
       "op": 4,
       "base": 2,
-      "budget": 21890
+      "budget": 13185
     },
     {
       "name": "monsters_ticker, 5 awake monsters",
       "op": 5,
       "base": 0,
-      "budget": 17540
+      "budget": 13359
+    },
+    {
+      "name": "monsters_ticker, 8 awake monsters (D3's cap)",
+      "op": 16,
+      "base": 0,
+      "budget": 30711
     },
     {
       "name": "monsters_ticker, 20 awake monsters",
       "op": 6,
       "base": 0,
-      "budget": 81311
+      "budget": 61425
     },
     {
       "name": "A_Chase, walking step, cached sight",
       "op": 7,
       "base": 1,
-      "budget": 5123,
+      "budget": 3872,
       "task_budget": 1800
+    },
+    {
+      "name": "P_Move alone (the physics in a chase step)",
+      "op": 17,
+      "base": 1,
+      "budget": 3352
     },
     {
       "name": "A_Look, one sight traversal",
       "op": 8,
       "base": 1,
-      "budget": 5463
+      "budget": 4521
     },
     {
       "name": "P_NewChaseDir",
       "op": 9,
       "base": 1,
-      "budget": 5117
+      "budget": 3805
     },
     {
       "name": "P_CheckMissileRange, cached sight",
       "op": 10,
       "base": 1,
-      "budget": 472
+      "budget": 754
     },
     {
       "name": "awake_count over 30 mobjs (the schedule pass)",
       "op": 11,
       "base": 0,
-      "budget": 1792
+      "budget": 1729
     },
     {
       "name": "A_Look woken by a noise (no traversal)",
       "op": 12,
       "base": 1,
-      "budget": 750
+      "budget": 784
     },
     {
       "name": "29 dormant monsters, nobody to look for",
       "op": 13,
       "base": 2,
-      "budget": 18467
+      "budget": 10183
     },
     {
       "name": "rebuilding a 30-mobj list (the floor)",
@@ -84,5 +96,8 @@
       "base": 0,
       "budget": 2697
     }
-  ]
+  ],
+  "code_words_game": 16241,
+  "code_words_proving": 17963,
+  "code_words_game_proving": 14209
 }

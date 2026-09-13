@@ -8,22 +8,28 @@
 //! (D15: Cairo has no function pointers, and an `if`-tree over ids costs 18
 //! bytecode words per value against 1 for a table, S1 §5.9).
 
+use doom_physics::maputl::{inc, opaque_zero, rd32};
 use doom_physics::{
-    Blocker, KIND_NONE, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, Mobj, MoveEvent, NO_MOBJ, ThingGrid,
-    World, XyOutcome, explode_missile, first_free, removed_mobj, unset_thing_position, xy_movement,
-    z_movement,
+    Blocker, KIND_NONE, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, MF_SOLID, Mobj, MoveEvent, NO_MOBJ,
+    ThingGrid, World, XyOutcome, explode_missile, first_free, maputl, removed_mobj,
+    unset_thing_position, xy_movement, z_movement,
 };
 use doom_things::tables::{
     A_CHASE, A_FACETARGET, A_LOOK, A_POSATTACK, A_SARGATTACK, A_SPOSATTACK, A_TROOPATTACK,
     MI_DAMAGE,
 };
-use prng::{Prng, PrngTrait};
+use prng::Prng;
 use super::actions::{
-    a_chase, a_face_target, a_look, a_pos_attack, a_sarg_attack, a_spos_attack, a_troop_attack,
-    hurt, passive,
+    a_chase_in, a_look_in, a_pos_attack_in, a_sarg_attack_in, a_spos_attack_in, a_troop_attack_in,
+    face_boxed, hurt_in, run_passive,
 };
 use super::event::{MonsterEvent, drain, missile_hit};
-use super::{Ctx, LOOK_CADENCE, Noise, Patch, WINDOW, read_mobj};
+use super::{Ctx, Env, Noise, Patch, WINDOW, env_of, read_boxed, read_mobj};
+
+/// [`super::LOOK_CADENCE`] as a `NonZero` literal: `%` on a `u32` keeps a "division
+/// by zero" panic path that the compiler does not fold away, even against a
+/// constant divisor (S7 §8 rule 1).
+const CADENCE: NonZero<u32> = 4;
 
 /// How many actions may chain off one state change before the dispatcher
 /// gives up. Doom's `P_SetMobjState` runs the action of every state it
@@ -45,7 +51,7 @@ fn is_ours(mo: @Mobj) -> bool {
 /// fooled by `A_Look` having set `target` from a sound it then refused
 /// (`MF_AMBUSH`).
 pub fn is_dormant(w: World, mo: @Mobj) -> bool {
-    *w.states.action_id.at(*mo.state) == A_LOOK
+    rd32(w.states.action_id, *mo.state) == A_LOOK
 }
 
 /// A monster the round-robin window has to visit: alive, countable, awake.
@@ -64,16 +70,29 @@ pub fn awake_count(w: World, mobjs: Span<Mobj>) -> u32 {
     // once per mobj costs more than the test itself.
     let actions = w.states.action_id;
     let n = mobjs.len();
-    let mut i: u32 = 0;
-    let mut c: u32 = 0;
+    // `opaque_zero`, not `0`: a literal as a loop-carried start makes the
+    // compiler emit a second, specialised copy of the loop body (S7 §8
+    // rule 4). `get` + `match` and `inc` keep the pass panic-free (rule 1).
+    let mut i: u32 = opaque_zero(n);
+    let mut c: u32 = opaque_zero(n);
     while i != n {
-        let m = mobjs.at(i);
-        if *m.health > 0
-            && doom_physics::has(*m.flags, MF_COUNTKILL)
-            && *actions.at(*m.state) != A_LOOK {
-            c += 1;
+        match mobjs.get(i) {
+            Option::Some(b) => {
+                let m = b.unbox();
+                // In this order: the bit test is the cheapest and rejects
+                // everything that is not a monster, the state test rejects
+                // every sleeper (the common case), and the signed `health`
+                // comparison — the dear one — runs only for the few that
+                // are left.
+                if doom_physics::has(*m.flags, MF_COUNTKILL)
+                    && rd32(actions, *m.state) != A_LOOK
+                    && *m.health > 0 {
+                    c = inc(c);
+                }
+            },
+            Option::None => {},
         }
-        i += 1;
+        i = inc(i);
     }
     c
 }
@@ -90,8 +109,17 @@ pub fn in_window(rank: u32, tic: u32, n: u32) -> bool {
     if n <= WINDOW {
         return true;
     }
-    let start = (WINDOW * tic) % n;
-    (rank + n - start) % n < WINDOW
+    // `n > WINDOW >= 1`, so the `NonZero` conversion always succeeds; the
+    // `match` is what keeps the function without a panic site, and `8 t` is
+    // folded in the field rather than through `u32`'s overflow-checked
+    // multiplication (S7 §8 rule 1).
+    let nz: NonZero<u32> = match n.try_into() {
+        Option::Some(v) => v,
+        Option::None => 1,
+    };
+    let (_, start) = DivRem::div_rem(maputl::low32(fixed::to_u128(WINDOW.into() * tic.into())), nz);
+    let (_, k) = DivRem::div_rem(maputl::add32(maputl::sub32(rank, start), n), nz);
+    k < WINDOW
 }
 
 /// Run one action id on `mo`, and return the action of the state it entered
@@ -101,11 +129,11 @@ pub fn in_window(rank: u32, tic: u32, n: u32) -> bool {
 /// this tic and an `A_Chase` outside the window are skipped, and the monster
 /// keeps counting down its idle or run frames as it would have.
 fn dispatch(
-    ctx: Ctx,
+    e: Env,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     action: u32,
     may_look: bool,
@@ -118,62 +146,72 @@ fn dispatch(
         if !may_chase {
             return fsm::NO_ACTION;
         }
-        return a_chase(ctx, mobjs, ref g, ref rng, ref mo, me, patches.span(), ref ev);
+        return a_chase_in(e, mobjs, ref g, ref rng, ref mo, me, patches.span(), ref ev);
     }
     if action == A_LOOK {
         if !may_look {
             return fsm::NO_ACTION;
         }
-        return a_look(ctx, mobjs, ref rng, ref mo, me, ref ev);
+        return a_look_in(e, mobjs, ref rng, ref mo, me, ref ev);
     }
+    // The four attacks and `A_FaceTarget` need a target that is still in
+    // the list; the read is hoisted out of their five arms.
+    let target = mo.unbox().target;
+    let aimed = target != NO_MOBJ && target < mobjs.len();
     if action == A_FACETARGET {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            let t = read_mobj(mobjs, patches.span(), mo.target);
-            a_face_target(ctx, ref rng, ref mo, @t);
+        if aimed {
+            let t = read_boxed(mobjs, patches.span(), target);
+            let mut m = mo.unbox();
+            face_boxed(e.w.unbox().rndtable, ref rng, ref m, t);
+            mo = BoxTrait::new(m);
         }
         return fsm::NO_ACTION;
     }
     if action == A_POSATTACK {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            a_pos_attack(ctx, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
+        if aimed {
+            a_pos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
     }
     if action == A_SPOSATTACK {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            a_spos_attack(ctx, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
+        if aimed {
+            a_spos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
     }
     if action == A_TROOPATTACK {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            a_troop_attack(
-                ctx, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref spawn_at,
+        if aimed {
+            a_troop_attack_in(
+                e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref spawn_at,
             );
         }
         return fsm::NO_ACTION;
     }
     if action == A_SARGATTACK {
-        if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            a_sarg_attack(ctx, mobjs, ref rng, ref mo, me, ref patches, ref ev);
+        if aimed {
+            a_sarg_attack_in(e, mobjs, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
     }
     // `A_Pain`, `A_Scream`, `A_XScream`, `A_Fall`: none of them changes the
     // state again. Everything else (the weapon and flash actions) belongs to
     // `doom_player` and is ignored here.
-    passive(ctx, ref rng, ref mo, me, action, ref ev);
+    let m = mo.unbox();
+    if run_passive(e.w.unbox().rndtable, ref rng, m.kind, me, action, ref ev) {
+        // `A_Fall`, the one passive action that writes anything.
+        mo = BoxTrait::new(Mobj { flags: doom_physics::without(m.flags, MF_SOLID), ..m });
+    }
     fsm::NO_ACTION
 }
 
 /// `P_SetMobjState`'s chain: run `action`, then the action of whatever state
 /// it entered, up to [`MAX_ACTION_CHAIN`] deep.
 fn run_chain(
-    ctx: Ctx,
+    e: Env,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     action: u32,
     may_look: bool,
@@ -183,11 +221,11 @@ fn run_chain(
     ref spawn_at: u32,
 ) {
     let mut a = action;
-    let mut depth: u32 = 0;
+    let mut depth: u32 = opaque_zero(action);
     while a != fsm::NO_ACTION && depth != MAX_ACTION_CHAIN {
         a =
             dispatch(
-                ctx,
+                e,
                 mobjs,
                 ref g,
                 ref rng,
@@ -200,7 +238,7 @@ fn run_chain(
                 ref ev,
                 ref spawn_at,
             );
-        depth += 1;
+        depth = inc(depth);
     }
 }
 
@@ -208,11 +246,11 @@ fn run_chain(
 /// state it entered, and the single zero-tic hop `doom_things`'
 /// `MAX_ZERO_TIC_CHAIN` allows.
 fn think_state(
-    ctx: Ctx,
+    e: Env,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref mo: Mobj,
+    ref mo: Box<Mobj>,
     me: u32,
     may_look: bool,
     may_chase: bool,
@@ -220,14 +258,14 @@ fn think_state(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) {
-    if mo.tics == fsm::FOREVER {
+    let m0 = mo.unbox();
+    if m0.tics == fsm::FOREVER {
         return;
     }
-    let (state, tics, action) = fsm::advance(ctx.w.states, mo.state, mo.tics);
-    mo.state = state;
-    mo.tics = tics;
+    let (state, tics, action) = fsm::advance(e.w.unbox().states, m0.state, m0.tics);
+    mo = BoxTrait::new(Mobj { state, tics, ..m0 });
     run_chain(
-        ctx,
+        e,
         mobjs,
         ref g,
         ref rng,
@@ -240,12 +278,12 @@ fn think_state(
         ref ev,
         ref spawn_at,
     );
-    if mo.tics == 0 {
-        let (s2, t2, a2) = fsm::advance(ctx.w.states, mo.state, 0);
-        mo.state = s2;
-        mo.tics = t2;
+    let m1 = mo.unbox();
+    if m1.tics == 0 {
+        let (s2, t2, a2) = fsm::advance(e.w.unbox().states, m1.state, 0);
+        mo = BoxTrait::new(Mobj { state: s2, tics: t2, ..m1 });
         run_chain(
-            ctx,
+            e,
             mobjs,
             ref g,
             ref rng,
@@ -276,7 +314,40 @@ pub fn mobj_thinker(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) -> bool {
-    let missile = doom_physics::has(mo.flags, MF_MISSILE);
+    let mut b = BoxTrait::new(mo);
+    let alive = mobj_thinker_in(
+        env_of(ctx),
+        mobjs,
+        ref g,
+        ref rng,
+        ref b,
+        me,
+        may_look,
+        may_chase,
+        ref patches,
+        ref ev,
+        ref spawn_at,
+    );
+    mo = b.unbox();
+    alive
+}
+
+/// [`mobj_thinker`] on the narrow [`Env`].
+pub(crate) fn mobj_thinker_in(
+    e: Env,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref mo: Box<Mobj>,
+    me: u32,
+    may_look: bool,
+    may_chase: bool,
+    ref patches: Array<Patch>,
+    ref ev: Array<MonsterEvent>,
+    ref spawn_at: u32,
+) -> bool {
+    let mut m = mo.unbox();
+    let missile = doom_physics::has(m.flags, MF_MISSILE);
     // Momentum, in `P_MobjThinker`'s order and under its two guards: Doom
     // calls `P_XYMovement` only when there is momentum to spend (or a lost
     // soul in flight) and `P_ZMovement` only when the thing is off its floor
@@ -286,12 +357,12 @@ pub fn mobj_thinker(
     // dormant monster off `xy_movement`'s ~740 steps of argument plumbing on
     // every one of the 700 tics it spends asleep.
     let mut moves: Array<MoveEvent> = array![];
-    let moving = mo.momx != fixed::ZERO
-        || mo.momy != fixed::ZERO
-        || doom_physics::has(mo.flags, doom_physics::MF_SKULLFLY);
+    let moving = m.momx != fixed::ZERO
+        || m.momy != fixed::ZERO
+        || doom_physics::has(m.flags, doom_physics::MF_SKULLFLY);
     let mut xy = XyOutcome::Moved;
     if moving {
-        xy = xy_movement(ctx.w, mobjs, ref g, ref mo, me, false, false, ref moves);
+        xy = xy_movement(e.w.unbox(), mobjs, ref g, ref m, me, false, false, ref moves);
         drain(moves.span(), me, ref ev);
     }
     let mut exploded = false;
@@ -300,30 +371,34 @@ pub fn mobj_thinker(
         if hit != NO_MOBJ {
             // `PIT_CheckThing` damages inline in C; the crate reports it, so
             // the draw happens here — still before anything else draws.
-            let dmg_per: u32 = *MI_DAMAGE.span().at(mo.kind);
-            let (next, roll) = rng.next(ctx.w.rndtable);
-            rng = next;
-            let r: u32 = (roll % 8).into();
-            hurt(ctx, mobjs, ref rng, hit, me, mo.target, (r + 1) * dmg_per, ref patches, ref ev);
+            let dmg_per: u32 = rd32(MI_DAMAGE.span(), m.kind);
+            let eight: NonZero<u8> = 8;
+            let draw = doom_physics::spawn::roll(ref rng, e.w.unbox().rndtable);
+            let (_, low) = DivRem::div_rem(draw, eight);
+            let r: u32 = low.into();
+            // `hurt_in` writes a *patch* on another mobj, never on us, so
+            // the actor need not be boxed around it.
+            hurt_in(e, mobjs, ref rng, hit, me, m.target, scale(r, dmg_per), ref patches, ref ev);
         }
         match xy {
             XyOutcome::MissileHit(b) => {
                 let _: Blocker = b;
-                explode_missile(ctx.w, ref rng, ref mo);
+                explode_missile(e.w.unbox(), ref rng, ref m);
                 exploded = true;
             },
             _ => {},
         }
     }
-    if !exploded && (mo.z != mo.floorz || mo.momz != fixed::ZERO) {
-        let z = z_movement(ref mo, Option::None);
+    if !exploded && (m.z != m.floorz || m.momz != fixed::ZERO) {
+        let z = z_movement(ref m, Option::None);
         if missile && z.missile_hit {
-            explode_missile(ctx.w, ref rng, ref mo);
+            explode_missile(e.w.unbox(), ref rng, ref m);
         }
     }
+    mo = BoxTrait::new(m);
     // The state machine, with `A_Look` held back (see below).
     think_state(
-        ctx, mobjs, ref g, ref rng, ref mo, me, false, may_chase, ref patches, ref ev, ref spawn_at,
+        e, mobjs, ref g, ref rng, ref mo, me, false, may_chase, ref patches, ref ev, ref spawn_at,
     );
     // **`A_Look` runs on the cadence, not on the frame.** Vanilla only
     // reaches `A_Look` when the two-frame idle loop turns over, which on
@@ -340,7 +415,7 @@ pub fn mobj_thinker(
     // unless it actually wakes, so the RNG stream is untouched.
     if may_look {
         run_chain(
-            ctx,
+            e,
             mobjs,
             ref g,
             ref rng,
@@ -355,8 +430,9 @@ pub fn mobj_thinker(
         );
     }
     // `S_NULL` with `FOREVER` is Doom's "remove me".
-    if mo.state == 0 && mo.tics == fsm::FOREVER {
-        unset_thing_position(ref g, @mo, me);
+    let done = mo.unbox();
+    if done.state == 0 && done.tics == fsm::FOREVER {
+        unset_thing_position(ref g, @done, me);
         return false;
     }
     true
@@ -375,7 +451,7 @@ pub fn monsters_ticker(
     tic: u32,
     rng: Prng,
 ) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
-    let ctx = Ctx { w, players, noise, tic };
+    let e = Env { w: BoxTrait::new(w), players, noise, tic };
     let mut r = rng;
     let mut ev: Array<MonsterEvent> = array![];
     let mut patches: Array<Patch> = array![];
@@ -393,30 +469,39 @@ pub fn monsters_ticker(
             spawn_at = free;
         }
     }
-    let look_phase = tic % LOOK_CADENCE;
-    // Hoisted out of the loop (D24): the classification below is `is_ours`,
-    // `is_awake` and `is_dormant` spelled out, so that the ~20-span `World`
-    // does not cross a call boundary once per mobj per tic.
-    let states = w.states;
-    let actions = states.action_id;
-    let mut i: u32 = 0;
-    let mut rank: u32 = 0;
+    let (_, look_phase) = DivRem::div_rem(tic, CADENCE);
+    // The classification below is `is_ours`, `is_awake` and `is_dormant`
+    // spelled out (D24), reading the two state columns *through the boxed
+    // world*: a `let` here would put the twelve felts of `StateTables` and
+    // its action column in the loop's live set, and a loop is a function
+    // whose live set is pushed and returned on every iteration (S7 §8
+    // rule 4). A read through the box is free.
+    let mut i: u32 = opaque_zero(n);
+    let mut rank: u32 = opaque_zero(n);
     while i != n {
-        let mut mo = *mobjs.at(i);
-        let flags = mo.flags;
+        // The classification reads the slot through the list's snapshot;
+        // the 27 felts are materialised only where the mobj is about to be
+        // written, which is one copy per slot per tic instead of two
+        // (S7 §8 rule 3 applied to the ticker's own pass).
+        let m = match mobjs.get(i) {
+            Option::Some(b) => b.unbox(),
+            Option::None => { break; },
+        };
+        let flags = *m.flags;
         let countkill = doom_physics::has(flags, MF_COUNTKILL);
-        if mo.kind == KIND_NONE || !(countkill || doom_physics::has(flags, MF_MISSILE)) {
-            out.append(mo);
-            i += 1;
+        if *m.kind == KIND_NONE || !(countkill || doom_physics::has(flags, MF_MISSILE)) {
+            out.append(*m);
+            i = inc(i);
             continue;
         }
-        let dormant = countkill && *actions.at(mo.state) == A_LOOK;
+        let dormant = countkill && rd32(e.w.unbox().states.action_id, *m.state) == A_LOOK;
         let mut may_chase = true;
-        if countkill && mo.health > 0 && !dormant {
+        if countkill && !dormant && *m.health > 0 {
             may_chase = in_window(rank, tic, awake);
-            rank += 1;
+            rank = inc(rank);
         }
-        let may_look = dormant && i % LOOK_CADENCE == look_phase;
+        let (_, phase) = DivRem::div_rem(i, CADENCE);
+        let may_look = dormant && phase == look_phase;
         // **The dormant fast path.** A monster asleep with no momentum, on
         // its floor and not due to look has exactly one thing left to do
         // this tic: count its idle frame down. Doing it here rather than
@@ -427,41 +512,49 @@ pub fn monsters_ticker(
         // The suppressed action can only be `A_Look` — that *is* what makes
         // the monster dormant — so nothing is lost.
         if dormant
-            && mo.momx == fixed::ZERO
-            && mo.momy == fixed::ZERO
-            && mo.momz == fixed::ZERO
-            && mo.z == mo.floorz {
-            if mo.tics != fsm::FOREVER {
-                let (st, tc, _) = fsm::advance(states, mo.state, mo.tics);
-                mo.state = st;
-                mo.tics = tc;
+            && *m.momx == fixed::ZERO
+            && *m.momy == fixed::ZERO
+            && *m.momz == fixed::ZERO
+            && *m.z == *m.floorz {
+            let (st, tc) = if *m.tics != fsm::FOREVER {
+                let (st, tc, _) = fsm::advance(e.w.unbox().states, *m.state, *m.tics);
+                (st, tc)
+            } else {
+                (*m.state, *m.tics)
+            };
+            if !may_look {
+                // Nothing else to do this tic: the countdown goes straight
+                // into the rebuilt list, one 27-felt write and no copy.
+                out.append(Mobj { state: st, tics: tc, ..*m });
+                i = inc(i);
+                continue;
             }
-            if may_look {
-                run_chain(
-                    ctx,
-                    mobjs,
-                    ref g,
-                    ref r,
-                    ref mo,
-                    i,
-                    A_LOOK,
-                    true,
-                    may_chase,
-                    ref patches,
-                    ref ev,
-                    ref spawn_at,
-                );
-            }
-            out.append(mo);
-            i += 1;
+            let mut b = BoxTrait::new(Mobj { state: st, tics: tc, ..*m });
+            run_chain(
+                e,
+                mobjs,
+                ref g,
+                ref r,
+                ref b,
+                i,
+                A_LOOK,
+                true,
+                may_chase,
+                ref patches,
+                ref ev,
+                ref spawn_at,
+            );
+            out.append(b.unbox());
+            i = inc(i);
             continue;
         }
-        let alive = mobj_thinker(
-            ctx,
+        let mut b = BoxTrait::new(*m);
+        let alive = mobj_thinker_in(
+            e,
             mobjs,
             ref g,
             ref r,
-            ref mo,
+            ref b,
             i,
             may_look,
             may_chase,
@@ -470,11 +563,11 @@ pub fn monsters_ticker(
             ref spawn_at,
         );
         if alive {
-            out.append(mo);
+            out.append(b.unbox());
         } else {
             out.append(removed_mobj());
         }
-        i += 1;
+        i = inc(i);
     }
     let final_list = apply(out, patches.span(), n);
     (final_list, r, ev)
@@ -491,27 +584,33 @@ fn apply(out: Array<Mobj>, patches: Span<Patch>, n: u32) -> Array<Mobj> {
     }
     let src = out.span();
     let mut res: Array<Mobj> = array![];
-    let mut i: u32 = 0;
+    let mut i: u32 = opaque_zero(n);
+    // The per-slot scan *is* `read_mobj`'s (S7 §8 rule 6: one shared helper
+    // out of line rather than the same loop written twice).
     while i != n {
-        let mut m = *src.at(i);
-        let mut k: u32 = 0;
-        while k != np {
-            let p = *patches.at(k);
-            if p.idx == i {
-                m = p.mo;
-            }
-            k += 1;
-        }
-        res.append(m);
-        i += 1;
+        res.append(read_mobj(src, patches, i));
+        i = inc(i);
     }
-    let mut k: u32 = 0;
+    let mut k: u32 = opaque_zero(np);
     while k != np {
-        let p = *patches.at(k);
-        if p.idx >= n && res.len() < MAX_MOBJS {
-            res.append(p.mo);
+        match patches.get(k) {
+            Option::Some(b) => {
+                let p = *b.unbox();
+                if p.idx >= n && res.len() < MAX_MOBJS {
+                    res.append(p.mo);
+                }
+            },
+            Option::None => {},
         }
-        k += 1;
+        k = inc(k);
     }
     res
+}
+
+/// `(r + 1) * mul`, the shape of every damage roll of `p_enemy.c`, in the
+/// field: `u32`'s `+` and `*` both carry an overflow panic path, and both
+/// operands here are bounded by a table (S7 §8 rule 1).
+#[inline(always)]
+pub(crate) fn scale(r: u32, mul: u32) -> u32 {
+    maputl::low32(fixed::to_u128((r.into() + 1) * mul.into()))
 }

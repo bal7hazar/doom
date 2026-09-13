@@ -12,13 +12,27 @@ Two measurements, both required by PLAN.md §3.1 rule 4:
    number printed is what a tic of that scene costs in a run. Fails at +10 %
    over `budgets.json`.
 
-2. **Bytecode words.** `bench/size/` calls every public entry point of this
-   crate once; `bench/baseline/` is the same package with the same level data
-   **and the same `doom_physics` calls**, and no `doom_monsters` call. The
-   difference is therefore this crate's own code — not the 57 000 words of
-   physics underneath it — which is what docs/DECISIONS.md D23 budgets at
-   5 000. The bootloader re-hashes the whole program every segment
+2. **Bytecode words.** `bench/size/` calls the crate's entry points once;
+   `bench/baseline/` is the same package with the same level data **and the
+   same `doom_physics` calls**, and no `doom_monsters` call. The difference
+   is therefore this crate's own code — not the 36 000 words of physics
+   underneath it. The bootloader re-hashes the whole program every segment
    (`2 340 + 14.7 x words` steps, S1 §5.9).
+
+   Four figures, because two axes matter (docs/spikes/S7.md §6,
+   docs/DECISIONS.md D29):
+
+   * `full_api` (default) calls the **whole public surface**, sixteen entry
+     points that each take the 72-felt `Ctx` and the actor by `ref`;
+     `--no-default-features` calls **the ticker alone**, which is what
+     `doom_game` calls and therefore what reaches the proved program;
+   * the `dev` profile against the **`proving`** profile, whose
+     `unsafe-panic = true` turns a panic into an unprovable-anyway trap
+     (R4-A2). Building under it is also the compile test S7 §6 asks for.
+
+   **D29 budgets this crate at 15 000 words**, and the figure it is about is
+   the ticker alone under `proving`; the check below fails at +10 % over it,
+   and every one of the four figures is guarded against regression.
 
 Usage:
     python3 measure.py            # measure, print the table, check budgets
@@ -40,7 +54,7 @@ SIZE = HERE / "size"
 BASELINE = HERE / "baseline"
 RE_RESOURCE = re.compile(r"^\s*([a-z_0-9 ]+):\s*([0-9,]+)\s*$")
 TOLERANCE = 1.10
-D23_CODE_WORDS = 5000  # docs/DECISIONS.md D23 / the task's bytecode budget
+D29_CODE_WORDS = 15000  # docs/DECISIONS.md D29: this crate's share of the 100 k
 D2_STEPS_PER_TIC = 12000  # docs/G0.md D2
 BOOTLOADER_PER_WORD = 14.7  # S1 §5.9 / S0 §5.2
 BOOTLOADER_FIXED = 2340
@@ -53,18 +67,25 @@ def scarb(args: list[str], cwd: Path = HERE) -> subprocess.CompletedProcess:
     )
 
 
-def build(cwd: Path) -> None:
-    p = scarb(["build"], cwd)
+def build(cwd: Path, profile: str = "dev", *flags: str) -> None:
+    p = scarb(["--profile", profile, "build", *flags], cwd)
     if p.returncode != 0:
         raise SystemExit(p.stdout + p.stderr)
 
 
-def bytecode_words(cwd: Path) -> int:
-    candidates = sorted((cwd / "target" / "dev").glob("*.executable.json"))
+def bytecode_words(cwd: Path, profile: str = "dev") -> int:
+    candidates = sorted((cwd / "target" / profile).glob("*.executable.json"))
     if not candidates:
-        raise SystemExit("no executable built in %s" % cwd)
+        raise SystemExit("no executable built in %s (%s)" % (cwd, profile))
     program = json.loads(candidates[0].read_text())
     return len(program["program"]["bytecode"])
+
+
+def size_of(profile: str, *flags: str) -> int:
+    """Words of `doom_monsters` code under `profile`, with these size flags."""
+    build(BASELINE, profile)
+    build(SIZE, profile, *flags)
+    return bytecode_words(SIZE, profile) - bytecode_words(BASELINE, profile)
 
 
 def run(op: int, n: int) -> dict[str, int]:
@@ -103,12 +124,16 @@ def main() -> int:
     iters = budgets.get("iterations", 20)
 
     build(HERE)
+    # The four bytecode figures, then the step bench's own executable.
+    game_proving = size_of("proving", "--no-default-features")
+    full_proving = size_of("proving")
+    game_words = size_of("dev", "--no-default-features")
     build(SIZE)
     build(BASELINE)
-    bench_words = bytecode_words(HERE)
-    words = bytecode_words(SIZE)
     base_words = bytecode_words(BASELINE)
+    words = bytecode_words(SIZE)
     code_words = words - base_words
+    bench_words = bytecode_words(HERE)
 
     cache: dict[int, tuple[float, float]] = {}
 
@@ -148,27 +173,48 @@ def main() -> int:
     print("\nbare loop: %.2f steps/iteration" % loop)
     print("D2 budget: %d steps/tic for the whole simulation" % D2_STEPS_PER_TIC)
     print(
-        "\nbytecode: %d words (bench/size) - %d (bench/baseline, same crate graph,"
-        "\n          same data and the same doom_physics calls) = %d words of"
-        "\n          doom_monsters code" % (words, base_words, code_words)
+        "\nbytecode: bench/size - bench/baseline (same crate graph, same data and"
+        "\n          the same doom_physics calls) = words of doom_monsters code:"
+    )
+    print("%42s  %8s  %8s" % ("", "dev", "proving"))
+    print("%42s  %8d  %8d" % ("whole public surface", code_words, full_proving))
+    print("%42s  %8d  %8d" % ("the ticker alone (what doom_game links)", game_words, game_proving))
+    print(
+        "          the boundary (16 entry points taking a 72-felt Ctx and the"
+        "\n          actor by ref) is the difference: %d words on dev, %d on proving"
+        % (code_words - game_words, full_proving - game_proving)
     )
     print(
-        "          bootloader program-hashing: %d steps/segment for this code"
-        % round(BOOTLOADER_FIXED + BOOTLOADER_PER_WORD * code_words)
+        "          bootloader program-hashing of the proved figure: %d steps/segment"
+        % round(BOOTLOADER_FIXED + BOOTLOADER_PER_WORD * game_proving)
     )
     print("          (the step benchmark itself compiles to %d words)" % bench_words)
-    print("          D23 budget for this crate: %d words" % D23_CODE_WORDS)
-    if code_words > D23_CODE_WORDS:
-        print("          OVER the D23 budget by %d words" % (code_words - D23_CODE_WORDS))
-    baselined = budgets.get("code_words", 0)
-    if baselined and code_words > baselined * TOLERANCE:
-        print("  REGRESSION (+10 %% over the %d words of budgets.json)" % baselined)
-        failures.append("code_words")
+    print("          D29 budget for this crate: %d words" % D29_CODE_WORDS)
+    if game_proving > D29_CODE_WORDS * TOLERANCE:
+        print(
+            "  OVER the D29 budget of %d words by %d (+10 %% tolerance)"
+            % (D29_CODE_WORDS, game_proving - D29_CODE_WORDS)
+        )
+        failures.append("D29 budget")
+    for key, value in (
+        ("code_words", code_words),
+        ("code_words_game", game_words),
+        ("code_words_proving", full_proving),
+        ("code_words_game_proving", game_proving),
+    ):
+        baselined = budgets.get(key, 0)
+        if baselined and value > baselined * TOLERANCE:
+            print("  REGRESSION (+10 %%): %s %d over the %d of budgets.json"
+                  % (key, value, baselined))
+            failures.append(key)
 
     if "--update" in sys.argv:
         for entry, res in zip(budgets["operations"], results):
             entry["budget"] = int(round(res["net"]))
         budgets["code_words"] = code_words
+        budgets["code_words_game"] = game_words
+        budgets["code_words_proving"] = full_proving
+        budgets["code_words_game_proving"] = game_proving
         (HERE / "budgets.json").write_text(json.dumps(budgets, indent=2) + "\n")
         print("budgets.json updated")
         return 0
@@ -183,6 +229,9 @@ def main() -> int:
                     step_bench_words=bench_words,
                     baseline_words=base_words,
                     code_words=code_words,
+                    code_words_game=game_words,
+                    code_words_proving=full_proving,
+                    code_words_game_proving=game_proving,
                     operations=results,
                 ),
                 indent=2,
