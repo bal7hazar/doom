@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Deterministic command-only E1M1 scenarios; never construct or mutate game state."""
 import random
+from exit_route import EXIT_RLE, EXIT_SUFFIX_TICS
 
 SEED = 20260913
 
@@ -72,6 +73,11 @@ def scenarios():
     rng = random.Random(SEED ^ 0xC0A5)
     cases.append({"name": "seeded_u32", "purpose": "all canonical command fields from seeded u32 words",
                   "words": [rng.getrandbits(32) for _ in range(128)]})
+    cases.append({"name": "exit_route",
+                  "purpose": "real genesis-to-exit route, followed by 17 unconsumed commands",
+                  "required_status": 2,
+                  "words": [w for count, w in EXIT_RLE for _ in range(count)]
+                           + [word(50, 40, 512, 1)] * EXIT_SUFFIX_TICS})
     if len({tuple(c["words"]) for c in cases}) != len(cases):
         raise AssertionError("duplicate replay commands")
     return cases

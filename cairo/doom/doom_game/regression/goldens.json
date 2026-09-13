@@ -1143,6 +1143,101 @@
         "0x0",
         "0x0"
       ]
+    },
+    "exit_route": {
+      "input_sha256": "993894e7815413a55355da51b8f5e9fea4327fc6608514e3de12e40675c23c35",
+      "status": 2,
+      "tic": 677,
+      "health": 29,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        70,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4271089149,
+        4379992348,
+        4286578688
+      ],
+      "angle": 2147483648,
+      "stats": [
+        0,
+        4,
+        0
+      ],
+      "prng": 193,
+      "mrng": 1,
+      "state_felts": 6467,
+      "snapshot_felts": 2506,
+      "state_sha256": "54bd0959bcce6934b6a308327a62c279409873ade900563070c2f6e3dae52da3",
+      "snapshot_sha256": "1eba0a7c5e2d6b2353a1d580ead907839ee0678d9894fc0577d058329c4af689",
+      "output_sha256": "58800320941e3478f71b5d7d1f5f038b9822d8e9c3b582a5d0e231b5f57c6c2b",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x5f14e3139aa869f95288f7d598e0a784ea9a6c36351b7b376cc578dab4e68c",
+        "0x0",
+        "0x2a5",
+        "0x2",
+        "0x37332c8ee3e8487dd9342b91f32a79b24db0585862b4ab6a12f78464a2070ed",
+        "0x0",
+        "0x4",
+        "0x0"
+      ]
+    }
+  },
+  "case_provenance": {
+    "exit_route": {
+      "engine_commit": "8ae7f1ccf3102eff99dbd57228ced61cdb3abdc3",
+      "scarb": "2.16.0",
+      "poseidon_py": "0.1.5",
+      "level_id": 0,
+      "route_seed": null,
+      "genesis_rng_cursors": [
+        4,
+        1
+      ],
+      "method": "independent native exploration, full Scarb dev/proving replay and D14 oracle; 677 consumed commands plus 17 terminal suffix commands",
+      "route_commands_sha256": "746a5ad2319402b552e9f14464d829f25d41fcc26c24a0b9f9a05f021d3fada8",
+      "identity": {
+        "proving": {
+          "genesis": {
+            "words": 46434,
+            "executable_sha256": "12130f43a4493bb775e497521cb38bfdda7d83864a005ca180ac84b78227700e",
+            "bytecode_sha256": "51789327bf688c430acd1c0af123a71e3f9e21a0c12d4a4714d8cf074589b40a"
+          },
+          "step_tic": {
+            "words": 108365,
+            "executable_sha256": "d31339fa2c73c32b0d337b0c42cc2328330b495a27545df728239a041a48f3c1",
+            "bytecode_sha256": "9577e274bec59fbd7f4d23a8d436c5215d52aac795270fd62ac8a2b837162e9b"
+          },
+          "run_segment": {
+            "words": 106878,
+            "executable_sha256": "f46eae2f9876850f02a7e18da60d0f71f7834786084d6a83e81f4d45a019e16f",
+            "bytecode_sha256": "02dfd736887c45a5a63ec1631ba6fc2d9419106b781376a23b6bee9e6e5e869a"
+          }
+        },
+        "dev": {
+          "genesis": {
+            "words": 50746,
+            "executable_sha256": "6daa2def92878c5c7a2f0137718fc9fee172823ef28f8dd93a38e6a7153da6ef",
+            "bytecode_sha256": "0f02ac42dd2b2530658b2636d38d856b157663f8239e7ab295ba46fc5c471dda"
+          },
+          "step_tic": {
+            "words": 125981,
+            "executable_sha256": "dcf0ee6a14c6a907742082bd174f27fc06c2bb07bba42bcb5f7867cdad44c310",
+            "bytecode_sha256": "607b08565f19ea976feaf6cb16a7de650f6e9023cd55cd322f56ca62a0ce63b0"
+          },
+          "run_segment": {
+            "words": 125854,
+            "executable_sha256": "fd2c7a9adfd5f54007d8b0df4e315198cc3d01cfbbbb5908221e193271277269",
+            "bytecode_sha256": "eeb0674436d4fa9bf277e4f66bace98d8e5897b31991b19ab3b389a8bf040ec7"
+          }
+        }
+      }
     }
   }
 }

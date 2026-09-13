@@ -8,7 +8,8 @@ import re
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from abi import (Failure, STATE_TAG, decode_frame, expected_d14, input_commitment, packed)
 from corpus import scenarios, word
 from run import check_profile, failure_artifact, invoke_genesis, replay, reproduce
@@ -57,6 +58,37 @@ class HarnessTests(unittest.TestCase):
         for ours, original in [("idle", "idle"), ("walk_lift", "walk"), ("door_pickups", "door"),
                                ("fight_sweep", "fight"), ("death", "death")]:
             self.assertEqual(cases[ours], historical.LOGS[original]())
+
+    def test_exit_route_requires_exit_and_retains_an_unconsumed_suffix(self):
+        from exit_route import EXIT_RLE, EXIT_SUFFIX_TICS, EXIT_TICS
+        from abi import digest
+        case = next(c for c in scenarios() if c["name"] == "exit_route")
+        route = [w for n, w in EXIT_RLE for _ in range(n)]
+        pins = json.loads((HERE / "goldens.json").read_text())
+        pin = pins["cases"]["exit_route"]
+        provenance = pins["case_provenance"]["exit_route"]
+        self.assertEqual(len(scenarios()), 26)
+        self.assertEqual(len(route), EXIT_TICS)
+        self.assertEqual(case["words"][:EXIT_TICS], route)
+        self.assertEqual(len(case["words"]), EXIT_TICS + EXIT_SUFFIX_TICS)
+        self.assertEqual(case["required_status"], 2)
+        self.assertEqual((pin["status"], pin["tic"]), (2, EXIT_TICS))
+        self.assertEqual(pin["input_sha256"], digest(case["words"]))
+        self.assertEqual(provenance["route_commands_sha256"], digest(route))
+
+    def test_exit_case_refuses_a_different_terminal_before_comparing_pins(self):
+        from run import corpus
+        with tempfile.TemporaryDirectory() as td:
+            args = SimpleNamespace(case=["exit_route"], record=None, goldens=HERE / "goldens.json",
+                                   profiles=["dev"], out=Path(td), timeout=120, target=None,
+                                   max_seconds=3600)
+            with patch("run.Runner", return_value=Mock()), \
+                    patch("run.invoke_genesis", return_value=[]), \
+                    patch("run.invoke_case", return_value=(frame(status=1), None, {})):
+                with self.assertRaises(Failure) as raised:
+                    corpus(args)
+                self.assertEqual(raised.exception.kind, "coverage")
+                self.assertIn("required status 2", str(raised.exception))
 
     def test_clean_poseidon_package_matches_existing_independent_reference_vectors(self):
         self.assertEqual(input_commitment([]),

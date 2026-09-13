@@ -5,14 +5,36 @@ This corpus uses only the public Scarb 2.16.0 `doom_run` entrypoints: `genesis`,
 32-bit command words. No state, health, actor, RNG, door or terminal status is injected.
 It is independent of the internal roster representation (D33).
 
-`corpus.py` defines 25 distinct command logs: the five existing historical replays plus
+`corpus.py` defines 26 distinct command logs: the five existing historical replays plus
 backwards and sideways collision, turns and momentum, diagonal sprint, zigzag, held/tapped
 attack, fist/pistol/unowned weapon requests, use edges/held/released, retreat after pickups,
 combat while moving, canonical input extrema and seeded arbitrary u32 commands. Purpose
 labels describe the intended stimulus; the result reports the actually observed health,
 weapon, ammo, counts and terminal state. At least twenty distinct final states, real pickups,
-a kill and a genuine death are required. An EXIT is counted only when the real entrypoint
-returns it; absence of EXIT is explicitly reported and leaves the spawn-to-exit criterion open.
+a kill, a genuine death and a real EXIT are required. The `exit_route` case explicitly
+requires status 2, including during characterization; a different terminal outcome fails.
+
+## Real EXIT route and additional pin
+
+`exit_route.py` holds 139 explicit RLE groups expanding to 677 legal commands, discovered
+from public inputs on D29 engine commit `8ae7f1ccf3102eff99dbd57228ced61cdb3abdc3`.
+The player reaches the exit switch at tic 677 with 29 health, 0 kills, 4 items and 0 secrets.
+The route traverses the two main doors, detours north around a blocking demon, then uses
+the final door and exit switch. It is not a shortest-route claim. There is no random search
+seed: `genesis(0)` selects E1M1, and the engine's initial P/M RNG cursors are 4/1.
+
+The corpus appends 17 legal movement/attack words after the exit command: 694 supplied,
+677 consumed, 17 excluded from D13/D14 and tic counts. Full/cut/empty-boundary checks cover
+that suffix in both profiles. The expected final state/render/envelope and D14 were obtained
+independently by full Scarb dev/proving replay and the Python oracle before adding the pin;
+the native exploration and a Chromium replay also returned the same full envelope.
+`goldens.json.case_provenance.exit_route` records its own D29 executable identities.
+The original global provenance and all 25 previous golden objects are unchanged; they do
+not pretend to originate from this later D29 executable. Existing cases were independently
+revalidated against these same frozen D29 binaries before this addition.
+
+This supplies real spawn-to-exit execution coverage. It does not establish a cryptographic
+proof of a complete game, P3.7, AIR limits, proof latency, memory limits or browser fluidity.
 
 ## What is checked
 

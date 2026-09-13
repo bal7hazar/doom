@@ -227,6 +227,9 @@ def corpus(args):
         for index, case in enumerate(cases):
             seed = SEED + index * 101
             frame, public, counts = invoke_case(runner, args.out, initial, case["words"], seed, case["name"])
+            if "required_status" in case:
+                require(frame.status == case["required_status"], "coverage",
+                        f"{case['name']} did not reach required status {case['required_status']}")
             pin = dict(input_sha256=digest(case["words"]), **frame.summary(), d14=[hex(x) for x in public])
             if expected is not None and expected["cases"][case["name"]] != pin:
                 error = Failure("golden", f"{case['name']} pinned output differs")
@@ -257,8 +260,9 @@ def corpus(args):
                     weapon_ids=sorted({r["weapon"] for r in first}))
     if not args.case:
         require(coverage["distinct_final_states"] >= 20 and coverage["deaths"] > 0
-                and coverage["cases_with_kills"] > 0 and coverage["cases_with_items"] > 0,
-                "coverage", "movement/combat/pickup/death corpus was not actually observed")
+                and coverage["cases_with_kills"] > 0 and coverage["cases_with_items"] > 0
+                and coverage["exits"] > 0,
+                "coverage", "movement/combat/pickup/death/exit corpus was not actually observed")
     result = dict(ok=True, mode="corpus", provenance=provenance(), seed=SEED, seconds=time.monotonic() - started,
                   coverage=coverage, profiles=rows,
                   identity={p: r.identity for p, r in runners.items()},
