@@ -38,7 +38,7 @@ fn harness(pin: Option<&str>, segment: &Value) -> Harness {
     std::fs::write(
         &verifier,
         format!(
-            "#!/bin/sh\ntouch '{}'\nprintf '%s\\n' '{}'\n",
+            "#!/bin/sh\ncase \"$*\" in *--expect-bootloader*) ;; *) exit 3 ;; esac\ntouch '{}'\nprintf '%s\\n' '{}'\n",
             marker.display(),
             report
         ),
@@ -46,6 +46,8 @@ fn harness(pin: Option<&str>, segment: &Value) -> Harness {
     .unwrap();
     std::fs::set_permissions(&verifier, std::fs::Permissions::from_mode(0o700)).unwrap();
     cfg.leaf_verify_bin = Some(verifier);
+    cfg.leaf_bootloader = Some(dir.path().join("bootloader.json"));
+    std::fs::write(cfg.leaf_bootloader.as_ref().unwrap(), r#"{"data":["0x1"]}"#).unwrap();
     // No scheduler: a successful admission queues work for later, never starts heavy jobs.
     let state = Arc::new(AppState::new(cfg, Db::open_memory().unwrap()));
     let router = api::router(Arc::clone(&state));

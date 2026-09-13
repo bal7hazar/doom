@@ -25,6 +25,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
 use cairo_air::CairoProof;
+use cairo_air::air::PublicMemory;
 use cairo_air::utils::get_verification_output;
 use cairo_air::verifier::verify_cairo_ex;
 use clap::Parser;
@@ -52,6 +53,10 @@ struct Cli {
     /// This is NOT the task hash in output_preimage[0].
     #[arg(long)]
     expect_program_hash: Option<String>,
+    /// Derive the expected bootloader hash from this configured Cairo 0 program's bytecode.
+    /// Prevents a valid proof of another program from reaching an expensive leaf circuit.
+    #[arg(long, conflicts_with = "expect_program_hash")]
+    expect_bootloader: Option<PathBuf>,
 }
 
 /// What the wrapper reads back.
@@ -140,10 +145,43 @@ fn parse_felt(s: &str) -> Result<starknet_ff::FieldElement> {
     }
 }
 
+/// Use the pinned verifier's own encoding/hash, rather than a separately maintained constant.
+fn bootloader_hash(bytes: &[u8]) -> Result<String> {
+    #[derive(serde::Deserialize)]
+    struct Program {
+        data: Vec<String>,
+    }
+    let program: Program = serde_json::from_slice(bytes).context("invalid bootloader JSON")?;
+    if program.data.is_empty() {
+        bail!("bootloader has no bytecode");
+    }
+    let mut memory = PublicMemory::default();
+    for word in program.data {
+        let felt = parse_felt(&word).context("invalid bootloader bytecode felt")?;
+        let bytes = felt.to_bytes_be();
+        let mut limbs = [0u32; 8];
+        for (i, chunk) in bytes.chunks_exact(4).enumerate() {
+            limbs[7 - i] = u32::from_be_bytes(chunk.try_into().unwrap());
+        }
+        memory.program.push((0, limbs));
+    }
+    Ok(format!(
+        "0x{:x}",
+        get_verification_output(&memory).program_hash
+    ))
+}
+
 fn run(cli: &Cli) -> Result<Report> {
     let bytes = std::fs::read(&cli.proof)
         .with_context(|| format!("cannot read {}", cli.proof.display()))?;
-    let expect = cli.expect_program_hash.as_deref();
+    let expected = if let Some(path) = &cli.expect_bootloader {
+        Some(bootloader_hash(&std::fs::read(path).with_context(
+            || format!("cannot read bootloader {}", path.display()),
+        )?)?)
+    } else {
+        cli.expect_program_hash.clone()
+    };
+    let expect = expected.as_deref();
     match cli.channel_hash.as_str() {
         "blake2s_m31" | "Blake2sM31" => verify_generic::<Blake2sM31MerkleChannel>(
             &bytes,

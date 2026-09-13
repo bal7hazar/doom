@@ -424,8 +424,11 @@ rebind against the current configuration before using a cached leaf or starting
 a prover, so a changed pin cannot revive work admitted under an older identity.
 
 `hellproof-leaf-verify` reports the **bootloader** hash in `program_hash`; its
-`--expect-program-hash` option also pins that bootloader. Neither is the task hash
-at `output_preimage[0]`. The output digest binds that separate task preimage to
+`--expect-program-hash` option also pins that bootloader. The service passes `--expect-bootloader` with its configured Cairo 0 bootloader:
+the verifier derives the expected hash from that exact bytecode using the pinned
+upstream hash function, and rejects another proven program before a circuit job.
+No duplicate bootloader hash constant is maintained. Neither bootloader pin is
+the task hash at `output_preimage[0]`. The output digest binds that separate task preimage to
 the verified proof. DoomRuns additionally recomposes with its own pinned task hash.
 
 The examples use the exact committed `client/public/programs/segment_stub10.executable.json`:
