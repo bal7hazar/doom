@@ -161,63 +161,25 @@ pub fn touch_special(ref p: Player, ref mo: Mobj, special: @Mobj) -> bool {
     }
     let kind = *special.kind;
     let dropped = has(*special.flags, MF_DROPPED);
-    let took = if kind == KIND_MISC0 {
-        give_armor(ref p, 1)
-    } else if kind == KIND_MISC1 {
-        give_armor(ref p, 2)
-    } else if kind == KIND_MISC2 {
-        bonus_health(ref p, ref mo, 1)
-    } else if kind == KIND_MISC3 {
-        bonus_armor(ref p)
-    } else if kind == KIND_MISC4 {
-        give_card(ref p, CARD_BLUE);
-        true
-    } else if kind == KIND_MISC10 {
-        give_body(ref p, ref mo, 10)
-    } else if kind == KIND_MISC11 {
-        give_body(ref p, ref mo, 25)
-    } else if kind == KIND_MISC12 {
-        bonus_health(ref p, ref mo, 100)
-    } else if kind == KIND_MISC13 {
-        give_strength(ref p, ref mo);
-        if p.ready_weapon != WP_FIST {
-            p.pending_weapon = WP_FIST;
-        }
-        true
-    } else if kind == KIND_CLIP {
-        give_ammo(ref p, AM_CLIP, if dropped {
-            0
-        } else {
-            1
-        })
-    } else if kind == KIND_MISC17 {
-        give_ammo(ref p, AM_CLIP, 5)
-    } else if kind == KIND_MISC22 {
-        give_ammo(ref p, AM_SHELL, 1)
-    } else if kind == KIND_MISC23 {
-        give_ammo(ref p, AM_SHELL, 5)
-    } else if kind == KIND_MISC18 {
-        give_ammo(ref p, AM_MISL, 1)
-    } else if kind == KIND_MISC19 {
-        give_ammo(ref p, AM_MISL, 5)
-    } else if kind == KIND_MISC20 {
-        give_ammo(ref p, AM_CELL, 1)
-    } else if kind == KIND_MISC21 {
-        give_ammo(ref p, AM_CELL, 5)
-    } else if kind == KIND_MISC24 {
-        backpack(ref p)
-    } else if kind == KIND_SHOTGUN {
-        give_weapon(ref p, WP_SHOTGUN, dropped)
-    } else if kind == KIND_CHAINGUN {
-        give_weapon(ref p, WP_CHAINGUN, dropped)
-    } else if kind == KIND_MISC26 {
-        give_weapon(ref p, WP_CHAINSAW, false)
-    } else {
-        // The rocket launcher and the plasma rifle are gettable in Doom but
-        // have no slot in this five-weapon roster; both are multiplayer-only
-        // placements on E1M1, so nothing spawns them at skill 2 and the item
-        // is left on the floor rather than half-applied (README).
-        false
+    // Doom's one `switch (special->sprite)`, split in three so that no arm
+    // of it keeps the `Player` + `Mobj` live set alive across 150 Sierra
+    // statements: past that, `universal-sierra-compiler` cannot encode the
+    // jump offsets (`Offset overflow`) under `inlining-strategy = "avoid"`,
+    // which is the flag `cairo-coverage` requires.
+    let took = match take_health(ref p, ref mo, kind) {
+        Option::Some(v) => v,
+        Option::None => match take_ammo(ref p, kind, dropped) {
+            Option::Some(v) => v,
+            Option::None => match take_weapon(ref p, ref mo, kind, dropped) {
+                Option::Some(v) => v,
+                // The rocket launcher and the plasma rifle can be picked up
+                // in Doom but have no slot in this five-weapon roster; both
+                // are multiplayer-only placements on E1M1, so nothing spawns
+                // them at skill 2 and the item is left on the floor rather
+                // than half-applied (README, "Known departures").
+                Option::None => false,
+            },
+        },
     };
     if !took {
         return false;
@@ -227,6 +189,83 @@ pub fn touch_special(ref p: Player, ref mo: Mobj, special: @Mobj) -> bool {
     }
     p.bonuscount += BONUSADD;
     true
+}
+
+/// The health, armor, key and power half of `P_TouchSpecialThing`.
+/// `None` when `kind` is none of them.
+fn take_health(ref p: Player, ref mo: Mobj, kind: u32) -> Option<bool> {
+    if kind == KIND_MISC0 {
+        Option::Some(give_armor(ref p, 1))
+    } else if kind == KIND_MISC1 {
+        Option::Some(give_armor(ref p, 2))
+    } else if kind == KIND_MISC2 {
+        Option::Some(bonus_health(ref p, ref mo, 1))
+    } else if kind == KIND_MISC3 {
+        Option::Some(bonus_armor(ref p))
+    } else if kind == KIND_MISC4 {
+        give_card(ref p, CARD_BLUE);
+        Option::Some(true)
+    } else if kind == KIND_MISC10 {
+        Option::Some(give_body(ref p, ref mo, 10))
+    } else if kind == KIND_MISC11 {
+        Option::Some(give_body(ref p, ref mo, 25))
+    } else if kind == KIND_MISC12 {
+        Option::Some(bonus_health(ref p, ref mo, 100))
+    } else if kind == KIND_MISC13 {
+        give_strength(ref p, ref mo);
+        if p.ready_weapon != WP_FIST {
+            p.pending_weapon = WP_FIST;
+        }
+        Option::Some(true)
+    } else {
+        Option::None
+    }
+}
+
+/// The ammo half. The clip is the one item whose `MF_DROPPED` changes what
+/// it gives (half a clip instead of one).
+fn take_ammo(ref p: Player, kind: u32, dropped: bool) -> Option<bool> {
+    if kind == KIND_CLIP {
+        Option::Some(give_ammo(ref p, AM_CLIP, if dropped {
+            0
+        } else {
+            1
+        }))
+    } else if kind == KIND_MISC17 {
+        Option::Some(give_ammo(ref p, AM_CLIP, 5))
+    } else if kind == KIND_MISC22 {
+        Option::Some(give_ammo(ref p, AM_SHELL, 1))
+    } else if kind == KIND_MISC23 {
+        Option::Some(give_ammo(ref p, AM_SHELL, 5))
+    } else if kind == KIND_MISC18 {
+        Option::Some(give_ammo(ref p, AM_MISL, 1))
+    } else if kind == KIND_MISC19 {
+        Option::Some(give_ammo(ref p, AM_MISL, 5))
+    } else if kind == KIND_MISC20 {
+        Option::Some(give_ammo(ref p, AM_CELL, 1))
+    } else if kind == KIND_MISC21 {
+        Option::Some(give_ammo(ref p, AM_CELL, 5))
+    } else {
+        Option::None
+    }
+}
+
+/// The backpack and the three weapons this roster carries as pickups.
+fn take_weapon(ref p: Player, ref mo: Mobj, kind: u32, dropped: bool) -> Option<bool> {
+    if kind == KIND_MISC24 {
+        Option::Some(backpack(ref p))
+    } else if kind == KIND_SHOTGUN {
+        Option::Some(give_weapon(ref p, WP_SHOTGUN, dropped))
+    } else if kind == KIND_CHAINGUN {
+        Option::Some(give_weapon(ref p, WP_CHAINGUN, dropped))
+    } else if kind == KIND_MISC26 {
+        // The chainsaw takes no ammo, so `dropped` changes nothing here —
+        // vanilla passes `false`.
+        Option::Some(give_weapon(ref p, WP_CHAINSAW, dropped))
+    } else {
+        let _ = mo;
+        Option::None
+    }
 }
 
 /// `SPR_BON1` and `SPR_SOUL`: health that may go over 100%, up to 200.

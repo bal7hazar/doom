@@ -87,12 +87,28 @@ pub fn player_think(
         );
     }
 
-    // Check for weapon change.
+    buttons(env, ref g, ref rng, ref p, ref mo, ref events);
+    counters(ref p);
+}
+
+/// The `BT_CHANGE` / `BT_USE` / `P_MovePsprites` tail of `P_PlayerThink`.
+///
+/// Split out of [`player_think`] so that neither function keeps its live set
+/// alive across more than ~150 Sierra statements: past that,
+/// `universal-sierra-compiler` cannot encode a jump offset (`Offset
+/// overflow`) under the `inlining-strategy = "avoid"` that `cairo-coverage`
+/// requires. It costs one call boundary a tic.
+fn buttons(
+    env: Env,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref p: Player,
+    ref mo: Mobj,
+    ref events: Array<PlayerEvent>,
+) {
     if (env.buttons & BT_CHANGE) != 0 {
         change_weapon(ref p, env.buttons);
     }
-
-    // Check for use.
     if (env.buttons & BT_USE) != 0 {
         if !p.usedown {
             use_lines(env, ref g, @mo, ref events);
@@ -101,11 +117,13 @@ pub fn player_think(
     } else {
         p.usedown = false;
     }
-
     move_psprites(env, ref g, ref rng, ref p, ref mo, ref events);
+}
 
-    // Counters. `pw_strength` is the only power on E1M1 at skill 2, and it
-    // counts up for ever (vanilla uses it for the berserk palette only).
+/// `P_PlayerThink`'s counters. `pw_strength` is the only power reachable on
+/// E1M1 at skill 2, and it counts up for ever (vanilla reads it for the
+/// berserk palette only).
+fn counters(ref p: Player) {
     if p.strength != 0 {
         p.strength += 1;
     }
@@ -183,31 +201,38 @@ pub fn calc_height(ref p: Player, mo: @Mobj, tic: u32) {
     let bob = fixed::mul(Fixed { enc: BIAS + (half / 2).into() }, bam::finesine(idx));
 
     if p.playerstate == PST_LIVE {
-        p.viewheight = fixed::add(p.viewheight, p.deltaviewheight);
-        let top = Fixed { enc: BIAS + VIEWHEIGHT };
-        if fixed::gt(p.viewheight, top) {
-            p.viewheight = top;
-            p.deltaviewheight = fixed::ZERO;
-        }
-        let floor = Fixed { enc: BIAS + HALF_VIEWHEIGHT };
-        if fixed::lt(p.viewheight, floor) {
-            p.viewheight = floor;
-            if fixed::le(p.deltaviewheight, fixed::ZERO) {
-                p.deltaviewheight = Fixed { enc: BIAS + 1 };
-            }
-        }
-        if p.deltaviewheight != fixed::ZERO {
-            p.deltaviewheight = Fixed { enc: p.deltaviewheight.enc + 16384 };
-            if p.deltaviewheight == fixed::ZERO {
-                p.deltaviewheight = Fixed { enc: BIAS + 1 };
-            }
-        }
+        spring(ref p);
     }
 
     p.viewz = fixed::add(fixed::add(*mo.z, p.viewheight), bob);
     let head = Fixed { enc: *mo.ceilingz.enc - 4 * 65536 };
     if fixed::gt(p.viewz, head) {
         p.viewz = head;
+    }
+}
+
+/// `P_CalcHeight`'s view-height spring: it climbs back to `VIEWHEIGHT` after
+/// a hard landing, never falls below half of it, and accelerates by
+/// `FRACUNIT/4` a tic while it is moving.
+fn spring(ref p: Player) {
+    p.viewheight = fixed::add(p.viewheight, p.deltaviewheight);
+    let top = Fixed { enc: BIAS + VIEWHEIGHT };
+    if fixed::gt(p.viewheight, top) {
+        p.viewheight = top;
+        p.deltaviewheight = fixed::ZERO;
+    }
+    let floor = Fixed { enc: BIAS + HALF_VIEWHEIGHT };
+    if fixed::lt(p.viewheight, floor) {
+        p.viewheight = floor;
+        if fixed::le(p.deltaviewheight, fixed::ZERO) {
+            p.deltaviewheight = Fixed { enc: BIAS + 1 };
+        }
+    }
+    if p.deltaviewheight != fixed::ZERO {
+        p.deltaviewheight = Fixed { enc: p.deltaviewheight.enc + 16384 };
+        if p.deltaviewheight == fixed::ZERO {
+            p.deltaviewheight = Fixed { enc: BIAS + 1 };
+        }
     }
 }
 

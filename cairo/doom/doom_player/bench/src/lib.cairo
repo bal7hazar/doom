@@ -12,12 +12,14 @@
 //! The player stands at E1M1's Player 1 start, linked in the thing grid.
 
 use doom_map::{LevelId, genesis, load};
+use doom_physics::{
+    MF_SPECIAL, Mobj, NO_MOBJ, ThingGrid, World, new_grid, removed_mobj, set_thing_position,
+    world_of,
+};
 use doom_player::{
     Env, Player, PlayerEvent, calc_height, damage_player, env_of, move_psprites, player_think,
     push_felts, spawn, touch_special, use_lines,
 };
-use doom_physics::{MF_SPECIAL, Mobj, NO_MOBJ, ThingGrid, World, new_grid, removed_mobj,
-    set_thing_position, world_of};
 use doom_things::tables::KIND_MISC2;
 use prng::from_index;
 use ticcmd::TicCmd;
@@ -123,9 +125,10 @@ fn main(op: u32, n: u32) -> felt252 {
         while i != n {
             let mut q = base_p;
             q.bonuscount = i % 7;
+            let mo = base_mo;
             let mut out: Array<felt252> = array![];
             push_felts(ref out, @q);
-            acc += out.len().into();
+            acc += out.len().into() + mo.x.enc;
             i += 1;
         }
     } else if op == 7 {
@@ -135,7 +138,7 @@ fn main(op: u32, n: u32) -> felt252 {
             let mut mo = base_mo;
             mo.momx = fixed::from_units((i % 8).into());
             calc_height(ref q, @mo, i);
-            acc += q.viewz.enc;
+            acc += q.viewz.enc + mo.x.enc + q.health.into();
             i += 1;
         }
     } else if op == 8 {
@@ -176,6 +179,15 @@ fn main(op: u32, n: u32) -> felt252 {
                 e, ref g, ref rng, ref q, ref mo, ref events, NO_MOBJ, NO_MOBJ, 5 + i % 3, false,
             );
             acc += q.health.into();
+            i += 1;
+        }
+    } else if op == 12 {
+        // baseline: the two restored records, without the tic's Env -- the
+        // baseline of the three ops that never build one
+        while i != n {
+            let q = base_p;
+            let mo = base_mo;
+            acc += q.health.into() + mo.x.enc + i.into();
             i += 1;
         }
     } else if op == 11 {

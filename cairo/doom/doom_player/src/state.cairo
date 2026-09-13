@@ -148,8 +148,16 @@ pub struct Player {
     pub armor_points: u32,
     /// 0 (none), 1 (green, absorbs a third) or 2 (blue, absorbs a half).
     pub armor_type: u32,
-    /// `player->ammo[]`, indexed by [`AM_CLIP`]…[`AM_MISL`].
-    pub ammo: [u32; 4],
+    /// `player->ammo[]`, one field per [`AM_CLIP`]…[`AM_MISL`] rather than a
+    /// `[u32; 4]`: a fixed-size array *in a struct* makes
+    /// `universal-sierra-compiler` 2.19.3 fail (`Deferred(Const) does not
+    /// match OutputVarReferenceInfo::ZeroSized`) under the
+    /// `inlining-strategy = "avoid"` that `cairo-coverage` needs, and four
+    /// fields also read for free where the array cost a `Span` index.
+    pub ammo_clip: u32,
+    pub ammo_shell: u32,
+    pub ammo_cell: u32,
+    pub ammo_misl: u32,
     /// `player->backpack`: [`MAXAMMO`] is doubled while true.
     pub backpack: bool,
     /// `player->weaponowned[]` as a bitset ([`weapon_bit`]).
@@ -199,38 +207,32 @@ pub struct Player {
 
 /// `player->ammo[type]`, `0` for [`AM_NOAMMO`].
 pub fn ammo_of(p: @Player, ammo: u32) -> u32 {
-    if ammo >= 4 {
-        return 0;
+    if ammo == AM_CLIP {
+        *p.ammo_clip
+    } else if ammo == AM_SHELL {
+        *p.ammo_shell
+    } else if ammo == AM_CELL {
+        *p.ammo_cell
+    } else if ammo == AM_MISL {
+        *p.ammo_misl
+    } else {
+        0
     }
-    let a = p.ammo.span();
-    *a.at(ammo)
 }
 
-/// `player->ammo[type] = value` (a whole four-element array is rebuilt: four
-/// selects, no allocation).
+/// `player->ammo[type] = value`.
 pub fn set_ammo(p: Player, ammo: u32, value: u32) -> Player {
-    let a = p.ammo.span();
-    let ammo = [
-        if ammo == 0 {
-            value
-        } else {
-            *a.at(0)
-        }, if ammo == 1 {
-            value
-        } else {
-            *a.at(1)
-        },
-        if ammo == 2 {
-            value
-        } else {
-            *a.at(2)
-        }, if ammo == 3 {
-            value
-        } else {
-            *a.at(3)
-        },
-    ];
-    Player { ammo, ..p }
+    if ammo == AM_CLIP {
+        Player { ammo_clip: value, ..p }
+    } else if ammo == AM_SHELL {
+        Player { ammo_shell: value, ..p }
+    } else if ammo == AM_CELL {
+        Player { ammo_cell: value, ..p }
+    } else if ammo == AM_MISL {
+        Player { ammo_misl: value, ..p }
+    } else {
+        p
+    }
 }
 
 /// `player->maxammo[type]`: [`MAXAMMO`], doubled while the backpack is held.
@@ -290,7 +292,10 @@ pub fn reborn(index: u32, mo: @Mobj) -> Player {
         health: MAXHEALTH,
         armor_points: 0,
         armor_type: 0,
-        ammo: [50, 0, 0, 0],
+        ammo_clip: 50,
+        ammo_shell: 0,
+        ammo_cell: 0,
+        ammo_misl: 0,
         backpack: false,
         weapons: weapon_bit(WP_FIST) + weapon_bit(WP_PISTOL),
         ready_weapon: WP_PISTOL,
@@ -334,7 +339,7 @@ pub fn fields() -> u32 {
 ///
 /// ```text
 /// mo, playerstate, health, armor_points, armor_type,
-/// ammo[0..3], backpack, weapons, ready_weapon, pending_weapon,
+/// ammo_clip, ammo_shell, ammo_cell, ammo_misl, backpack, weapons, ready_weapon, pending_weapon,
 /// cards, strength, viewz, viewheight, deltaviewheight, bob,
 /// psp_state, psp_tics, psp_sx, psp_sy, flash_state, flash_tics,
 /// extralight, damagecount, bonuscount, attacker, attackdown, usedown,
@@ -349,11 +354,10 @@ pub fn push_felts(ref out: Array<felt252>, p: @Player) {
     out.append((*p.health).into());
     out.append((*p.armor_points).into());
     out.append((*p.armor_type).into());
-    let a = p.ammo.span();
-    out.append((*a.at(0)).into());
-    out.append((*a.at(1)).into());
-    out.append((*a.at(2)).into());
-    out.append((*a.at(3)).into());
+    out.append((*p.ammo_clip).into());
+    out.append((*p.ammo_shell).into());
+    out.append((*p.ammo_cell).into());
+    out.append((*p.ammo_misl).into());
     out.append(bit(*p.backpack));
     out.append((*p.weapons).into());
     out.append((*p.ready_weapon).into());

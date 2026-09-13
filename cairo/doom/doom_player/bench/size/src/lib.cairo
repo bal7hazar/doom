@@ -18,8 +18,8 @@ use doom_player::{
     PlayerEvent, absorb, bring_up_weapon, bullet_slope, calc_height, chain, change_weapon,
     check_ammo, count_kill, damage_player, death_think, drop_weapon, env_of, give_ammo, give_armor,
     give_body, give_card, give_strength, give_weapon, move_player, move_psprites, onground,
-    player_stopped, player_think, player_tic, push_felts, set_psprite, spawn, thrust,
-    touch_special, use_lines,
+    player_stopped, player_think, player_tic, push_felts, set_psprite, spawn, thrust, touch_special,
+    use_lines,
 };
 use doom_things::tables::KIND_MISC2;
 use prng::from_index;
@@ -58,7 +58,11 @@ fn main(op: u32) -> felt252 {
     acc += bool_felt(touch_special(ref p, ref mo, @thing)); // SIZE:inter
     count_kill(ref p); // SIZE:inter
     acc += absorb(ref p, 9).into(); // SIZE:inter
-    acc += bool_felt(damage_player(e, ref g, ref rng, ref p, ref mo, ref events, NO_MOBJ, NO_MOBJ, 7, false).died); // SIZE:inter
+    acc +=
+        bool_felt(
+            damage_player(e, ref g, ref rng, ref p, ref mo, ref events, NO_MOBJ, NO_MOBJ, 7, false)
+                .died,
+        ); // SIZE:inter
 
     move_psprites(e, ref g, ref rng, ref p, ref mo, ref events); // SIZE:weapon
     set_psprite(e, ref g, ref rng, ref p, ref mo, ref events, 0, chain(1).attack, 0); // SIZE:weapon

@@ -19,9 +19,7 @@ use doom_physics::{
     new_grid, path_traverse, push_felts, removed_mobj, set_state, set_thing_position, spawn_mobj,
     spawn_player, world_of,
 };
-use doom_specials::{
-    PlayerSector, player, player_in_special_sector, spawn_specials, use_line,
-};
+use doom_specials::{PlayerSector, player, player_in_special_sector, spawn_specials, use_line};
 use doom_things::tables::{KIND_MISC2, KIND_POSSESSED};
 use geom2d::{Point, point_side_alone};
 use prng::from_index;
