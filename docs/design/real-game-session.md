@@ -9,8 +9,9 @@ persisted synthétiques ; aucune admission BFCache réelle n’est revendiquée.
 
 `main` utilise encore `stubSim`. La capture, les écrans et la sauvegarde utilisateur
 sont assemblés par `8cf6d97` : 222 tests et neuf smokes après fusion, dont clavier/
-souris et sauvegarde/reload/import exacts. Le rendu des sprites/armes et le vrai
-adaptateur de preuve restent à livrer. Le défaut WASM S12 est corrigé et sa CI est
+souris et sauvegarde/reload/import exacts. Le rendu v1 des acteurs/HUD et l’adaptateur sont maintenant livrés (`f188fc8`,
+`1b9816a`) et assemblés indépendamment par root : 243 tests et dix smokes verts.
+Le raccord F4 réel est en cours ; les psprites animés nécessitent encore v2. Le défaut WASM S12 est corrigé et sa CI est
 verte ; les budgets, le registre et P3.7 restent distincts de ce résultat.
 
 Les écarts ci-dessous décrivent le point de départ de l’audit. Le journal avant
@@ -72,3 +73,18 @@ avancés et la mémoire pendant une partie complète. La campagne suivante ajout
 concurrente sur matériel 16 GiB et mesure le temps résiduel C3. Le débit moyen du prototype
 S10 ne clôt pas ces critères. Aucun défaut de registre, de preuve ou de budget n’est levé
 par le seul branchement du Worker.
+
+## Suite décidée après audit du rendu v1
+
+Les acteurs v1 contiennent déjà sprite/frame/flags réels. La livraison `f188fc8`
+corrige leur sélection et les sept familles absentes de l’atlas, ainsi que le HUD :
+WeaponId compact 4 est la tronçonneuse, tandis que 4 désigne le lance-roquettes en
+démonstration. Les métadonnées doivent correspondre au même tic que le ring et être
+indexées par identifiant ; le mobj de la vue provient du player.mo de l’état validé,
+pas d’un id zéro supposé. Aucun changement des pins ou du format v1 n’est nécessaire.
+
+Les psprites animés exigent ensuite une projection Cairo explicite. L’audit propose
+13 felts supplémentaires dans un harnais v2 isolé, avec coexistence v1 et migration
+épinglée ; cette seconde livraison n’est pas encore implémentée. Le client ne doit
+pas reconstruire les transitions d’arme en JavaScript. L’adaptateur de preuve reste
+un chantier séparé, avec replay depuis genesis et refus AIR conservant le journal.

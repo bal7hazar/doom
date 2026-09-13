@@ -105,12 +105,39 @@ async fn the_deadline_closes_a_batch_that_never_fills_up() {
     h.wait_run(&run_id, &["done"], 10_000).await;
 }
 
+fn metric_counter(metrics: &str, series: &str) -> u64 {
+    let prefix = format!("{series} ");
+    metrics
+        .lines()
+        .find_map(|line| line.strip_prefix(&prefix))
+        .map(|value| value.parse().expect("counter value must be an integer"))
+        .unwrap_or(0)
+}
+
 #[tokio::test]
 async fn identical_leaves_are_proven_once() {
+    assert_identical_leaf_reuse(false).await;
+}
+
+#[tokio::test]
+async fn finished_leaves_are_cached_before_the_second_submission() {
+    assert_identical_leaf_reuse(true).await;
+}
+
+async fn assert_identical_leaf_reuse(warm_second_submission: bool) {
     let h = Harness::start(2, 600);
     // Two runs with the same seed submit the same (program, args) segments.
-    let (_, a) = h.submit(run_body(7, 2, false)).await;
-    let mut body = run_body(7, 2, false);
+    let (_, a) = h.submit(run_body(7, 2, warm_second_submission)).await;
+    if warm_second_submission {
+        // A completed solo run is a state barrier, independent of scheduler timing.
+        h.wait_run(a["run_id"].as_str().unwrap(), &["done"], 10_000)
+            .await;
+        assert_eq!(
+            metric_counter(&h.state.metrics.render(), "wrapper_leaf_cache_hits_total"),
+            0
+        );
+    }
+    let mut body = run_body(7, 2, warm_second_submission);
     body["run_id"] = json!("second-run");
     let (_, b) = h.submit(body).await;
 
@@ -132,28 +159,60 @@ async fn identical_leaves_are_proven_once() {
     };
     assert_eq!(keys(&a), keys(&b));
     let metrics = h.state.metrics.render();
-    assert!(
-        metrics.contains("wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"} 2"),
+    assert_eq!(
+        metric_counter(
+            &metrics,
+            "wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"}"
+        ),
+        2,
         "{metrics}"
     );
-    assert!(
-        metrics.contains("wrapper_jobs_total{kind=\"verify\",outcome=\"done\"} 4"),
+    assert_eq!(
+        metric_counter(
+            &metrics,
+            "wrapper_jobs_total{kind=\"verify\",outcome=\"done\"}"
+        ),
+        4,
         "{metrics}"
     );
+    let hits_before_third = metric_counter(&metrics, "wrapper_leaf_cache_hits_total");
+    if warm_second_submission {
+        assert_eq!(
+            hits_before_third, 2,
+            "the second run must reuse both finished leaves"
+        );
+    }
 
     // A later run reuses the finished proofs outright (the content-hash cache).
     let mut third = run_body(7, 2, true);
     third["run_id"] = json!("third-run");
     let (_, c) = h.submit(third).await;
-    h.wait_run(c["run_id"].as_str().unwrap(), &["done"], 10_000)
+    let c = h
+        .wait_run(c["run_id"].as_str().unwrap(), &["done"], 10_000)
         .await;
+    assert_eq!(keys(&a), keys(&c));
     let metrics = h.state.metrics.render();
-    assert!(
-        metrics.contains("wrapper_leaf_cache_hits_total 2"),
+    // The concurrently submitted second run may already have reused finished leaves.
+    // Once both runs are done, the third must add exactly two hits to that snapshot.
+    assert_eq!(
+        metric_counter(&metrics, "wrapper_leaf_cache_hits_total"),
+        hits_before_third + 2,
         "{metrics}"
     );
-    assert!(
-        metrics.contains("wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"} 2"),
+    assert_eq!(
+        metric_counter(
+            &metrics,
+            "wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"}"
+        ),
+        2,
+        "{metrics}"
+    );
+    assert_eq!(
+        metric_counter(
+            &metrics,
+            "wrapper_jobs_total{kind=\"verify\",outcome=\"done\"}"
+        ),
+        6,
         "{metrics}"
     );
 }

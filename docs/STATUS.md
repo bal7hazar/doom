@@ -7,7 +7,7 @@
 > D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
 > Correctif WASM S12 intégré `e274bec` : preuves réelles mono/quatre threads valides, build Docker reproduit ; CI distante verte (`34762719280`) ; garde runtime ajouté `163c9e1`.
 > CI générale verte sur `67f618c` (run `34754644282`) ; reconstruction WASM GitHub indépendante verte.
-> P1.9 en intégration `8ae7f1c` : 565 tests verts, 106 878 mots ; preuve quatre tics valide en 42,16 s, D2/D29 non atteints.
+> P1.9 en intégration `ffdabf0` (moteur `0c8a3a8`) : candidat validé par 567 tests, 106 855 mots ; preuve quatre tics valide en 41,55 s, D2/D29 non atteints.
 > Simulation avec continuation + D33 : 8,8–16,6 ms/tic, 512 MiB, 386 tics exacts ; latence par frame et client restants (S10).
 > P1.10 livré sur branche : 25 replays × deux profils, fuzz 10 000 tics exacts ; validation D29 25/25 dans les deux profils ; 26e cas EXIT677 intégré et vérifié.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
@@ -70,17 +70,59 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : optimisation du parcours des acteurs (`codex/idle-actor-pass`),
-adaptateur réel du programme de preuve (`codex/real-proof-adapter`) et audit des
-champs de rendu (`codex/render-abi-audit`). Les contrôles et le nouveau cas EXIT
-sont assemblés par `8cf6d97`, documentation harmonisée `9bccbc1`, sur
-`codex/game-integration`. Les six exécutables D29 de consensus restent inchangés.
+Vague active : fuzz de 10 000 tics du moteur figé, raccordement du panneau de
+preuve réel (`codex/real-proof-ui`) et micro-harnais isolé de compactage de carte
+(`codex/map-packing-probe`). Le rendu v1 `f188fc8` et l’adaptateur `1b9816a` sont
+livrés, revus et fusionnés dans `codex/game-integration` par **`ffdabf0`**, après
+validation de l’assemblage indépendant `5cf5474`.
+
+La nouvelle campagne complète sur `0c8a3a8` passe **26/26 dans chacun des deux
+profils**, en 1 411,36 s : 7 575 tics logiques, 371 mots terminaux non consommés,
+une mort et une sortie au tic677. Par profil, 202 sorties d’état et 201 snapshots
+sont comparés, dont 26 frontières vides. Les 26 pins restent inchangés. Le fuzz
+lancé ensuite sur ce moteur est une campagne distincte ; aucun résultat anticipé.
+
+L’assemblage indépendant passe **243 tests client et 10 tests Chromium**, sans skip
+dans cette sélection (Cairo, apparences, contrôles et rendu). Le niveau atteint
+EXIT677 avec le nouveau rendu, sans erreur console ; écran final inspecté. Les
+six exécutables reconstruits du moteur sont identiques au candidat. Avant cet
+assemblage, 222 tests client et 12 E2E passaient (un E2E de preuve stub ignoré).
+
+L’adaptateur prépare les frontières réelles depuis genesis dans un Worker distinct,
+contrôle SHA/identité/D14/D13 et préserve le journal antérieur à F4. Root revalide
+six frontières exactes et le pipeline réel : refus AIR, zéro preuve lancée,
+export/import conservé, ancienne identité rejetée, Workers libérés et préparation
+recréée au retry. Il reste à raccorder cette API à l’écran de jeu ; les frontières
+de départ déjà terminales sont explicitement refusées. Aucune admission ni
+certification de partie n’est déduite de ces validations.
+
+**Parcours des acteurs passifs** : 106 878 → **106 855 mots**, 567 tests Cairo,
+35 ABI et 70 comparaisons de replays/coupes par profil verts. Root a revalidé
+EXIT677 avec 17 mots terminaux exclus et 14 coupes par profil. Deux frames exactes :
+idle300 **30 012 → 26 298 steps** (−12,37 %), fight493 **170 333 → 166 596**
+(−2,19 %). Frontières et allocations inchangées. Petit roster de 29 monstres
+dormants : **+3,07 %** de coût brut, dans les seuils existants. Les quantiles
+complets ont été mesurés par frames VM sur 2 946 tics, puis root a remesuré
+la référence D29 avec le même protocole : moyenne **53 245,88 → 49 524,87**
+(−6,99 %), p99 **128 871 → 125 157**, maximum **171 470 → 167 756**. Tous
+les tics gagnent 3 699–3 737 steps ; frontières de chaque chunk et cinq hashes
+finaux strictement identiques. D2 reste dépassé. La référence D33 historique
+53 309,24 ne servait pas à isoler cette dernière optimisation.
+
+Preuve root du même exécutable SHA256 `5a3817dc…57b28`, quatre tics de marche :
+**2 193 266 steps** selon execute, **41,553 s**, **11 643 256 832 B** linéaires,
+**4 375 790 B** de preuve, **log21**. Vérification WASM et native/bzip2 réussies ;
+altération et mauvais bootloader rejetés ; dix sorties D14 identiques à D29.
+La preuve précédente mesurait 2 208 390 steps selon le même compteur execute
+(2 208 389 dans le compteur antérieurement cité). Le temps isolé ne constitue pas
+une accélération statistique. D29 dépasse toujours la cible de **6 855 mots** ;
+registre, plafonds et validation de partie complète C3 restent inchangés.
 
 Worker/journal et contrôles après fusion : **222 tests client sans skip**, 13 tests
 du harnais, types/build/REUSE et **neuf smokes Chromium verts**, dont vrai verrou
 souris, sauvegarde/reload exact, import/export et récupération après état importé
 rejeté par Cairo. La revue visuelle et l’écran « Level complete » au tic 677 sont
-également vérifiés. Le rendu sprites/psprites reste incomplet et F4 ne prétend pas
+également vérifiés. Les psprites restent incomplets et F4 ne prétend pas
 prouver le jeu réel ; l’adaptateur est un chantier distinct.
 
 Root a aussi revalidé 386 tics exacts par mode d’isolation, reprise de huit mots
@@ -92,7 +134,15 @@ ni un oracle par tic, ni une mesure RSS/16 GiB/preuve concurrente.
 La CI générale **`34764805296`** (sept jobs) et WASM **`34764805318`** (deux jobs)
 sont vertes sur `7415869`. L’artefact GitHub confirme **1 200 072 assertions**
 runtime, zéro erreur, puis les deux modules reconstruits identiques aux SHA
-commités et inchangés après réapplication de la transformation Memory64.
+commités et inchangés après réapplication de la transformation Memory64. Le run
+suivant `34766545806` sur `ce964a0` a échoué uniquement sur le test Rust
+`identical_leaves_are_proven_once` : deux feuilles prouvées comme attendu, mais
+compteur de cache 3 au lieu de 2. Le réordonnancement asynchrone est à auditer ;
+relance ciblée annulée par le push suivant. CI `34767083328` entièrement verte
+sur `c281684`, sans assimiler ce vert à une correction. Le correctif test-only
+`e715fb3` est intégré par `525eced` : 77 tests wrapper verts, ancienne assertion
+réfutée déterministement, 60 répétitions sans retry ; root revalide les 12 tests
+service après fusion. Le scheduler de production est inchangé.
 
 
 **S12 résolu localement, intégré `e274bec`** : quatre chargements SIMD tronquaient
@@ -387,3 +437,10 @@ d'attribution `infra/sierra_words`, règles de code S7 §8) — tous mergés. **
 P1.9 `doom_game` + `doom_run` avec profil d'un tic complet, P4.4 indexeur + leaderboard.
 
 Ensuite : `doom_game` + `doom_run` (P1.9), replays dorés (P1.10), Worker sim client (P2.3/P2.4), E2E C3.
+
+### Dernier contrôle CI
+
+Le run `34767835852` est entièrement vert sur `87acfb5`, correctif déterministe
+cache wrapper inclus. Les preuves lourdes historiquement ignorées ne sont pas
+réactivées par ce test ; le garde runtime WASM reste couvert par le dernier run
+WASM vert `34764805318`.

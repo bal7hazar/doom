@@ -128,6 +128,23 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   avec 39 mesures stables à 258 801 664 B et restauration exacte. Pas de mesure RSS
   ou 16 GiB, ni de preuve concurrente. Contrôles utilisateur intégrés `8cf6d97` : 222 tests client et neuf smokes verts.
 
+- Parcours passif intégré `0c8a3a8` (candidat `9b130df`) : **106 855 mots**, 567 tests
+  Cairo ; ABI et replays exacts deux profils. Root revalide EXIT677 et ses coupes.
+  idle300 26 298 steps (−12,37 %), fight493 166 596 (−2,19 %) ; frontières inchangées,
+  contrepartie petit roster dormant +3,07 %. Sur les mêmes 2 946 tics, référence
+  D29 remesurée 53 245,88 → **49 524,87** steps moyens (−6,99 %), p99
+  128 871 → **125 157**, maximum 171 470 → **167 756** ; toutes frontières
+  et cinq états finaux inchangés. D2 demeure dépassé.
+  Preuve quatre tics : **2 193 266 steps execute, 41,553 s, 11 643 256 832 B**
+  linéaires, **4 375 790 B**, log21. Vérifications native/bzip2 et négatifs verts ;
+  dix sorties D14 exactes. Ce succès isolé ne ferme ni D2/D29 ni C3/16 GiB.
+
+- Client assemblé `5cf5474` : rendu v1 exact des acteurs/effets et HUD compact,
+  adaptateur réel depuis genesis avec identité et D14 vérifiés. **243 tests + dix
+  smokes Chromium**, zéro skip dans cette sélection ; EXIT677 rendu sans erreur.
+  L’admission AIR échoue comme attendu, conserve l’export et libère les Workers.
+  Le raccord F4 et les psprites animés restent à terminer ; pas de GO C3.
+
 ## 1. Vision et périmètre
 
 Objectif : une version de Doom dont le **cœur de jeu (simulation) est réécrit en Cairo**, jouable

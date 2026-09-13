@@ -25,6 +25,17 @@
 
 ---
 
+### Dernière mesure — moteur passif assemblé
+
+`0c8a3a8` réduit le programme à **106 855 mots** (D29 encore +6 855), avec 567 tests
+et replays exacts. Deux frames gagnent 12,37 % et 2,19 % ; un petit roster dormant
+coûte 3,07 % de plus, toujours sous son seuil. La distribution complète donne
+49 524,87 steps moyens et p99 125 157 sur 2 946 tics, soit −6,99 % moyen face
+à D29 remesurée avec le même protocole ; D2 reste dépassé. Preuve courte root valide en **41,553 s**, toujours **log21** et environ
+11,64 Go linéaires ; D14 exact et vérification native indépendante. Aucun GO
+registre/16 GiB/partie concurrente n’en découle. L’adaptateur doit rendre le refus
+AIR explicite et préserver le journal, même si le segment minimal est inadmissible.
+
 ### Requalification du 2026-09-13
 
 - **R2 reste ouvert après S7** : monstres intégrés (`8471b7e`), ticker 14 209 mots `proving` sous
