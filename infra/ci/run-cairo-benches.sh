@@ -16,7 +16,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 status=0
 found=0
 
-for bench in "$REPO_ROOT"/cairo/crates/*/bench/measure.py cairo/doom/*/bench/measure.py; do
+for bench in "$REPO_ROOT"/cairo/crates/*/bench/measure.py "$REPO_ROOT"/cairo/doom/*/bench/measure.py; do
   [ -f "$bench" ] || continue
   found=1
   crate="$(basename "$(dirname "$(dirname "$bench")")")"
