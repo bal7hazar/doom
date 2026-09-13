@@ -13,6 +13,7 @@ import {
   type Playpal,
   type SpriteDef,
 } from "@hellproof/wad";
+import type { CairoSpriteNames } from "./cairoSprites.js";
 import type { LevelJson } from "../map/level.js";
 import { SKY_FLAT } from "../map/level.js";
 import { mobjInfoFor } from "../map/mobjInfo.js";
@@ -38,6 +39,8 @@ export const WEAPON_SPRITES = [
 
 export interface AssetStore {
   wad: Wad;
+  /** Names only, from the licensed Cairo data source; absent for the demo. */
+  cairoSprites?: CairoSpriteNames;
   playpal: Playpal;
   colormap: Colormap;
   /** Wall textures *and* flats, keyed with `texKey`/`flatKey`. */
@@ -74,6 +77,7 @@ export function buildAssetStore(
   wadBytes: Uint8Array,
   level: LevelJson,
   progress: LoadProgress = () => {},
+  cairoSprites?: CairoSpriteNames,
 ): AssetStore {
   const t0 = performance.now();
   const wad = Wad.fromBytes(wadBytes);
@@ -126,16 +130,21 @@ export function buildAssetStore(
   for (const key of surfaceAtlas.overflow) missing.push(`overflow ${key}`);
 
   progress("sprites", 0.6);
-  const prefixes = new Set<string>();
-  for (const thing of level.things) {
-    const info = mobjInfoFor(thing.type);
-    if (info) prefixes.add(info.sprite);
+  const prefixes = new Set<string>(cairoSprites?.names);
+  if (!cairoSprites) {
+    for (const thing of level.things) {
+      const info = mobjInfoFor(thing.type);
+      if (info) prefixes.add(info.sprite);
+    }
+    for (const w of WEAPON_SPRITES) prefixes.add(w);
+    // The player's own corpse/gib sprites are needed the moment the sim kills us.
+    prefixes.add("PLAY");
   }
-  for (const w of WEAPON_SPRITES) prefixes.add(w);
-  // The player's own corpse/gib sprites are needed the moment the sim kills us.
-  prefixes.add("PLAY");
 
   const spriteDefs = buildSpriteDefs(wad, prefixes);
+  if (cairoSprites) for (const prefix of prefixes) {
+    if (!spriteDefs.has(prefix)) missing.push(`sprite family ${prefix}`);
+  }
   const spriteEntries: AtlasEntry[] = [];
   const seenLumps = new Set<number>();
   for (const def of spriteDefs.values()) {
@@ -163,6 +172,7 @@ export function buildAssetStore(
   progress("ready", 1);
   return {
     wad,
+    cairoSprites,
     playpal,
     colormap,
     surfaceAtlas,

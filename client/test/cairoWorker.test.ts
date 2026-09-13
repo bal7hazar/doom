@@ -8,7 +8,11 @@ import type { CairoBackend, SimIdentity, SimResponse } from "../src/sim/cairoPro
 
 const identity: SimIdentity = { version: 1, stateSchema: 2, snapshotSchema: 1, revision: "test",
   hashes: { wasm: "a".repeat(64), session: "b".repeat(64), genesis: "c".repeat(64), step: "d".repeat(64) } };
-const state = (tic: number): Uint8Array => encodeFelts([0x48502e5354415445n, 2, 3, 0x45314d31, tic, 0]);
+const state = (tic: number, viewMobj = 0): Uint8Array => {
+  const fields: (number | bigint)[] = Array(46).fill(0);
+  fields[0] = 0x48502e5354415445n; fields[1] = 2; fields[2] = 43; fields[3] = 0x45314d31; fields[4] = tic; fields[10] = viewMobj;
+  return encodeFelts(fields);
+};
 function frame(tic: number, status = 0): Uint8Array {
   const words: (number | bigint)[] = Array(36).fill(0);
   words[0] = 1; words[1] = tic; words[2] = status;
@@ -18,12 +22,13 @@ function frame(tic: number, status = 0): Uint8Array {
 }
 class Backend implements CairoBackend {
   identity = identity;
-  tic = 0; steps = 0; calls = 0; restarts = 0; freed = false; fail = false;
+  viewMobj = 0; tic = 0; steps = 0; calls = 0; restarts = 0; freed = false; fail = false;
   pending = false; interrupted = false; terminalAt = Infinity;
   initialize(initial?: Uint8Array) {
     this.tic = initial ? stateTic(initial) : 0;
+    this.viewMobj = initial ? Number(decodeFelts(initial)[10]) : 0;
     this.steps = 0; this.fail = false;
-    return { state: state(this.tic), frame: frame(this.tic), status: 0 };
+    return { state: state(this.tic, this.viewMobj), frame: frame(this.tic), status: 0 };
   }
   advance() {
     if (this.fail) throw new Error("command/step limit; poisoned");
@@ -34,7 +39,7 @@ class Backend implements CairoBackend {
   snapshot() { return frame(this.tic, this.status()); }
   status(): number { return this.tic >= this.terminalAt ? 1 : 0; }
   requestCheckpoint() { return 0; }
-  checkpoint() { return state(this.tic); }
+  checkpoint() { return state(this.tic, this.viewMobj); }
   restart(s: Uint8Array) { this.tic = stateTic(s); this.restarts++; this.steps = 0; }
   totalSteps() { return this.steps; }
   memoryBytes() { return 512 * 1024 * 1024; }
@@ -178,6 +183,15 @@ describe("main-thread Worker client", () => {
     await checkpoint;
     expect(backend.calls).toBe(1); client.dispose();
     await expect(client.init()).rejects.toThrow("disposed");
+  });
+  it("keeps the validated camera actor on restart/restore, including nonzero ids", async () => {
+    const { client } = clientPort(); await client.init(undefined, state(40, 9));
+    expect(client.viewMobjId).toBe(9); await client.resume(); await client.advance(0x808080);
+    await client.checkpoint();
+    const saved = client.journal!.export();
+    await client.restart(); expect(client.viewMobjId).toBe(0);
+    await client.restore(saved); expect(client.viewMobjId).toBe(9);
+    expect(client.journal!.ticEnd).toBe(41); client.dispose();
   });
   it("a late resume acknowledgement cannot undo a newer pause", async () => {
     const { client } = clientPort(); await client.init();
