@@ -1,9 +1,9 @@
 # STATUS — point d'avancement
 
-> Mis à jour le 2026-09-13 : jeu réel assemblé sur `codex/game-integration` (`49f2a66`), moteur `ee5f819` ; `main` conserve les squelettes du jeu.
+> Mis à jour le 2026-09-13 : jeu réel assemblé sur `codex/game-integration` (`6eec3e7`), moteur prouvé `ee5f819` ; `main` conserve les squelettes du jeu.
 > P1.9 : **573 tests Cairo**, **107 018 mots** ; moyenne exacte **48 543,68 steps/tic**, p99 **122 942**. D2/D29 restent manqués.
 > P1.10 : **26/26 replays dans chacun des deux profils** sur ce moteur, EXIT677 compris ; fuzz 10 000 tics validé sur le moteur précédent `0c8a3a8`. Nightly durable restant.
-> Client : rendu v1, contrôles, sauvegarde et F4 preuve réelle raccordés ; **259 tests unitaires verts**, migration explicite des identités. Psprites et partie complète prouvée restent ouverts.
+> Client : rendu v1, contrôles, sauvegarde et F4 preuve réelle raccordés ; **262 tests unitaires verts**, psprites arme/flash animés. Partie complète prouvée restant ouverte.
 > Preuve réelle historique quatre tics (`0c8a3a8`) : **41,55 s**, vérification WASM/native verte. Nouveau moteur contrôlé par execute, sans nouvelle preuve ; log21 reste incompatible avec le registre log20. Aucun GO C3/16 GiB.
 > Dernière CI générale vérifiée verte : `34d7b93` (run `34769473077`) ; garde runtime WASM couverte par CI verte `34764805318`.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
@@ -520,3 +520,22 @@ relèvement de plafond ni déploiement. Tous les agents de cette passe ont termi
 Après fusion, les 259 tests client sont rejoués sans cas ignoré ; build
 TypeScript/Vite et REUSE 1 785/1 785 passent. L’arbre suivi est identique à
 l’assemblage validé avant ajout des documents de pilotage.
+
+### Animation de tir et choix de visée
+
+L’implémentation `5f1da8b` est fusionnée par `6eec3e7` sur la branche du jeu.
+L’arme, son recul, le flash, la baisse/remontée suivent les slots Cairo, sans
+FSM ajoutée dans le client. Snapshot live v2 et session R5 dédiée ; les six
+exécutables de référence dev/proving, le task hash, l’état2 et D14 sont inchangés.
+Le sponsor choisit explicitement de conserver la visée automatique classique :
+pas de freelook ni de changement des trajectoires.
+
+63 tests doom_game passent, dont une comparaison v1/v2 sur 45 tics sans mutation
+d’état. Les 262 tests client passent après fusion. Les sauvegardes v1 de la
+session connue migrent à exécutables identiques, sans réétiqueter leur provenance ;
+l’identité chargée reste séparée afin de permettre les imports v2 suivants.
+
+Après fusion : **13 smokes Chromium headed verts en une minute**, incluant les
+trois nouveaux tests arme/flash, munitions vides/changement et migration de
+sauvegarde, plus les contrôles clavier/souris et F4. Build et REUSE **1 789/1 789**
+verts. Aucun agent ni serveur de test restant ; aucune preuve ni transaction.

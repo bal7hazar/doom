@@ -1,6 +1,6 @@
 # Handoff d’orchestration — Hellproof
 
-> État actualisé le **2026-09-13**, après la passe de calculs Cairo S14.
+> État actualisé le **2026-09-13**, après S14 et l’animation des armes Cairo.
 > Ce document remplace le handoff initial de Claude. Les mesures historiques
 > détaillées restent dans `docs/STATUS.md` ; ne pas les confondre avec le moteur courant.
 
@@ -19,17 +19,17 @@ un scénario échoue*. Tu lui rends compte en français, de façon concise, avec
 ## État exact à reprendre
 
 - Dépôt : `/Users/bal7hazar/git/doom`.
-- `main` : dernier commit avant ce handoff `8763426` (documentation S14), poussé.
+- `main` : dernier commit avant cette livraison `e3bc27b` (handoff précédent), poussé.
   **Le jeu complet n’est pas sur main** : `doom_game` / `doom_run` y restent des squelettes.
 - Jeu complet : branche locale **`codex/game-integration`**, worktree
-  `.claude/worktrees/codex-game-integration`, HEAD avant ce handoff **`2eef9ea`**.
+  `.claude/worktrees/codex-game-integration`, fusion animation **`6eec3e7`** (implémentation `5f1da8b`).
   Fusion fonctionnelle S14 **`49f2a66`**, assemblage **`d17b3be`**, moteur **`ee5f819`**.
   La synchronisation ultérieure de documentation peut changer HEAD sans changer le moteur.
 - Aucun sous-agent ni campagne de preuve encore en cours à la fin de S14.
   Les agents Claude arrêtés pour quota ne sont plus attendus. Préserver leurs
   anciennes modifications non commitées ; ne pas nettoyer aveuglément les worktrees.
-- CI générale : verte sur `34d7b93` (run `34769473077`) ; run `34771558289`
-  de `8763426` encore en cours lors de cette rédaction. Reconsulter GitHub.
+- CI générale : verte sur `e3bc27b` (run `34771778945`) ; run `34771558289`
+  de `8763426` annulé par succession des mises à jour. Reconsulter GitHub.
   CI WASM de référence verte `34764805318`.
 
 **Ne pas fusionner le jeu complet dans main avant résolution des gates D2/D29.**
@@ -44,14 +44,17 @@ Déplacements, visée souris, tir, interactions, objets, monstres, portes/ascens
 pause, sauvegarde/reprise, mort et sortie sont raccordés. Le journal conserve les
 commandes réellement consommées. F4 ouvre la file de preuve et l’export récupérable.
 
-Validation récente : dix smokes Chromium headed (dont contrôles et verrou souris),
-259 tests client et replay navigateur jusqu’à **EXIT au tic 677**, santé 29,
+Validation récente : treize smokes Chromium headed (dont contrôles et verrou souris),
+262 tests client et replay navigateur jusqu’à **EXIT au tic 677**, santé 29,
 quatre objets. Ce replay est piloté par l’API du client, pas une partie entière
 jouée manuellement. La simulation conserve **35 tics/s** ; le rendu utilise rAF.
 Cela ne constitue pas une mesure garantissant 35 FPS sur tout matériel.
 
-Limites : image d’arme statique / psprites incomplets, certains effets visuels
-approximatifs ; aucune partie complète prouvée de bout en bout ni validation
+Les images d’arme, recul, flash et baisse/remontée lors du changement suivent
+maintenant les psprites Cairo (snapshot live v2). La visée automatique classique
+est conservée à la demande du sponsor : aucun mouvement vertical de caméra.
+
+Limites : certains effets visuels approximatifs ; aucune partie complète prouvée de bout en bout ni validation
 jeu + preuve simultanés sur machine physique de 16 GiB. Le refus AIR est explicite
 et laisse l’export disponible. Le prototype jouable ne vaut pas validation du MVP.
 
@@ -83,8 +86,8 @@ paragraphes historiques du README client sont encore obsolètes.
 | Corpus moteur courant | **26/26 cas dev + 26/26 proving**, 7 575 tics logiques par profil, 1 365,78 s |
 | Frontières | 149 coupes / 123 frontières sérialisées / 175 D14 indépendants par profil ; sorties et goldens exacts |
 | Microbench S14 | 258 exécutions avec oracles ; 16 384 angles pour `sin_cos` |
-| Client | **259 tests**, dix smokes headed et replay EXIT677 ; build après fusion vert |
-| Licences après fusion fonctionnelle | REUSE **1 785/1 785** |
+| Client | **262 tests**, treize smokes headed ; replay EXIT677 validé avant cette extension de rendu ; build après fusion vert |
+| Licences après fusion fonctionnelle | REUSE **1 789/1 789** |
 
 S14 partage le pliage trigonométrique, remplace certains modulos IA par des
 masques exacts et évite/réduit les copies de hauteurs. Les règles arithmétiques
@@ -112,7 +115,9 @@ Le nightly durable reste à mettre en place.
   `18100435ee3882f0ae98d2b3fd89ee89c8dc365333a8cb3c0f74bed23f94b3bb`.
 - Task hash mesuré par execute :
   `0x55fb48519602ba0310b362e11cfd040f3afad418cca2e37e2b3c069b251fc22`.
-- R5 session : `dcb7193cbb8d77cdb08c66517e1c5e68453b15687808e40ea2abb5acbc4a0cac`.
+- R5 session live v2 : `2f2be024e3f91e24385aa3d73dead26394b924fd36d16be98c83dca935e39300`.
+  Migration de sauvegarde v1 `dcb7193cbb8d77cdb08c66517e1c5e68453b15687808e40ea2abb5acbc4a0cac`
+  autorisée seulement à exécutables jeu/VM identiques ; autres sessions inconnues refusées.
 - VM sim R5 : `dd73ce152f44a9e00368e195c6de36d40b2948b0740794f056b2e557c94b67c5`.
 - Schéma état 2, D14 à dix felts, RNG, D3 et cadence inchangés.
   Les anciens exports ne sont pas réétiquetés ; migration client explicite.
@@ -138,7 +143,7 @@ micro-harnais versionnés. Ne pas supposer leur présence sur une autre machine.
    prouveur/registre avant de revendiquer la preuve complète.
 4. **P3.7 / C3** : partie complète, preuve concurrente, wrapper, devnet et DoomRuns ;
    résiduel PLAN ≤10 min, objectif opérationnel ≤5 min. Matériel 16 GiB à valider.
-5. Nightly de prouvabilité, psprites et finition visuelle ; puis P4.5 Sepolia,
+5. Nightly de prouvabilité et finition visuelle ; puis P4.5 Sepolia,
    campagne et frais mesurés. Mainnet hors MVP.
 
 À la reprise, lire STATUS, DECISIONS et le rapport S14 ; contrôler Git, les
@@ -202,3 +207,25 @@ client et à la CLI sur main (`b00c90b`).
 - Après une vague, rapport concis en français : intégré où/commit, métriques,
   tests, limites, agents réellement actifs et prochain blocage. Ne jamais annoncer
   un agent, un serveur ou une preuve en cours sans en avoir vérifié l’état.
+
+## Dernière livraison : animation de tir
+
+`5f1da8b`, fusion `6eec3e7`, ajoute un snapshot **live** v2 : les deux slots
+arme/flash, leurs frames et offsets proviennent de Cairo. Snapshot v1 de step_tic,
+état2, D14 et les six exécutables dev/proving restent strictement identiques.
+Le programme prouvé reste donc à 107 018 mots ; aucun changement de gameplay.
+L’initialisation/restauration publie les psprites sans consommer de tic.
+Les sauvegardes précédentes connues restent chargeables ; la provenance du journal
+importé est conservée séparément de l’identité du simulateur chargé.
+
+Validation ciblée Cairo : 63 tests doom_game, dont 45 tics comparant le préfixe
+v1, les slots v2 et l’absence de mutation d’état. Les captures navigateur ont
+confirmé l’alignement de l’arme et du flash après correction d’un décalage vertical.
+La suite complète Cairo de 573 tests reste la mesure S14 ; elle n’a pas été
+rejouée intégralement pour cette extension d’affichage.
+
+Après fusion, root rejoue **262 tests client et 13 smokes Chromium headed** en
+une minute : animation/flash, pause/restauration, munitions vides, changement
+arme, migration v1/v2, clavier/souris natifs, sauvegarde/import, F4/refus AIR/export.
+Build TypeScript/Vite et REUSE 1 789/1 789 verts. Aucune preuve ni transaction
+lancée ; aucun agent ou serveur de test restant. Logs `/tmp/hellproof-weapon-audit/`.
