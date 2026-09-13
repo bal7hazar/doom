@@ -74,8 +74,9 @@ Vague active : validation du moteur assemblé `0c8a3a8`, adaptateur réel du
 programme de preuve (`codex/real-proof-adapter`) et corrections client des acteurs,
 atlas et HUD v1 après audit (`codex/render-abi-audit`). Les contrôles et EXIT sont
 assemblés depuis `8cf6d97`. Le moteur passif `9b130df` est maintenant fusionné ;
-les nouveaux artefacts de simulation doivent être reconstruits avant validation
-navigateur sur cette version.
+les six exécutables reconstruits sont identiques au candidat et les nouveaux
+artefacts de simulation sont validés : 222 tests client, 12 E2E verts (un E2E de
+preuve stub ignoré), EXIT677 état/rendu et restauration exacts dans Chromium.
 
 **Parcours des acteurs passifs** : 106 878 → **106 855 mots**, 567 tests Cairo,
 35 ABI et 70 comparaisons de replays/coupes par profil verts. Root a revalidé
@@ -83,7 +84,12 @@ EXIT677 avec 17 mots terminaux exclus et 14 coupes par profil. Deux frames exact
 idle300 **30 012 → 26 298 steps** (−12,37 %), fight493 **170 333 → 166 596**
 (−2,19 %). Frontières et allocations inchangées. Petit roster de 29 monstres
 dormants : **+3,07 %** de coût brut, dans les seuils existants. Les quantiles
-complets de la version assemblée sont en cours ; aucun gain global n’en est déduit.
+complets ont été mesurés par frames VM sur 2 946 tics, puis root a remesuré
+la référence D29 avec le même protocole : moyenne **53 245,88 → 49 524,87**
+(−6,99 %), p99 **128 871 → 125 157**, maximum **171 470 → 167 756**. Tous
+les tics gagnent 3 699–3 737 steps ; frontières de chaque chunk et cinq hashes
+finaux strictement identiques. D2 reste dépassé. La référence D33 historique
+53 309,24 ne servait pas à isoler cette dernière optimisation.
 
 Preuve root du même exécutable SHA256 `5a3817dc…57b28`, quatre tics de marche :
 **2 193 266 steps** selon execute, **41,553 s**, **11 643 256 832 B** linéaires,
@@ -114,7 +120,11 @@ commités et inchangés après réapplication de la transformation Memory64. Le 
 suivant `34766545806` sur `ce964a0` a échoué uniquement sur le test Rust
 `identical_leaves_are_proven_once` : deux feuilles prouvées comme attendu, mais
 compteur de cache 3 au lieu de 2. Le réordonnancement asynchrone est à auditer ;
-relance ciblée en cours, sans assimiler un éventuel vert à une correction.
+relance ciblée annulée par le push suivant. CI `34767083328` entièrement verte
+sur `c281684`, sans assimiler ce vert à une correction. Le correctif test-only
+`e715fb3` est intégré par `525eced` : 77 tests wrapper verts, ancienne assertion
+réfutée déterministement, 60 répétitions sans retry ; root revalide les 12 tests
+service après fusion. Le scheduler de production est inchangé.
 
 
 **S12 résolu localement, intégré `e274bec`** : quatre chargements SIMD tronquaient

@@ -131,7 +131,10 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
 - Parcours passif intégré `0c8a3a8` (candidat `9b130df`) : **106 855 mots**, 567 tests
   Cairo ; ABI et replays exacts deux profils. Root revalide EXIT677 et ses coupes.
   idle300 26 298 steps (−12,37 %), fight493 166 596 (−2,19 %) ; frontières inchangées,
-  contrepartie petit roster dormant +3,07 %. Quantiles assemblés encore à mesurer.
+  contrepartie petit roster dormant +3,07 %. Sur les mêmes 2 946 tics, référence
+  D29 remesurée 53 245,88 → **49 524,87** steps moyens (−6,99 %), p99
+  128 871 → **125 157**, maximum 171 470 → **167 756** ; toutes frontières
+  et cinq états finaux inchangés. D2 demeure dépassé.
   Preuve quatre tics : **2 193 266 steps execute, 41,553 s, 11 643 256 832 B**
   linéaires, **4 375 790 B**, log21. Vérifications native/bzip2 et négatifs verts ;
   dix sorties D14 exactes. Ce succès isolé ne ferme ni D2/D29 ni C3/16 GiB.
