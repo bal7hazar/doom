@@ -6,10 +6,27 @@ edition.workspace = true
 [dependencies]
 doom_game = { path = "../doom_game" }
 doom_map = { path = "../doom_map" }
+segment = { path = "../../crates/segment" }
+state_hash = { path = "../../crates/state_hash" }
 ticcmd = { path = "../../crates/ticcmd" }
 cairo_execute = "2.16.0"
 
+# Three provable entry points, one program each (`scarb build` compiles all
+# three; `scarb execute --executable-name <name>` runs one). `run_segment`
+# is the program the bootloader hashes and the browser proves; `step_tic`
+# and `genesis` are for the real-time Worker (cairo-vm wasm) and are never
+# proved. See README.md for the argument and output encodings.
 [[target.executable]]
+name = "run_segment"
+function = "doom_run::run_segment"
+
+[[target.executable]]
+name = "step_tic"
+function = "doom_run::step_tic"
+
+[[target.executable]]
+name = "genesis"
+function = "doom_run::genesis"
 
 [dev-dependencies]
 cairo_test.workspace = true
