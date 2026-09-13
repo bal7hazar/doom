@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# The "without the AI" side of the bytecode measurement: the same crate
+# graph, the same level and table data and the same `doom_physics` calls as
+# `../size`, and no `doom_monsters` call.
+[package]
+name = "doom_monsters_baseline"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_monsters = { path = "../.." }
+doom_physics = { path = "../../../doom_physics" }
+doom_map = { path = "../../../doom_map" }
+doom_things = { path = "../../../doom_things" }
+fixed = { path = "../../../../crates/fixed" }
+geom2d = { path = "../../../../crates/geom2d" }
+prng = { path = "../../../../crates/prng" }
+fsm = { path = "../../../../crates/fsm" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_monsters_baseline"
+function = "doom_monsters_baseline::main"
+sierra = true
+
+[cairo]
+enable-gas = false

@@ -9,9 +9,9 @@
 //! bytecode words per value against 1 for a table, S1 §5.9).
 
 use doom_physics::{
-    Blocker, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, Mobj, MoveEvent, NO_MOBJ, ThingGrid, World,
-    XyOutcome, explode_missile, first_free, is_removed, removed_mobj, unset_thing_position,
-    xy_movement, z_movement,
+    Blocker, KIND_NONE, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, Mobj, MoveEvent, NO_MOBJ, ThingGrid,
+    World, XyOutcome, explode_missile, first_free, removed_mobj, unset_thing_position, xy_movement,
+    z_movement,
 };
 use doom_things::tables::{
     A_CHASE, A_FACETARGET, A_LOOK, A_POSATTACK, A_SARGATTACK, A_SPOSATTACK, A_TROOPATTACK,
@@ -59,11 +59,18 @@ pub fn is_awake(w: World, mo: @Mobj) -> bool {
 /// through the state) would make the schedule depend on history rather than
 /// on `tic` alone.
 pub fn awake_count(w: World, mobjs: Span<Mobj>) -> u32 {
+    // The action column is hoisted out of the loop and `is_awake` is spelled
+    // out here (D24): passing the ~20-span `World` through a call boundary
+    // once per mobj costs more than the test itself.
+    let actions = w.states.action_id;
     let n = mobjs.len();
     let mut i: u32 = 0;
     let mut c: u32 = 0;
     while i != n {
-        if is_awake(w, mobjs.at(i)) {
+        let m = mobjs.at(i);
+        if *m.health > 0
+            && doom_physics::has(*m.flags, MF_COUNTKILL)
+            && *actions.at(*m.state) != A_LOOK {
             c += 1;
         }
         i += 1;
@@ -270,11 +277,23 @@ pub fn mobj_thinker(
     ref spawn_at: u32,
 ) -> bool {
     let missile = doom_physics::has(mo.flags, MF_MISSILE);
-    // Momentum. Movement is never skipped: D3 caps the *thinking*, not the
-    // physics, or a de-scheduled monster would stop mid-air.
+    // Momentum, in `P_MobjThinker`'s order and under its two guards: Doom
+    // calls `P_XYMovement` only when there is momentum to spend (or a lost
+    // soul in flight) and `P_ZMovement` only when the thing is off its floor
+    // or moving vertically. D3 caps the *thinking*, never the physics — a
+    // de-scheduled monster must not freeze in mid-fall — but a monster
+    // standing still has no physics to run, and the guards are what keep a
+    // dormant monster off `xy_movement`'s ~740 steps of argument plumbing on
+    // every one of the 700 tics it spends asleep.
     let mut moves: Array<MoveEvent> = array![];
-    let xy = xy_movement(ctx.w, mobjs, ref g, ref mo, me, false, false, ref moves);
-    drain(moves.span(), me, ref ev);
+    let moving = mo.momx != fixed::ZERO
+        || mo.momy != fixed::ZERO
+        || doom_physics::has(mo.flags, doom_physics::MF_SKULLFLY);
+    let mut xy = XyOutcome::Moved;
+    if moving {
+        xy = xy_movement(ctx.w, mobjs, ref g, ref mo, me, false, false, ref moves);
+        drain(moves.span(), me, ref ev);
+    }
     let mut exploded = false;
     if missile {
         let hit = missile_hit(moves.span());
@@ -296,7 +315,7 @@ pub fn mobj_thinker(
             _ => {},
         }
     }
-    if !exploded {
+    if !exploded && (mo.z != mo.floorz || mo.momz != fixed::ZERO) {
         let z = z_movement(ref mo, Option::None);
         if missile && z.missile_hit {
             explode_missile(ctx.w, ref rng, ref mo);
@@ -319,7 +338,7 @@ pub fn mobj_thinker(
     // responsive than vanilla (every 4 tics rather than every 10) for a
     // quarter of the cost of looking every tic, and it draws no `P_Random`
     // unless it actually wakes, so the RNG stream is untouched.
-    if may_look && is_dormant(ctx.w, @mo) {
+    if may_look {
         run_chain(
             ctx,
             mobjs,
@@ -364,29 +383,79 @@ pub fn monsters_ticker(
     let n = mobjs.len();
     let awake = awake_count(w, mobjs);
     // Where a missile spawned this tic goes: a freed slot if there is one,
-    // otherwise the end of the list.
-    let free = first_free(mobjs);
-    let mut spawn_at = if free == NO_MOBJ {
-        n
-    } else {
-        free
-    };
+    // otherwise the end of the list. Only an awake monster can fire, and
+    // `first_free` unboxes every slot of the list, so a tic with nothing
+    // awake does not pay for it.
+    let mut spawn_at = n;
+    if awake != 0 {
+        let free = first_free(mobjs);
+        if free != NO_MOBJ {
+            spawn_at = free;
+        }
+    }
     let look_phase = tic % LOOK_CADENCE;
+    // Hoisted out of the loop (D24): the classification below is `is_ours`,
+    // `is_awake` and `is_dormant` spelled out, so that the ~20-span `World`
+    // does not cross a call boundary once per mobj per tic.
+    let states = w.states;
+    let actions = states.action_id;
     let mut i: u32 = 0;
     let mut rank: u32 = 0;
     while i != n {
         let mut mo = *mobjs.at(i);
-        if is_removed(@mo) || !is_ours(@mo) {
+        let flags = mo.flags;
+        let countkill = doom_physics::has(flags, MF_COUNTKILL);
+        if mo.kind == KIND_NONE || !(countkill || doom_physics::has(flags, MF_MISSILE)) {
             out.append(mo);
             i += 1;
             continue;
         }
+        let dormant = countkill && *actions.at(mo.state) == A_LOOK;
         let mut may_chase = true;
-        if is_awake(w, @mo) {
+        if countkill && mo.health > 0 && !dormant {
             may_chase = in_window(rank, tic, awake);
             rank += 1;
         }
-        let may_look = i % LOOK_CADENCE == look_phase;
+        let may_look = dormant && i % LOOK_CADENCE == look_phase;
+        // **The dormant fast path.** A monster asleep with no momentum, on
+        // its floor and not due to look has exactly one thing left to do
+        // this tic: count its idle frame down. Doing it here rather than
+        // through `mobj_thinker` skips four call boundaries that each copy
+        // the ~60-felt `World` inside `Ctx` (the same argument-plumbing tax
+        // the `doom_physics` README measures at ~740 steps a call), and it
+        // is the path 29 of E1M1's 30 monsters are on for most of a run.
+        // The suppressed action can only be `A_Look` — that *is* what makes
+        // the monster dormant — so nothing is lost.
+        if dormant
+            && mo.momx == fixed::ZERO
+            && mo.momy == fixed::ZERO
+            && mo.momz == fixed::ZERO
+            && mo.z == mo.floorz {
+            if mo.tics != fsm::FOREVER {
+                let (st, tc, _) = fsm::advance(states, mo.state, mo.tics);
+                mo.state = st;
+                mo.tics = tc;
+            }
+            if may_look {
+                run_chain(
+                    ctx,
+                    mobjs,
+                    ref g,
+                    ref r,
+                    ref mo,
+                    i,
+                    A_LOOK,
+                    true,
+                    may_chase,
+                    ref patches,
+                    ref ev,
+                    ref spawn_at,
+                );
+            }
+            out.append(mo);
+            i += 1;
+            continue;
+        }
         let alive = mobj_thinker(
             ctx,
             mobjs,
