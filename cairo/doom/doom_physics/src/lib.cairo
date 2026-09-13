@@ -39,7 +39,10 @@ pub mod spawn;
 mod tests;
 pub mod world;
 
-pub use damage::{BASETHRESHOLD, DamageOutcome, damage_mobj, kill_mobj};
+pub use damage::{
+    BASETHRESHOLD, DamageOutcome, PlayerDefense, damage_mobj, damage_mobj_with_defense, kill_mobj,
+    no_player_defense,
+};
 pub use grid::{ThingGrid, link, new_grid, rebuild, relink, things_in, unlink};
 pub use hitscan::{
     AIMRANGE, Aim, Hit, Intercept, MELEERANGE, MISSILERANGE, aim_line_attack, bleeds, line_attack,

@@ -514,55 +514,30 @@ fn test_monster_events_are_applied() {
 }
 
 #[test]
-fn test_reconcile_player_applies_armor_and_death() {
+fn test_reconcile_player_synchronizes_resolved_damage_and_death() {
     let g = genesis(LevelId::E1M1);
     let (ctx, _) = plumbing(@g);
-    let w = ctx.w;
-    let mut grid: ThingGrid = new_grid();
-    let before = *g.mobjs.at(0);
-    let env = env_of(w, g.mobjs, 0, 0, 0);
+    let mut grid = new_grid();
+    let env = env_of(ctx.w, g.mobjs, 0, 0, 0);
     let mut rng = from_index(1);
-    // 30 raw with green armor: 10 absorbed, 20 through.
     let mut p = g.player;
-    p.armor_type = 1;
-    p.armor_points = 50;
-    let mut after = before;
-    after.health = 70;
-    let cues = array![
-        MonsterEvent {
-            kind: doom_monsters::EV_BLOOD,
-            who: 4,
-            a: 0,
-            b: 30,
-            at: Point { x: fixed::ZERO, y: fixed::ZERO },
-        },
-    ];
-    let fixed_mo = reconcile_player(env, ref grid, ref rng, ref p, before, after, cues.span());
-    assert(p.health == 80, 'armor took a third');
-    assert(p.armor_points == 40, 'ten points spent');
-    assert(p.damagecount == 20, 'flash');
-    assert(p.attacker == 4, 'the shooter');
-    assert(fixed_mo.health == 80, 'mobj mirrors the player');
-    assert(p.playerstate == PST_LIVE, 'alive');
-    // A lethal raw blow that armor survives: the mobj is restored.
-    let mut p2 = g.player;
-    p2.armor_type = 2;
-    p2.armor_points = 200;
-    let mut dead = before;
-    dead.health = -5;
-    dead.state = 0;
-    dead.flags = 0;
-    let fixed2 = reconcile_player(env, ref grid, ref rng, ref p2, before, dead, array![].span());
-    assert(p2.health == 47, 'half of 105 through');
-    assert(fixed2.state == before.state && fixed2.flags == before.flags, 'restored');
-    assert(fixed2.health == 47, 'mirrored');
-    // No armor, lethal: PST_DEAD and the weapon drops.
-    let mut p3 = g.player;
-    let mut gone = before;
-    gone.health = -20;
-    let fixed3 = reconcile_player(env, ref grid, ref rng, ref p3, before, gone, array![].span());
-    assert(p3.health == 0 && p3.playerstate == PST_DEAD, 'dead');
-    assert(fixed3.health == -20, 'the corpse keeps its overkill');
+    let mut after = *g.mobjs.at(0);
+    after.health = 80;
+    let defense = doom_physics::PlayerDefense {
+        mo: 0, armor_type: 1, armor_points: 40, damagecount: 20, attacker: 4,
+    };
+    let fixed = reconcile_player(env, ref grid, ref rng, ref p, after, defense);
+    assert(p.health == 80 && p.armor_points == 40, 'no second absorption');
+    assert(p.damagecount == 20 && p.attacker == 4, 'bookkeeping');
+    assert(fixed == after && p.playerstate == PST_LIVE, 'mobj already resolved');
+    after.health = -20;
+    let corpse = reconcile_player(env, ref grid, ref rng, ref p, after, defense);
+    assert(p.health == 0 && p.playerstate == PST_DEAD, 'dead');
+    assert(corpse.health == -20, 'overkill preserved');
+    let once = p;
+    let cursor = rng.index;
+    let _ = reconcile_player(env, ref grid, ref rng, ref p, corpse, defense);
+    assert(p == once && rng.index == cursor, 'weapon dropped once');
 }
 
 #[test]
