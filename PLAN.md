@@ -134,7 +134,13 @@ Livrables : les crates génériques `cairo/crates/*`, les crates `cairo/doom/*`,
 5. **Non-régression.** Toute correction de bug ajoute d'abord le test qui la reproduit ; les
    changements de sortie sur les replays dorés exigent une justification et la régénération explicite
    des fixtures (jamais silencieuse).
-6. **Versionnage par crate** (`Scarb.toml`), CHANGELOG par crate, publication possible hors du dépôt
+6. **Règles de coût de bytecode (S7 §8, obligatoires)** : aucun site de panique sur le chemin chaud
+   (`get` + `match`, conversions sans `unwrap`, compteurs wrapping, divisions par `NonZero` littéral),
+   un seul `return` par fonction large, rien de large ne traverse un appel (`Box<Mobj>`, `Level`
+   boxé), une petite fonction par boucle, pas de générique lourd instancié plusieurs fois, helpers
+   partagés hors ligne sauf dans les boucles par ligne ; mesurer avec `infra/sierra_words` +
+   `bench/attribute.py` et compiler le profil `proving` (`unsafe-panic = true`). Budgets : D29.
+7. **Versionnage par crate** (`Scarb.toml`), CHANGELOG par crate, publication possible hors du dépôt
    (Cartridge/Dojo) sans emporter le code GPL.
 
 Tâches (ordre suggéré) :

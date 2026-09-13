@@ -43,4 +43,10 @@ un tir de zombieman ≈ 14 400 steps, une traversée de vue 7 700–9 700, un pa
 `doom_game` ; (3) leviers si insuffisant : plafond de 4–6 éveillés, hitscan borné en portée/cellules,
 17,5 Hz (R2-A7). Décision à prendre après S7.
 
+Après-midi : `doom_player` (132 tests, mais 39 890 mots ; un tir de pistolet manqué = 114 k steps),
+P4.1 (**gas on-chain −60 % : 1,54e9, 47 STRK/fait, 5 tx**), S7 (physique 57 k → 36 k mots, outillage
+d'attribution `infra/sierra_words`, règles de code S7 §8) — tous mergés. **D29** : budget programme révisé
+à 100 k mots avec profil `unsafe-panic`. Lancés : passes de style sur `doom_monsters` et `doom_player`,
+P1.9 `doom_game` + `doom_run` avec profil d'un tic complet, P4.4 indexeur + leaderboard.
+
 Ensuite : `doom_game` + `doom_run` (P1.9), replays dorés (P1.10), Worker sim client (P2.3/P2.4), E2E C3.
