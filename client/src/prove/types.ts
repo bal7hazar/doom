@@ -138,6 +138,10 @@ export interface RunRecord {
   /** The wrapper's program id (`segment_stub10`, later `doom_run`). */
   program: string;
   programHashFunction: "blake" | "poseidon";
+  programIdentity?: string;
+  /** Last rejected preparation remains exportable even if no segment fits. */
+  admissionFailure?: { ticStart: number; ticCount: number; args: Felt[]; outputPreimage: Felt[];
+    reason: string; resources: unknown; updatedAt: number };
   /** `h_in` of the first segment. */
   genesis: Felt;
   stage: RunStage;
