@@ -66,19 +66,18 @@ export interface ProofStats {
   preprocessed_lifting_log_size: number;
   /** `trace_lifting_log_size - log_blowup_factor`: the size the leaf registry is keyed on (20). */
   trace_log_size: number;
-  /** Largest base-trace component, log2 rows — must stay ≤ 20; exact counterpart of
-   * {@link ResourceSummary.log_max_component_size}. */
+  /** Largest base-trace component, log2 rows, including fixed lookup tables.
+   * ResourceSummary reports the variable maximum and fixed floor separately. */
   max_trace_component_log_size: number;
-  /** Max over every tree, preprocessed included: always 20 with `canonical_small`. */
+  /** Max over every tree, including preprocessing; can exceed 20 with `canonical_small`. */
   max_log_size: number;
   /** Log size of every base-trace component, descending. */
   component_log_sizes: number[];
 }
 
 /**
- * What {@link Prover.resources} returns: everything the client needs to decide whether one more
- * tic fits in the current segment, computed from the adapter's counters without generating a
- * trace.
+ * AIR height checks from adapter counters, without generating a trace. These are one input
+ * to segment planning, alongside step limits; they do not bound RAM or guarantee proof success.
  */
 export interface ResourceSummary {
   n_steps: number;
@@ -89,12 +88,24 @@ export interface ResourceSummary {
   memory_id_to_big: number;
   memory_id_to_small: number;
   verify_instruction: number;
+  /** Raw auxiliary counts before their own padding. Optional for decoding older artifacts;
+   * the planner rejects admission when this field is absent. */
+  auxiliary_components?: [string, number][];
+  /** Largest variable component only; fixed lookup tables do not consume the planner's margin. */
   max_component_rows: number;
   max_component: string;
-  /** `ceil(log2(max_component_rows))`; compare with {@link ProofStats.max_log_size}. */
+  /** `ceil(log2(max_component_rows))`, excluding fixed tables and lifting. */
   log_max_component_size: number;
-  /** `log_max_component_size <= 20`. */
+  /** Fixed lookup-table floor, separate from the variable planner budget. */
+  fixed_component_log_size?: number;
+  /** Largest Seq(log_size) requested; Blake G's own height does not require a Seq. */
+  max_sequence_log_size?: number;
+  fits_preprocessed_trace?: boolean;
+  /** Registry key after the configured lifting policy, excluding FRI blowup. */
+  estimated_trace_log_size?: number;
+  /** Height/preprocessing/lifting/split checks for the current log20 registry, not a RAM guarantee. */
   fits_leaf_registry: boolean;
+  n_memory_id_to_big_components?: number;
 }
 
 /** Progress/telemetry event emitted while a call runs. */

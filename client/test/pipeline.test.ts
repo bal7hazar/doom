@@ -31,6 +31,7 @@ interface FakeProverOptions {
   hangOn?: Set<number>;
   /** Segment indices whose every `prove()` fails. */
   failOn?: Set<number>;
+  legacySizing?: boolean;
   rowsPerTic?: number;
   stepsPerTic?: number;
 }
@@ -105,6 +106,7 @@ class FakeProver implements ProverLike {
       opcodes: [["add_opcode", rows]],
       builtins: [],
       unique_aggregator_inputs: [],
+      ...(this.options.legacySizing ? {} : { auxiliary_components: [] }),
       memory_address_to_id: 16,
       memory_id_to_big: 1,
       memory_id_to_small: 1,
@@ -209,6 +211,54 @@ afterEach(() => {
 });
 
 describe("ProofPipeline", () => {
+  it("stops before prove when the loaded artifact has incomplete AIR sizing", async () => {
+    const { pipeline } = makePipeline({ legacySizing: true });
+    const run = await pipeline.attach();
+    await pipeline.appendTics(words(4));
+    await pipeline.proveAll();
+    expect(FakeProver.proves).toBe(0);
+    expect(FakeProver.executes).toBe(1);
+    expect(pipeline.state.error).toMatch(/update the prover artifacts/i);
+    expect(await store.listSegments(run.id)).toHaveLength(0);
+  });
+
+  it.each([
+    ["legacy sizing", { legacySizing: true }, /update the prover artifacts/i],
+    ["larger current AIR", { rowsPerTic: 225_000 }, /row|registry/i],
+    ["larger current step count", { stepsPerTic: 400_000 }, /step.*ceiling/i],
+  ] as const)("rechecks a persisted segment against %s and preserves it for a valid retry", async (_label, options, reason) => {
+    const initial = makePipeline({ failOn: new Set([0]) });
+    const run = await initial.pipeline.attach();
+    await initial.pipeline.appendTics(words(4));
+    await initial.pipeline.proveAll();
+    const original = await store.getSegment(run.id, 0);
+    expect(original?.stage).toBe("failed");
+    // Persist the boundary as if the tab closed after planning, before its first proof attempt.
+    await store.putSegment({ ...original!, stage: "planned", attempts: 0, retriedSingleThread: false });
+    FakeProver.proves = 0;
+    FakeProver.executes = 0;
+
+    const resumed = makePipeline(options);
+    await resumed.pipeline.attach(run.id);
+    await resumed.pipeline.proveAll();
+    expect(FakeProver.proves).toBe(0);
+    expect(FakeProver.executes).toBe(1); // admission failure must not fall back to another prove mode
+    const rejected = await store.getSegment(run.id, 0);
+    expect(rejected?.stage).toBe("failed");
+    expect(rejected?.error).toMatch(reason);
+    expect(rejected?.args).toEqual(original?.args);
+    expect(await store.getProof(run.id, 0)).toBeUndefined();
+
+    const updated = makePipeline();
+    await updated.pipeline.attach(run.id);
+    await updated.pipeline.proveAll();
+    expect(FakeProver.proves).toBe(1);
+    const accepted = await store.getSegment(run.id, 0);
+    expect(accepted?.stage).toBe("proved");
+    expect(accepted?.verified).toBe(true);
+    expect(accepted?.args).toEqual(original?.args);
+  });
+
   it("plans, proves, verifies, chains and persists a whole run", async () => {
     const { pipeline, events } = makePipeline({}, { planner: { initialTics: 100, maxTics: 100 } });
     const run = await pipeline.attach();

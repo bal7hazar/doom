@@ -150,15 +150,19 @@ variant only. `vendor/` is gitignored and rebuilt by `build.sh vendor`.
 
 | File | Built by | Sizes (st / mt) |
 |---|---|---|
-| `SHA256SUMS` | `./build.sh` on macOS arm64 | 45 035 551 / 45 111 575 B |
-| `SHA256SUMS.linux` | `docker build --platform linux/arm64 -o out -f Dockerfile .` (Debian bookworm arm64) | 45 032 682 / 45 114 562 B |
+| `SHA256SUMS` (historical, before the AIR correction) | `./build.sh` on macOS arm64 | 45 035 551 / 45 111 575 B |
+| `SHA256SUMS.linux` (AIR correction) | `docker build --platform linux/arm64 -o out -f Dockerfile .` (Debian bookworm arm64) | 45 034 502 / 45 073 267 B |
 
 ```sh
 docker build --platform linux/arm64 -o out -f prover/wasm/Dockerfile prover/wasm
 (cd out && shasum -a 256 -c ../prover/wasm/SHA256SUMS.linux)
 ```
 
-Evidence: the macOS build has been reproduced bit-for-bit three times (S2's artifact
+The earlier Linux reference remains in Git history: 45 032 682 / 45 114 562 B,
+`e97232a0…ed48` / `41bba119…1b73` (st / mt). No macOS rebuild was performed for the AIR
+correction, so its hash file still describes the earlier source revision.
+
+Historical same-source evidence: the macOS build has been reproduced bit-for-bit three times (S2's artifact
 `32c031ea…ce02c` from a fresh GitHub clone of the monorepo in a separate target directory, then
 again here), and the container build twice — **the same host always lands on the same bytes**.
 macOS and Linux do *not*: the two artifacts differ by ~3 KB, and a string diff of their data
@@ -189,7 +193,7 @@ resolved digest from that run is now committed. No amd64 byte-identity claim is 
 GitHub's [standard runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 lists `ubuntu-24.04-arm` for public repositories, including this repository.
 
-Audit reproduction on 2026-09-13: a fresh build with the pinned image and **two Cargo jobs**
+Before the AIR correction, audit reproduction on 2026-09-13: a fresh build with the pinned image and **two Cargo jobs**
 recreated both existing Linux hashes byte for byte; `SHA256SUMS.linux` was not changed.
 The container's build step took 754 s (single: 386 s; threaded: 350 s). These exact Linux-built
 artifacts then proved and verified the 16 271-step `k14` program on macOS arm64 in Node
@@ -198,6 +202,26 @@ The non-isolated Chromium page requested four threads, fell back to one, and ver
 (33.4 s). Benchmark reports now hash the actual files in `pkg/wasm`, so Linux artifacts are not
 mislabelled with the macOS baseline. GitHub execution of the repaired jobs remains a separate
 check after merge.
+
+AIR correction rebuild on 2026-09-13: Rust source commit `4309399`, checkout `5ed01d0`,
+the same pinned Dockerfile and two Cargo jobs. The build step took 779.2 s (single: 391 s;
+threaded: 370 s). The two exported files were hashed, checked against the generated manifest,
+and copied unchanged to `dist/`, `pkg/wasm/` and `harness/public/`. Only `SHA256SUMS.linux`
+was refreshed: single-threaded `3e94a4c0…479a5`, threaded `fdb977ad…4277c`.
+
+Both new variants executed the immutable 117,531-word, four-tic `run_segment` under Node
+24.16.0: 2,681,208 VM steps; all original resource counters, all 43 variable claim heights and
+the 11-felt output preimage matched the native reference and existing proof. Each now reports
+`blake_g = 1,303,200`, `log_max_component_size = 21`, `fits_leaf_registry = false`, while
+`max_sequence_log_size = 20` and `fits_preprocessed_trace = true`. No new large proof was needed.
+
+The new files also proved and verified `k14` (16,271 steps, 755,280 proof felts) on macOS arm64:
+Node 24.16.0 single/four threads in 34.88/11.11 s; Chromium 153.0.8010.12 single/four threads
+in 40.1/11.2 s; the non-isolated Chromium fallback requested four threads and verified with
+one in 33.0 s. These are smoke timings from one run per mode, not a performance or reliability
+claim. The client suite passed all 193 tests after preparing the locally cached Freedoom assets,
+including old-artifact rejection and fresh admission checks for persisted segments.
+The independent GitHub ARM64 rebuild and hash comparison remain the next verification step.
 
 ### Versions (pinned)
 
@@ -276,7 +300,7 @@ Compared with the recursion registry that will consume these proofs
 | `pow_bits` / `log_blowup_factor` / `n_queries` | 26 / 1 / 70 | same | 96-bit security. |
 | `fold_step` | 1 | same | the `doom` registry's value. The future `doom_fold4_min` registry will use 4 (S0: −12 % proof size); pass `{"fri_config": {…, "fold_step": 4}}` then — the module does not care. |
 | `include_all_preprocessed_columns` | `true` | same | **mandatory**: `prove_leaf` asserts it (the verifier circuit expects a constant number of preprocessed columns). |
-| `lifting_size_policy` | `at_least_preprocessed` | same | **mandatory**, asserted too; it lifts every tree to max(trace, preprocessed) = 2^21 rows, which is what pins `trace_log_size` to 20. |
+| `lifting_size_policy` | `at_least_preprocessed` | same | **mandatory**, asserted too; it lifts each tree to max(trace, preprocessed) plus FRI blowup. The registry key remains 20 only while all base-trace components fit log20. |
 | `opt_n_id_to_big_components` | 16 | same | forces 16 `memory_id_to_big` components whatever the memory size. |
 | `store_polynomials_coefficients` | `false` | same | +0.36 GiB if enabled (S0). |
 
@@ -285,36 +309,106 @@ comparison sets, not what the recursion takes.
 
 ## Segment sizing (`resources()`)
 
-A segment is **not** capped at 2^20 steps (S4b): the leaf registry is keyed on `trace_log_size`,
-which stays 20 as long as **every AIR component stays within 2^20 rows**. `resources(input)`
-answers that from the adapter's counters, without generating a trace (~1 ms, no extra memory):
+The current `doom` leaf registry accepts the trace key **20**. A segment is not capped at
+2^20 VM steps: each AIR component has its own row count, and auxiliary witnesses can be much
+taller than their parent opcode or builtin. `resources(input)` derives those heights from the
+adapter counters without generating a trace. It does not estimate RAM or guarantee that a proof
+will finish. The client retains its separate 80% row target and 1.5 M threaded / 2.3 M
+single-threaded step ceilings.
 
-```jsonc
-{ "n_steps": 2000000,
-  "opcodes": [["add_ap_opcode", 1], ["add_opcode_small", 181371], …],  // one component each
-  "builtins": [["range_check_builtin", 256], …],
-  "memory_address_to_id": 2015806, "memory_id_to_big": 158, "memory_id_to_small": 1000032,
-  "verify_instruction": 1149,
-  "max_component": "memory_id_to_small", "max_component_rows": 1048576,
-  "log_max_component_size": 20,         // ceil(log2) of the largest component
-  "fits_leaf_registry": true,           // log_max_component_size <= 20 and id_to_big fits
-  "n_memory_id_to_big_components": 1 }  // must stay <= opt_n_id_to_big_components (16)
+The fields distinguish quantities that must not be used interchangeably:
+
+| Field | Meaning |
+|---|---|
+| `auxiliary_components` | Raw auxiliary row counts, including parent padding when the dependency consumes it, before the component's own final padding. |
+| `max_component`, `max_component_rows`, `log_max_component_size` | Largest **variable** component, its padded height and log2 height. Equal padded heights are resolved by the larger raw count. These exclude fixed tables so the planner's 80% margin remains useful. |
+| `fixed_component_log_size` | Fixed lookup-table floor: 20; 23 when wide Pedersen is used with `canonical`. |
+| `max_sequence_log_size`, `fits_preprocessed_trace` | Largest `Seq(log_size)` actually requested, and availability of the required Seq/Pedersen tables. This is independent of the tallest auxiliary component. |
+| `estimated_trace_log_size` | Registry key after lifting, excluding FRI blowup. Under the default policy it is the maximum of variable, fixed and preprocessing heights. |
+| `fits_leaf_registry` | Checks that these heights, lifting and big-memory component count fit the current log20 registry. Assumes valid execution input and compatible cryptographic parameters; it does not validate every parameter, lookup multiplicity bound or available RAM. |
+
+Let `P(n) = next_pow2(max(n, 16))`, `B` be the active `blake_compress_opcode` count,
+`U` the distinct aggregator inputs reported by the adapter, and `A = P(U)`. An absent
+builtin has no aggregator or dependent component. The dependency rules at the pinned
+[`cd7bc5f`](https://github.com/starkware-libs/proving/commit/cd7bc5f4697fb188a27e09f9242f1dd76df8afdc)
+are:
+
+| Variable auxiliary component | Raw rows before its own `P` |
+|---|---:|
+| `blake_round` / `blake_g` / `triple_xor_32` | `10B` / `80B` / `8B` |
+| `poseidon_aggregator` | `U` |
+| `poseidon_3_partial_rounds_chain` / `poseidon_full_round_chain` | `27A` / `8A` |
+| `cube_252` | `2A + 3(27A) + 3(8A) = 107A` |
+| `range_check_252_width_27` | `2A + 3(27A) = 83A` |
+| `pedersen_aggregator_window_bits_9` / `_18` | `U` |
+| `partial_ec_mul_window_bits_9` / `_18` | `56A` / `28A` |
+| `partial_ec_mul_generic` | `252 × padded ec_op_builtin instances` |
+
+The generated witness sources under
+[`crates/prover/src/witness/components`](https://github.com/starkware-libs/proving/tree/cd7bc5f4697fb188a27e09f9242f1dd76df8afdc/crates/prover/src/witness/components)
+are the authority: `blake_compress_opcode.rs` and `blake_round.rs` forward active rows;
+`poseidon_aggregator.rs` forwards its **padded** size; its two chain generators forward active
+rows. Padding an intermediate Poseidon chain again before multiplying would overestimate cubes.
+The Pedersen aggregators and `ec_op_builtin.rs` forward their padded input sizes.
+
+Other variable components use `P(count)` per opcode, builtin and `verify_instruction`;
+`P(ceil((address_len - 1) / 16))` for `memory_address_to_id` (address zero is excluded);
+`P(len)` for `memory_id_to_small`; and chunks of up to `2^preprocessing_log` for
+`memory_id_to_big`, with at least one component and a separate component-count check against
+`opt_n_id_to_big_components`. The output builtin contributes public memory, not an AIR component.
+
+The remaining auxiliary range-check and bitwise lookup tables have fixed heights, at most log20.
+Their multiplicity columns are not additional rows: for example `verify_bitwise_xor_12` uses
+16 multiplicity columns over a log20 table, not a log24 table. Pedersen's fixed points table is
+log15 with 9-bit windows, log23 with 18-bit windows. These fixed floors are distinct from the
+number of columns and total allocation cost. The other fixed auxiliaries are
+`blake_round_sigma` (log4) and `poseidon_round_keys` (log6).
+
+The AIR sources under
+[`crates/cairo-air/src/components`](https://github.com/starkware-libs/proving/tree/cd7bc5f4697fb188a27e09f9242f1dd76df8afdc/crates/cairo-air/src/components)
+request size-dependent `Seq` columns only for the Blake compression opcode, memory tables,
+Poseidon/Pedersen aggregators and non-output builtins. Blake G/round/XOR, Poseidon chains/cubes
+and partial EC multiplication do **not** request `Seq` at their own height. Fixed range checks
+always request Seq through log20, and the wide Pedersen points table requests Seq23; these are
+included in `max_sequence_log_size`. `canonical_small` provides Seq through log20; the other variants through log25. An oversized memory table can
+therefore panic with missing `Seq(21)`, while Blake G log21 remains technically provable with
+`canonical_small` but falls outside the current registry. The sizing check must not turn that
+registry limit into a universal prohibition of log21 proofs.
+
+The regression fixture from the real 117,531-word `run_segment`, four tics under the leaf
+bootloader, contains 16,290 Blake compressions: **1,303,200 G rows → 2^21** after padding.
+The old estimate reported `memory_id_to_small`, log20, and `fits_leaf_registry=true`; the
+corrected estimate names `blake_g`, log21, and rejects it. The existing verified proof's
+component claims match every variable height in `tests/fixtures/real-blake-claim-heights.json`;
+its largest Seq remains log20. The native Poseidon comparison has 65,136 distinct inputs,
+`A = 65,536`, hence 7,012,352 cube rows → log23. That second value is a source-derived estimate;
+a completed Poseidon proof is not claimed.
+
+`prove()` separately reports the observed `trace_log_size`, all `component_log_sizes` and
+`max_trace_component_log_size` including fixed tables. The latter equals the maximum of the
+variable estimate and fixed floor for this input, not the variable estimate alone. Its
+`max_log_size` also includes preprocessing and can exceed 20 even with `canonical_small`.
+
+The estimator covers all variable components at the pinned revision. A dependency change needs
+another inventory review; new components cannot silently inherit this claim. Fixtures are small
+public counters and extracted claim heights, not committed proofs. Rust regressions run with
+`cargo test --lib` after `./build.sh vendor`. To also execute the original microprograms without
+proving:
+
+```sh
+ASDF_SCARB_VERSION=2.16.0 scarb --manifest-path harness/programs/steps_k/Scarb.toml build
+HELLPROOF_SIZING_EXECUTABLE="$PWD/harness/programs/steps_k/target/dev/main.executable.json" \
+  cargo test --lib execute_original_microprograms -- --ignored
 ```
 
-The row counts follow the witness generators: `next_pow2(count)` per opcode and for
-`verify_instruction`; `next_pow2(len / 16)` for `memory_address_to_id` (`MEMORY_ADDRESS_TO_ID_SPLIT`);
-`next_pow2(len)` for `memory_id_to_small` — **not** split, which is what binds first for a
-memory-writing program; chunks of 2^20 for `memory_id_to_big`.
-
-Cross-check with the proof: `prove()` returns `trace_log_size` (what the leaf reads, 20 with these
-parameters), `max_trace_component_log_size` and the whole `component_log_sizes` list. Note that
-with `include_all_preprocessed_columns` the fixed range-check/bitwise components sit at 2^20 rows
-in *every* proof, so only `resources()` tells you how much room the *program* still has.
-
-Above the limit the prover does not fail gracefully: it panics inside the constraint framework with
-`Preprocessed column Seq(21) is missing from static allocation` (upstream finding, see
-`patches/README.md`). **Call `resources()` and stop the segment while `fits_leaf_registry` is
-true.**
+**Artifact compatibility:** the new counters require the rebuilt WASM variants recorded in
+`SHA256SUMS.linux`; `SHA256SUMS` remains the earlier macOS reference. The TypeScript fields stay
+optional so older summaries can be decoded, but the client rejects admission when auxiliary
+counters are absent, with an explicit request to update the prover artifacts. Every `prove`
+attempt, including reloads and retries, re-executes and checks fresh resources against the
+current policy. Rejection preserves the segment for a later retry and cannot trigger a proof.
+For a modern summary with an unknown named maximum, the planner uses a conservative rounded
+count. Registry, row margin and step ceilings are unchanged.
 
 Measured on the `steps_k` program (a felt loop that writes one new memory value per iteration, so
 `memory_id_to_small` ≈ steps/2), with `pkg/test/sizing.mjs`:
@@ -546,8 +640,9 @@ fails the same way). The bootloader path is the supported one and the one the re
 - Memory64 needs Chrome/Edge ≥ 133 (Firefox ≥ 143 behind a flag, Safari no); Node ≥ 24 outside a
   browser. Chrome caps a Memory64 at 16 GiB (`--max-memory=17179869184` in the link args).
 - Threads additionally need `crossOriginIsolated` (COOP/COEP) and a Worker (never the main thread).
-- `preprocessed_trace = canonical` (default SHARP params, ~17 GB) cannot fit; `canonical_small`
-  caps a component at 2^20 rows (§Segment sizing).
+- `preprocessed_trace = canonical` (default SHARP params, ~17 GB) cannot fit the module's memory
+  cap. `canonical_small` supplies Seq only through log20; auxiliary components without their own
+  Seq can exceed that height, but exceed the current log20 registry (§Segment sizing).
 - `Poseidon252` channel is not available on wasm (upstream `cfg`).
 - The module is 45 MB / 8.1 MB gzipped (§Artifact size).
 - The proof crosses the JS boundary as a copy out of wasm memory (bincode, ~4.2 MB per segment).

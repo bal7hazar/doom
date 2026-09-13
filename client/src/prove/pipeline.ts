@@ -123,6 +123,9 @@ export function autoThreadCount(): number {
   return Math.max(1, Math.min(4, cores - 2));
 }
 
+// Admission failures remain resumable, but a different thread count cannot repair stale sizing.
+class ResourceAdmissionError extends Error {}
+
 export class ProofPipeline {
   private readonly options: Required<
     Pick<
@@ -495,6 +498,16 @@ export class ProofPipeline {
         const executed = await prover.execute(executable, segment.args);
         await this.yieldToGame();
 
+        // Re-execution after reload/retry must be admitted with this worker's fresh counters.
+        // Use a separate policy evaluator so the repeated probe does not train the planner twice.
+        const summary = await prover.resources(executed.input);
+        const admission = new SegmentPlanner(this.planner.config).judge(
+          segment.ticEnd - segment.ticStart, summary, singleThread ? 1 : this.threads,
+        );
+        if (admission.verdict !== "accept") {
+          throw new ResourceAdmissionError(`fresh execution is not admissible: ${admission.reason}`);
+        }
+
         segment.stage = "proving";
         this.emitProgress(segment.index, "proving", startedAt);
         const timeout = singleThread
@@ -552,7 +565,7 @@ export class ProofPipeline {
         const timedOut = error instanceof ProverTimeoutError;
         this.dropProver();
         const message = error instanceof Error ? error.message : String(error);
-        if (attempt === 0 && !singleThread && this.threads > 1) {
+        if (!(error instanceof ResourceAdmissionError) && attempt === 0 && !singleThread && this.threads > 1) {
           // R1-A8: the threaded path is the one that hangs. One retry, single
           // threaded, which has never failed in S2 or P3.1.
           singleThread = true;

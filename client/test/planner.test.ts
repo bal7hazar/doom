@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ResourceSummary } from "@hellproof/prover-wasm";
 import { DEFAULT_PLANNER_CONFIG, SegmentPlanner, nextPow2, rawMaxComponentRows } from "../src/prove/planner.js";
@@ -28,6 +29,7 @@ function summary(options: {
     ],
     builtins: [["range_check_builtin", Math.floor(options.rows / 8)]],
     unique_aggregator_inputs: [],
+    auxiliary_components: [],
     memory_address_to_id: options.addressToId ?? 16,
     memory_id_to_big: 158,
     memory_id_to_small: options.idToSmall ?? 1,
@@ -61,9 +63,69 @@ describe("rawMaxComponentRows", () => {
     const unknown = { ...s, max_component: "some_future_component", max_component_rows: 2 ** 19 };
     expect(rawMaxComponentRows(unknown)).toEqual({ rows: 2 ** 19, exact: false });
   });
+
+  it("does not claim exactness from another component in the same rounded bucket", () => {
+    const s = summary({ steps: 800_000, rows: 600_000 });
+    const unknown = { ...s, max_component: "unknown_auxiliary", max_component_rows: 2 ** 20 };
+    expect(rawMaxComponentRows(unknown)).toEqual({ rows: 2 ** 20, exact: false });
+  });
+
+  it("uses Blake G's real active count instead of a smaller opcode count", () => {
+    const s = summary({ steps: 2_681_207, rows: 770_870 });
+    const blake = {
+      ...s,
+      auxiliary_components: [["blake_round", 162_900], ["blake_g", 1_303_200], ["triple_xor_32", 130_320]] as [string, number][],
+      max_component: "blake_g",
+      max_component_rows: 2 ** 21,
+      log_max_component_size: 21,
+      fits_leaf_registry: false,
+    };
+    expect(rawMaxComponentRows(blake)).toEqual({ rows: 1_303_200, exact: true });
+    const verdict = new SegmentPlanner().judge(4, blake, 4);
+    expect(verdict.verdict).toBe("shrink");
+    expect(verdict.utilisation).toBeCloseTo(1_303_200 / 2 ** 20);
+  });
+
+  it("keeps the 80 percent margin when an auxiliary shares an opcode's padded height", () => {
+    const s = {
+      ...summary({ steps: 900_000, rows: 600_000 }),
+      auxiliary_components: [["some_counted_auxiliary", 950_000]] as [string, number][],
+      max_component: "some_counted_auxiliary",
+    };
+    expect(rawMaxComponentRows(s)).toEqual({ rows: 950_000, exact: true });
+    expect(new SegmentPlanner().judge(4, s, 4).verdict).toBe("shrink");
+  });
+
+  it("excludes memory address zero at a padding boundary", () => {
+    const s = {
+      ...summary({ steps: 1_000, rows: 1_024 }),
+      memory_address_to_id: 16 * 1_024 + 1,
+      max_component: "memory_address_to_id",
+    };
+    expect(rawMaxComponentRows(s)).toEqual({ rows: 1_024, exact: true });
+  });
 });
 
 describe("SegmentPlanner.judge", () => {
+  it("rejects the real old Blake false positive and requests updated artifacts", () => {
+    const legacy: ResourceSummary = JSON.parse(readFileSync(
+      new URL("./fixtures/legacy-blake-resources.json", import.meta.url), "utf8",
+    ));
+    expect(legacy.fits_leaf_registry).toBe(true);
+    expect(legacy.auxiliary_components).toBeUndefined();
+    const planner = new SegmentPlanner();
+    const verdict = planner.judge(4, legacy, 1);
+    expect(verdict.verdict).toBe("impossible");
+    if (verdict.verdict !== "impossible") throw new Error("unreachable");
+    expect(verdict.reason).toMatch(/update the prover artifacts/i);
+    expect(planner.observations).toHaveLength(0);
+  });
+
+  it("accepts a modern small segment with explicit auxiliary counters", () => {
+    const modern = summary({ steps: 16_271, rows: 5_000 });
+    expect(new SegmentPlanner().judge(1, modern, 4).verdict).toBe("accept");
+  });
+
   const planner = (over: Partial<typeof DEFAULT_PLANNER_CONFIG> = {}): SegmentPlanner =>
     new SegmentPlanner({ maxTics: 100_000, ...over });
 
@@ -84,7 +146,7 @@ describe("SegmentPlanner.judge", () => {
   });
 
   it("shrinks when resources() says the segment does not fit the leaf registry", () => {
-    // 2^21 rows: the prover would panic on this one (P3.1 §Segment sizing).
+    // 2^21 rows: outside the current log20 registry (not every component needs Seq21).
     const verdict = planner().judge(2000, summary({ steps: 200_000, rows: 1_200_000 }), 1);
     expect(verdict.verdict).toBe("shrink");
     if (verdict.verdict !== "shrink") throw new Error("unreachable");
