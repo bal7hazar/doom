@@ -28,3 +28,9 @@ sierra = true
 
 [cairo]
 enable-gas = false
+
+# Attribution (docs/spikes/S7.md §3.1): the statement -> source-function map
+# `bench/attribute.py` joins to the CASM offsets. It does not change the
+# generated code, only the debug info of the Sierra file.
+unstable-add-statements-functions-debug-info = true
+unstable-add-statements-code-locations-debug-info = true
