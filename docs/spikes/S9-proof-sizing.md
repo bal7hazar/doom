@@ -124,6 +124,30 @@ le cas quatre tics dépasse encore le seuil mono. Mesure de ressources uniquemen
 aucune nouvelle preuve : `integration-final-sizing.json`, Node 24.16.0,
 exécutable SHA-256 `663028863fef87341e215928abd4e738817104167292655193e448544a57b021`.
 
+Avec D33 (`aa16f2b`, **110 015 mots**), les mêmes arguments donnent **2 113 239 /
+2 152 507 / 2 260 220 steps** pour 0 / 1 / 4 tics. Les **15 355** compressions
+produisent **1 228 400** lignes G : registre log20 toujours refusé. Quatre tics
+passent désormais sous le plafond mono 2,3 M, mais zéro tic reste au-dessus de
+1,5 M threads. Ces résultats n’autorisent ni migration ni hausse des plafonds.
+Ressources sans preuve dans `boxed-integrated-sizing.json`, exécutable SHA-256
+`24672e9db90cf22502d2a69c50ea5d428fad5d45039acdc034d736b33b7b2b65`.
+
+## Largeur des traces et expérience suivante
+
+Les claims de la preuve S9 de référence, rapprochés des nombres de colonnes du
+prouveur épinglé, montrent un coût fixe significatif des auxiliaires Poseidon.
+`cube_252` à log20 porte 341 colonnes trace + interaction en éléments M31, soit
+**1 364 MiB** de tableaux non étendus. Les six composants Poseidon associés
+sélectionnés totalisent **1 827,625 MiB** ; les trois composants Blake sélectionnés
+**1 064,125 MiB**. Le calcul exclut les colonnes prétraitées, extensions/FFT,
+arbres de Merkle, autres composants et allocations ; certains auxiliaires sont
+partagés entre producteurs. Il ne prédit aucune économie de RAM ou de preuve.
+
+D34 lance donc une étude isolée du hash d’état Blake2s : encodage canonique,
+oracle Python indépendant et mesures réelles d’AIR avant toute preuve comparative.
+Le hash d’état de production reste Poseidon ; D31 concerne seulement le programme.
+Calcul root : `selected-trace-footprint.json`, dans le répertoire d’audit S9.
+
 ## Reproduction et traces
 
 Les artefacts de cette session sont dans

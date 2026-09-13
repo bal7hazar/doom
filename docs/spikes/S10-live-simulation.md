@@ -2,7 +2,9 @@
 
 Audit du 13 septembre 2026, après les mesures de preuve S9. Le petit programme
 de référence S3 ne représentait pas le coût de passage du vrai état du jeu.
-La simulation actuelle reste sous la cible de 35 tics/s, même sans preuve ni rendu.
+La VM recréée à chaque tic reste sous la cible de 35 tics/s, même sans preuve ni rendu.
+Le prototype de continuation assemblé avec D33 atteint depuis **8,8–16,6 ms moyens/tic**,
+maintenance comprise, avec **512 MiB** linéaires ; les pointes de latence restent à traiter.
 
 ## Méthode
 
@@ -83,3 +85,52 @@ servent uniquement une liste explicite de fichiers locaux et ferment navigateur,
 Worker et serveur ; échéance de 180 s. Build : `sim-wasm-build.log` dans le répertoire
 d’audit parent. La préparation Scarb utilise le programme complet de la branche
 d’intégration, pas les squelettes encore présents sur `main`.
+
+## Continuation conservée, puis combinaison avec D33
+
+Les commits `b51cefe` et `350d6db` conservent une exécution Cairo non terminée entre les
+commandes. Le harnais appelle le vrai `doom_game::step_tic` et émet son snapshot ; Rust
+transporte les entrées et sorties. Les hints, scopes, builtins et caches de la VM persistent.
+Un poll attend exactement un mot, les quantums reprennent une instruction sans rejouer ses
+hints. Une exportation de checkpoint n’avance pas le tic ; son rechargement réexécute la
+validation complète `from_felts`. Les entrypoints prouvés restent inchangés.
+
+L’orchestrateur a reproduit la campagne de référence : **386 états/snapshots/statuts natifs
+exacts**, puis 386 snapshots navigateur, checkpoints périodiques et cinq sorties ABI finales
+identiques aux fixtures immuables. Interruption après 101 steps, reprise par 4 096 steps,
+refus d’un second input en vol et attente sans exécution passent. **11 tests Rust**, format
+et Clippy strict passent, dont limites, état empoisonné après erreur et récupération.
+La référence `91719f8` mesure **9,55–18,73 ms/tic** maintenance comprise dans cette reproduction,
+contre 9,73–18,64 dans la dernière campagne agent ; capacité WASM maximale 906,1 MiB.
+
+L’intégration **`f306c6a`** ajoute le roster boxé D33 à ce même runtime. Seul le harnais Cairo
+est reconstruit ; les empreintes du WASM et du runner natif sont vérifiées avant copie.
+Les mêmes contrôles complets passent sur les mêmes 386 tics :
+
+| Scène | Tic seul, ms moyens | Avec maintenance, ms moyens | p99 avec maintenance, ms | Appels >28,57 ms |
+|---|---:|---:|---:|---:|
+| idle | 8,102 | 8,845 | 38,235 | 2/80 |
+| marche | 13,417 | 14,200 | 45,320 | 2/80 |
+| porte | 15,848 | 16,620 | 45,355 | 2/80 |
+| combat | 12,548 | 13,282 | 42,260 | 2/80 |
+| mort | 10,639 | 11,983 | 45,050 | 3/66 |
+
+Le Worker exporte puis recrée sa VM tous les 32 tics ; cette pause est comptée dans l’appel
+qui la déclenche. Le setup initial et l’export final réservé à l’audit sont hors chronométrage.
+La capacité linéaire atteint **536 870 912 octets (512 MiB)**, puis reste stable sur la fin de
+cette courte campagne. Ce n’est ni une mesure de heap/RSS ni un test de fuite longue durée.
+Les onze dépassements, les contrôles/rendu/preuve concurrents et le matériel 16 GiB restent
+à évaluer. La limite locale de 256 commandes/32 M steps par session impose de reprendre un
+checkpoint avant saturation ; elle ne modifie aucun budget de jeu ou de preuve.
+
+Ce prototype est assemblé sur la branche d’intégration, sans branchement au client. Son
+transport de simulation est de confiance ; il ne certifie pas ses checkpoints. Seuls le
+journal rejoué et la chaîne de preuve existante peuvent les engager. Le client doit journaliser
+dès le premier tic, conserver exactement les mots acceptés et fournir l’état sérialisé aux
+segments, en plus de leur `h_in`. L’ouverture tardive de la file F4 et l’actuel `SegmentRequest`
+limité au hash ne satisfont pas ces conditions.
+
+Traces root : `/tmp/hellproof-audit-20260913/continuation-{reference,boxed}/`.
+WASM SHA-256 `dd73ce152f44a9e00368e195c6de36d40b2948b0740794f056b2e557c94b67c5` ;
+harnais avec D33 `6ae3f3820f9b075713e2edceec8d7cfe56ec5d4bdb6e214b8f8ceba115f9bd22`.
+Le harnais suivi est `prover/sim/bench/continuation/run.py` sur la branche d’intégration.
