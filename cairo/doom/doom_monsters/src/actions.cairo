@@ -12,7 +12,7 @@
 //!
 //! Every public function of this module is the **boundary**: it takes the
 //! 72-felt [`Ctx`] and the actor as a `Mobj`, and hands both to the `_in`
-//! twin that does the work, which carries the six-felt [`Env`] and the
+//! twin that does the work, which carries the one-pointer [`Env`] and the
 //! actor as a `Box<Mobj>`. Nothing wide crosses a call inside the crate:
 //!
 //! * a struct pushed at a call costs one word of bytecode and one step per

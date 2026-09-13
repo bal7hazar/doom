@@ -97,7 +97,7 @@ pub struct Patch {
 /// it is running on.
 ///
 /// This is the **public boundary** type; inside the crate every call carries
-/// the six-felt [`Env`] instead (see it for why).
+/// the one-pointer [`Env`] instead (see it for why).
 #[derive(Copy, Drop)]
 pub struct Ctx {
     pub w: World,
@@ -107,8 +107,9 @@ pub struct Ctx {
     pub tic: u32,
 }
 
-/// [`Ctx`] as the crate's own calls carry it: the 67-felt [`World`] behind
-/// **one pointer**, so the whole context is six felts.
+/// Payload of the crate's read-only context: six felts with the 67-felt
+/// [`World`] behind one pointer. [`Env`] boxes this payload too, so loops
+/// and calls carry one pointer rather than copying its six felts.
 ///
 /// docs/spikes/S7.md §8 rule 3: a struct pushed at a call costs one word of
 /// bytecode and one step per felt, a `Box` costs one, and reading a field
@@ -119,17 +120,22 @@ pub struct Ctx {
 /// `World` is rebuilt on the stack only where `doom_physics` asks for one,
 /// which is where those felts had to be pushed anyway.
 #[derive(Copy, Drop)]
-pub(crate) struct Env {
+pub(crate) struct EnvData {
     pub w: Box<World>,
     pub players: Span<u32>,
     pub noise: Noise,
     pub tic: u32,
 }
 
+/// Read-only context passed through the entire action chain as one felt.
+pub(crate) type Env = Box<EnvData>;
+
 /// The [`Env`] of a public [`Ctx`], at the one boundary that pays for it.
 #[inline(always)]
 pub(crate) fn env_of(ctx: Ctx) -> Env {
-    Env { w: BoxTrait::new(ctx.w), players: ctx.players, noise: ctx.noise, tic: ctx.tic }
+    BoxTrait::new(
+        EnvData { w: BoxTrait::new(ctx.w), players: ctx.players, noise: ctx.noise, tic: ctx.tic },
+    )
 }
 
 /// Slot `i` of the list, or a removed slot past its end.
