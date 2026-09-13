@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# The "without data" side of the bytecode measurement: the same package as
+# ../size, the same crate graph and the same flags, but referencing none of
+# `doom_specials`' generated tables. `../measure.py` subtracts this
+# executable's bytecode from ../size's.
+[package]
+name = "doom_specials_baseline"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_specials = { path = "../.." }
+doom_map = { path = "../../../doom_map" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_specials_baseline"
+function = "doom_specials_baseline::main"
+sierra = true
+
+[cairo]
+enable-gas = false

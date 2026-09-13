@@ -5,6 +5,10 @@ edition.workspace = true
 
 [dependencies]
 doom_map = { path = "../doom_map" }
+fixed = { path = "../../crates/fixed" }
+prng = { path = "../../crates/prng" }
+state_hash = { path = "../../crates/state_hash" }
 
 [dev-dependencies]
 cairo_test.workspace = true
+doom_things = { path = "../doom_things" }
