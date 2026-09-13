@@ -65,6 +65,7 @@ fn env() -> Option<Env> {
     })
 }
 
+#[allow(clippy::field_reassign_with_default)]
 fn config(e: &Env, data_dir: PathBuf, leaf_mode: LeafMode) -> Config {
     let mut cfg = Config::default();
     cfg.data_dir = data_dir;
@@ -342,5 +343,94 @@ async fn a_tampered_proof_is_rejected_in_seconds() {
     assert!(
         depths.iter().all(|(kind, _, _)| kind == "verify"),
         "expensive work was scheduled for a rejected run: {depths:?}"
+    );
+}
+
+/// The resumable per-segment upload protocol (README "Resumable per-segment uploads"), against
+/// the same two real `segment_stub` proofs `wraps_two_real_segment_proofs_into_one_root` submits
+/// as one `POST`: `PUT` each segment on its own — no `POST /v1/runs` at all — then
+/// `POST .../complete`, and check it folds into the same shape of root proof.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "runs the real prover: 32.5 GB per circuit proof, minutes per run"]
+async fn resumable_upload_wraps_two_real_segment_proofs_into_one_root() {
+    use base64::Engine;
+
+    let e = env().expect("set WRAPPER_E2E_* (see the module docs)");
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = config(&e, dir.path().to_path_buf(), LeafMode::FromProof);
+    cfg.check_runnable()
+        .expect("pipeline binaries and fixtures must exist");
+
+    let db = Db::open(&dir.path().join("queue.sqlite3")).unwrap();
+    let state = Arc::new(AppState::new(cfg, db));
+    tokio::spawn(Scheduler::new(Arc::clone(&state)).run());
+    let router = api::router(Arc::clone(&state));
+
+    let manifest: Value =
+        serde_json::from_slice(&std::fs::read(e.fixtures.join("manifest.json")).unwrap()).unwrap();
+    let segments = manifest["segments"].as_array().unwrap();
+    let run_id = "resumable-e2e";
+
+    // No `args` at all: `from_proof` folds the submitted proof, exactly like the whole-run test.
+    for s in segments {
+        let proof = std::fs::read(s["proof_path"].as_str().unwrap()).unwrap();
+        let index = s["index"].as_u64().unwrap();
+        let body = json!({
+            "index": index,
+            "output_preimage": s["output_preimage"],
+            "proof": {
+                "format": "bincode_b64",
+                "data": base64::engine::general_purpose::STANDARD.encode(&proof),
+            },
+        });
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!("/v1/runs/{run_id}/segments/{index}"))
+            .header("authorization", format!("Bearer {KEY}"))
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+        let started = std::time::Instant::now();
+        let (code, res) = call(&router, req).await;
+        eprintln!(
+            "segment {index} verified in {:.2} s: {res}",
+            started.elapsed().as_secs_f64()
+        );
+        assert_eq!(code, StatusCode::OK, "{res}");
+        assert_eq!(res["verified"], true, "{res}");
+    }
+
+    let (code, listed) = get(&router, &format!("/v1/runs/{run_id}/segments")).await;
+    assert_eq!(code, StatusCode::OK, "{listed}");
+    assert_eq!(listed["held"].as_array().unwrap().len(), segments.len());
+
+    let (code, res) = post(
+        &router,
+        &format!("/v1/runs/{run_id}/complete"),
+        json!({ "program": "segment_stub", "solo": true }),
+    )
+    .await;
+    assert_eq!(code, StatusCode::ACCEPTED, "{res}");
+    assert_ne!(res["status"], "rejected", "{res}");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1800);
+    let run = loop {
+        let (_, run) = get(&router, &format!("/v1/runs/{run_id}")).await;
+        match run["status"].as_str().unwrap_or("") {
+            "done" => break run,
+            "rejected" | "failed" => panic!("run did not complete: {run}"),
+            _ => {}
+        }
+        assert!(std::time::Instant::now() < deadline, "timed out: {run}");
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    };
+
+    let batch_id = run["batch_id"].as_str().unwrap();
+    let (_, batch) = get(&router, &format!("/v1/batches/{batch_id}")).await;
+    assert_eq!(batch["status"], "done");
+    assert_eq!(batch["leaves"].as_array().unwrap().len(), segments.len());
+    eprintln!(
+        "resumable upload: root proof {} felts, same fixtures as the whole-run test",
+        batch["root_proof_felt_count"]
     );
 }
