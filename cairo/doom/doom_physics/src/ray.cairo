@@ -23,7 +23,7 @@ use geom2d::{
     Box as BBox, DivLine, HalfPlane, Point, SIDE_BACK, SIDE_CROSS, SIDE_FRONT, divline_side, hoist,
     intercept_fraction, point_side,
 };
-use super::maputl::{cell_at, dec, delta_signs, inc, line_box, line_divline};
+use super::maputl::{TraceBox, cell_at, dec, delta_signs, inc, line_box, line_divline, trace_box};
 
 /// `2^62`: the offset that turns the sign test of a signed felt product into
 /// one `felt_ge_narrow` (the product of two raw deltas is below 2^62 in
@@ -48,6 +48,9 @@ pub struct Trace {
     /// The trace as a divline: the side tests of line endpoints
     /// ([`trace_side`]) and `intercept_fraction`.
     pub dl: DivLine,
+    /// Its unit-rounded bounding box, for the early reject of every line
+    /// ([`maputl::line_box_misses`]).
+    pub tb: TraceBox,
 }
 
 /// The DDA cursor of a walk.
@@ -81,6 +84,7 @@ pub fn trace_of(p1: Point, p2: Point) -> Box<Trace> {
             dl: DivLine {
                 x: p1.x, y: p1.y, dx: fixed::sub(p2.x, p1.x), dy: fixed::sub(p2.y, p1.y),
             },
+            tb: trace_box(p1, p2),
         },
     )
 }

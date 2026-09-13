@@ -271,6 +271,61 @@ fn units_ceil(enc: felt252) -> u128 {
     (to_u128(enc - COORD_OFFSET) + 65535) / 65536
 }
 
+/// The unit-rounded bounding box of a *trace*, for the early reject of the
+/// traversals (S7): a line whose box lies **strictly** outside the trace's
+/// box cannot be crossed by it (nor touched, which the three-valued sight
+/// test counts as crossed), so `line.top < y_lo`, `line.bottom > y_hi`,
+/// `line.right < x_lo` or `line.left > x_hi` dismiss it without reading its
+/// predicate. The y bounds are pre-shifted by 16 bits so that both y tests
+/// run on the halves of one `u128` divmod of the packed `L_BOX`.
+#[derive(Copy, Drop)]
+pub struct TraceBox {
+    /// `ceil(min_y) << 16`: the line is below the trace when `hi < y_lo_sh`
+    /// (`hi = right + top << 16`).
+    pub y_lo_sh: u128,
+    /// `(floor(max_y) + 1) << 16`: the line is above the trace when
+    /// `lo >= y_hi1_sh` (`lo = left + bottom << 16`).
+    pub y_hi1_sh: u128,
+    /// `ceil(min_x)`: the line is left of the trace when `right < x_lo`.
+    pub x_lo: u128,
+    /// `floor(max_x)`: the line is right of the trace when `left > x_hi`.
+    pub x_hi: u128,
+}
+
+/// The [`TraceBox`] of the trace `p1 -> p2`: four divisions, once per
+/// traversal.
+pub fn trace_box(p1: Point, p2: Point) -> TraceBox {
+    let y_lo: felt252 = units_ceil(fixed::min(p1.y, p2.y).enc).into();
+    let y_hi: felt252 = units_floor(fixed::max(p1.y, p2.y).enc).into();
+    TraceBox {
+        y_lo_sh: to_u128(y_lo * 65536),
+        y_hi1_sh: to_u128((y_hi + 1) * 65536),
+        x_lo: units_ceil(fixed::min(p1.x, p2.x).enc),
+        x_hi: units_floor(fixed::max(p1.x, p2.x).enc),
+    }
+}
+
+/// `true` when the line's packed `L_BOX` lies strictly outside the trace's
+/// [`TraceBox`]: one divmod settles both y tests, two more the x tests.
+#[inline(always)]
+pub fn line_box_misses(packed: felt252, tb: TraceBox) -> bool {
+    let w32: NonZero<u128> = 0x100000000;
+    let w16: NonZero<u128> = 0x10000;
+    let (hi, lo) = DivRem::div_rem(to_u128(packed), w32);
+    if hi < tb.y_lo_sh {
+        return true;
+    }
+    if lo >= tb.y_hi1_sh {
+        return true;
+    }
+    let (_, left) = DivRem::div_rem(lo, w16);
+    if left > tb.x_hi {
+        return true;
+    }
+    let (_, right) = DivRem::div_rem(hi, w16);
+    right < tb.x_lo
+}
+
 /// The [`UnitBox`] of a box: four conversions and four divisions, once per
 /// `P_CheckPosition`.
 pub fn unit_box(b: Box) -> UnitBox {

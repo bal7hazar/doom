@@ -29,7 +29,7 @@
 use doom_map::{ML_TWOSIDED, reject_of};
 use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
 use geom2d::Point;
-use super::maputl::{add32, inc, line_hp, line_opening, line_sides, rd, rd32};
+use super::maputl::{add32, inc, line_box_misses, line_hp, line_opening, line_sides, rd, rd32};
 use super::mobj::{Mobj, has};
 use super::ray::{
     Trace, crosses_sight, crossing_fraction, ray_advance, ray_cell, ray_start, trace_of,
@@ -110,8 +110,12 @@ fn sight_cell(
         let map = lv.hot.unbox();
         let line = rd32(map.bm_items, j);
         j = inc(j);
+        let packed_box = rd(map.l_box, line);
+        if line_box_misses(packed_box, tr.unbox().tb) {
+            continue;
+        }
         let hp = line_hp(map.l_ab, map.l_bb, map.l_cb, line);
-        let lbox = match crosses_sight(tr, hp, rd(map.l_box, line)) {
+        let lbox = match crosses_sight(tr, hp, packed_box) {
             Option::Some(b) => b,
             Option::None => { continue; },
         };
