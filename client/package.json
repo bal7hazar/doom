@@ -2,13 +2,14 @@
   "name": "@hellproof/client",
   "version": "0.1.0",
   "private": true,
-  "description": "Hellproof web client: Freedoom asset pipeline + WebGL2 renderer (roadmap P2.1, P2.2, P2.7)",
+  "description": "Hellproof web client: Freedoom asset pipeline + WebGL2 renderer, proving pipeline and local persistence (roadmap P2.1, P2.2, P2.5, P2.7, P3.2)",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "assets": "bash scripts/prepare-assets.sh",
+    "prover": "bash scripts/prepare-prover.sh",
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
@@ -19,11 +20,14 @@
     "fixtures": "tsx test/fixtures/generate.ts"
   },
   "dependencies": {
-    "@hellproof/wad": "*"
+    "@hellproof/prover-wasm": "*",
+    "@hellproof/wad": "*",
+    "@hellproof/wrapper-client": "*"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
     "@types/node": "^22.10.1",
+    "fake-indexeddb": "^6.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vite": "^6.0.3",

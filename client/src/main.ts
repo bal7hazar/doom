@@ -128,7 +128,40 @@ async function main(): Promise<void> {
 
   const ring = new SnapshotRing();
   const sim = createStubSim(level);
-  const scheduler = new TicScheduler(ring, (tic) => sim.stepTic(tic));
+
+  // Proving (P3.2) is attached lazily, on F4: `public/prover/` is 90 MB of
+  // gitignored wasm that a plain clone does not have, and nothing about it may
+  // cost a frame before the player asks for the queue.
+  let prove: import("./prove/session.js").ProveSession | null = null;
+  let provePending = false;
+  let neutralWord = 0;
+  const scheduler = new TicScheduler(ring, (tic) => {
+    // Until P2.4 captures real input there is no command to record; the journal
+    // takes the neutral one, so the wiring - and only the wiring - is exercised.
+    if (prove) prove.recordTic(neutralWord);
+    return sim.stepTic(tic);
+  });
+  const toggleProofQueue = async (): Promise<void> => {
+    if (prove) {
+      prove.element.hidden = !prove.element.hidden;
+      return;
+    }
+    if (provePending) return;
+    provePending = true;
+    try {
+      const { ProveSession, NEUTRAL_TICCMD_WORD } = await import("./prove/session.js");
+      neutralWord = NEUTRAL_TICCMD_WORD;
+      prove = await ProveSession.create({
+        host: document.getElementById("stage") as HTMLElement,
+        wrapperUrl: import.meta.env?.VITE_WRAPPER_URL ?? null,
+      });
+      prove.element.classList.add("proof-queue-overlay");
+    } catch (error) {
+      console.error("proof queue unavailable:", error);
+    } finally {
+      provePending = false;
+    }
+  };
   const hud = new Hud(store);
   const dynamicSectors = findDynamicSectors(level);
 
@@ -175,6 +208,10 @@ async function main(): Promise<void> {
       case "F3":
         event.preventDefault();
         renderOptions.flatShading = !renderOptions.flatShading;
+        break;
+      case "F4":
+        event.preventDefault();
+        void toggleProofQueue();
         break;
       case " ":
         event.preventDefault();

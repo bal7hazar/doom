@@ -1,9 +1,11 @@
 {
   "name": "hellproof",
   "private": true,
-  "description": "Workspace root: wires client/ to tools/wad (@hellproof/wad) via npm workspaces - see tools/wad/README.md.",
+  "description": "Workspace root: wires client/ to tools/wad (@hellproof/wad), prover/wasm/pkg (@hellproof/prover-wasm) and prover/wrapper/client-ts (@hellproof/wrapper-client) via npm workspaces.",
   "workspaces": [
     "tools/wad",
+    "prover/wasm/pkg",
+    "prover/wrapper/client-ts",
     "client"
   ]
 }

@@ -152,3 +152,149 @@ body {
 .help b {
   color: var(--fg);
 }
+
+/* ---------------------------------------------------------------------------
+   Proof queue (P3.2 / P2.6). The panel is a plain <section> the caller places;
+   `prove.html` uses the whole page for it, the game overlays it like the other
+   panels.
+   --------------------------------------------------------------------------- */
+
+body.prove-page {
+  overflow: auto;
+  padding: 16px 20px 40px;
+  height: auto;
+  min-height: 100%;
+}
+
+body.prove-page h1 {
+  font-size: 15px;
+  margin: 0 0 6px;
+  color: var(--accent);
+}
+
+body.prove-page #status {
+  color: var(--dim);
+  margin: 0 0 14px;
+}
+
+.proof-queue {
+  background: var(--panel);
+  border: 1px solid #2a2521;
+  border-radius: 4px;
+  padding: 10px 12px;
+  max-width: 1100px;
+}
+
+.proof-queue header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.proof-queue h2 {
+  font-size: 13px;
+  margin: 0;
+  color: var(--fg);
+}
+
+.proof-queue-summary {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.proof-queue-scroll {
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px solid #201c19;
+}
+
+.proof-queue table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 11px;
+}
+
+.proof-queue th,
+.proof-queue td {
+  padding: 2px 6px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid #1a1714;
+}
+
+.proof-queue th:first-child,
+.proof-queue td:first-child {
+  text-align: left;
+}
+
+.proof-queue thead th {
+  position: sticky;
+  top: 0;
+  background: #16130f;
+  color: var(--dim);
+  font-weight: normal;
+}
+
+.proof-queue tr.stage-proved td {
+  color: var(--ok);
+}
+
+.proof-queue tr.stage-failed td {
+  color: var(--bad);
+  text-align: left;
+  white-space: normal;
+}
+
+.proof-queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 6px;
+}
+
+.proof-queue-actions button {
+  font: inherit;
+  font-size: 11px;
+  color: var(--fg);
+  background: #221d19;
+  border: 1px solid #3a322b;
+  border-radius: 3px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+.proof-queue-actions button:hover {
+  border-color: var(--accent);
+}
+
+.proof-queue-actions button.danger {
+  color: var(--bad);
+}
+
+.proof-queue-actions label {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.proof-queue-log {
+  margin: 0;
+  max-height: 22vh;
+  overflow: auto;
+  color: var(--dim);
+  font-size: 11px;
+  white-space: pre-wrap;
+  border-top: 1px solid #201c19;
+  padding-top: 6px;
+}
+
+/* The queue as an overlay on the game page (F4), rather than the whole page. */
+.proof-queue-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 36px;
+  width: min(960px, calc(100vw - 24px));
+  max-height: 60vh;
+  overflow: auto;
+}

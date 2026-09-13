@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
 /**
@@ -39,6 +40,14 @@ export default defineConfig({
   build: {
     target: "es2022",
     sourcemap: true,
+    rollupOptions: {
+      // Two pages: the renderer preview and the proving pipeline harness
+      // (P3.2), which the Playwright end-to-end test drives.
+      input: {
+        main: resolve(import.meta.dirname, "index.html"),
+        prove: resolve(import.meta.dirname, "prove.html"),
+      },
+    },
   },
   worker: {
     format: "es",

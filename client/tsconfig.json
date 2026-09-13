@@ -3,6 +3,17 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    // Both packages are consumed *for their types only* (see src/prove/README
+    // section of client/README.md): the prover's runtime lives in `public/prover/`
+    // as static assets and the wrapper client is re-implemented here with
+    // resumable upload. Pointing at their sources rather than at their built
+    // `dist/` keeps `npm run typecheck` working in a fresh clone, with no
+    // build-order coupling between the three packages.
+    "paths": {
+      "@hellproof/prover-wasm": ["../prover/wasm/pkg/src/index.ts"],
+      "@hellproof/wrapper-client": ["../prover/wrapper/client-ts/src/index.ts"]
+    },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
     "strict": true,

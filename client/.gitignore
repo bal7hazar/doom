@@ -11,6 +11,12 @@ coverage/
 public/freedoom1.wad
 public/levels/
 
+# The wasm64 prover, staged by `npm run prover` from prover/wasm (45 MB per
+# artifact; their hashes are tracked in prover/wasm/SHA256SUMS). The stub
+# program under public/programs/ *is* committed - it is 36 kB and the e2e test
+# needs it.
+public/prover/
+
 # Generated test fixtures (derived from the WAD, see test/fixtures/generate.ts).
 test/fixtures/generated/
 
