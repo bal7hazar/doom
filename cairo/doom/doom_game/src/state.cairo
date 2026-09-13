@@ -151,17 +151,10 @@ pub fn hash(s: @GameState) -> felt252 {
 #[derive(Copy, Drop)]
 struct Reader {
     data: Span<felt252>,
-    pos: u32,
 }
 
 fn next(ref r: Reader) -> Option<felt252> {
-    match r.data.get(r.pos) {
-        Option::Some(b) => {
-            r.pos = r.pos + 1;
-            Option::Some(*b.unbox())
-        },
-        Option::None => Option::None,
-    }
+    Option::Some(*r.data.pop_front()?)
 }
 
 fn next_u32(ref r: Reader) -> Option<u32> {
@@ -180,55 +173,91 @@ fn next_bool(ref r: Reader) -> Option<bool> {
     }
 }
 
-fn next_fixed(ref r: Reader) -> Option<Fixed> {
-    let f = next(ref r)?;
-    let u: u64 = f.try_into()?;
-    if u >= FIXED_BOUND {
-        return Option::None;
-    }
-    Option::Some(Fixed { enc: f })
-}
 
-fn read_player(ref r: Reader) -> Option<Player> {
+#[inline(never)]
+fn read_player(ref r: Reader) -> Option<Box<Player>> {
+    let raw = r.data.multi_pop_front::<36>()?;
+    let [
+        mo,
+        playerstate,
+        health,
+        armor_points,
+        armor_type,
+        ammo_clip,
+        ammo_shell,
+        ammo_cell,
+        ammo_misl,
+        backpack,
+        weapons,
+        ready_weapon,
+        pending_weapon,
+        cards,
+        strength,
+        viewz,
+        viewheight,
+        deltaviewheight,
+        bob,
+        psp_state,
+        psp_tics,
+        psp_sx,
+        psp_sy,
+        flash_state,
+        flash_tics,
+        extralight,
+        damagecount,
+        bonuscount,
+        attacker,
+        attackdown,
+        usedown,
+        refire,
+        cheats,
+        killcount,
+        itemcount,
+        secretcount,
+    ] =
+        raw
+        .unbox();
     Option::Some(
-        Player {
-            mo: next_u32(ref r)?,
-            playerstate: next_u32(ref r)?,
-            health: next_u32(ref r)?,
-            armor_points: next_u32(ref r)?,
-            armor_type: next_u32(ref r)?,
-            ammo_clip: next_u32(ref r)?,
-            ammo_shell: next_u32(ref r)?,
-            ammo_cell: next_u32(ref r)?,
-            ammo_misl: next_u32(ref r)?,
-            backpack: next_bool(ref r)?,
-            weapons: next_u32(ref r)?,
-            ready_weapon: next_u32(ref r)?,
-            pending_weapon: next_u32(ref r)?,
-            cards: next_u32(ref r)?,
-            strength: next_u32(ref r)?,
-            viewz: next_fixed(ref r)?,
-            viewheight: next_fixed(ref r)?,
-            deltaviewheight: next_fixed(ref r)?,
-            bob: next_fixed(ref r)?,
-            psp_state: next_u32(ref r)?,
-            psp_tics: next_u32(ref r)?,
-            psp_sx: next_fixed(ref r)?,
-            psp_sy: next_fixed(ref r)?,
-            flash_state: next_u32(ref r)?,
-            flash_tics: next_u32(ref r)?,
-            extralight: next_u32(ref r)?,
-            damagecount: next_u32(ref r)?,
-            bonuscount: next_u32(ref r)?,
-            attacker: next_u32(ref r)?,
-            attackdown: next_bool(ref r)?,
-            usedown: next_bool(ref r)?,
-            refire: next_u32(ref r)?,
-            cheats: next_u32(ref r)?,
-            killcount: next_u32(ref r)?,
-            itemcount: next_u32(ref r)?,
-            secretcount: next_u32(ref r)?,
-        },
+        BoxTrait::new(
+            Player {
+                mo: mo.try_into()?,
+                playerstate: playerstate.try_into()?,
+                health: health.try_into()?,
+                armor_points: armor_points.try_into()?,
+                armor_type: armor_type.try_into()?,
+                ammo_clip: ammo_clip.try_into()?,
+                ammo_shell: ammo_shell.try_into()?,
+                ammo_cell: ammo_cell.try_into()?,
+                ammo_misl: ammo_misl.try_into()?,
+                backpack: bool_of(backpack)?,
+                weapons: weapons.try_into()?,
+                ready_weapon: ready_weapon.try_into()?,
+                pending_weapon: pending_weapon.try_into()?,
+                cards: cards.try_into()?,
+                strength: strength.try_into()?,
+                viewz: fixed_of(viewz)?,
+                viewheight: fixed_of(viewheight)?,
+                deltaviewheight: fixed_of(deltaviewheight)?,
+                bob: fixed_of(bob)?,
+                psp_state: psp_state.try_into()?,
+                psp_tics: psp_tics.try_into()?,
+                psp_sx: fixed_of(psp_sx)?,
+                psp_sy: fixed_of(psp_sy)?,
+                flash_state: flash_state.try_into()?,
+                flash_tics: flash_tics.try_into()?,
+                extralight: extralight.try_into()?,
+                damagecount: damagecount.try_into()?,
+                bonuscount: bonuscount.try_into()?,
+                attacker: attacker.try_into()?,
+                attackdown: bool_of(attackdown)?,
+                usedown: bool_of(usedown)?,
+                refire: refire.try_into()?,
+                cheats: cheats.try_into()?,
+                killcount: killcount.try_into()?,
+                itemcount: itemcount.try_into()?,
+                secretcount: secretcount.try_into()?,
+            },
+        ),
     )
 }
 
@@ -236,12 +265,7 @@ fn read_player(ref r: Reader) -> Option<Player> {
 /// Field-domain checks remain identical to the scalar reader.
 #[inline(never)]
 fn read_mobj(ref r: Reader) -> Option<Box<Mobj>> {
-    if r.data.len() - r.pos < MOBJ_FELTS {
-        return Option::None;
-    }
-    let record = r.data.slice(r.pos, MOBJ_FELTS);
-    let raw: @Box<[felt252; 27]> = record.try_into()?;
-    r.pos += MOBJ_FELTS;
+    let raw = r.data.multi_pop_front::<27>()?;
     let [
         kind,
         x,
@@ -393,7 +417,8 @@ fn phase(id: felt252) -> Option<Phase> {
 }
 
 /// The inverse of `doom_specials::append_to`, over the slot counts of `lm`.
-fn read_specials(ref r: Reader, lm: @SpecialsMap) -> Option<SpecialsState> {
+#[inline(never)]
+fn read_specials(ref r: Reader, lm: @SpecialsMap) -> Option<Box<SpecialsState>> {
     let secrets = next_u32(ref r)?;
     let exit = next_bool(ref r)?;
     let next_light = next_u32(ref r)?;
@@ -407,18 +432,20 @@ fn read_specials(ref r: Reader, lm: @SpecialsMap) -> Option<SpecialsState> {
     let mut lights: Array<Light> = array![];
     let mut k: u32 = 0;
     while k != n_lights {
-        let kind = light_kind(next(ref r)?)?;
+        let raw = r.data.multi_pop_front::<8>()?;
+        let [kind, sector, light, maxlight, minlight, hi_time, lo_time, next] = raw.unbox();
+        let kind = light_kind(kind)?;
         lights
             .append(
                 Light {
                     kind,
-                    sector: next_u32(ref r)?,
-                    light: next_u32(ref r)?,
-                    maxlight: next_u32(ref r)?,
-                    minlight: next_u32(ref r)?,
-                    hi_time: next_u32(ref r)?,
-                    lo_time: next_u32(ref r)?,
-                    next: next_u32(ref r)?,
+                    sector: sector.try_into()?,
+                    light: light.try_into()?,
+                    maxlight: maxlight.try_into()?,
+                    minlight: minlight.try_into()?,
+                    hi_time: hi_time.try_into()?,
+                    lo_time: lo_time.try_into()?,
+                    next: next.try_into()?,
                 },
             );
         k = k + 1;
@@ -430,18 +457,20 @@ fn read_specials(ref r: Reader, lm: @SpecialsMap) -> Option<SpecialsState> {
     let mut movers: Array<Mover> = array![];
     k = 0;
     while k != n_movers {
-        let kind = mover_kind(next(ref r)?)?;
-        let ph = phase(next(ref r)?)?;
+        let raw = r.data.multi_pop_front::<7>()?;
+        let [kind, ph, sector, height, top, bottom, count] = raw.unbox();
+        let kind = mover_kind(kind)?;
+        let ph = phase(ph)?;
         movers
             .append(
                 Mover {
                     kind,
                     phase: ph,
-                    sector: next_u32(ref r)?,
-                    height: next_fixed(ref r)?,
-                    top: next_fixed(ref r)?,
-                    bottom: next_fixed(ref r)?,
-                    count: next_u32(ref r)?,
+                    sector: sector.try_into()?,
+                    height: fixed_of(height)?,
+                    top: fixed_of(top)?,
+                    bottom: fixed_of(bottom)?,
+                    count: count.try_into()?,
                 },
             );
         k = k + 1;
@@ -452,26 +481,33 @@ fn read_specials(ref r: Reader, lm: @SpecialsMap) -> Option<SpecialsState> {
     }
     let used = read_u32s(ref r, n_used)?;
     Option::Some(
-        SpecialsState {
-            ceilings,
-            floors,
-            specials,
-            lights: lights.span(),
-            next_light,
-            movers: movers.span(),
-            used,
-            secrets,
-            exit,
-        },
+        BoxTrait::new(
+            SpecialsState {
+                ceilings,
+                floors,
+                specials,
+                lights: lights.span(),
+                next_light,
+                movers: movers.span(),
+                used,
+                secrets,
+                exit,
+            },
+        ),
     )
 }
 
 /// Rebuild a state from its serialization (header included), or `None` if
 /// anything is malformed: wrong tag, version or length, a field out of its
 /// domain, an unknown level, a player index past the list. The derived
-/// fields (grid, heights) are recomputed.
+/// heights are recomputed; the committed grid lists are restored exactly.
 pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
-    let mut r = Reader { data, pos: 0 };
+    Option::Some(read_state(data)?.unbox())
+}
+
+#[inline(never)]
+fn read_state(data: Span<felt252>) -> Option<Box<GameState>> {
+    let mut r = Reader { data };
     if next(ref r)? != TAG {
         return Option::None;
     }
@@ -501,7 +537,7 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
     }
     let prng = from_index(pi);
     let mrng = from_index(mi);
-    let player = read_player(ref r)?;
+    let player = read_player(ref r)?.unbox();
     let n_mobjs = next_u32(ref r)?;
     if n_mobjs == 0 || n_mobjs > doom_physics::MAX_MOBJS {
         return Option::None;
@@ -525,29 +561,42 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
         return Option::None;
     }
     let n_specials = next_u32(ref r)?;
-    let before = r.pos;
+    let before = r.data.len();
     let lm: SpecialsMap = doom_specials::load(level);
-    let specials = read_specials(ref r, @lm)?;
-    if !valid_specials(specials, m, lm) {
+    let specials = read_specials(ref r, @lm)?.unbox();
+    if !valid_specials(specials, m.s_floor.len(), lm.ceil_slot, lm.floor_slot) {
         return Option::None;
     }
-    if r.pos - before != n_specials {
+    if before - r.data.len() != n_specials {
         return Option::None;
     }
     let grid = read_grid(ref r, mobjs, m.cell_node.len())?;
-    if r.pos != data.len() {
+    if !r.data.is_empty() {
         return Option::None;
     }
     let (floor, ceil) = materialise_heights(@m, @lm, @specials);
     Option::Some(
-        GameState {
-            level, leveltime, status, noise, prng, mrng, player, mobjs, specials, floor, ceil, grid,
-        },
+        BoxTrait::new(
+            GameState {
+                level,
+                leveltime,
+                status,
+                noise,
+                prng,
+                mrng,
+                player,
+                mobjs,
+                specials,
+                floor,
+                ceil,
+                grid,
+            },
+        ),
     )
 }
 
 /// Decode and validate the roster outside `from_felts`' wide player/level
-/// live set. The helper returns only the span and reader position (S7 §8).
+/// live set. The helper returns only the roster and remaining input (S7 §8).
 #[inline(never)]
 fn read_mobjs(ref r: Reader, n_mobjs: u32, bounds: MapBounds) -> Option<Span<Mobj>> {
     let mut mobjs: Array<Mobj> = array![];
@@ -623,10 +672,12 @@ fn valid_mobj(mo: Mobj, bounds: MapBounds, n: u32) -> bool {
         && mo.health < 0x100000
 }
 
-fn valid_specials(s: SpecialsState, m: LevelMap, lm: SpecialsMap) -> bool {
+fn valid_specials(
+    s: SpecialsState, sectors: u32, ceil_slot: Span<u32>, floor_slot: Span<u32>,
+) -> bool {
     let mut ls = s.lights;
     while let Option::Some(l) = ls.pop_front() {
-        if *l.sector >= m.s_floor.len()
+        if *l.sector >= sectors
             || *l.light > 255
             || *l.maxlight > 255
             || *l.minlight > *l.maxlight
@@ -640,9 +691,9 @@ fn valid_specials(s: SpecialsState, m: LevelMap, lm: SpecialsMap) -> bool {
     let mut ms = s.movers;
     while let Option::Some(mv) = ms.pop_front() {
         let slots = if doom_specials::state::moves_ceiling(*mv.kind) {
-            lm.ceil_slot
+            ceil_slot
         } else {
-            lm.floor_slot
+            floor_slot
         };
         let slot = match slots.get(*mv.sector) {
             Option::Some(v) => *v.unbox(),

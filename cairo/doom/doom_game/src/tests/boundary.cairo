@@ -91,3 +91,102 @@ fn test_grid_duplicate_member_is_rejected() {
     }
     assert(found, 'fixture has a multi-member cell');
 }
+
+#[test]
+fn test_player_block_preserves_every_scalar_domain_check() {
+    let state = serialize(@genesis(LevelId::E1M1));
+    // The 36 player fields start after three header and seven scalar felts.
+    for field in array![15, 16, 17, 18, 21, 22] {
+        assert(
+            from_felts(altered(state.span(), 10 + field, 0x200000000).span()).is_none(),
+            'player fixed',
+        );
+    }
+    for field in array![9, 29, 30] {
+        assert(from_felts(altered(state.span(), 10 + field, 2).span()).is_none(), 'player boolean');
+    }
+    for field in array![
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 19, 20, 23, 24, 25, 26, 27, 28, 31, 32, 33,
+        34, 35,
+    ] {
+        assert(
+            from_felts(altered(state.span(), 10 + field, 0x100000000).span()).is_none(),
+            'player u32',
+        );
+    }
+}
+
+#[test]
+fn test_truncated_player_block_is_rejected() {
+    let state = serialize(@genesis(LevelId::E1M1));
+    let mut n = 10;
+    while n < 46 {
+        let short = altered(state.span().slice(0, n), 2, (n - 3).into());
+        assert(from_felts(short.span()).is_none(), 'short player');
+        n += 1;
+    }
+}
+
+#[test]
+fn test_specials_blocks_preserve_their_field_domains() {
+    let mut g = genesis(LevelId::E1M1);
+    let lm = doom_specials::load(LevelId::E1M1);
+    let mover = doom_specials::Mover {
+        kind: doom_specials::MoverKind::DoorNormal,
+        phase: doom_specials::Phase::Up,
+        sector: *lm.ceil_sectors.at(0),
+        height: fixed::ZERO,
+        top: fixed::from_int(1),
+        bottom: fixed::ZERO,
+        count: 7,
+    };
+    g.specials.movers = array![mover].span();
+    let state = serialize(@g);
+    let restored = from_felts(state.span()).expect('valid distinct fields');
+    assert(serialize(@restored) == state, 'exact specials fields');
+    let light = 47
+        + g.mobjs.len() * 27
+        + 1
+        + 3
+        + lm.ceil_sectors.len()
+        + lm.floor_sectors.len()
+        + lm.special_sectors.len()
+        + 1;
+    assert(from_felts(altered(state.span(), light, 2).span()).is_none(), 'light kind');
+    let mut i = 1;
+    while i < 8 {
+        assert(
+            from_felts(altered(state.span(), light + i, 0x100000000).span()).is_none(), 'light u32',
+        );
+        i += 1;
+    }
+    let mv = light + g.specials.lights.len() * 8 + 1;
+    assert(from_felts(altered(state.span(), mv, 5).span()).is_none(), 'mover kind');
+    assert(from_felts(altered(state.span(), mv + 1, 3).span()).is_none(), 'mover phase');
+    for field in array![2, 6] {
+        assert(
+            from_felts(altered(state.span(), mv + field, 0x100000000).span()).is_none(),
+            'mover u32',
+        );
+    }
+    for field in array![3, 4, 5] {
+        assert(
+            from_felts(altered(state.span(), mv + field, 0x200000000).span()).is_none(),
+            'mover fixed',
+        );
+    }
+    for size in array![7, 6] {
+        let at = if size == 7 {
+            light
+        } else {
+            mv
+        };
+        let mut n = 0;
+        while n <= size {
+            let end = at + n;
+            let short = altered(state.span().slice(0, end), 2, (end - 3).into());
+            assert(from_felts(short.span()).is_none(), 'short specials');
+            n += 1;
+        }
+    }
+}
