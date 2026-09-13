@@ -19,14 +19,19 @@ cairo_execute = "2.16.0"
 [[target.executable]]
 name = "run_segment"
 function = "doom_run::run_segment"
+# The Sierra is what bench/attribute.py reads (proving profile); it is a
+# build output, never committed.
+sierra = true
 
 [[target.executable]]
 name = "step_tic"
 function = "doom_run::step_tic"
+sierra = true
 
 [[target.executable]]
 name = "genesis"
 function = "doom_run::genesis"
+sierra = true
 
 [dev-dependencies]
 cairo_test.workspace = true
