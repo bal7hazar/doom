@@ -143,7 +143,19 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   adaptateur réel depuis genesis avec identité et D14 vérifiés. **243 tests + dix
   smokes Chromium**, zéro skip dans cette sélection ; EXIT677 rendu sans erreur.
   L’admission AIR échoue comme attendu, conserve l’export et libère les Workers.
-  Le raccord F4 et les psprites animés restent à terminer ; pas de GO C3.
+  F4 est désormais raccordé par `3cb97c1` (UI `e5cac03`) ; trois défauts
+  de cycle de vie sont corrigés et revus, 259 tests client verts. Les psprites
+  animés restent à terminer ; pas de GO C3.
+
+- S13 BM_ITEMS (`19a869e`) : packing exact de 2 064 ids, gain net **1 439 mots**,
+  surcoût mesuré **65 417 steps**, économie Blake modélisée **21 225,25**.
+  Root reproduit le résultat : variante rejetée, aucune intégration du décodeur
+  dans le moteur. Le potentiel brut de carte ne constitue pas un gain accepté.
+
+- Fuzz du moteur `0c8a3a8`, proving, seed20260913 : **10 000 tics**, 158 cas,
+  11 épisodes, trois morts, zéro divergence en **1 040,04 s**. D14 : 158 vérifications
+  complètes / 40 coupes ; 493 états et 492 snapshots aux frontières publiques,
+  57 mots terminaux exclus. Les contrôles <2^72 portent sur les felts décodés.
 
 ## 1. Vision et périmètre
 

@@ -11,7 +11,10 @@ persisted synthétiques ; aucune admission BFCache réelle n’est revendiquée.
 sont assemblés par `8cf6d97` : 222 tests et neuf smokes après fusion, dont clavier/
 souris et sauvegarde/reload/import exacts. Le rendu v1 des acteurs/HUD et l’adaptateur sont maintenant livrés (`f188fc8`,
 `1b9816a`) et assemblés indépendamment par root : 243 tests et dix smokes verts.
-Le raccord F4 réel est en cours ; les psprites animés nécessitent encore v2. Le défaut WASM S12 est corrigé et sa CI est
+Le raccord F4 réel est fusionné par `3cb97c1` (UI `e5cac03`), après correction
+et revue indépendante de trois défauts d’arrêt Worker : 259 tests client verts.
+Le journal complet, le refus AIR exportable et la reprise sont raccordés ; les
+psprites animés nécessitent encore v2. Le défaut WASM S12 est corrigé et sa CI est
 verte ; les budgets, le registre et P3.7 restent distincts de ce résultat.
 
 Les écarts ci-dessous décrivent le point de départ de l’audit. Le journal avant
