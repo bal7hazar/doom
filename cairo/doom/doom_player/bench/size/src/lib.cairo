@@ -41,7 +41,10 @@ fn main(op: u32) -> felt252 {
     let e = env_of(w, array![mo].span(), 0, op, 3);
     let mut felts: Array<felt252> = array![];
     let mut thing: Mobj = removed_mobj();
-    thing.kind = KIND_MISC2;
+    // `op - op` is a zero the compiler cannot see: a literal `kind` here
+    // specialised `touch_special` and `take_health` on it and put a second,
+    // folded copy of the pickup dispatch in this program (S7 §8 rule 7).
+    thing.kind = KIND_MISC2 + (op - op);
     thing.flags = MF_SPECIAL;
     thing.z = mo.z;
     thing.height = fixed::from_units(16);
@@ -49,8 +52,11 @@ fn main(op: u32) -> felt252 {
     push_felts(ref felts, @p); // SIZE:state
     acc += felts.len().into(); // SIZE:state
 
-    acc += bool_felt(give_ammo(ref p, 0, 1)); // SIZE:inter
-    acc += bool_felt(give_weapon(ref p, 2, true)); // SIZE:inter
+    // `op`-derived arguments, never literals: a literal specialises the
+    // callee and this program then measures a folded copy (S7 §8 rule 7).
+    let zero = op - op;
+    acc += bool_felt(give_ammo(ref p, zero, zero + 1)); // SIZE:inter
+    acc += bool_felt(give_weapon(ref p, zero + 2, zero == 0)); // SIZE:inter
     acc += bool_felt(give_body(ref p, ref mo, 10)); // SIZE:inter
     acc += bool_felt(give_armor(ref p, 1)); // SIZE:inter
     give_card(ref p, 1); // SIZE:inter

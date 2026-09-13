@@ -456,10 +456,10 @@ fn run_action_in(
         a_fire_gun(env, ref g, ref rng, ref p, ref mo, ref events, 7, depth);
     } else if action == A_FIRECGUN {
         a_fire_cgun(env, ref g, ref rng, ref p, ref mo, ref events, depth);
-    } else if action == A_PUNCH {
-        a_melee(env, ref g, ref rng, ref p, ref mo, ref events, false);
-    } else if action == A_SAW {
-        a_melee(env, ref g, ref rng, ref p, ref mo, ref events, true);
+    } else if action == A_PUNCH || action == A_SAW {
+        // One arm, with `saw` computed: two arms with a literal each gave the
+        // lowering two copies of `a_melee`'s 2 184 words (S7 §2).
+        a_melee(env, ref g, ref rng, ref p, ref mo, ref events, action == A_SAW);
     } else if action == A_LIGHT0 {
         set_extralight(ref p, 0);
     } else if action == A_LIGHT1 {

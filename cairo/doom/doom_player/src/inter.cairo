@@ -16,7 +16,7 @@ use doom_things::tables::{
 use fixed::{BIAS, Fixed};
 use prng::Prng;
 use super::env::{Env, PlayerEvent, enter, leave};
-use super::num::{add32, div32, inc, mul32, rd32, sub32};
+use super::num::{add32, div32, inc, mul32, opaque_zero, rd32, sub32};
 use super::state::{
     AM_CELL, AM_CLIP, AM_MISL, AM_NOAMMO, AM_SHELL, BONUSADD, CARD_BLUE, CLIPAMMO, MAXARMOR_BONUS,
     MAXDAMAGECOUNT, MAXHEALTH, MAXHEALTH_BONUS, PST_DEAD, Player, WP_CHAINGUN, WP_CHAINSAW, WP_FIST,
@@ -101,6 +101,18 @@ pub fn give_weapon(ref p: Player, weapon: u32, dropped: bool) -> bool {
 
 /// `P_GiveBody`: heal up to [`MAXHEALTH`], never past it.
 pub fn give_body(ref p: Player, ref mo: Mobj, num: u32) -> bool {
+    let healed = give_body_p(ref p, num);
+    if healed {
+        mo.health = health_i32(p.health);
+    }
+    healed
+}
+
+/// `P_GiveBody` without the mobj: it and `SPR_BON1`/`SPR_SOUL` all mirror
+/// the new health into `mo.health`, which [`touch_special`] now does once for
+/// the whole pickup — so the 27-felt `ref Mobj` stays out of the pickup
+/// dispatch (S7 §8 rule 3).
+fn give_body_p(ref p: Player, num: u32) -> bool {
     if p.health >= MAXHEALTH {
         return false;
     }
@@ -110,7 +122,6 @@ pub fn give_body(ref p: Player, ref mo: Mobj, num: u32) -> bool {
     } else {
         raised
     };
-    mo.health = health_i32(p.health);
     true
 }
 
@@ -151,6 +162,13 @@ pub fn give_strength(ref p: Player, ref mo: Mobj) -> bool {
     true
 }
 
+/// [`give_strength`] without the mobj (see [`give_body_p`]).
+fn give_strength_p(ref p: Player) -> bool {
+    give_body_p(ref p, 100);
+    p.strength = 1;
+    true
+}
+
 // ---------------------------------------------------------------------------
 // P_TouchSpecialThing
 // ---------------------------------------------------------------------------
@@ -173,16 +191,26 @@ pub fn touch_special(ref p: Player, ref mo: Mobj, special: @Mobj) -> bool {
     }
     let kind = *special.kind;
     let dropped = has(*special.flags, MF_DROPPED);
+    let before = p.health;
     // Doom's one `switch (special->sprite)`, split in three so that no arm
-    // of it keeps the `Player` + `Mobj` live set alive across 150 Sierra
-    // statements: past that, `universal-sierra-compiler` cannot encode the
-    // jump offsets (`Offset overflow`) under `inlining-strategy = "avoid"`,
-    // which is the flag `cairo-coverage` requires.
-    let took = match take_health(ref p, ref mo, kind) {
+    // of it keeps the `Player` live set alive across 150 Sierra statements:
+    // past that, `universal-sierra-compiler` cannot encode the jump offsets
+    // (`Offset overflow`) under `inlining-strategy = "avoid"`, which is the
+    // flag `cairo-coverage` requires.
+    //
+    // **The mobj does not go down the dispatch** (S7 §8 rule 3): the only
+    // field any pickup writes on it is `health`, which the `P_Give*` of
+    // `p_inter.c` set to the player's new health — so the mirror happens
+    // here, once, and 27 felts stay out of three call boundaries. The one
+    // case vanilla writes and this does not is a health item taken at the
+    // cap, where the value written is the one already there (`mo.health`
+    // equals `player->health` whenever it is positive, which the reach test
+    // above has just established).
+    let took = match take_health(ref p, kind) {
         Option::Some(v) => v,
         Option::None => match take_ammo(ref p, kind, dropped) {
             Option::Some(v) => v,
-            Option::None => match take_weapon(ref p, ref mo, kind, dropped) {
+            Option::None => match take_weapon(ref p, kind, dropped) {
                 Option::Some(v) => v,
                 // The rocket launcher and the plasma rifle can be picked up
                 // in Doom but have no slot in this five-weapon roster; both
@@ -193,6 +221,9 @@ pub fn touch_special(ref p: Player, ref mo: Mobj, special: @Mobj) -> bool {
             },
         },
     };
+    if p.health != before {
+        mo.health = health_i32(p.health);
+    }
     if !took {
         return false;
     }
@@ -205,26 +236,42 @@ pub fn touch_special(ref p: Player, ref mo: Mobj, special: @Mobj) -> bool {
 
 /// The health, armor, key and power half of `P_TouchSpecialThing`.
 /// `None` when `kind` is none of them.
-fn take_health(ref p: Player, ref mo: Mobj, kind: u32) -> Option<bool> {
-    if kind == KIND_MISC0 {
-        Option::Some(give_armor(ref p, 1))
-    } else if kind == KIND_MISC1 {
-        Option::Some(give_armor(ref p, 2))
-    } else if kind == KIND_MISC2 {
-        Option::Some(bonus_health(ref p, ref mo, 1))
-    } else if kind == KIND_MISC3 {
+fn take_health(ref p: Player, kind: u32) -> Option<bool> {
+    // The two armor arms and the four health arms each reach `give_armor` /
+    // `give_body_p` / `bonus_health` once, with the amount as a variable: a
+    // literal argument gets the callee a specialised copy of its body
+    // (S7 §2, and `take_ammo` above).
+    if kind == KIND_MISC0 || kind == KIND_MISC1 {
+        let kinds = if kind == KIND_MISC0 {
+            1
+        } else {
+            2
+        };
+        return Option::Some(give_armor(ref p, kinds));
+    }
+    if kind == KIND_MISC10 || kind == KIND_MISC11 {
+        let num = if kind == KIND_MISC10 {
+            10
+        } else {
+            25
+        };
+        return Option::Some(give_body_p(ref p, num));
+    }
+    if kind == KIND_MISC2 || kind == KIND_MISC12 {
+        let num = if kind == KIND_MISC2 {
+            1
+        } else {
+            100
+        };
+        return Option::Some(bonus_health(ref p, num));
+    }
+    if kind == KIND_MISC3 {
         Option::Some(bonus_armor(ref p))
     } else if kind == KIND_MISC4 {
         give_card(ref p, CARD_BLUE);
         Option::Some(true)
-    } else if kind == KIND_MISC10 {
-        Option::Some(give_body(ref p, ref mo, 10))
-    } else if kind == KIND_MISC11 {
-        Option::Some(give_body(ref p, ref mo, 25))
-    } else if kind == KIND_MISC12 {
-        Option::Some(bonus_health(ref p, ref mo, 100))
     } else if kind == KIND_MISC13 {
-        give_strength(ref p, ref mo);
+        give_strength_p(ref p);
         if p.ready_weapon != WP_FIST {
             p.pending_weapon = WP_FIST;
         }
@@ -236,59 +283,66 @@ fn take_health(ref p: Player, ref mo: Mobj, kind: u32) -> Option<bool> {
 
 /// The ammo half. The clip is the one item whose `MF_DROPPED` changes what
 /// it gives (half a clip instead of one).
+///
+/// The eight arms pick `(type, clips)` and there is **one** call to
+/// [`give_ammo`]: with a literal at each arm the lowering specialised the
+/// callee on it, and `bench/attribute.py` found nine copies of `give_ammo`
+/// for 3 562 words (S7 §2, §8 rule 4).
 fn take_ammo(ref p: Player, kind: u32, dropped: bool) -> Option<bool> {
-    if kind == KIND_CLIP {
-        Option::Some(give_ammo(ref p, AM_CLIP, if dropped {
+    let (ammo, clips) = if kind == KIND_CLIP {
+        (AM_CLIP, if dropped {
             0
         } else {
             1
-        }))
+        })
     } else if kind == KIND_MISC17 {
-        Option::Some(give_ammo(ref p, AM_CLIP, 5))
+        (AM_CLIP, 5)
     } else if kind == KIND_MISC22 {
-        Option::Some(give_ammo(ref p, AM_SHELL, 1))
+        (AM_SHELL, 1)
     } else if kind == KIND_MISC23 {
-        Option::Some(give_ammo(ref p, AM_SHELL, 5))
+        (AM_SHELL, 5)
     } else if kind == KIND_MISC18 {
-        Option::Some(give_ammo(ref p, AM_MISL, 1))
+        (AM_MISL, 1)
     } else if kind == KIND_MISC19 {
-        Option::Some(give_ammo(ref p, AM_MISL, 5))
+        (AM_MISL, 5)
     } else if kind == KIND_MISC20 {
-        Option::Some(give_ammo(ref p, AM_CELL, 1))
+        (AM_CELL, 1)
     } else if kind == KIND_MISC21 {
-        Option::Some(give_ammo(ref p, AM_CELL, 5))
+        (AM_CELL, 5)
     } else {
-        Option::None
-    }
+        return Option::None;
+    };
+    Option::Some(give_ammo(ref p, ammo, clips))
 }
 
 /// The backpack and the three weapons this roster carries as pickups.
-fn take_weapon(ref p: Player, ref mo: Mobj, kind: u32, dropped: bool) -> Option<bool> {
+/// One call to [`give_weapon`], for the reason [`take_ammo`] gives.
+fn take_weapon(ref p: Player, kind: u32, dropped: bool) -> Option<bool> {
     if kind == KIND_MISC24 {
-        Option::Some(backpack(ref p))
-    } else if kind == KIND_SHOTGUN {
-        Option::Some(give_weapon(ref p, WP_SHOTGUN, dropped))
+        return Option::Some(backpack(ref p));
+    }
+    let weapon = if kind == KIND_SHOTGUN {
+        WP_SHOTGUN
     } else if kind == KIND_CHAINGUN {
-        Option::Some(give_weapon(ref p, WP_CHAINGUN, dropped))
+        WP_CHAINGUN
     } else if kind == KIND_MISC26 {
         // The chainsaw takes no ammo, so `dropped` changes nothing here —
         // vanilla passes `false`.
-        Option::Some(give_weapon(ref p, WP_CHAINSAW, dropped))
+        WP_CHAINSAW
     } else {
-        let _ = mo;
-        Option::None
-    }
+        return Option::None;
+    };
+    Option::Some(give_weapon(ref p, weapon, dropped))
 }
 
 /// `SPR_BON1` and `SPR_SOUL`: health that may go over 100%, up to 200.
-fn bonus_health(ref p: Player, ref mo: Mobj, num: u32) -> bool {
+fn bonus_health(ref p: Player, num: u32) -> bool {
     let raised = add32(p.health, num);
     p.health = if raised > MAXHEALTH_BONUS {
         MAXHEALTH_BONUS
     } else {
         raised
     };
-    mo.health = health_i32(p.health);
     true
 }
 
@@ -311,10 +365,15 @@ fn backpack(ref p: Player) -> bool {
     if !p.backpack {
         p.backpack = true;
     }
-    give_ammo(ref p, AM_CLIP, 1);
-    give_ammo(ref p, AM_SHELL, 1);
-    give_ammo(ref p, AM_CELL, 1);
-    give_ammo(ref p, AM_MISL, 1);
+    // `am_clip, am_shell, am_cell, am_misl`, in that order — as a loop from
+    // an opaque zero, so that neither the counter nor the clip count is a
+    // literal at the call site (S7 §8 rules 4 and 7).
+    let one = inc(opaque_zero(p.weapons));
+    let mut t = opaque_zero(p.weapons);
+    while t != 4 {
+        give_ammo(ref p, t, one);
+        t = inc(t);
+    }
     true
 }
 

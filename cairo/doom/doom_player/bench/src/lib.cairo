@@ -29,9 +29,14 @@ fn word(forward: i64, side: i64, buttons: u8) -> felt252 {
 }
 
 /// A health bonus one unit away, varying with `i` so nothing is hoisted.
+///
+/// `kind` is derived from `i` too (`i - i` is a zero the compiler cannot
+/// see): a literal there let the lowering specialise `touch_special` and
+/// `take_health` on it, folding the 22-arm dispatch to the one arm this
+/// measures — S7 §8 rule 7, and 950 words of a duplicate in `bench/size`.
 fn bonus(i: u32) -> Mobj {
     let mut mo = removed_mobj();
-    mo.kind = KIND_MISC2;
+    mo.kind = KIND_MISC2 + (i - i);
     mo.flags = MF_SPECIAL + 0x800000; // MF_COUNTITEM
     mo.z = fixed::from_units((i % 4).into());
     mo.height = fixed::from_units(16);
