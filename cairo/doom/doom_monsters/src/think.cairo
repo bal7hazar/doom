@@ -26,10 +26,13 @@ use super::actions::{
 use super::event::{MonsterEvent, drain, missile_hit};
 use super::{Ctx, Env, EnvData, Noise, Patch, WINDOW, env_of, read_boxed, read_mobj};
 
-/// [`super::LOOK_CADENCE`] as a `NonZero` literal: `%` on a `u32` keeps a "division
-/// by zero" panic path that the compiler does not fold away, even against a
-/// constant divisor (S7 §8 rule 1).
-const CADENCE: NonZero<u32> = 4;
+/// D3 fixes the look cadence at four: its phase is exactly the low two bits
+/// for every u32, including the full clock range. See the paired divmod/mask
+/// measurements in the crate README; this does not change the cadence.
+#[inline(always)]
+fn look_phase(value: u32) -> u32 {
+    value & 3
+}
 
 /// How many actions may chain off one state change before the dispatcher
 /// gives up. Doom's `P_SetMobjState` runs the action of every state it
@@ -591,7 +594,7 @@ fn monsters_ticker_in(
     let mut pass = BoxTrait::new(
         Pass { grid: g, rng, patches: array![], events: array![], spawn_at, defense },
     );
-    let (_, look_phase) = DivRem::div_rem(tic, CADENCE);
+    let phase_now = look_phase(tic);
     // The classification below is `is_ours`, `is_awake` and `is_dormant`
     // spelled out (D24), reading the two state columns *through the boxed
     // world*: a `let` here would put the twelve felts of `StateTables` and
@@ -613,8 +616,8 @@ fn monsters_ticker_in(
             may_chase = in_window(rank, tic, awake);
             rank = inc(rank);
         }
-        let (_, phase) = DivRem::div_rem(i, CADENCE);
-        let may_look = dormant && phase == look_phase;
+        let phase = look_phase(i);
+        let may_look = dormant && phase == phase_now;
         // **The dormant fast path.** A monster asleep with no momentum, on
         // its floor and not due to look has exactly one thing left to do
         // this tic: count its idle frame down. Doing it here rather than
@@ -791,5 +794,37 @@ mod passive_run_tests {
         assert_eq!(out.len(), 2);
         assert_eq!(out.at(0).kind, KIND_NONE);
         assert_eq!(out.at(1).kind, KIND_NONE);
+    }
+}
+
+#[cfg(test)]
+mod phase_tests {
+    use core::num::traits::{WrappingAdd, WrappingSub};
+    use super::look_phase;
+
+    #[test]
+    fn phase_matches_division_across_slot_and_clock_boundaries() {
+        assert_eq!(crate::LOOK_CADENCE, 4);
+        // Every roster index, plus every phase around each u32 power of two.
+        // The reference uses integer division, independently of the mask.
+        let mut value: u32 = 0;
+        while value <= 256 {
+            assert_eq!(look_phase(value), value % 4);
+            value += 1;
+        }
+        let mut power: u32 = 1;
+        let mut bit: u32 = 0;
+        while bit < 32 {
+            let mut offset: u32 = 0;
+            while offset < 8 {
+                let below = power.wrapping_sub(offset);
+                let above = power.wrapping_add(offset);
+                assert_eq!(look_phase(below), below % 4);
+                assert_eq!(look_phase(above), above % 4);
+                offset += 1;
+            }
+            power = power.wrapping_add(power);
+            bit += 1;
+        }
     }
 }
