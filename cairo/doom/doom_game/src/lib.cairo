@@ -4,11 +4,7 @@
 //! canonical serialization/hash.
 
 use doom_map::{LevelId, genesis as level_genesis};
-use doom_monsters::{MonsterState, spawn as spawn_monster};
 use doom_player::{PlayerState, spawn as spawn_player, think as player_think};
-use doom_things::tables::KIND_POSSESSED;
-use fixed::from_int;
-use geom2d::Point;
 use segment::{SegmentOutput, chain_commands};
 use state_hash::hash_state;
 use ticcmd::TicCmd;
@@ -46,10 +42,11 @@ pub fn hash_of(state: GameState) -> felt252 {
     hash_state(serialize(state).span())
 }
 
-/// Aggregation helper: spawn one zombieman from `doom_monsters` — exercises
+/// Aggregation helper: D3's round-robin, the schedule this crate's tic loop
+/// will drive `doom_monsters::monsters_ticker` with in P1.9 — it exercises
 /// the `doom_monsters` edge of the dependency graph this crate assembles.
-pub fn spawn_sample_monster() -> MonsterState {
-    spawn_monster(KIND_POSSESSED, Point { x: from_int(100), y: from_int(0) })
+pub fn monsters_scheduled(rank: u32, tic: u32, awake: u32) -> bool {
+    doom_monsters::in_window(rank, tic, awake)
 }
 
 /// The header `doom_run::run_segment` will attach real public outputs to.
@@ -60,7 +57,7 @@ pub fn run_segment_header(h_in: felt252, tic_start: u32, cmds: Span<TicCmd>) -> 
 #[cfg(test)]
 mod tests {
     use ticcmd::TicCmd;
-    use super::{genesis, hash_of, run_segment_header, spawn_sample_monster, step_tic};
+    use super::{genesis, hash_of, monsters_scheduled, run_segment_header, step_tic};
 
     #[test]
     fn test_genesis_starts_at_tic_zero() {
@@ -87,8 +84,10 @@ mod tests {
 
     #[test]
     fn test_aggregation_wires_monsters() {
-        let monster = spawn_sample_monster();
-        assert(!monster.awake, 'spawns asleep');
+        // Below D3's cap of 8 awake monsters, everyone is scheduled every
+        // tic; past it the window slides.
+        assert(monsters_scheduled(3, 0, 4), 'under the cap');
+        assert(!monsters_scheduled(8, 0, 9), 'over the cap, rank 8 waits');
     }
 
     #[test]

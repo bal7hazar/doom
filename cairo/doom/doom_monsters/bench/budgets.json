@@ -1,0 +1,88 @@
+{
+  "crate": "doom_monsters",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 is the bare loop, 1 builds a linked chaser pair). Measured by measure.py on Scarb 2.16.0; a run over the recorded 'budget' by more than 10 % fails (PLAN.md 3.1 rule 4). 'task_budget' is the figure P1.8 set out to hit, printed for the record. 'code_words' is the compiled size of this crate's own code, measured against bench/baseline (D23 budget 5 000).",
+  "iterations": 20,
+  "code_words": 34014,
+  "operations": [
+    {
+      "name": "monsters_ticker, player only (overhead)",
+      "op": 2,
+      "base": 0,
+      "budget": 598
+    },
+    {
+      "name": "monsters_ticker, 1 dormant monster",
+      "op": 3,
+      "base": 2,
+      "budget": 740,
+      "task_budget": 60
+    },
+    {
+      "name": "monsters_ticker, 29 dormant monsters",
+      "op": 4,
+      "base": 2,
+      "budget": 21890
+    },
+    {
+      "name": "monsters_ticker, 5 awake monsters",
+      "op": 5,
+      "base": 0,
+      "budget": 17540
+    },
+    {
+      "name": "monsters_ticker, 20 awake monsters",
+      "op": 6,
+      "base": 0,
+      "budget": 81311
+    },
+    {
+      "name": "A_Chase, walking step, cached sight",
+      "op": 7,
+      "base": 1,
+      "budget": 5123,
+      "task_budget": 1800
+    },
+    {
+      "name": "A_Look, one sight traversal",
+      "op": 8,
+      "base": 1,
+      "budget": 5463
+    },
+    {
+      "name": "P_NewChaseDir",
+      "op": 9,
+      "base": 1,
+      "budget": 5117
+    },
+    {
+      "name": "P_CheckMissileRange, cached sight",
+      "op": 10,
+      "base": 1,
+      "budget": 472
+    },
+    {
+      "name": "awake_count over 30 mobjs (the schedule pass)",
+      "op": 11,
+      "base": 0,
+      "budget": 1792
+    },
+    {
+      "name": "A_Look woken by a noise (no traversal)",
+      "op": 12,
+      "base": 1,
+      "budget": 750
+    },
+    {
+      "name": "29 dormant monsters, nobody to look for",
+      "op": 13,
+      "base": 2,
+      "budget": 18467
+    },
+    {
+      "name": "rebuilding a 30-mobj list (the floor)",
+      "op": 15,
+      "base": 0,
+      "budget": 2697
+    }
+  ]
+}

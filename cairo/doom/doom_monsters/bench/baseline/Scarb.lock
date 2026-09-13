@@ -25,23 +25,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "doom_game"
-version = "0.1.0"
-dependencies = [
- "doom_map",
- "doom_monsters",
- "doom_player",
- "doom_specials",
- "doom_things",
- "fixed",
- "fsm",
- "geom2d",
- "segment",
- "state_hash",
- "ticcmd",
-]
-
-[[package]]
 name = "doom_map"
 version = "0.1.0"
 dependencies = [
@@ -67,6 +50,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "doom_monsters_baseline"
+version = "0.1.0"
+dependencies = [
+ "doom_map",
+ "doom_monsters",
+ "doom_physics",
+ "doom_things",
+ "fixed",
+ "fsm",
+ "geom2d",
+ "prng",
+]
+
+[[package]]
 name = "doom_physics"
 version = "0.1.0"
 dependencies = [
@@ -79,38 +76,6 @@ dependencies = [
  "fsm",
  "geom2d",
  "prng",
-]
-
-[[package]]
-name = "doom_player"
-version = "0.1.0"
-dependencies = [
- "doom_map",
- "doom_physics",
- "doom_things",
- "fixed",
- "geom2d",
- "ticcmd",
-]
-
-[[package]]
-name = "doom_run"
-version = "0.1.0"
-dependencies = [
- "doom_game",
- "doom_map",
- "ticcmd",
-]
-
-[[package]]
-name = "doom_specials"
-version = "0.1.0"
-dependencies = [
- "doom_map",
- "doom_things",
- "fixed",
- "prng",
- "state_hash",
 ]
 
 [[package]]
@@ -140,20 +105,4 @@ dependencies = [
 
 [[package]]
 name = "prng"
-version = "0.1.0"
-
-[[package]]
-name = "segment"
-version = "0.1.0"
-dependencies = [
- "state_hash",
- "ticcmd",
-]
-
-[[package]]
-name = "state_hash"
-version = "0.1.0"
-
-[[package]]
-name = "ticcmd"
 version = "0.1.0"
