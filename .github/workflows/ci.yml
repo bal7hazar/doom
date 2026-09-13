@@ -146,6 +146,16 @@ jobs:
         working-directory: cairo/doom_contracts/crates/doom_contracts
         run: snforge test
 
+      - name: snforge test (recursion_outputs)
+        if: steps.check.outputs.present == 'true'
+        working-directory: cairo/doom_contracts/crates/recursion_outputs
+        run: snforge test
+
+      - name: snforge test (doom_runs)
+        if: steps.check.outputs.present == 'true'
+        working-directory: cairo/doom_contracts/crates/doom_runs
+        run: snforge test
+
   # ---------------------------------------------------------------------
   # 3. tools/wad: the WAD extraction library/CLI (npm workspace member).
   #    npm test is hermetic (synthetic in-memory WADs) and always runs;
@@ -234,7 +244,7 @@ jobs:
   #    ~15s for all 4 tests, so it runs as a real (non-allow-failure) gate.
   # ---------------------------------------------------------------------
   client:
-    name: client (test, build, e2e)
+    name: client + infra (test, typecheck, build, e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -261,6 +271,18 @@ jobs:
         if: steps.check.outputs.present == 'true'
         run: npm ci
 
+      - name: Fetch Freedoom WAD (cached)
+        if: steps.check.outputs.present == 'true'
+        uses: ./.github/actions/fetch-freedoom
+
+      - name: Prepare renderer assets and decoding fixtures
+        if: steps.check.outputs.present == 'true'
+        run: |
+          npm run assets --workspace client
+          WAD="$FREEDOOM_DIR/freedoom1.wad" npm run fixtures --workspace client
+          test -s client/public/levels/e1m1.json
+          test -s client/test/fixtures/generated/pictures.json
+
       - name: npm test
         if: steps.check.outputs.present == 'true'
         run: npm test --workspace client
@@ -269,13 +291,13 @@ jobs:
         if: steps.check.outputs.present == 'true'
         run: npm run build --workspace client
 
-      - name: Fetch Freedoom WAD (cached)
-        if: steps.check.outputs.present == 'true'
-        uses: ./.github/actions/fetch-freedoom
-
-      - name: Prepare renderer assets (freedoom1.wad + levels/e1m1.json)
-        if: steps.check.outputs.present == 'true'
-        run: npm run assets --workspace client
+      - name: infra submit and indexer (typecheck, test)
+        run: |
+          for package in infra/submit infra/indexer; do
+            npm ci --prefix "$package"
+            npm run typecheck --prefix "$package"
+            npm test --prefix "$package"
+          done
 
       - name: Install Playwright Chromium
         if: steps.check.outputs.present == 'true'
@@ -308,34 +330,8 @@ jobs:
   #    wrapper) -- `cargo test`'s default already excludes #[ignore]d
   #    tests, so nothing extra is needed to keep them out of CI.
   #
-  #    `cargo clippy -- -D warnings` runs on both but is NON-BLOCKING
-  #    (continue-on-error) because neither crate is clippy-clean today:
-  #      - prover/sim: `clippy::incompatible_msrv` on `is_multiple_of`
-  #        (stable since 1.87, but Cargo.toml pins rust-version = "1.85") in
-  #        src/core.rs.
-  #      - prover/wrapper: 3x `clippy::field_reassign_with_default` in
-  #        src/config.rs, tests/common/mod.rs and tests/pipeline_e2e.rs.
-  #    These are real, fixable findings (not flagged for silent fixing here
-  #    per this change's scope), and the step still runs and reports on
-  #    every CI run so regressions beyond today's baseline are visible.
-  #    Once both crates are clean, drop `continue-on-error` to make it a
-  #    real gate, matching the "if clean" condition this step was asked
-  #    for.
-  #
-  #    `cargo fmt --check` DOES block: prover/wrapper is already clean;
-  #    prover/sim currently is not (import ordering in src/bin/bench.rs,
-  #    a wrapped `end_run` call in src/core.rs, a wrapped `load_with_mode`
-  #    call in src/wasm.rs) -- a one-command, no-behavior-change fix
-  #    (`cargo fmt`) left as a follow-up rather than made here, since it's
-  #    a source-code change and not test-runner config.
-  #
-  #    prover/wasm (the WASM64 Stwo prover build) is intentionally NOT
-  #    built here: it is a separate, much heavier toolchain (a pinned
-  #    nightly, `-Z build-std`, a vendored `starkware-libs/proving`
-  #    checkout) that another workstream owns in its own
-  #    .github/workflows/prover-wasm.yml. At the time of this change that
-  #    file does not exist yet -- TODO(ci): once it lands, nothing here
-  #    needs to change; if it never lands, prover/wasm needs its own job.
+  #    Formatting and Clippy warnings block merges in both crates. The separate
+  #    prover-wasm.yml workflow owns the heavier pinned WASM64 container build.
   #
   #    prover/wrapper/leaf-verify/ (its own workspace, pulls the pinned
   #    starkware-libs/proving monorepo as a dependency to get cairo-air) is
@@ -384,10 +380,9 @@ jobs:
         working-directory: prover/sim
         run: cargo fmt --check
 
-      - name: prover/sim -- cargo clippy -D warnings (non-blocking, see note above)
+      - name: prover/sim -- cargo clippy -D warnings
         if: steps.check.outputs.sim == 'true'
         working-directory: prover/sim
-        continue-on-error: true
         run: cargo clippy --all-targets -- -D warnings
 
       - name: prover/sim -- cargo test
@@ -400,10 +395,9 @@ jobs:
         working-directory: prover/wrapper
         run: cargo fmt --check
 
-      - name: prover/wrapper -- cargo clippy -D warnings (non-blocking, see note above)
+      - name: prover/wrapper -- cargo clippy -D warnings
         if: steps.check.outputs.wrapper == 'true'
         working-directory: prover/wrapper
-        continue-on-error: true
         run: cargo clippy --all-targets -- -D warnings
 
       - name: prover/wrapper -- cargo test (real-pipeline tests stay #[ignore]d)
