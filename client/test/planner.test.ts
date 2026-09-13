@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ResourceSummary } from "@hellproof/prover-wasm";
 import { DEFAULT_PLANNER_CONFIG, SegmentPlanner, nextPow2, rawMaxComponentRows } from "../src/prove/planner.js";
@@ -28,6 +29,7 @@ function summary(options: {
     ],
     builtins: [["range_check_builtin", Math.floor(options.rows / 8)]],
     unique_aggregator_inputs: [],
+    auxiliary_components: [],
     memory_address_to_id: options.addressToId ?? 16,
     memory_id_to_big: 158,
     memory_id_to_small: options.idToSmall ?? 1,
@@ -105,6 +107,25 @@ describe("rawMaxComponentRows", () => {
 });
 
 describe("SegmentPlanner.judge", () => {
+  it("rejects the real old Blake false positive and requests updated artifacts", () => {
+    const legacy: ResourceSummary = JSON.parse(readFileSync(
+      new URL("./fixtures/legacy-blake-resources.json", import.meta.url), "utf8",
+    ));
+    expect(legacy.fits_leaf_registry).toBe(true);
+    expect(legacy.auxiliary_components).toBeUndefined();
+    const planner = new SegmentPlanner();
+    const verdict = planner.judge(4, legacy, 1);
+    expect(verdict.verdict).toBe("impossible");
+    if (verdict.verdict !== "impossible") throw new Error("unreachable");
+    expect(verdict.reason).toMatch(/update the prover artifacts/i);
+    expect(planner.observations).toHaveLength(0);
+  });
+
+  it("accepts a modern small segment with explicit auxiliary counters", () => {
+    const modern = summary({ steps: 16_271, rows: 5_000 });
+    expect(new SegmentPlanner().judge(1, modern, 4).verdict).toBe("accept");
+  });
+
   const planner = (over: Partial<typeof DEFAULT_PLANNER_CONFIG> = {}): SegmentPlanner =>
     new SegmentPlanner({ maxTics: 100_000, ...over });
 

@@ -205,6 +205,16 @@ export class SegmentPlanner {
    * the planner says how much smaller to go and the caller probes again.
    */
   judge(tics: number, summary: ResourceSummary, threads: number): PlannerVerdict {
+    // Old WASM artifacts omit auxiliary AIR witnesses and can report a false registry fit.
+    // A compatibility summary is decodable, but cannot authorise a proof or train the model.
+    if (!Array.isArray(summary.auxiliary_components)) {
+      return {
+        verdict: "impossible",
+        reason: "Incomplete AIR sizing: update the prover artifacts before proving (auxiliary component counters are missing).",
+        utilisation: summary.max_component_rows / this.rowCeiling,
+        stepUtilisation: summary.n_steps / this.stepCeiling(threads),
+      };
+    }
     const { rows, exact } = rawMaxComponentRows(summary);
     this.remember({ tics, rows, steps: summary.n_steps, exact });
 

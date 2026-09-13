@@ -88,7 +88,8 @@ export interface ResourceSummary {
   memory_id_to_big: number;
   memory_id_to_small: number;
   verify_instruction: number;
-  /** Raw auxiliary component counts before their own padding; requires the rebuilt AIR sizing artifact. */
+  /** Raw auxiliary counts before their own padding. Optional for decoding older artifacts;
+   * the planner rejects admission when this field is absent. */
   auxiliary_components?: [string, number][];
   /** Largest variable component only; fixed lookup tables do not consume the planner's margin. */
   max_component_rows: number;
