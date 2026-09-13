@@ -503,3 +503,29 @@ describe("retry error state", () => {
     await pipeline.stop(true); store.close();
   });
 });
+
+
+it("owns and terminates a prover whose init rejects", async () => {
+  const { pipeline } = makePipeline({}, { createProver: () => {
+    const p = new FakeProver({ seen: new Set() }); p.init = async () => { throw new Error("init failed response"); }; return p;
+  } });
+  await pipeline.attach(); await pipeline.appendTics([0]); await pipeline.proveAll();
+  expect(pipeline.state.error).toContain("init failed response");
+  expect(FakeProver.terminations).toBe(1); await pipeline.stop(true);
+  expect(FakeProver.terminations).toBe(1); expect(FakeProver.proves).toBe(0);
+});
+
+it("hard stop owns an initializing prover and cannot resurrect it after a late init", async () => {
+  let release!: () => void, notify!: () => void;
+  const ready = new Promise<void>(resolve => { notify = resolve; });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const { pipeline } = makePipeline({}, { createProver: () => {
+    const p = new FakeProver({ seen: new Set() }), init = p.init.bind(p);
+    p.init = async opts => { notify(); await held; return init(opts); }; return p;
+  } });
+  await pipeline.attach(); await pipeline.appendTics([0]); const proving = pipeline.proveAll();
+  await ready; const stopping = pipeline.stop(true);
+  expect(FakeProver.terminations).toBe(1); release(); await Promise.all([proving, stopping]);
+  expect(FakeProver.executes).toBe(0); expect(FakeProver.proves).toBe(0);
+  expect(FakeProver.terminations).toBe(1);
+});

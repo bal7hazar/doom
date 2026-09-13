@@ -6,7 +6,7 @@ import type { ProveSession } from "../src/prove/session.js";
 const journal = (tag: string) => ({ export: () => ({ tag }), length: 0 } as unknown as InputJournal);
 const program = () => ({ dispose: vi.fn() } as unknown as DoomProgram);
 function session(id: string) {
-  return { element: { remove: vi.fn() }, pipeline: { state: { runId: id }, stop: vi.fn(async () => {}), syncGameJournal: vi.fn(async () => {}) },
+  return { cancelVerification: vi.fn(), element: { remove: vi.fn() }, pipeline: { state: { runId: id }, stop: vi.fn(async () => {}), syncGameJournal: vi.fn(async () => {}) },
     dispose: vi.fn(async () => {}) } as unknown as ProveSession;
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; }

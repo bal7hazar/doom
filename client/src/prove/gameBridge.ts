@@ -50,7 +50,7 @@ export class GameProofBridge {
     this.controller?.abort(); this.controller = undefined; this.opening = undefined;
     const session = this.current; this.current = undefined;
     if (session) {
-      session.element.remove();
+      session.element.remove(); session.cancelVerification();
       // Stop synchronous Worker activity before waiting for IndexedDB.
       void session.pipeline.stop(true).catch(error => this.options.notify(String(error)));
       this.cleanup = this.cleanup.then(async () => {

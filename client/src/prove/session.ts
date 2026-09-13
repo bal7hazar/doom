@@ -63,6 +63,10 @@ export async function proverIsAvailable(url = DEFAULT_PROVER_WORKER_URL, signal?
 }
 
 export class ProveSession {
+  private verification?: ProverClient;
+  private verificationEpoch = 0;
+  private verifying = false;
+  private disposed = false;
   private constructor(
     readonly pipeline: ProofPipeline,
     readonly store: RunStore,
@@ -80,7 +84,7 @@ export class ProveSession {
     const panel = new ProofQueuePanel({
       actions: {
         onProve: () => void (program.journalWords ? session.finishAndProve() : session.startProving()).catch(error => panel.log(String(error))),
-        onVerify: () => void session.verifyLocally(),
+        onVerify: () => void session.verifyLocally().catch(error => panel.log(String(error))),
         onKeepOffline: (value) => void session.setKeepOffline(value),
         onExport: () => void session.exportRun().catch(error => panel.log(String(error))),
         onImport: (file) => void session.importRun(file).catch(error => panel.log(`Import refused: ${String(error)}`)),
@@ -168,38 +172,46 @@ export class ProveSession {
    * re-checks the chain from the database — the "verify locally" button.
    */
   async verifyLocally(): Promise<boolean> {
-    const chain = await this.pipeline.verifyPersistedChain();
-    if (!chain.ok) {
-      this.panel.log(`chain rejected: ${chain.reason}`);
-      return false;
-    }
-    const segments = await this.store.listSegments(this.run.id);
-    if (segments.length === 0) {
-      this.panel.log("nothing to verify yet");
-      return false;
-    }
-    const prover = new ProverClient({
-      workerUrl: this.options.proverWorkerUrl ?? DEFAULT_PROVER_WORKER_URL,
-    });
+    if (this.disposed || this.verifying) return false;
+    this.verifying = true;
+    const epoch = this.verificationEpoch;
+    const cancelled = () => this.disposed || epoch !== this.verificationEpoch;
+    let prover: ProverClient | undefined;
     try {
+      const chain = await this.pipeline.verifyPersistedChain();
+      if (cancelled()) return false;
+      if (!chain.ok) { this.panel.log(`chain rejected: ${chain.reason}`); return false; }
+      const segments = await this.store.listSegments(this.run.id);
+      if (cancelled()) return false;
+      if (segments.length === 0) { this.panel.log("nothing to verify yet"); return false; }
+      prover = new ProverClient({ workerUrl: this.options.proverWorkerUrl ?? DEFAULT_PROVER_WORKER_URL });
+      this.verification = prover;
       await prover.init({ threads: 1 });
+      if (cancelled()) return false;
       for (const segment of segments) {
         const proof = await this.store.getProof(this.run.id, segment.index);
-        if (!proof) {
-          this.panel.log(`segment ${segment.index} has no stored proof`);
-          return false;
-        }
-        if (!(await prover.verify(proof))) {
-          this.panel.log(`segment ${segment.index} FAILED verification`);
-          return false;
-        }
+        if (cancelled()) return false;
+        if (!proof) { this.panel.log(`segment ${segment.index} has no stored proof`); return false; }
+        const valid = await prover.verify(proof);
+        if (cancelled()) return false;
+        if (!valid) { this.panel.log(`segment ${segment.index} FAILED verification`); return false; }
         this.panel.log(`segment ${segment.index} verified from disk`);
       }
+      this.panel.log(`all ${segments.length} proof(s) verified and the chain links up (${chain.tics} tics)`);
+      return true;
+    } catch (error) {
+      if (cancelled()) return false;
+      throw error;
     } finally {
-      prover.terminate();
+      if (prover && this.verification === prover) { prover.terminate(); this.verification = undefined; }
+      this.verifying = false;
     }
-    this.panel.log(`all ${segments.length} proof(s) verified and the chain links up (${chain.tics} tics)`);
-    return true;
+  }
+
+  /** Cancel an in-flight local verification immediately, including during init. */
+  cancelVerification(): void {
+    ++this.verificationEpoch;
+    this.verification?.terminate(); this.verification = undefined;
   }
 
   /** C6: nothing leaves this machine until the flag is cleared. */
@@ -231,6 +243,7 @@ export class ProveSession {
 
   /** Close this proof UI and release both Workers; the game journal remains owned by CairoClient. */
   async dispose(): Promise<void> {
+    this.disposed = true; this.cancelVerification();
     try { await this.pipeline.stop(true); }
     finally {
       this.options.program?.dispose?.();
@@ -241,6 +254,7 @@ export class ProveSession {
 
   /** The explicit reset C6 demands. */
   async reset(): Promise<void> {
+    this.cancelVerification();
     await this.pipeline.stop(true);
     await this.store.deleteRun(this.run.id);
     this.panel.log(`run ${this.run.id} deleted`);

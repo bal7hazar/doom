@@ -682,22 +682,28 @@ export class ProofPipeline {
       ? this.options.createProver({ onEvent })
       : new ProverClient({ workerUrl: this.options.proverWorkerUrl, onEvent });
     const want = forceThreads ?? (this.options.threads ?? "auto");
-    const info = await prover.init({
-      threads: want === "auto" ? autoThreadCount() : want,
-      ...(this.options.wasmUrl ? { wasmUrl: this.options.wasmUrl } : {}),
-      ...(this.options.threadedWasmUrl ? { threadedWasmUrl: this.options.threadedWasmUrl } : {}),
-    });
-    this.prover = prover;
-    this.proverInfo = info;
-    this.threads = info.threads;
-    this.emit({
-      type: "prover",
-      threads: info.threads,
-      threaded: info.threaded,
-      wasmUrl: info.wasmUrl,
-      instantiateMs: info.instantiateMs,
-    });
-    return prover;
+    this.prover = prover; // Own the Worker before its asynchronous initialization.
+    try {
+      const info = await prover.init({
+        threads: want === "auto" ? autoThreadCount() : want,
+        ...(this.options.wasmUrl ? { wasmUrl: this.options.wasmUrl } : {}),
+        ...(this.options.threadedWasmUrl ? { threadedWasmUrl: this.options.threadedWasmUrl } : {}),
+      });
+      if (this.prover !== prover || prover.isDead || this.stopping) throw new Error("prover initialization cancelled");
+      this.proverInfo = info;
+      this.threads = info.threads;
+      this.emit({
+        type: "prover",
+        threads: info.threads,
+        threaded: info.threaded,
+        wasmUrl: info.wasmUrl,
+        instantiateMs: info.instantiateMs,
+      });
+      return prover;
+    } catch (error) {
+      if (this.prover === prover) this.dropProver();
+      throw error;
+    }
   }
 
   private dropProver(): void {

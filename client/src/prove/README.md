@@ -146,3 +146,9 @@ synthetic BFCache events, keyboard pause and focus. Native pointer lock uses
 
 No complete-game proof, proof/render concurrency test on 16 GiB hardware, residual
 C3 latency, or P3.7 completion is claimed by this UI or its resource measurements.
+
+Worker ownership begins before asynchronous initialization. A failed or cancelled
+prover init terminates the instance and cannot reattach it after a hard stop.
+Local verification is owned by ProveSession as well: retirement, cached-page
+suspension, reset and disposal cancel it immediately, including a pending init or
+verification request. A lookup finishing after disposal cannot create a Worker.
