@@ -79,11 +79,16 @@ const OCTANT_ANGLE: [u32; 8] = [
     0, 0x20000000, 0x40000000, 0x60000000, 0x80000000, 0xA0000000, 0xC0000000, 0xE0000000,
 ];
 
-/// `ANG45` as a divisor and `DI_NODIR` as a modulus, as `NonZero` literals:
-/// the `/` and `%` operators keep an unfolded "division by zero" panic path
+/// `ANG45` as a `NonZero` divisor: the `/` operator keeps an unfolded
+/// "division by zero" panic path
 /// even against a constant divisor (S7 §8 rule 1).
 const ANG45_NZ: NonZero<u32> = 0x20000000;
-const EIGHT: NonZero<u32> = 8;
+/// The octant remainder is exact for all u32 values; unlike the angular
+/// quotient above, a low-bit remainder only needs the bitwise builtin.
+#[inline(always)]
+fn octant_mod(value: u32) -> u32 {
+    value & 7
+}
 const SIXTEEN: NonZero<u8> = 16;
 const TWO: NonZero<u8> = 2;
 const UNIT: NonZero<u128> = 65536;
@@ -690,7 +695,7 @@ pub(crate) fn a_chase_in(
     // moved one eighth of a turn the short way round.
     if m.move_dir < DI_NODIR {
         let (octant, _) = DivRem::div_rem(m.angle, ANG45_NZ);
-        let (_, delta) = DivRem::div_rem(maputl::sub32(add32(octant, DI_NODIR), m.move_dir), EIGHT);
+        let delta = octant_mod(maputl::sub32(add32(octant, DI_NODIR), m.move_dir));
         // The same eighth of a turn as an octant index: `bam::sub(ang,
         // ANG45)` is `octant - 1 mod 8` and `bam::add` is `octant + 1 mod 8`,
         // both exact because `ang` is a multiple of `ANG45`.
@@ -701,7 +706,7 @@ pub(crate) fn a_chase_in(
         } else {
             1
         };
-        let (_, oct) = DivRem::div_rem(add32(octant, turn), EIGHT);
+        let oct = octant_mod(add32(octant, turn));
         m.angle = rd32(OCTANT_ANGLE.span(), oct);
     }
     // The three fields the rest of the function reads, read before the one
@@ -1198,4 +1203,22 @@ pub(crate) fn a_sarg_attack_in(
     }
     let damage = roll_damage(rnd, ref rng, TEN, 4);
     hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev, ref defense);
+}
+
+#[cfg(test)]
+mod octant_tests {
+    use super::octant_mod;
+
+    #[test]
+    fn octant_mask_matches_remainder() {
+        // All values reachable from (octant + 8 - direction) and from
+        // (octant + turn), then high-word boundaries of the scalar helper.
+        let mut value: u32 = 0;
+        while value < 32 {
+            assert_eq!(octant_mod(value), value % 8);
+            let high = 0xffffffff_u32 - value;
+            assert_eq!(octant_mod(high), high % 8);
+            value += 1;
+        }
+    }
 }
