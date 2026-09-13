@@ -4,8 +4,11 @@ use core::iter::{IntoIterator, Iterator};
 use stwo_verifier_utils::zip_eq::zip_eq;
 use crate::Hash;
 use crate::channel::{Channel, ChannelTrait};
-use crate::circle::{CirclePointM31Impl, CosetImpl};
-use crate::fields::Invertible;
+use crate::circle::{
+    CirclePoint, CirclePointIndex, CirclePointIndexImpl, CirclePointIndexTrait,
+    CirclePointM31Impl, CosetImpl,
+};
+use crate::fields::{BatchInvertible, Invertible};
 use crate::fields::m31::M31;
 use crate::fields::qm31::{QM31, QM31Serde, QM31Trait, QM31_EXTENSION_DEGREE};
 use crate::poly::circle::{CanonicCosetImpl, CircleDomain, CircleDomainImpl};
@@ -15,6 +18,10 @@ use crate::queries::{Queries, QueriesImpl};
 use crate::utils::{ArrayImpl, OptionImpl, SpanExTrait, bit_reverse_index, pow2};
 use crate::vcs::MerkleHasher;
 use crate::vcs::verifier::{MerkleDecommitment, MerkleVerifier, MerkleVerifierTrait};
+
+/// Lazily-reduced fold arithmetic (Hellproof patch 0002).
+mod lazy;
+use lazy::{fold_subset, lazy_add_x, lazy_add_y, lazy_double_x, reduce_narrow};
 
 /// Number of QM31 evaluations packed into a single Merkle leaf when `fold_step > 1`.
 pub const LOG_PACKED_LEAF_SIZE: u32 = 2;
@@ -280,7 +287,7 @@ pub impl FriFirstLayerVerifierImpl of FriFirstLayerVerifierTrait {
         // For decommitment, each QM31 col must be split into its constituent M31 coordinate cols.
         let mut decommitted_values = array![];
 
-        let (column_decommitment_positions, sparse_evaluation) =
+        let (folded_query_positions, sparse_evaluation) =
             compute_decommitment_positions_and_rebuild_evals(
             queries, query_evals, ref fri_witness, *self.fold_step,
         );
@@ -307,8 +314,8 @@ pub impl FriFirstLayerVerifierImpl of FriFirstLayerVerifierTrait {
         } else {
             0
         };
-        let merkle_positions = build_merkle_verification_inputs(
-            column_decommitment_positions, leaf_log_size,
+        let merkle_positions = merkle_positions_of_subsets(
+            folded_query_positions, pow2(*self.fold_step - leaf_log_size),
         );
         let n_columns = QM31_EXTENSION_DEGREE * pow2(leaf_log_size);
         let degree_bound_by_column = ArrayImpl::new_repeated(n: n_columns, v: *self.log_bound);
@@ -349,7 +356,7 @@ pub impl FriInnerLayerVerifierImpl of FriInnerLayerVerifierTrait {
 
         let mut fri_witness = (**self.proof.fri_witness).into_iter();
 
-        let (decommitment_positions, sparse_evaluation) =
+        let (folded_query_positions, sparse_evaluation) =
             compute_decommitment_positions_and_rebuild_evals(
             queries, evals_at_queries, ref fri_witness, *self.fold_step,
         );
@@ -378,8 +385,8 @@ pub impl FriInnerLayerVerifierImpl of FriInnerLayerVerifierTrait {
         } else {
             0
         };
-        let merkle_positions = build_merkle_verification_inputs(
-            decommitment_positions, leaf_log_size,
+        let merkle_positions = merkle_positions_of_subsets(
+            folded_query_positions, pow2(*self.fold_step - leaf_log_size),
         );
         let n_columns = QM31_EXTENSION_DEGREE * pow2(leaf_log_size);
         let degree_bound_by_column = ArrayImpl::new_repeated(
@@ -396,7 +403,11 @@ pub impl FriInnerLayerVerifierImpl of FriInnerLayerVerifierTrait {
                 merkle_positions, decommitted_values.span(), (*self.proof.decommitment).clone(),
             );
 
-        let folded_queries = queries.fold(*self.fold_step);
+        // The folded queries of `queries.fold(fold_step)`, already computed above.
+        let folded_queries = Queries {
+            positions: folded_query_positions,
+            log_domain_size: queries.log_domain_size - *self.fold_step,
+        };
         let folded_evals = sparse_evaluation
             .fold_line(*self.folding_alpha, *self.domain, *self.fold_step);
 
@@ -404,39 +415,45 @@ pub impl FriInnerLayerVerifierImpl of FriInnerLayerVerifierTrait {
     }
 }
 
-/// Returns a column's Merkle tree decommitment positions and re-builds the evaluations needed by
-/// the verifier for folding and decommitment.
+/// Returns the folded query positions (the index of each queried subset) and re-builds the
+/// evaluations needed by the verifier for folding and decommitment.
+///
+/// (Hellproof patch 0002) Returns the folded positions instead of the flat decommitment
+/// positions: the subsets' Merkle positions follow from them arithmetically
+/// (`merkle_positions_of_subsets`) and the caller reuses them as the next layer's queries. The
+/// decommitment positions of a subset are generated as `subset_start + offset` from a per-layer
+/// offset span (one range check each) instead of a range iterator (two each).
 ///
 /// # Panics
 ///
 /// Panics if the number of queries doesn't match the number of query evals.
 fn compute_decommitment_positions_and_rebuild_evals(
-    mut queries: Queries,
+    queries: Queries,
     mut query_evals: Span<QM31>,
     ref witness_evals_iter: SpanIter<QM31>,
     fold_step: u32,
 ) -> (Span<usize>, SparseEvaluation) {
     let fold_factor = pow2(fold_step);
+    let mut subset_offsets = array![];
+    for offset in 0..fold_factor {
+        subset_offsets.append(offset);
+    }
+    let subset_offsets = subset_offsets.span();
 
-    let mut decommitment_positions = array![];
     let mut subset_evals = array![];
     let mut subset_domain_start_indices = array![];
 
     let mut query_positions = queries.positions;
-    let mut folded_query_positions = queries.fold(fold_step).positions;
+    let folded_query_positions = queries.fold(fold_step).positions;
 
     for folded_query_position in folded_query_positions {
         let subset_start = *folded_query_position * fold_factor;
-        let subset_end = subset_start + fold_factor;
-        let mut subset_decommitment_positions = (subset_start..subset_end).into_iter();
         let mut subset_eval = array![];
 
-        // Extract the subset eval and decommitment positions.
-        for decommitment_position in subset_decommitment_positions {
-            decommitment_positions.append(decommitment_position);
-
-            // If the decommitment position is a query position: take the value from `query_evals`,
-            // else: take the value from `witness_evals`.
+        // Extract the subset eval: if the decommitment position is a query position, take the
+        // value from `query_evals`, else take it from `witness_evals`.
+        for offset in subset_offsets {
+            let decommitment_position = subset_start + *offset;
             subset_eval
                 .append(
                     *match query_positions.next_if_eq(@decommitment_position) {
@@ -460,7 +477,7 @@ fn compute_decommitment_positions_and_rebuild_evals(
         subset_evals, subset_domain_start_indices.span(),
     );
 
-    (decommitment_positions.span(), sparse_evaluation)
+    (folded_query_positions, sparse_evaluation)
 }
 
 /// Foldable subsets of evaluations on a circle polynomial or univariate polynomial.
@@ -482,34 +499,46 @@ pub impl SparseEvaluationImpl of SparseEvaluationTrait {
 
     /// Folds evaluations of a degree `d` univariate polynomial into evaluations of a degree
     /// `d / 2^fold_step` univariate polynomial.
+    ///
+    /// (Hellproof patch 0002) Same folds as before — level `l` of a subset pairs consecutive
+    /// values with `fri_fold(v0, v1, 1/x, alpha^(2^l))`, `x` running over the fold domain's
+    /// x-coordinates in bit-reversed order then their repeated doublings — computed as:
+    /// per layer, the step multiples of the fold domain (in the twiddle order) and the alpha
+    /// powers; per subset, the twiddles from a single `to_point` (the other x-coordinates are
+    /// `x(p0 + k G)` with reduced `p0` and constant `k G`, one reduction each); one Montgomery
+    /// batch inversion of all the layer's twiddles; then the lazily-reduced subset folds.
     fn fold_line(
         self: @SparseEvaluation, fold_alpha: QM31, source_domain: LineDomain, fold_step: u32,
     ) -> Array<QM31> {
-        let mut folded_eval = array![];
+        let half = pow2(fold_step) / 2;
+        let step_multiples = step_multiples_bit_reversed(
+            CirclePointIndexImpl::subgroup_gen(fold_step), fold_step,
+        );
+        let alpha_powers = alpha_powers(fold_alpha, fold_step);
 
-        for (subset_eval, subset_domain_initial_index) in zip_eq(
-            self.subset_evals.span(), *self.subset_domain_initial_indexes,
-        ) {
+        let mut twiddles: Array<M31> = array![];
+        for subset_domain_initial_index in *self.subset_domain_initial_indexes {
             let fold_domain_initial = source_domain.coset.index_at(*subset_domain_initial_index);
-            let fold_domain = LineDomainImpl::new_unchecked(
-                CosetImpl::new(fold_domain_initial, fold_step),
-            );
-            let mut x_coords = array![];
-            let mut j = 0;
-            while j < fold_domain.size() {
-                let x_coord = fold_domain.at(bit_reverse_index(j, fold_step));
-                x_coords.append(x_coord);
-                j += 2;
-            }
-
-            folded_eval.append(fold_coset(subset_eval.span(), x_coords.span(), fold_alpha));
+            let p0 = fold_domain_initial.to_point();
+            let mut x_coords = line_x_coords(p0, step_multiples.span(), half);
+            append_doubling_levels(ref twiddles, x_coords);
         }
+        let mut itwiddles = BatchInvertible::batch_inverse(twiddles).span();
 
+        let mut folded_eval = array![];
+        for subset_eval in self.subset_evals.span() {
+            folded_eval.append(fold_subset(subset_eval.span(), ref itwiddles, alpha_powers.span()));
+        }
+        assert!(itwiddles.is_empty());
         folded_eval
     }
 
     /// Folds evaluations of a degree `d` circle polynomial into evaluations of a
     /// degree `d / 2^fold_step` univariate polynomial.
+    ///
+    /// (Hellproof patch 0002) As `fold_line`: the first level folds with `1/y` of the circle
+    /// fold domain's points (bit-reversed order of the half coset) and `alpha`, the next levels
+    /// with `1/x` of every other of those points, their doublings, and `alpha^2, alpha^4, ...`.
     fn fold_circle(
         self: @SparseEvaluation, fold_alpha: QM31, source_domain: CircleDomain, fold_step: u32,
     ) -> Array<QM31> {
@@ -527,64 +556,142 @@ pub impl SparseEvaluationImpl of SparseEvaluationTrait {
             return folded_eval;
         }
 
-        for (subset_eval, subset_domain_initial_index) in zip_eq(
-            self.subset_evals.span(), *self.subset_domain_initial_indexes,
-        ) {
+        // The circle fold domain of a subset is `p0 + <G>`, `G` the generator of order
+        // `2^(fold_step - 1)` (the half coset of `CircleDomainImpl::new(CosetImpl::new(
+        // fold_domain_initial, fold_step - 1))`); its points are visited at the indices
+        // `bit_reverse_index(j, fold_step)`, `j` even, all below `2^(fold_step - 1)`.
+        let half = pow2(fold_step) / 2;
+        let step_multiples = step_multiples_bit_reversed(
+            CirclePointIndexImpl::subgroup_gen(fold_step - 1), fold_step,
+        );
+        let alpha_powers = alpha_powers(fold_alpha, fold_step);
+
+        let mut twiddles: Array<M31> = array![];
+        for subset_domain_initial_index in *self.subset_domain_initial_indexes {
             let fold_domain_initial = source_domain.index_at(*subset_domain_initial_index);
-            let circle_fold_domain = CircleDomainImpl::new(
-                CosetImpl::new(fold_domain_initial, fold_step - 1),
-            );
-
-            let mut subset_eval = subset_eval.span();
-            let mut x_coords = array![];
-            let mut line_eval_domain = array![];
-            let mut j = 0;
-            // Iterate with stride 4. This is done in order to only populate the array `x_coords`
-            // with coordinates that are actually needed.
-            // Since fold_step > 1, we are guaranteed that `circle_fold_domain.size() = 2^k` with k
-            // >= 2, hence the indices are never out of bounds.
-            while let Some(evals) = subset_eval.multi_pop_front::<4>() {
-                let [v0, v1, v2, v3] = evals.unbox();
-                let circle_pt_0 = circle_fold_domain.at(bit_reverse_index(j, fold_step));
-                let circle_pt_1 = circle_fold_domain.at(bit_reverse_index(j + 2, fold_step));
-                line_eval_domain.append(fri_fold(v0, v1, circle_pt_0.y.inverse(), fold_alpha));
-                line_eval_domain.append(fri_fold(v2, v3, circle_pt_1.y.inverse(), fold_alpha));
-                x_coords.append(circle_pt_0.x);
-                j += 4;
+            let p0 = fold_domain_initial.to_point();
+            let px: felt252 = p0.x.into();
+            let py: felt252 = p0.y.into();
+            // Level 0: 1/y of every point.
+            let mut x_coords: Array<M31> = array![];
+            let mut first = true;
+            let mut take_x = true;
+            for m in step_multiples.span() {
+                if first {
+                    twiddles.append(p0.y);
+                    x_coords.append(p0.x);
+                    first = false;
+                } else {
+                    let mx: felt252 = (*m.x).into();
+                    let my: felt252 = (*m.y).into();
+                    twiddles.append(reduce_narrow(lazy_add_y(px, py, mx, my)));
+                    if take_x {
+                        x_coords.append(reduce_narrow(lazy_add_x(px, py, mx, my)));
+                    }
+                }
+                take_x = !take_x;
             }
-            let alpha_sq = fold_alpha * fold_alpha;
-            folded_eval.append(fold_coset(line_eval_domain.span(), x_coords.span(), alpha_sq));
+            assert!(x_coords.len() == half / 2);
+            // Levels 1..: 1/x of every other point, then the doublings.
+            append_doubling_levels(ref twiddles, x_coords);
         }
+        let mut itwiddles = BatchInvertible::batch_inverse(twiddles).span();
 
+        for subset_eval in self.subset_evals.span() {
+            folded_eval.append(fold_subset(subset_eval.span(), ref itwiddles, alpha_powers.span()));
+        }
+        assert!(itwiddles.is_empty());
         folded_eval
     }
 }
 
-/// Shifts decommitment positions right by `leaf_log_size` and deduplicates them, producing
-/// Merkle tree positions for packed leaves. When `leaf_log_size == 0`, it returns the positions
-/// unchanged.
-///
-/// It assumes that `decommitment positions` is sorted in ascending order.
-fn build_merkle_verification_inputs(
-    decommitment_positions: Span<u32>, leaf_log_size: u32,
-) -> Span<u32> {
-    if leaf_log_size == 0 {
-        return decommitment_positions;
+/// The points `k * step` for `k = bit_reverse_index(j, fold_step)`, `j = 0, 2, .., 2^fold_step - 2`
+/// (the order in which the folds visit a subset's domain; the first one is the neutral point).
+fn step_multiples_bit_reversed(step: CirclePointIndex, fold_step: u32) -> Array<CirclePoint<M31>> {
+    let fold_factor = pow2(fold_step);
+    let mut multiples = array![];
+    let mut j = 0;
+    while j != fold_factor {
+        multiples.append(step.mul(bit_reverse_index(j, fold_step)).to_point());
+        j += 2;
     }
-    let leaf_size = pow2(leaf_log_size);
+    multiples
+}
+
+/// `alpha, alpha^2, alpha^4, ..., alpha^(2^(n - 1))`: the folding factor of each level.
+fn alpha_powers(alpha: QM31, n: u32) -> Array<QM31> {
+    let mut powers = array![];
+    let mut power = alpha;
+    for _ in 0..n {
+        powers.append(power);
+        power = power * power;
+    }
+    powers
+}
+
+/// The x-coordinates `x(p0 + m)` for the step multiples `m` (the first one being `p0` itself).
+fn line_x_coords(
+    p0: CirclePoint<M31>, mut step_multiples: Span<CirclePoint<M31>>, n: u32,
+) -> Array<M31> {
+    let px: felt252 = p0.x.into();
+    let py: felt252 = p0.y.into();
+    let mut x_coords = array![p0.x];
+    let _ = step_multiples.pop_front();
+    for m in step_multiples {
+        x_coords.append(reduce_narrow(lazy_add_x(px, py, (*m.x).into(), (*m.y).into())));
+    }
+    assert!(x_coords.len() == n);
+    x_coords
+}
+
+/// Appends to `out` the twiddles of a line fold tree in the order `fold_subset` consumes them:
+/// `x_coords`, then the doublings of every other one, and so on down to a single value (the
+/// `next_x_coords.append(double_x(x0))` of the original `fold_coset`).
+fn append_doubling_levels(ref out: Array<M31>, mut level: Array<M31>) {
+    loop {
+        out.append_span(level.span());
+        if level.len() == 1 {
+            break;
+        }
+        let mut next = array![];
+        let mut it = level.span();
+        while let Some(x0) = it.pop_front() {
+            let _ = it.pop_front();
+            next.append(reduce_narrow(lazy_double_x((*x0).into())));
+        }
+        level = next;
+    }
+}
+
+/// Merkle tree positions of the leaves covering the subsets `folded_positions` (ascending,
+/// distinct), `leaves_per_subset = fold_factor / leaf_size` per subset.
+///
+/// (Hellproof patch 0002) Replaces the shift-and-deduplicate pass over the flat decommitment
+/// positions: those are exactly the runs `[f * fold_factor, (f + 1) * fold_factor)` of the
+/// folded positions `f`, so, shifted right by `leaf_log_size` and deduplicated, they are exactly
+/// `f * leaves_per_subset + m` for `m < leaves_per_subset`, in the same ascending order. With
+/// `leaf_size = 1` (`leaves_per_subset = fold_factor`) this is the identity on the decommitment
+/// positions, as before.
+fn merkle_positions_of_subsets(folded_positions: Span<u32>, leaves_per_subset: u32) -> Span<u32> {
+    let mut leaf_offsets = array![];
+    for m in 0..leaves_per_subset {
+        leaf_offsets.append(m);
+    }
+    let leaf_offsets = leaf_offsets.span();
     let mut merkle_positions = array![];
-    let mut prev: Option<u32> = Option::None;
-    for pos in decommitment_positions {
-        let merkle_pos = *pos / leaf_size;
-        if prev != Option::Some(merkle_pos) {
-            merkle_positions.append(merkle_pos);
-            prev = Option::Some(merkle_pos);
+    for f in folded_positions {
+        let start = *f * leaves_per_subset;
+        for m in leaf_offsets {
+            merkle_positions.append(start + *m);
         }
     }
     merkle_positions.span()
 }
 
 /// Folds `2^n` evaluations into a single evaluation using precomputed twiddles.
+///
+/// (Hellproof patch 0002) The tree of `fri_fold`s is now `lazy::fold_subset` over the batch-
+/// inverted twiddles (`x_coords`, then the doublings of every other one, level by level).
 ///
 /// # Arguments
 ///
@@ -593,32 +700,20 @@ fn build_merkle_verification_inputs(
 /// * `alpha` - the random folding factor.
 pub fn fold_coset(eval: Span<QM31>, x_coords: Span<M31>, alpha: QM31) -> QM31 {
     assert!(eval.len() == 2 * x_coords.len());
-
-    let mut current_eval = eval;
-    let mut current_x_coords = x_coords;
-    let mut folding_alpha = alpha;
-    #[cairofmt::skip]
-    // In each iteration of the loop, we scan `current_eval` with a stride of 4. At the end of the loop
-    // we are guaranteed that `current_eval.len() == 2`.
-    while current_eval.len() > 2 {
-        let mut next_eval = array![];
-        let mut next_x_coords = array![];
-        while let Some(boxed_tuple) = current_eval.multi_pop_front::<4>() {
-            let [v0, v1, v2, v3]: [QM31; 4] = boxed_tuple.unbox();
-            let [x0, x1]: [M31; 2] = current_x_coords.multi_pop_front::<2>().unwrap().unbox();
-            next_eval.append(fri_fold(v0, v1, x0.inverse(), folding_alpha));
-            next_eval.append(fri_fold(v2, v3, x1.inverse(), folding_alpha));
-            next_x_coords.append(CirclePointM31Impl::double_x(x0));
-        }
-        folding_alpha = folding_alpha * folding_alpha;
-        current_eval = next_eval.span();
-        current_x_coords = next_x_coords.span();
-    };
-    let boxed_pair: Box<[QM31; 2]> = *current_eval.try_into().unwrap();
-    let boxed_x_coord: Box<[M31; 1]> = *current_x_coords.try_into().unwrap();
-    let [v0, v1] = boxed_pair.unbox();
-    let [x0] = boxed_x_coord.unbox();
-    fri_fold(v0, v1, x0.inverse(), folding_alpha)
+    let mut n_levels = 0;
+    let mut size = 1;
+    while size != eval.len() {
+        size *= 2;
+        n_levels += 1;
+    }
+    let mut level = array![];
+    level.append_span(x_coords);
+    let mut twiddles = array![];
+    append_doubling_levels(ref twiddles, level);
+    let mut itwiddles = BatchInvertible::batch_inverse(twiddles).span();
+    let folded = fold_subset(eval, ref itwiddles, alpha_powers(alpha, n_levels).span());
+    assert!(itwiddles.is_empty());
+    folded
 }
 
 /// Proof of an individual FRI layer.
