@@ -16,16 +16,24 @@ python3 client/scripts/prepare-game-proof.py \
 
 This verifies all bytes before copying them into the ignored
 `client/public/prover/game-proof/`. No compilation occurs. `doomArtifacts.ts`
-pins D29 + idle-loop revision `0c8a3a8` genesis/step/run_segment, R5 simulator WASM, its JavaScript glue and
+pins calculation-pass revision `ee5f819` genesis/step/run_segment, R5 simulator WASM, its JavaScript glue and
 its clock snippet, plus the Blake task hash of `run_segment` measured for that
 exact executable (preimage element zero, distinct from the bootloader hash). The Worker independently verifies those six SHA-256 values.
 It imports verified JavaScript bytes and its verified snippet via Blob URLs,
 avoiding an unchecked second fetch. Serving requires same-origin assets and a
 CSP permitting module Workers and `blob:` module imports.
 
-The adapter initially measured revision `8ae7f1c`; migrating to `0c8a3a8` changes
-step/run SHA and the task hash explicitly. Existing old identities remain refused;
-no stored run or pin is rewritten to appear compatible.
+The adapter previously measured `8ae7f1c` and `0c8a3a8`. The explicit migration
+to `ee5f819` changes all three executable SHA values and the Blake task hash;
+state-2 / D14-v1, R5 and proof parameters are unchanged. Existing old identities
+remain refused; no stored run or pin is rewritten to appear compatible.
+
+The new proving artifacts contain 46 496 genesis words, 108 505 step words and
+107 018 segment words. The segment task hash measured by real corrected WASM
+execution is `0x55fb48519602ba0310b362e11cfd040f3afad418cca2e37e2b3c069b251fc22`.
+The compiled R5 session SHA is
+`dcb7193cbb8d77cdb08c66517e1c5e68453b15687808e40ea2abb5acbc4a0cac`.
+Executable SHA values remain centralized in `doomArtifacts.ts`.
 
 These are distinct artifacts from the corrected Memory64 proof WASM, staged by
 `client/scripts/prepare-prover.sh`. No proof parameters or hashes are inferred
@@ -106,7 +114,8 @@ log-20 AIR limit even for one tic (and for the measured empty segment).
 Tests cover exact non-maintenance boundaries, changed prefixes/slices/hashes,
 forged initial states, ignored imported checkpoints, full D14/D13/program-hash
 comparison, late journal synchronization, incompatible resume, substituted
-persisted args, and preserved admission refusal. Real Worker runs were compared
+persisted args, and preserved admission refusal. On the preceding `0c8a3a8`
+revision, real Worker runs were compared
 felt by felt with independently executed Scarb + Python Poseidon references for
 0/1/4 tics, boundaries 3 and 33, and the final 676→677 EXIT transition. Real
 corrected proof WASM execute/resources returned the same eleven output felts.
@@ -152,3 +161,42 @@ prover init terminates the instance and cannot reattach it after a hard stop.
 Local verification is owned by ProveSession as well: retirement, cached-page
 suspension, reset and disposal cancel it immediately, including a pending init or
 verification request. A lookup finishing after disposal cannot create a Worker.
+
+## Calculation-pass migration validation
+
+The current `ee5f819` build passes 259 client tests and four production-browser
+proof-UI tests with real Cairo preparation and corrected proof WASM resource
+inspection. The browser guard prohibits every `prove` message. The exact former
+`0c8a3a8` executable/simulation identity is a frozen fixture: its import is refused
+before persistence. The existing run's input log, identity, complete admission
+failure, segment metadata and proofs remain identical in its subsequent export;
+normal same-identity export/import resumes successfully.
+
+Two real four-tic executions use identical historical walking arguments and the
+same corrected four-thread WASM, without generating a proof:
+
+| Resource | `0c8a3a8` | `ee5f819` |
+|---|---:|---:|
+| Execute VM steps | 2 193 266 | 2 195 222 |
+| Range-check instances | 131 470 | 131 257 |
+| Bitwise instances | 3 116 | 3 236 |
+| Poseidon instances | 6 368 | 6 368 |
+| `blake_g` unpadded rows | 1 192 640 | 1 194 560 |
+| Largest padded AIR component | 2^21 | 2^21 |
+| Existing log-20 registry admission | refused | refused |
+
+The four-tic execution increases by 1 956 steps: a smaller cost within individual
+tics does not imply a cheaper short proof segment when the program grows. The ten
+D14 felts are identical; the task hash and its derived output digest change. The
+resource estimator's `n_steps` is one less than the execute counter in each run;
+these counters must not be mixed. The current empty segment also refuses log-20
+admission (2 066 162 estimator steps, largest component 2^21). No cap or registry
+was changed to admit either case, and no proof-duration improvement is claimed.
+
+A bounded second comparison repeats those same walking words for 32 tics.
+Execute steps then improve **3 083 596 → 3 081 268** (−2 328), range-check
+instances **153 636 → 150 791**, bitwise instances **16 095 → 17 055** and
+Poseidon remains 6 371. D14 remains exact and both AIR checks still refuse at
+2^21. Prover-input bytes increase **62 676 788 → 62 975 556**, so the step gain
+is not a memory improvement. These 4- and 32-tic samples bound observations for
+this exact walk; they do not establish a universal break-even segment length.

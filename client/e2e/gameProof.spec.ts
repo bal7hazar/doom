@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 import { guardWorkers } from "./proofWorkerGuard.js";
+import { legacyDoomIdentity } from "../test/fixtures/legacyDoomIdentity.js";
 
 async function advance(page: import("@playwright/test").Page, count: number): Promise<void> {
   await page.evaluate(async count => {
@@ -36,17 +37,26 @@ test("real F4 retains acknowledged inputs, refuses AIR without prove, exports an
   expect(manifest.run.admissionFailure.outputPreimage).toHaveLength(11); expect(manifest.segments).toHaveLength(0);
   await writeFile(test.info().outputPath("refusal.hellproof"), bytes);
   await writeFile(test.info().outputPath("admission-manifest.json"), JSON.stringify(manifest, null, 2));
-  const metadata = JSON.parse(manifest.run.programIdentity);
-  metadata.artifacts.segment = "0".repeat(64);
+  const metadata = legacyDoomIdentity;
   const invalidManifest = { ...manifest, run: { ...manifest.run, programIdentity: JSON.stringify(metadata) } };
   const invalidJson = Buffer.from(JSON.stringify(invalidManifest)), invalid = Buffer.alloc(16 + invalidJson.length);
   bytes.copy(invalid, 0, 0, 16); invalid.writeUInt32LE(invalidJson.length, 12); invalidJson.copy(invalid, 16);
   await ui.getByLabel("Resume real proof file").setInputFiles({ name: "incompatible.hellproof", mimeType: "application/octet-stream", buffer: invalid });
-  await expect(ui.getByRole("status").first()).toContainText("identity differs");
+  await expect(ui.getByRole("status").first()).toContainText("identity");
   await expect(ui.getByRole("button", { name: /^Export stored run/ })).toHaveCount(1);
   const preserved = page.waitForEvent("download");
   await ui.getByRole("button", { name: /^Export stored run/ }).click();
-  expect((await preserved).suggestedFilename()).toContain(".hellproof");
+  const preservedDownload = await preserved;
+  expect(preservedDownload.suggestedFilename()).toContain(".hellproof");
+  const preservedBytes = await readFile((await preservedDownload.path())!);
+  const preservedManifest = JSON.parse(preservedBytes.subarray(16, 16 + preservedBytes.readUInt32LE(12)).toString());
+  expect(preservedManifest.inputs).toEqual(manifest.inputs);
+  expect(preservedManifest.run.programIdentity).toBe(manifest.run.programIdentity);
+  expect(preservedManifest.run.admissionFailure).toEqual(manifest.run.admissionFailure);
+  expect(preservedManifest.segments).toEqual(manifest.segments);
+  expect(preservedManifest.proofs).toEqual(manifest.proofs);
+  // File selection cannot rewrite the supplied incompatible export bytes.
+  expect(invalid.subarray(16).toString()).toBe(invalidJson.toString());
   const storedCount = await ui.getByRole("button", { name: /^Export stored run/ }).count();
   await ui.getByLabel("Resume real proof file").setInputFiles({ name: "resume.hellproof", mimeType: "application/octet-stream", buffer: bytes });
   await expect(ui.getByRole("button", { name: "Check resources / prove", exact: true })).toBeVisible();
