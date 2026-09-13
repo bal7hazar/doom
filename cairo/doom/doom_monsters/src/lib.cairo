@@ -150,18 +150,26 @@ pub fn mobj_at(mobjs: Span<Mobj>, i: u32) -> Mobj {
 /// rewritten it, the list otherwise. The patch list holds at most a handful
 /// of entries per tic, so the scan is cheaper than any index.
 pub fn read_mobj(mobjs: Span<Mobj>, patches: Span<Patch>, i: u32) -> Mobj {
+    read_boxed(mobjs, patches, i).unbox()
+}
+
+/// [`read_mobj`] leaving the answer boxed, which is what every caller
+/// inside the crate wants: the scan carries one felt through its loop
+/// instead of 27, and the reads the callers make through the box are free
+/// (S7 §8 rules 3 and 4).
+pub(crate) fn read_boxed(mobjs: Span<Mobj>, patches: Span<Patch>, i: u32) -> Box<Mobj> {
     let n = patches.len();
     // `opaque_zero`, not `0`: a literal as a loop-carried start makes the
     // compiler emit a second, specialised copy of the loop body (S7 §8
     // rule 4).
     let mut k: u32 = maputl::opaque_zero(n);
-    let mut found = mobj_at(mobjs, i);
+    let mut found = BoxTrait::new(mobj_at(mobjs, i));
     while k != n {
         match patches.get(k) {
             Option::Some(b) => {
                 let p = *b.unbox();
                 if p.idx == i {
-                    found = p.mo;
+                    found = BoxTrait::new(p.mo);
                 }
             },
             Option::None => {},

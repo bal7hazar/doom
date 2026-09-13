@@ -21,10 +21,10 @@ use doom_things::tables::{
 use prng::Prng;
 use super::actions::{
     a_chase_in, a_look_in, a_pos_attack_in, a_sarg_attack_in, a_spos_attack_in, a_troop_attack_in,
-    face_target, hurt_in, run_passive,
+    face_boxed, hurt_in, run_passive,
 };
 use super::event::{MonsterEvent, drain, missile_hit};
-use super::{Ctx, Env, Noise, Patch, WINDOW, env_of, mobj_at, read_mobj};
+use super::{Ctx, Env, Noise, Patch, WINDOW, env_of, read_boxed, read_mobj};
 
 /// [`super::LOOK_CADENCE`] as a `NonZero` literal: `%` on a `u32` keeps a "division
 /// by zero" panic path that the compiler does not fold away, even against a
@@ -160,9 +160,9 @@ fn dispatch(
     let aimed = target != NO_MOBJ && target < mobjs.len();
     if action == A_FACETARGET {
         if aimed {
-            let t = read_mobj(mobjs, patches.span(), target);
+            let t = read_boxed(mobjs, patches.span(), target);
             let mut m = mo.unbox();
-            face_target(e.w.unbox().rndtable, ref rng, ref m, @t);
+            face_boxed(e.w.unbox().rndtable, ref rng, ref m, t);
             mo = BoxTrait::new(m);
         }
         return fsm::NO_ACTION;
@@ -470,11 +470,12 @@ pub fn monsters_ticker(
         }
     }
     let (_, look_phase) = DivRem::div_rem(tic, CADENCE);
-    // Hoisted out of the loop (D24): the classification below is `is_ours`,
-    // `is_awake` and `is_dormant` spelled out, so that the ~20-span `World`
-    // does not cross a call boundary once per mobj per tic.
-    let states = w.states;
-    let actions = states.action_id;
+    // The classification below is `is_ours`, `is_awake` and `is_dormant`
+    // spelled out (D24), reading the two state columns *through the boxed
+    // world*: a `let` here would put the twelve felts of `StateTables` and
+    // its action column in the loop's live set, and a loop is a function
+    // whose live set is pushed and returned on every iteration (S7 §8
+    // rule 4). A read through the box is free.
     let mut i: u32 = opaque_zero(n);
     let mut rank: u32 = opaque_zero(n);
     while i != n {
@@ -493,7 +494,7 @@ pub fn monsters_ticker(
             i = inc(i);
             continue;
         }
-        let dormant = countkill && rd32(actions, *m.state) == A_LOOK;
+        let dormant = countkill && rd32(e.w.unbox().states.action_id, *m.state) == A_LOOK;
         let mut may_chase = true;
         if countkill && !dormant && *m.health > 0 {
             may_chase = in_window(rank, tic, awake);
@@ -516,7 +517,7 @@ pub fn monsters_ticker(
             && *m.momz == fixed::ZERO
             && *m.z == *m.floorz {
             let (st, tc) = if *m.tics != fsm::FOREVER {
-                let (st, tc, _) = fsm::advance(states, *m.state, *m.tics);
+                let (st, tc, _) = fsm::advance(e.w.unbox().states, *m.state, *m.tics);
                 (st, tc)
             } else {
                 (*m.state, *m.tics)
@@ -584,22 +585,10 @@ fn apply(out: Array<Mobj>, patches: Span<Patch>, n: u32) -> Array<Mobj> {
     let src = out.span();
     let mut res: Array<Mobj> = array![];
     let mut i: u32 = opaque_zero(n);
+    // The per-slot scan *is* `read_mobj`'s (S7 §8 rule 6: one shared helper
+    // out of line rather than the same loop written twice).
     while i != n {
-        let mut m = mobj_at(src, i);
-        let mut k: u32 = opaque_zero(np);
-        while k != np {
-            match patches.get(k) {
-                Option::Some(b) => {
-                    let p = *b.unbox();
-                    if p.idx == i {
-                        m = p.mo;
-                    }
-                },
-                Option::None => {},
-            }
-            k = inc(k);
-        }
-        res.append(m);
+        res.append(read_mobj(src, patches, i));
         i = inc(i);
     }
     let mut k: u32 = opaque_zero(np);

@@ -54,7 +54,7 @@ use super::tables::{
     YSPEED,
 };
 use super::think::scale;
-use super::{Ctx, Env, Patch, SIGHT_TTL, env_of, read_mobj};
+use super::{Ctx, Env, Patch, SIGHT_TTL, env_of, read_boxed, read_mobj};
 
 /// One eighth of a turn, `ANG90 / 2`: what `A_Chase` turns by per tic.
 const ANG45: Angle = 0x20000000;
@@ -663,14 +663,14 @@ pub(crate) fn a_chase_in(
         m.reaction_time = dec(m.reaction_time);
     }
     let has_target = m.target != NO_MOBJ && m.target < mobjs.len();
-    let target = if has_target {
-        read_mobj(mobjs, patches, m.target)
+    // Boxed: the four calls below would otherwise push its 27 felts each,
+    // and every read through the box is free (S7 §8 rule 3).
+    let tbox = if has_target {
+        read_boxed(mobjs, patches, m.target)
     } else {
-        m
+        BoxTrait::new(m)
     };
-    // Boxed once: the four calls below would otherwise push its 27 felts
-    // each (S7 §8 rule 3).
-    let tbox = BoxTrait::new(target);
+    let target = tbox.unbox();
     // Modify the target threshold.
     if m.threshold != 0 {
         if !has_target || target.health <= 0 {
@@ -772,6 +772,18 @@ pub fn a_face_target(ctx: Ctx, ref rng: Prng, ref mo: Mobj, target: @Mobj) {
 pub(crate) fn face_target(rnd: Span<u8>, ref rng: Prng, ref mo: Mobj, target: @Mobj) {
     mo.flags = without(mo.flags, MF_AMBUSH);
     mo.angle = face_angle(rnd, ref rng, mo.x, mo.y, *target.x, *target.y, *target.flags);
+}
+
+/// [`face_target`] with the target boxed, which is how every caller inside
+/// the crate holds it.
+#[inline(always)]
+pub(crate) fn face_boxed(rnd: Span<u8>, ref rng: Prng, ref mo: Mobj, target: Box<Mobj>) {
+    mo.flags = without(mo.flags, MF_AMBUSH);
+    mo
+        .angle =
+            face_angle(
+                rnd, ref rng, mo.x, mo.y, target.unbox().x, target.unbox().y, target.unbox().flags,
+            );
 }
 
 /// The angle `A_FaceTarget` turns to, spread against a `MF_SHADOW` target.
@@ -974,8 +986,8 @@ pub(crate) fn a_pos_attack_in(
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
-    let target = read_mobj(mobjs, patches.span(), m.target);
-    face_target(rnd, ref rng, ref m, @target);
+    let target = read_boxed(mobjs, patches.span(), m.target);
+    face_boxed(rnd, ref rng, ref m, target);
     let base = m.angle;
     mo = BoxTrait::new(m);
     let aim: Aim = aim_line_attack(e.w.unbox(), mobjs, ref g, me, base, MISSILERANGE);
@@ -1013,9 +1025,9 @@ pub(crate) fn a_spos_attack_in(
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
-    let target = read_mobj(mobjs, patches.span(), m.target);
+    let target = read_boxed(mobjs, patches.span(), m.target);
     ev.append(sound(me, SFX_SHOTGN));
-    face_target(rnd, ref rng, ref m, @target);
+    face_boxed(rnd, ref rng, ref m, target);
     let base = m.angle;
     mo = BoxTrait::new(m);
     let aim: Aim = aim_line_attack(e.w.unbox(), mobjs, ref g, me, base, MISSILERANGE);
@@ -1068,10 +1080,10 @@ pub(crate) fn a_troop_attack_in(
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
     let target_idx = m.target;
-    let target = read_mobj(mobjs, patches.span(), target_idx);
-    face_target(rnd, ref rng, ref m, @target);
+    let target = read_boxed(mobjs, patches.span(), target_idx);
+    face_boxed(rnd, ref rng, ref m, target);
     mo = BoxTrait::new(m);
-    if check_melee_range_in(e, ref mo, BoxTrait::new(target)) {
+    if check_melee_range_in(e, ref mo, target) {
         ev.append(sound(me, SFX_CLAW));
         let damage = roll_damage(rnd, ref rng, EIGHT_U8, 3);
         hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev);
@@ -1081,8 +1093,9 @@ pub(crate) fn a_troop_attack_in(
     let mut moves: Array<MoveEvent> = array![];
     let idx = spawn_at;
     let shooter = mo.unbox();
+    let aimed = target.unbox();
     let (missile, _) = spawn_missile(
-        e.w.unbox(), mobjs, ref g, ref rng, @shooter, me, @target, FIREBALL, idx, ref moves,
+        e.w.unbox(), mobjs, ref g, ref rng, @shooter, me, @aimed, FIREBALL, idx, ref moves,
     );
     super::event::drain(moves.span(), idx, ref ev);
     ev.append(sound(me, SFX_FIRSHT));
@@ -1117,10 +1130,10 @@ pub(crate) fn a_sarg_attack_in(
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
     let target_idx = m.target;
-    let target = read_mobj(mobjs, patches.span(), target_idx);
-    face_target(rnd, ref rng, ref m, @target);
+    let target = read_boxed(mobjs, patches.span(), target_idx);
+    face_boxed(rnd, ref rng, ref m, target);
     mo = BoxTrait::new(m);
-    if !check_melee_range_in(e, ref mo, BoxTrait::new(target)) {
+    if !check_melee_range_in(e, ref mo, target) {
         return;
     }
     let damage = roll_damage(rnd, ref rng, TEN, 4);
