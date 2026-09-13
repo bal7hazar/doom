@@ -469,3 +469,13 @@ ait fixé le budget ; conserver 20 % de marge dans le planning du PLAN §5 ; ré
 4. **R11-A1 / R1-A3** — Conteneur de build WASM64 et première mesure dans Chrome.
 5. **R9-A1 / R9-A2 / R9-A3** — Cadre de licences et nom du produit.
 6. **R5-A1** — Wrapper wasm de simulation avec programme en cache.
+
+### Contrôle ponctuel du moteur figé — 2026-09-13
+
+Le fuzz proving sur `0c8a3a8` termine 10 000 tics, 158 cas / 11 épisodes,
+avec trois morts et zéro divergence en 1 040,04 s ; D14 complet et coupes contrôlés,
+felts décodés <2^72. Les 26 goldens passent aussi dans les deux profils. Ces
+résultats réduisent le risque de régression de frontière, sans clore le nightly.
+Le panneau réel (`3cb97c1`) conserve les exports lors du refus AIR ; trois défauts
+d’arrêt/possession des Workers sont corrigés et revus. L’incompatibilité log21/log20
+et la validation concurrente sur 16 GiB restent ouvertes, sans relèvement des caps.

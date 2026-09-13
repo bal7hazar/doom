@@ -1,15 +1,11 @@
 # STATUS — point d'avancement
 
-> Mis à jour le 2026-09-13 : monstres `8471b7e`, contrôles CI `375f092`, joueur `06058b1` intégrés.
-> CI : oracle Python installé explicitement ; reproductibilité WASM ARM64 réparée (`30f8d77`).
-> CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
-> AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
-> D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
-> Correctif WASM S12 intégré `e274bec` : preuves réelles mono/quatre threads valides, build Docker reproduit ; CI distante verte (`34762719280`) ; garde runtime ajouté `163c9e1`.
-> CI générale verte sur `67f618c` (run `34754644282`) ; reconstruction WASM GitHub indépendante verte.
-> P1.9 en intégration `ffdabf0` (moteur `0c8a3a8`) : candidat validé par 567 tests, 106 855 mots ; preuve quatre tics valide en 41,55 s, D2/D29 non atteints.
-> Simulation avec continuation + D33 : 8,8–16,6 ms/tic, 512 MiB, 386 tics exacts ; latence par frame et client restants (S10).
-> P1.10 livré sur branche : 25 replays × deux profils, fuzz 10 000 tics exacts ; validation D29 25/25 dans les deux profils ; 26e cas EXIT677 intégré et vérifié.
+> Mis à jour le 2026-09-13 : jeu réel assemblé sur `codex/game-integration` (`48b9dc7`), moteur figé `0c8a3a8` ; `main` conserve les squelettes du jeu.
+> P1.9 : 567 tests Cairo, **106 855 mots** ; moyenne exacte **49 524,87 steps/tic**, p99 **125 157**. D2/D29 restent manqués.
+> P1.10 : **26/26 replays dans chacun des deux profils**, EXIT677 compris ; nouveau fuzz **10 000 tics**, 158 cas, zéro divergence. Nightly durable restant.
+> Client : rendu v1, contrôles, sauvegarde et F4 preuve réelle raccordés ; **259 tests unitaires verts**, refus AIR exportable. Psprites et partie complète prouvée restent ouverts.
+> Preuve réelle quatre tics RUNNING : **41,55 s**, vérification WASM/native verte ; log21 incompatible avec le registre de production log20. Aucun GO C3/16 GiB.
+> CI générale verte sur `92edde5` (run `34768352897`) ; correctif WASM S12 et garde runtime couverts par CI WASM verte `34764805318`.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -70,17 +66,21 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : fuzz de 10 000 tics du moteur figé, raccordement du panneau de
-preuve réel (`codex/real-proof-ui`) et micro-harnais isolé de compactage de carte
-(`codex/map-packing-probe`). Le rendu v1 `f188fc8` et l’adaptateur `1b9816a` sont
-livrés, revus et fusionnés dans `codex/game-integration` par **`ffdabf0`**, après
-validation de l’assemblage indépendant `5cf5474`.
+Vague UI/fuzz terminée côté implémentation : le panneau réel et les corrections
+Worker (`e5cac03`) sont revus et fusionnés par **`3cb97c1`** sur
+`codex/game-integration`. Le rendu v1 `f188fc8` et l’adaptateur `1b9816a` y étaient
+déjà assemblés par `ffdabf0`. Le micro-harnais S13 est archivé sans migration du moteur.
 
 La nouvelle campagne complète sur `0c8a3a8` passe **26/26 dans chacun des deux
 profils**, en 1 411,36 s : 7 575 tics logiques, 371 mots terminaux non consommés,
 une mort et une sortie au tic677. Par profil, 202 sorties d’état et 201 snapshots
 sont comparés, dont 26 frontières vides. Les 26 pins restent inchangés. Le fuzz
-lancé ensuite sur ce moteur est une campagne distincte ; aucun résultat anticipé.
+suivant, sur le même moteur figé et le profil proving, termine **10 000 tics** en
+**1 040,04 s** (seed20260913) : 158 cas, 11 épisodes, trois morts, zéro divergence.
+158 contrôles D14 complets et 40 coupes ; 493 sorties d’état / 492 snapshots,
+20 frontières vides comprises. Les 57 mots après état terminal sont exclus.
+Les felts décodés restent <2^72 ; contrôle aux frontières publiques, pas de toutes
+les cellules VM. Cette campagne ponctuelle ne constitue pas un historique nightly.
 
 L’assemblage indépendant passe **243 tests client et 10 tests Chromium**, sans skip
 dans cette sélection (Cairo, apparences, contrôles et rendu). Le niveau atteint
@@ -92,7 +92,7 @@ L’adaptateur prépare les frontières réelles depuis genesis dans un Worker d
 contrôle SHA/identité/D14/D13 et préserve le journal antérieur à F4. Root revalide
 six frontières exactes et le pipeline réel : refus AIR, zéro preuve lancée,
 export/import conservé, ancienne identité rejetée, Workers libérés et préparation
-recréée au retry. Il reste à raccorder cette API à l’écran de jeu ; les frontières
+recréée au retry. F4 raccorde désormais cette API à l’écran de jeu ; les frontières
 de départ déjà terminales sont explicitement refusées. Aucune admission ni
 certification de partie n’est déduite de ces validations.
 
@@ -122,8 +122,8 @@ Worker/journal et contrôles après fusion : **222 tests client sans skip**, 13 
 du harnais, types/build/REUSE et **neuf smokes Chromium verts**, dont vrai verrou
 souris, sauvegarde/reload exact, import/export et récupération après état importé
 rejeté par Cairo. La revue visuelle et l’écran « Level complete » au tic 677 sont
-également vérifiés. Les psprites restent incomplets et F4 ne prétend pas
-prouver le jeu réel ; l’adaptateur est un chantier distinct.
+également vérifiés. Ce premier lot précédait le raccord F4 décrit ci-dessus ;
+les psprites restent incomplets et aucun succès de preuve complète n’est revendiqué.
 
 Root a aussi revalidé 386 tics exacts par mode d’isolation, reprise de huit mots
 après reload, refus busy/order et ABORT. Maximum 465 436 672 B de mémoire linéaire.
@@ -440,7 +440,48 @@ Ensuite : `doom_game` + `doom_run` (P1.9), replays dorés (P1.10), Worker sim cl
 
 ### Dernier contrôle CI
 
-Le run `34767835852` est entièrement vert sur `87acfb5`, correctif déterministe
+Le run `34768352897` est entièrement vert sur `92edde5`, correctif déterministe
 cache wrapper inclus. Les preuves lourdes historiquement ignorées ne sont pas
 réactivées par ce test ; le garde runtime WASM reste couvert par le dernier run
 WASM vert `34764805318`.
+
+### S13 : compactage de carte écarté après mesure
+
+L’audit identifie 8 613 mots de payload compressibles, mais `load()` est rappelé
+par tic et aux frontières : aucune intégration directe n’est retenue. Le premier
+micro-harnais isolé BM_ITEMS (`19a869e`, archivé sur l’intégration) reproduit
+exactement 2 064 ids ; 14 cas limites et quatre paires de rejets passent.
+**2 196 → 757 mots**, mais **20 694 → 86 111 steps** : +65 417 au chargement
+contre seulement ~21 225 économisés selon le modèle Blake. Root reproduit ces
+mesures après fusion du spike isolé. **NO-GO pour cette variante**, arrêt sans
+élargissement ni modification de load/ctx_of, de l’état ou du moteur. Une sortie
+zéro du harnais signifie exactitude, pas succès du filtre de performance.
+
+### Panneau de preuve réel et revue des arrêts
+
+La livraison `e5cac03`, fusionnée par `3cb97c1`, capture chaque objet journal dès
+le début de partie, pause le jeu sur F4 et conserve export/reprise et anciennes
+parties. Le contrôle réel AIR refuse toujours log21 face au registre log20 ;
+arguments, onze felts de préimage et ressources restent dans le `.hellproof`.
+Aucune preuve ni soumission automatique : les smokes interdisent l’appel prove.
+
+La revue indépendante a reproduit puis clos trois défauts : Worker perdu sur
+rejet d’init, vérificateur local survivant au retrait, retry de preuve après arrêt
+dur. Les Workers sont détenus dès création ; l’arrêt dur invalide les réponses
+tardives, l’arrêt doux termine le segment. **259 tests client passent** sur le
+client identique à l’intégration, dont les régressions d’annulation. Les budgets
+D2/D29, le registre et C3/P3.7 restent ouverts ; les psprites animés restent à faire.
+
+Après fusion, root valide **13 smokes Chromium headless** (12 dans la sélection
+principale, un d’apparence séparé), build TypeScript/Vite et REUSE **1 772/1 772**.
+Le test de pointeur natif conditionnel est exercé en headed : F4 libère le verrou,
+le pointeur tourne/tire dans Cairo. Un favicon absent, visible uniquement dans ce
+contrôle headed, est déclaré explicitement (`eb76557`) ; les assertions console
+restent intactes. Une collision de fichiers temporaires entre campagnes root a
+été corrigée en rejouant séquentiellement avec des sorties isolées.
+
+Le correctif favicon est fusionné par `48b9dc7` ; root revalide le test d’apparence
+headed en 8,1 s, sans erreur console. Tous les agents de cette vague ont terminé.
+Prochain chemin critique : réduire D29/D2 et rendre l’admission AIR compatible
+avec le registre, puis mesurer la partie complète et la concurrence sur 16 GiB.
+Aucun changement de plafond, de cadence ou de gameplay n’est adopté ici.
