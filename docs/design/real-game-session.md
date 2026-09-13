@@ -1,9 +1,22 @@
 # Session du jeu réel — audit du branchement client
 
-État au 2026-09-13, après S10 et D33. La continuation Cairo est assemblée dans la
-branche du jeu et vérifiée sur 386 tics ; le client `main` utilise encore `stubSim`.
-Ce document fixe les interfaces à livrer pour P2.3/P2.4/P2.6. Il ne déclare pas ces
-tâches terminées. La génération de preuve WASM du nouveau programme est en diagnostic.
+État au 2026-09-13 : Worker Cairo et journal assemblés sur la branche du jeu
+par `3e21031`, après revue indépendante et correction du cycle pagehide/pageshow.
+Root a revalidé 386 tics exacts avec isolation et 386 sans isolation, reprise après
+reload et interruption comprises, puis 209 tests client et six smokes Chromium
+après fusion. Le contrôle du retour de page conservée utilise des événements
+persisted synthétiques ; aucune admission BFCache réelle n’est revendiquée.
+
+`main` utilise encore `stubSim`. La capture, les écrans et la sauvegarde utilisateur
+sont assemblés par `8cf6d97` : 222 tests et neuf smokes après fusion, dont clavier/
+souris et sauvegarde/reload/import exacts. Le rendu des sprites/armes et le vrai
+adaptateur de preuve restent à livrer. Le défaut WASM S12 est corrigé et sa CI est
+verte ; les budgets, le registre et P3.7 restent distincts de ce résultat.
+
+Les écarts ci-dessous décrivent le point de départ de l’audit. Le journal avant
+le premier tic, le Worker, le transport par transfert et le décodage des positions
+sont désormais réalisés dans la branche d’intégration. Les flags bruts sont
+conservés séparément, sans aliaser CORPSE avec TELEPORTED.
 
 ## Écarts vérifiés
 

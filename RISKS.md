@@ -102,7 +102,14 @@
 - **R1/R11 : défaut runtime S12 corrigé `e274bec`** : preuve D33 valide en mono et
   quatre threads, modules Docker reconstruits identiques ; validation runtime root verte.
   La CI distante du build corrigé est verte (`34762719280`) ; le garde runtime ajouté
-  `163c9e1` reste à valider sur GitHub. Le registre log20 et les plafonds restent inchangés.
+  `163c9e1` est également vert (`34764805318`). Le registre log20 et les plafonds restent inchangés.
+- **R5, Worker intégré `3e21031`** : transport et journal réels vérifiés, 209 tests
+  client et six smokes après fusion ; 10 000 tics idle sans croissance de mémoire
+  linéaire aux 39 points mesurés. Ce n’est pas une absence de fuite globale ni un
+  GO 35 Hz/16 GiB/preuve concurrente. Contrôles et rendu restent à compléter.
+- **Parcours de sortie désormais réel** : EXIT au tic 677 reproduit depuis genesis en
+  dev/proving et Worker Chromium, 29 PV, D14 exact ; l’absence de trajet terminé
+  n’est plus un obstacle. La preuve complète et les critères C3 restent ouverts.
 - **D29 après passe bornée** : 106 878 mots, 565 tests verts, mêmes sorties ; la preuve
   réelle quatre tics est vérifiée, mais ne clôt ni le budget 100k ni le scénario P3.7.
 - **S11 après optimisation** : BLAKE9 373 349 steps/hash contre Poseidon 66 867 ;
