@@ -441,6 +441,11 @@ verifies the proof/output digest without yet knowing the program; `/complete`
 checks each task pin before assigning leaf keys or queueing. Recovered leaf jobs
 rebind against the current configuration before using a cached leaf or starting
 a prover, so a changed pin cannot revive work admitted under an older identity.
+Before every new from_proof circuit, the same stored proof file handed to the
+circuit is checked again by the native gate. This covers persisted `verified`
+markers from an earlier policy, including the bootloader binding; successful
+cached circuit leaves need no repeat check. The extra work is one cheap native
+verification, not a new Cairo execution or proof.
 
 `hellproof-leaf-verify` reports the **bootloader** hash in `program_hash`; its
 `--expect-program-hash` option also pins that bootloader. The service passes `--expect-bootloader` with its configured Cairo 0 bootloader:
