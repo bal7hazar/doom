@@ -6,7 +6,11 @@ optimisations de style monstres et joueur intégrées. Le manifeste d'annotation
 Sierra `34325ff` ne change pas le code. Les optimisations de frontière et le
 correctif d'armure par impact sont mesurés séparément dans la section 6.
 
-**Résultat intégré `b11fd7f` :** frontières optimisées et défense par impact
+**Dernière validation `f306c6a` (section 7)** : run **110 015 mots**, moyenne réelle du tic
+**53 309**, p99 **128 207** sur les mêmes 2 946 tics ; hashes inchangés et 565 tests verts.
+D2/D29 restent ouverts ; la continuation Chromium est mesurée séparément dans S10.
+
+**Référence intégrée `b11fd7f` :** frontières optimisées et défense par impact
 validées ensemble ; programme prouvé **116 287 mots**, moyenne réelle du tic
 **83 003**, p99 **168 038** sur les 2 946 tics des cinq replays. Les cibles
 D2/D29 restent ouvertes. La section 6 donne cette mesure finale ; les
@@ -345,3 +349,40 @@ complètent le test synthétique santé 101, le combat découpé tous les 25 tic
 et les mesures exécutables découpées tous les 35 tics. Des aller-retours
 explicites après ramassage, suppression d'un missile puis ajout d'un drop
 vérifient aussi la cohérence des listes de grille et du hash à ces étapes.
+
+## 7. Validation après parcours monstres, seconde frontière et roster boxé D33
+
+L’intégration `f306c6a` assemble les trois optimisations sans changer les règles de jeu,
+la représentation wire schema 2 ni D14. Les boîtes évitent de copier les 27 champs de
+chaque acteur inchangé ; les allocations des dormants dont le countdown change sont incluses.
+Les six exécutables dev/proving ont été reproduits bit à bit après merge.
+
+Le profil root réexécute les cinq replays avec `trace_profile.py --all --chunk 35` :
+chaque échantillon est une frame VM réelle, frontière exclue, selon la méthode de section 2.
+Les cinq hashes finaux correspondent aux pins sources historiques, vérifiés indépendamment.
+
+| Replay | Tics | Moyenne | p99 | Maximum |
+|---|---:|---:|---:|---:|
+| idle | 700 | 30 475 | 34 181 | 34 233 |
+| marche | 350 | 56 016 | 97 297 | 119 536 |
+| porte | 350 | 71 319 | 134 350 | 169 828 |
+| combat | 700 | 67 704 | 158 003 | 169 976 |
+| mort | 846 | 51 721 | 99 589 | 130 876 |
+
+Agrégat **2 946 tics, moyenne 53 309, p99 128 207, maximum 169 976** : −35,8 % en
+moyenne contre `b11fd7f`, mais encore au-dessus de D2 (12 k / p99 25 k).
+Run proving **110 015 mots**, step 111 502, genesis 47 415 ; cible D29 manquée de 10 015 mots.
+Le programme step mesuré a SHA-256
+`2a057738d3423148cdbcbede6129c2d363fffa7e94b075e929f6b09c79718040`.
+
+Root valide **565 tests / 23 cibles**, format/build dev/proving, graphe, 70 comparaisons
+proving de replays/D14/découpes et 35 cas ABI natifs, avec rejet des quatre enveloppes
+malformées. Rapport des samples : `/tmp/hellproof-audit-20260913/boxed-integrated-tics.json` ;
+équivalences `boxed-integrated-{replays,abi}.json`. Les tests et références n’ont pas été
+réécrits pour absorber un changement de résultat.
+
+L’exécution WASM Blake 0/1/4 tics coûte **2 113 239 / 2 152 507 / 2 260 220 steps**,
+mais `blake_g` demeure log21 et le registre courant refuse les trois cas (S9).
+La continuation de simulation apporte un gain distinct : **8,8–16,6 ms moyens/tic**,
+maintenance comprise, 512 MiB linéaires, 386 tics exacts ; onze pauses dépassent 28,57 ms.
+Elle n’a pas encore été branchée au client et ne modifie pas le programme prouvé (S10).
