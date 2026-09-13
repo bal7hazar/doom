@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# The "without the player" side of the bytecode measurement: the same crate
+# graph and the same level/table data as `../size`, no `doom_player` call.
+[package]
+name = "doom_player_baseline"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_player = { path = "../.." }
+doom_physics = { path = "../../../doom_physics" }
+doom_specials = { path = "../../../doom_specials" }
+doom_map = { path = "../../../doom_map" }
+doom_things = { path = "../../../doom_things" }
+fixed = { path = "../../../../crates/fixed" }
+geom2d = { path = "../../../../crates/geom2d" }
+prng = { path = "../../../../crates/prng" }
+ticcmd = { path = "../../../../crates/ticcmd" }
+fsm = { path = "../../../../crates/fsm" }
+bam = { path = "../../../../crates/bam" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_player_baseline"
+function = "doom_player_baseline::main"
+sierra = true
+
+[cairo]
+enable-gas = false
