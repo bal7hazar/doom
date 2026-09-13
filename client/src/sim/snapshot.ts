@@ -263,6 +263,14 @@ export class SnapshotRing {
     return Atomics.load(this.header, Header.STATE);
   }
 
+  /** A new local session must not interpolate against the previous game's slots. */
+  resetLocal(): void {
+    if (this.shared) throw new Error("cannot reset a concurrently shared ring");
+    new Uint8Array(this.buffer).fill(0);
+    this.header[Header.PUBLISHED] = -1;
+    this.header[Header.INPUT_HEAD] = -1;
+  }
+
   set state(v: number) {
     Atomics.store(this.header, Header.STATE, v);
   }

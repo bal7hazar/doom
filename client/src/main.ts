@@ -7,6 +7,10 @@ import { Renderer, type RenderOptions } from "./render/renderer.js";
 import { TicScheduler } from "./sim/scheduler.js";
 import { interpolate, SnapshotRing, type InterpolatedView } from "./sim/snapshot.js";
 import { createStubSim } from "./sim/stubSim.js";
+import { CairoClient } from "./sim/cairoClient.js";
+import { CairoScheduler } from "./sim/cairoScheduler.js";
+import { bindCairoPageLifecycle } from "./sim/cairoPageLifecycle.js";
+import { encodeCmd } from "./prove/ticcmd.js";
 import { DEFAULT_AUTOMAP, drawAutomap, type AutomapOptions } from "./ui/automap.js";
 import { renderDiagnostics } from "./ui/diagnostics.js";
 import { Hud } from "./ui/hud.js";
@@ -126,8 +130,23 @@ async function main(): Promise<void> {
     return;
   }
 
-  const ring = new SnapshotRing();
-  const sim = createStubSim(level);
+  // Keep the existing renderer/prover demo available. P2.3 is an explicit real
+  // simulation mode until the sprite/psprite render seam and P2.4 capture land.
+  const realCairo = new URLSearchParams(location.search).get("sim") === "cairo";
+  const cairo = realCairo ? new CairoClient() : null;
+  if (cairo) {
+    say("loading real Cairo simulation…", 0.95);
+    try { await cairo.init(); }
+    catch (error) { cairo.dispose(); fail(loading, loadingStatus, String(error)); return; }
+    profile.snapshotTransport = "copied";
+    profile.reasons[0] = "Cairo Worker: transferred ArrayBuffers feed a local renderer ring";
+    renderDiagnostics(diagnosticsEl, caps, profile);
+    const notice = document.createElement("p");
+    notice.textContent = "Cairo simulation · neutral inputs until P2.4 capture · sprites and weapon animation incomplete · proof adapter pending";
+    diagnosticsEl.prepend(notice);
+  }
+  const ring = cairo?.ring ?? new SnapshotRing();
+  const sim = cairo ? null : createStubSim(level);
 
   // Proving (P3.2) is attached lazily, on F4: `public/prover/` is 90 MB of
   // gitignored wasm that a plain clone does not have, and nothing about it may
@@ -135,13 +154,19 @@ async function main(): Promise<void> {
   let prove: import("./prove/session.js").ProveSession | null = null;
   let provePending = false;
   let neutralWord = 0;
-  const scheduler = new TicScheduler(ring, (tic) => {
+  const scheduler = cairo ? new CairoScheduler(cairo,
+    () => encodeCmd({ forward: 0, side: 0, turn: 0, buttons: 0 })) : new TicScheduler(ring, (tic) => {
     // Until P2.4 captures real input there is no command to record; the journal
     // takes the neutral one, so the wiring - and only the wiring - is exercised.
     if (prove) prove.recordTic(neutralWord);
-    return sim.stepTic(tic);
+    return sim!.stepTic(tic);
   });
   const toggleProofQueue = async (): Promise<void> => {
+    if (cairo) {
+      diagnosticsEl.hidden = false;
+      // Never label the real journal with createStubProgram's executable.
+      return;
+    }
     if (prove) {
       prove.element.hidden = !prove.element.hidden;
       return;
@@ -219,10 +244,10 @@ async function main(): Promise<void> {
         else scheduler.start();
         break;
       case "[":
-        scheduler.rate = Math.max(0.1, scheduler.rate / 1.5);
+        if (scheduler instanceof TicScheduler) scheduler.rate = Math.max(0.1, scheduler.rate / 1.5);
         break;
       case "]":
-        scheduler.rate = Math.min(8, scheduler.rate * 1.5);
+        if (scheduler instanceof TicScheduler) scheduler.rate = Math.min(8, scheduler.rate * 1.5);
         break;
       case "r":
       case "R":
@@ -239,6 +264,7 @@ async function main(): Promise<void> {
   });
 
   scheduler.start();
+  if (cairo && scheduler instanceof CairoScheduler) bindCairoPageLifecycle(scheduler, cairo);
   loading.hidden = true;
 
   let lastFrameTime = performance.now();
@@ -255,7 +281,8 @@ async function main(): Promise<void> {
     }
 
     resize();
-    const pair = ring.readPair();
+    const latest = ring.readLatest();
+    const pair = ring.readPair() ?? (latest ? { previous: latest, current: latest } : null);
     if (pair) {
       const view: InterpolatedView = interpolate(pair.previous, pair.current, scheduler.alpha(now));
       renderOptions.paletteRow = selectPalette(
@@ -283,7 +310,7 @@ async function main(): Promise<void> {
         const cssW = overlay.width / dpr;
         const cssH = overlay.height / dpr;
         if (showAutomap) {
-          drawAutomap(overlayCtx, level, view, cssW, cssH, automapOptions, sim.path, dynamicSectors);
+          drawAutomap(overlayCtx, level, view, cssW, cssH, automapOptions, sim?.path ?? [], dynamicSectors);
         }
         if (showHud) hud.draw(overlayCtx, view.latest, cssW, cssH);
         overlayCtx.restore();
@@ -306,6 +333,7 @@ async function main(): Promise<void> {
     store,
     level,
     ring,
+    cairo,
     resetFpsWindow(): void {
       frame.frames = 0;
       frame.windowFrames = 0;
@@ -326,7 +354,7 @@ async function main(): Promise<void> {
 
 function formatStats(
   frame: FrameStats,
-  scheduler: TicScheduler,
+  scheduler: Pick<TicScheduler, "tic" | "rate" | "stepMs" | "droppedTics">,
   renderer: Renderer,
   store: AssetStore,
   gpu: string | null,
