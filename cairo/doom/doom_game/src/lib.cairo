@@ -5,7 +5,9 @@
 
 use doom_map::{LevelId, genesis as level_genesis};
 use doom_monsters::{MonsterState, spawn as spawn_monster};
-use doom_player::{PlayerState, spawn as spawn_player, think as player_think};
+// P1.7 renamed the skeleton's `spawn`/`think` to `spawn_skeleton`/`think_skeleton`
+// (`doom_player::compat`, D17); the real `Player` is wired in with P1.9.
+use doom_player::{PlayerState, spawn_skeleton as spawn_player, think_skeleton as player_think};
 use doom_things::tables::KIND_POSSESSED;
 use fixed::from_int;
 use geom2d::Point;

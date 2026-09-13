@@ -84,11 +84,15 @@ dependencies = [
 name = "doom_player"
 version = "0.1.0"
 dependencies = [
+ "bam",
  "doom_map",
  "doom_physics",
+ "doom_specials",
  "doom_things",
  "fixed",
+ "fsm",
  "geom2d",
+ "prng",
  "ticcmd",
 ]
 
