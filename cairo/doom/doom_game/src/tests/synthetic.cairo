@@ -624,3 +624,91 @@ fn test_moving_sectors_and_refresh_track_the_movers() {
     let _: SpecialsState = g.specials;
     let _ = removed_mobj();
 }
+
+#[test]
+fn test_reader_rejects_overflowing_declared_length_without_panicking() {
+    assert(from_felts(array![TAG, VERSION, 0xffffffff].span()).is_none(), 'oversized header');
+}
+
+#[test]
+fn test_serialized_boundary_preserves_pickup_order() {
+    let mut g = genesis(LevelId::E1M1);
+    let ctx = ctx_of(g.level, g.floor, g.ceil);
+    let mut me = *g.mobjs.at(0);
+    me.health = 99;
+    g.player.health = 99;
+    let mut bonus = spawn_mobj(ctx.w, KIND_MISC2, me.x, me.y, SpawnZ::OnFloor);
+    let mut stim = spawn_mobj(ctx.w, doom_things::tables::KIND_MISC10, me.x, me.y, SpawnZ::OnFloor);
+    let mut grid = new_grid();
+    set_thing_position(@ctx.w.map, ref grid, ref me, 0);
+    set_thing_position(@ctx.w.map, ref grid, ref bonus, 1);
+    set_thing_position(@ctx.w.map, ref grid, ref stim, 2);
+    // A previous move changes visitation order without changing any mobj.
+    doom_physics::relink(ref grid, bonus.cell, 1);
+    g.mobjs = array![me, bonus, stim].span();
+    g.grid = grid;
+    let saved = serialize(@g);
+    let restored = from_felts(saved.span()).expect('readable');
+    let (a, _) = step_tic(g, word(25, 0, 0, 0));
+    let (b, _) = step_tic(restored, word(25, 0, 0, 0));
+    println!("pickup order: uninterrupted {} restored {}", a.player.health, b.player.health);
+    assert(hash(@a) == hash(@b), 'same pickup order');
+}
+
+fn altered(data: Span<felt252>, at: u32, value: felt252) -> Array<felt252> {
+    let mut out = array![];
+    let mut i: u32 = 0;
+    while i < data.len() {
+        out.append(if i == at {
+            value
+        } else {
+            *data.at(i)
+        });
+        i += 1;
+    }
+    out
+}
+
+#[test]
+fn test_reader_rejects_unsafe_domains_and_grid_corruption() {
+    let g = genesis(LevelId::E1M1);
+    let a = serialize(@g);
+    // Player health, weapon, attacker; mobj kind, state, sector; count.
+    let bad = array![
+        (12, 0xffffffff), (21, 9), (38, 0xfffffffe), (46, 257), (47, 9999), (59, 9999), (68, 9999),
+        (8, 256),
+    ];
+    let mut pairs = bad.span();
+    while let Option::Some(pair) = pairs.pop_front() {
+        let (offset, value) = *pair;
+        assert(from_felts(altered(a.span(), offset, value).span()).is_none(), 'unsafe domain');
+    }
+    let base = 3
+        + crate::state::SCALARS
+        + doom_player::PLAYER_FELTS
+        + 1
+        + g.mobjs.len() * doom_physics::MOBJ_FELTS
+        + 1
+        + doom_specials::fields(@g.specials);
+    assert(
+        from_felts(altered(a.span(), base + 1, 0xffffffff).span()).is_none(), 'invalid grid cell',
+    );
+    assert(
+        from_felts(altered(a.span(), base + 3, 0xffffffff).span()).is_none(), 'invalid grid member',
+    );
+    assert(from_felts(altered(a.span(), base, 0).span()).is_none(), 'omitted grid');
+    // Locate a cell with at least two members, then duplicate one index.
+    let mut offset = base + 1;
+    let mut tested = false;
+    while offset < a.len() {
+        let n: u32 = (*a.at(offset + 1)).try_into().unwrap();
+        if n >= 2 {
+            let bad = altered(a.span(), offset + 3, *a.at(offset + 2));
+            assert(from_felts(bad.span()).is_none(), 'duplicate member');
+            tested = true;
+            break;
+        }
+        offset += 2 + n;
+    }
+    assert(tested, 'a shared cell exercised');
+}

@@ -25,19 +25,20 @@
 //!                                next_light, ceilings[15], floors[5],
 //!                                specials[13], n_lights, lights×8,
 //!                                n_movers, movers×7, n_used, used)
+//!     grid order                n_cells, (cell, n_members, indices...)×n_cells
 //! ```
 //!
 //! Every felt is non-negative and below 2^72 (A7): `Fixed` fields are their
 //! `enc` (< 2^33), a mobj's health is biased by 2^31, everything else is a
-//! `u32`, a bit or a count. The thing grid and the materialised sector
-//! heights are **derived** from the fields above and are not hashed; they
-//! are rebuilt by [`from_felts`].
+//! `u32`, a bit or a count. Materialised heights are derived. Cell membership
+//! order is consensus state: movement changes it and pickup/trace visitation
+//! observes it. Schema 2 hashes that order and restores it exactly; the
+//! append-only grid journal itself is not serialized.
 
+use core::dict::{Felt252Dict, Felt252DictEntryTrait};
 use doom_map::{LevelId, LevelMap, genesis as level_genesis};
 use doom_monsters::Noise;
-use doom_physics::{
-    HEALTH_BIAS, MOBJ_FELTS, Mobj, NO_MOBJ, ThingGrid, push_felts as push_mobj, rebuild,
-};
+use doom_physics::{HEALTH_BIAS, MOBJ_FELTS, Mobj, NO_MOBJ, ThingGrid, push_felts as push_mobj};
 use doom_player::{PLAYER_FELTS, Player, push_felts as push_player};
 use doom_specials::state::append_to as append_specials;
 use doom_specials::{
@@ -53,7 +54,7 @@ use super::level::materialise_heights;
 /// Domain tag: the state stack's own tag for "a serialized `GameState`".
 pub const TAG: felt252 = state_hash::tag::STATE;
 /// Schema version. Bump it whenever a field is added, removed or reordered.
-pub const VERSION: felt252 = 1;
+pub const VERSION: felt252 = 2;
 /// Scalar fields ahead of the player record.
 pub const SCALARS: u32 = 7;
 /// `2^33`: the exclusive bound of a well-formed `Fixed::enc`.
@@ -84,7 +85,7 @@ pub struct GameState {
     pub floor: Span<felt252>,
     /// Derived: current ceiling height of every sector.
     pub ceil: Span<felt252>,
-    /// Derived: the blockmap's thing lists.
+    /// The blockmap thing lists; visitation order is committed in schema 2.
     pub grid: ThingGrid,
 }
 
@@ -98,12 +99,21 @@ pub fn level_id(level: LevelId) -> felt252 {
 }
 
 /// How many felts [`append_to`] writes.
-pub fn fields(s: @GameState) -> u32 {
+fn base_fields(s: @GameState) -> u32 {
     SCALARS + PLAYER_FELTS + 1 + (*s.mobjs).len() * MOBJ_FELTS + 1 + specials_fields(s.specials)
+}
+
+pub fn fields(s: @GameState) -> u32 {
+    base_fields(s) + doom_physics::grid::canonical_order(s.grid, *s.mobjs).len()
 }
 
 /// Append the fields — not the header — in schema order.
 pub fn append_to(s: @GameState, ref out: Array<felt252>) {
+    append_base(s, ref out);
+    out.append_span(doom_physics::grid::canonical_order(s.grid, *s.mobjs).span());
+}
+
+fn append_base(s: @GameState, ref out: Array<felt252>) {
     out.append(level_id(*s.level));
     out.append((*s.leveltime).into());
     out.append(status_felt(*s.status));
@@ -123,8 +133,10 @@ pub fn append_to(s: @GameState, ref out: Array<felt252>) {
 
 /// The whole record, header included.
 pub fn serialize(s: @GameState) -> Array<felt252> {
-    let mut out = open(TAG, VERSION, fields(s));
-    append_to(s, ref out);
+    let order = doom_physics::grid::canonical_order(s.grid, *s.mobjs);
+    let mut out = open(TAG, VERSION, base_fields(s) + order.len());
+    append_base(s, ref out);
+    out.append_span(order.span());
     out
 }
 
@@ -363,6 +375,9 @@ fn read_specials(ref r: Reader, lm: @SpecialsMap) -> Option<SpecialsState> {
         k = k + 1;
     }
     let n_movers = next_u32(ref r)?;
+    if n_movers > 256 {
+        return Option::None;
+    }
     let mut movers: Array<Mover> = array![];
     k = 0;
     while k != n_movers {
@@ -383,6 +398,9 @@ fn read_specials(ref r: Reader, lm: @SpecialsMap) -> Option<SpecialsState> {
         k = k + 1;
     }
     let n_used = next_u32(ref r)?;
+    if n_used > 65535 {
+        return Option::None;
+    }
     let used = read_u32s(ref r, n_used)?;
     Option::Some(
         SpecialsState {
@@ -412,7 +430,7 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
         return Option::None;
     }
     let n = next_u32(ref r)?;
-    if n + 3 != data.len() {
+    if data.len() < 3 || n != data.len() - 3 {
         return Option::None;
     }
     let id = next(ref r)?;
@@ -422,16 +440,39 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
         return Option::None;
     };
     let leveltime = next_u32(ref r)?;
+    if leveltime > segment::MAX_TIC {
+        return Option::None;
+    }
     let status = status_from_felt(next(ref r)?)?;
     let noise = Noise { source: next_u32(ref r)?, sector: next_u32(ref r)? };
-    let prng = from_index(next_u32(ref r)?);
-    let mrng = from_index(next_u32(ref r)?);
+    let pi = next_u32(ref r)?;
+    let mi = next_u32(ref r)?;
+    if pi > 255 || mi > 255 {
+        return Option::None;
+    }
+    let prng = from_index(pi);
+    let mrng = from_index(mi);
     let player = read_player(ref r)?;
     let n_mobjs = next_u32(ref r)?;
+    if n_mobjs == 0 || n_mobjs > doom_physics::MAX_MOBJS {
+        return Option::None;
+    }
+    let m: LevelMap = doom_map::load(level);
+    if !valid_player(player, n_mobjs) {
+        return Option::None;
+    }
+    if !valid_index(noise.source, n_mobjs)
+        || (noise.source != NO_MOBJ && noise.sector >= m.s_floor.len()) {
+        return Option::None;
+    }
     let mut mobjs: Array<Mobj> = array![];
     let mut k: u32 = 0;
     while k != n_mobjs {
-        mobjs.append(read_mobj(ref r)?);
+        let mo = read_mobj(ref r)?;
+        if !valid_mobj(mo, m, n_mobjs) {
+            return Option::None;
+        }
+        mobjs.append(mo);
         k = k + 1;
     }
     if player.mo >= n_mobjs {
@@ -439,10 +480,16 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
     }
     let n_specials = next_u32(ref r)?;
     let before = r.pos;
-    let m: LevelMap = doom_map::load(level);
     let lm: SpecialsMap = doom_specials::load(level);
     let specials = read_specials(ref r, @lm)?;
-    if r.pos - before != n_specials || r.pos != data.len() {
+    if !valid_specials(specials, m, lm) {
+        return Option::None;
+    }
+    if r.pos - before != n_specials {
+        return Option::None;
+    }
+    let grid = read_grid(ref r, mobjs.span(), m.cell_node.len())?;
+    if r.pos != data.len() {
         return Option::None;
     }
     let (floor, ceil) = materialise_heights(@m, @lm, @specials);
@@ -459,7 +506,7 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
             specials,
             floor,
             ceil,
-            grid: rebuild(mobjs.span()),
+            grid,
         },
     )
 }
@@ -467,4 +514,141 @@ pub fn from_felts(data: Span<felt252>) -> Option<GameState> {
 /// `NO_MOBJ`, re-exported for the tests.
 pub fn nobody() -> u32 {
     NO_MOBJ
+}
+
+// Bounds used by table reads and integer arithmetic in the assembled rules.
+// They are deliberately checked before rebuilding heights or running a tic.
+fn valid_index(i: u32, n: u32) -> bool {
+    i == NO_MOBJ || i < n
+}
+
+fn valid_player(p: Player, n: u32) -> bool {
+    p.mo < n
+        && p.playerstate <= 1
+        && p.health <= 200
+        && p.armor_points <= 200
+        && p.armor_type <= 2
+        && p.ammo_clip <= 400
+        && p.ammo_shell <= 100
+        && p.ammo_cell <= 600
+        && p.ammo_misl <= 100
+        && p.weapons < 32
+        && p.ready_weapon < doom_player::state::NUM_WEAPONS
+        && p.pending_weapon <= doom_player::WP_NOCHANGE
+        && p.cards <= 1
+        && p.psp_state < doom_things::num_states()
+        && p.flash_state < doom_things::num_states()
+        && p.damagecount <= 100
+        && p.bonuscount <= 0x10000
+        && valid_index(p.attacker, n)
+        && p.strength <= segment::MAX_TIC
+        && p.refire <= segment::MAX_TIC
+        && p.killcount <= segment::MAX_TIC
+        && p.itemcount <= segment::MAX_TIC
+        && p.secretcount <= segment::MAX_TIC
+        && p.cheats == 0
+}
+
+fn valid_mobj(mo: Mobj, m: LevelMap, n: u32) -> bool {
+    if doom_physics::is_removed(@mo) {
+        return mo == doom_physics::removed_mobj();
+    }
+    mo.kind < doom_things::num_kinds()
+        && mo.state < doom_things::num_states()
+        && valid_index(mo.target, n)
+        && mo.sector < m.s_floor.len()
+        && mo.subsector < m.ss_sector.len()
+        && (mo.cell == doom_physics::NO_CELL || mo.cell < m.cell_node.len())
+        && mo.move_dir <= 8
+        && mo.health > -0x100000
+        && mo.health < 0x100000
+}
+
+fn valid_specials(s: SpecialsState, m: LevelMap, lm: SpecialsMap) -> bool {
+    let mut ls = s.lights;
+    while let Option::Some(l) = ls.pop_front() {
+        if *l.sector >= m.s_floor.len()
+            || *l.light > 255
+            || *l.maxlight > 255
+            || *l.minlight > *l.maxlight
+            || *l.hi_time > 0x10000
+            || *l.lo_time > 0x10000
+            || *l.next > segment::MAX_TIC
+            + 0x10000 {
+            return false;
+        }
+    }
+    let mut ms = s.movers;
+    while let Option::Some(mv) = ms.pop_front() {
+        let slots = if doom_specials::state::moves_ceiling(*mv.kind) {
+            lm.ceil_slot
+        } else {
+            lm.floor_slot
+        };
+        let slot = match slots.get(*mv.sector) {
+            Option::Some(v) => *v.unbox(),
+            Option::None => { return false; },
+        };
+        if slot == doom_specials::level::NO_SLOT {
+            return false;
+        }
+    }
+    s.secrets <= segment::MAX_TIC && s.next_light <= segment::MAX_TIC + 0x10000
+}
+
+/// An external order must cover each linked mobj exactly once, in its
+/// declared cell; no duplicate cells, duplicate indices or omitted members.
+fn read_grid(ref r: Reader, mobjs: Span<Mobj>, cells: u32) -> Option<ThingGrid> {
+    let n = next_u32(ref r)?;
+    if n > mobjs.len() {
+        return Option::None;
+    }
+    let mut seen_cells: Felt252Dict<bool> = Default::default();
+    let mut seen_members: Felt252Dict<bool> = Default::default();
+    let mut grid = doom_physics::new_grid();
+    let mut i: u32 = 0;
+    let mut linked: u32 = 0;
+    while i < n {
+        let cell = next_u32(ref r)?;
+        if cell >= cells {
+            return Option::None;
+        }
+        let (entry, duplicate) = seen_cells.entry(cell.into());
+        seen_cells = entry.finalize(true);
+        if duplicate {
+            return Option::None;
+        }
+        let count = next_u32(ref r)?;
+        if count == 0 || count > mobjs.len() - linked {
+            return Option::None;
+        }
+        let mut j: u32 = 0;
+        while j < count {
+            let idx = next_u32(ref r)?;
+            let mo = mobjs.get(idx)?.unbox();
+            if !doom_physics::in_blockmap(mo) || *mo.cell != cell {
+                return Option::None;
+            }
+            let (entry, duplicate) = seen_members.entry(idx.into());
+            seen_members = entry.finalize(true);
+            if duplicate {
+                return Option::None;
+            }
+            doom_physics::link(ref grid, cell, idx);
+            linked += 1;
+            j += 1;
+        }
+        i += 1;
+    }
+    let mut expected: u32 = 0;
+    let mut ms = mobjs;
+    while let Option::Some(m) = ms.pop_front() {
+        if doom_physics::in_blockmap(m) {
+            expected += 1;
+        }
+    }
+    if linked != expected {
+        return Option::None;
+    }
+    Option::Some(grid)
 }

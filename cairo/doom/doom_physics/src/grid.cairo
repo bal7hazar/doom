@@ -9,9 +9,9 @@
 //! `get` (~35 steps); linking or unlinking rebuilds that one short span
 //! (a handful of appends), and a mobj that stays in its cell — the common
 //! case, a thing moves less than 30 units per tic in a 128-unit cell — costs
-//! nothing at all. The dict is derived data: `rebuild` recreates it from the
-//! mobjs' `cell` fields at the start of a segment, so it is **not** part of
-//! the hashed state and never needs serializing.
+//! nothing at all. Membership alone is derived; visitation order is not.
+//! `doom_game` schema 2 commits [`canonical_order`] at boundaries and restores
+//! the lists exactly. [`rebuild`] is only for a fresh grid, not a saved game.
 //!
 //! S1 §7's warning against `Felt252Dict` was about indexing the mobjs
 //! themselves (51 steps per insert/get pair on *every* access of *every*
@@ -28,11 +28,14 @@ use super::mobj::{Mobj, in_blockmap};
 #[derive(Destruct, Default)]
 pub struct ThingGrid {
     cells: Felt252Dict<Nullable<Span<u32>>>,
+    // Immutable snapshots can read this append-only journal. The canonical
+    // state records only each cell's last list, never the journal history.
+    journal: Array<(u32, Span<u32>)>,
 }
 
 /// An empty grid.
 pub fn new_grid() -> ThingGrid {
-    ThingGrid { cells: Default::default() }
+    ThingGrid { cells: Default::default(), journal: array![] }
 }
 
 /// The mobj indices linked into `cell` (empty when none).
@@ -55,7 +58,9 @@ pub fn link(ref g: ThingGrid, cell: u32, idx: u32) {
         out.append(*v);
     }
     out.append(idx);
-    g.cells.insert(cell.into(), NullableTrait::new(out.span()));
+    let list = out.span();
+    g.cells.insert(cell.into(), NullableTrait::new(list));
+    g.journal.append((cell, list));
 }
 
 /// Unlink mobj `idx` from `cell` (`P_UnsetThingPosition`'s blockmap half).
@@ -69,7 +74,9 @@ pub fn unlink(ref g: ThingGrid, cell: u32, idx: u32) {
             out.append(*v);
         }
     }
-    g.cells.insert(cell.into(), NullableTrait::new(out.span()));
+    let list = out.span();
+    g.cells.insert(cell.into(), NullableTrait::new(list));
+    g.journal.append((cell, list));
 }
 
 /// `unlink` then `link` of the same mobj in the same cell, in one rewrite:
@@ -95,7 +102,9 @@ pub fn relink(ref g: ThingGrid, cell: u32, idx: u32) {
         }
     }
     out.append(idx);
-    g.cells.insert(cell.into(), NullableTrait::new(out.span()));
+    let list = out.span();
+    g.cells.insert(cell.into(), NullableTrait::new(list));
+    g.journal.append((cell, list));
 }
 
 /// Rebuild the grid from the mobjs' own `cell` fields — what `doom_game`
@@ -110,4 +119,45 @@ pub fn rebuild(mut mobjs: Span<Mobj>) -> ThingGrid {
         i = inc(i);
     }
     g
+}
+
+/// Canonical cell order is the first live mobj index in each cell; the
+/// *members* retain their exact historical visitation order. Replaying the
+/// journal into a temporary dict makes this O(history + roster + members),
+/// only at a hash/serialization boundary, and permits an immutable snapshot.
+/// Format: [n_cells, cell, n_members, member_indices..., ...].
+pub fn canonical_order(g: @ThingGrid, mut mobjs: Span<Mobj>) -> Array<felt252> {
+    let mut latest: Felt252Dict<Nullable<Span<u32>>> = Default::default();
+    let mut history = g.journal.span();
+    while let Option::Some(record) = history.pop_front() {
+        let (cell, list) = *record;
+        latest.insert(cell.into(), NullableTrait::new(list));
+    }
+    let mut seen: Felt252Dict<bool> = Default::default();
+    let mut body: Array<felt252> = array![];
+    let mut count: u32 = 0;
+    while let Option::Some(m) = mobjs.pop_front() {
+        if in_blockmap(m) {
+            let cell = *m.cell;
+            let (entry, done) = seen.entry(cell.into());
+            seen = entry.finalize(true);
+            if !done {
+                let (entry, value) = latest.entry(cell.into());
+                latest = entry.finalize(value);
+                let mut list = match match_nullable(value) {
+                    FromNullableResult::Null => array![].span(),
+                    FromNullableResult::NotNull(v) => v.unbox(),
+                };
+                body.append(cell.into());
+                body.append(list.len().into());
+                while let Option::Some(idx) = list.pop_front() {
+                    body.append((*idx).into());
+                }
+                count = inc(count);
+            }
+        }
+    }
+    let mut out = array![count.into()];
+    out.append_span(body.span());
+    out
 }

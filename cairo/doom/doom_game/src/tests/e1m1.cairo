@@ -194,18 +194,40 @@ fn death_log() -> Array<felt252> {
 
 /// Pinned final hashes and stats. A zero pin is "not yet pinned": the test
 /// prints the value and fails.
-const IDLE_HASH: felt252 =
+const IDLE_V1_HASH: felt252 =
     2153606983378364918731315774236787078519694294296420268027668792811803518728;
-const WALK_HASH: felt252 =
+const IDLE_HASH: felt252 =
+    2156929299860618434340270683399317251723592578997214595893226167015506269488;
+const WALK_V1_HASH: felt252 =
     39841880533417028430921014231592644327184952983595253635262055579997356896;
-const DOOR_HASH: felt252 =
+const WALK_HASH: felt252 =
+    3462572684582230757027468800465421350164007866179957854524195282835990262921;
+const DOOR_V1_HASH: felt252 =
     2329372413786409031289006427365542770779486037083556827439984175323657023109;
-const FIGHT_HASH: felt252 =
+const DOOR_HASH: felt252 =
+    321045542051096443918771498371496930581403787579927917773145811854484040822;
+const FIGHT_V1_HASH: felt252 =
     1532869039222309804296551618310848711341877344954734786015860209771621064852;
-const DEATH_HASH: felt252 =
+const FIGHT_HASH: felt252 =
+    1609348354717009447474707322230094655457362319666387447877072993886890408972;
+const DEATH_V1_HASH: felt252 =
     2945023360227877718775127057908218198185833009002510623948511571322548243465;
+const DEATH_HASH: felt252 =
+    1827285648027806617056651336177441561786598671369093960976531423658312820056;
 
-fn check(name: felt252, state: @GameState, pin: felt252) {
+fn check(name: felt252, state: @GameState, pin: felt252, v1_pin: felt252) {
+    // Explicit schema migration: only the committed grid order and version
+    // may change. The five existing gameplay records retain their v1 pins.
+    let record = crate::serialize(state);
+    let base = crate::state::SCALARS
+        + doom_player::PLAYER_FELTS
+        + 1
+        + (*state.mobjs).len() * doom_physics::MOBJ_FELTS
+        + 1
+        + doom_specials::fields(state.specials);
+    let mut legacy = state_hash::open(crate::TAG, 1, base);
+    legacy.append_span(record.span().slice(3, base));
+    assert(state_hash::seal(legacy.span()) == v1_pin, 'v1 gameplay golden unchanged');
     let h = hash(state);
     if h != pin {
         println!("{}: hash {} (pinned {})", name, h, pin);
@@ -239,7 +261,7 @@ fn test_replay_idle() {
     assert(s.leveltime == 700, '700 tics');
     let st = stats_of(@s);
     assert(st.kills == 0 && st.items == 0 && st.secrets == 0, 'nothing happened');
-    check('idle', @s, IDLE_HASH);
+    check('idle', @s, IDLE_HASH, IDLE_V1_HASH);
 }
 
 #[test]
@@ -252,7 +274,7 @@ fn test_replay_walk() {
     let st = stats_of(@s);
     assert(st.items == 1 && st.kills == 0, 'one pickup on the way');
     assert(s.player.health == 77, 'shot at on the way down');
-    check('walk', @s, WALK_HASH);
+    check('walk', @s, WALK_HASH, WALK_V1_HASH);
 }
 
 #[test]
@@ -266,7 +288,7 @@ fn test_replay_door() {
     let st = stats_of(@s);
     assert(st.items == 3 && st.kills == 0, 'three pickups');
     assert(s.player.health == 70, 'health 70');
-    check('door', @s, DOOR_HASH);
+    check('door', @s, DOOR_HASH, DOOR_V1_HASH);
 }
 
 #[test]
@@ -279,7 +301,7 @@ fn test_replay_fight() {
     assert(s.leveltime == 700, '700 tics');
     let ctx = crate::ctx_of(s.level, s.floor, s.ceil);
     assert(doom_monsters::awake_count(ctx.w, s.mobjs) == 11, '11 awake at the end');
-    check('fight', @s, FIGHT_HASH);
+    check('fight', @s, FIGHT_HASH, FIGHT_V1_HASH);
 }
 
 #[test]
@@ -289,7 +311,7 @@ fn test_replay_death() {
     assert(s.player.playerstate == PST_DEAD && s.player.health == 0, 'PST_DEAD');
     assert(s.leveltime == 846, 'dead on tic 846');
     assert(stats_of(@s).items == 2, 'two pickups before');
-    check('death', @s, DEATH_HASH);
+    check('death', @s, DEATH_HASH, DEATH_V1_HASH);
 }
 
 #[test]
@@ -300,4 +322,27 @@ fn test_segment_over_the_walk_matches_the_loop() {
     assert(hash(@looped) == hash(@segmented), 'same state');
     assert(out.h_out == hash(@looped), 'h_out');
     assert(out.tic_end == log.len(), 'every tic ran');
+}
+
+/// A process boundary reconstructs derived data; associativity must hold
+/// across that boundary, not only while keeping the same in-memory grid.
+#[test]
+fn test_fight_is_associative_across_serialized_boundaries() {
+    let log = fight_log();
+    let (whole, _) = run(genesis(LevelId::E1M1), log.span());
+    let mut sliced = genesis(LevelId::E1M1);
+    let mut start: u32 = 0;
+    while start < log.len() {
+        let count = if log.len() - start > 25 {
+            25
+        } else {
+            log.len() - start
+        };
+        let saved = crate::serialize(@sliced);
+        sliced = crate::from_felts(saved.span()).expect('boundary readable');
+        let (next, _) = run(sliced, log.span().slice(start, count));
+        sliced = next;
+        start += count;
+    }
+    assert(hash(@whole) == hash(@sliced), 'serialized split associative');
 }

@@ -98,7 +98,7 @@ pub fn step_tic_impl(
     match from_felts(state) {
         Option::Some(game) => {
             let mut g: GameState = game;
-            let mut status = Status::Running;
+            let mut status = g.status;
             while let Option::Some(w) = words.pop_front() {
                 let (next, st) = doom_game::step_tic(g, *w);
                 g = next;
