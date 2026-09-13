@@ -36,7 +36,7 @@ ship the WAD, but it must never enter git history. Point `VITE_WAD_URL` and
 | `npm test` | vitest unit tests |
 | `npm run fixtures` | Regenerates the WAD-derived test fixtures |
 | `npm run prover` | Stages `@hellproof/prover-wasm` into `public/prover/` (see below) |
-| `npm run test:e2e` | Playwright: the renderer smoke test **and** two proved segments |
+| `npm run test:e2e` | Playwright: the renderer smoke test, two proved segments, **and** the leaderboard smoke test |
 
 Keys: **F1** diagnostics · **Tab** automap · **F2** HUD · **F3** light-only
 view · **F4** proof queue · **Space** pause · **[** / **]** sim rate ·
@@ -317,6 +317,36 @@ persisted so a reload knows what is left. `GET /v1/runs/{id}` and
 felt count); the transactions that follow are **P4.3**, and the hook is
 `ProveSession.submit()`.
 
+## Leaderboard (P4.4)
+
+`leaderboard.html` (`src/leaderboardMain.ts`, `src/leaderboard/`) is the read side of `DoomRuns`:
+best-score / best-time boards per version with paging, a player page, and a run detail view with
+the on-chain proof of validity (fact, `submit_batch` transaction, a Voyager link on a public
+network) and a replay download. Plain TS + CSS, no framework — same convention as `prove.html`.
+
+```
+leaderboard.html?indexer=http://localhost:8788                # infra/indexer's read API
+leaderboard.html?rpc=http://127.0.0.1:5081/rpc&runs=0x<DoomRuns>  # RPC fallback, no indexer needed
+```
+
+Query parameters: `indexer` (base URL of `infra/indexer`; when present it is used), `rpc` /
+`runs` (the fallback: `DoomRuns`'s own views — `leaderboard`, `get_run`, `player_runs`, … — called
+directly over JSON-RPC, so the page works with nothing but an RPC URL), `network`
+(`mainnet`/`sepolia`/anything else means devnet-local, which skips the explorer links), `version`
+(default board version). Hash routes: `#/board`, `#/player/<address>`, `#/run/<run_id>`.
+
+The replay download reuses `src/store/hellproofFile.ts`'s exact container format and types
+(`src/leaderboard/replay.ts`): it reconstructs the run's continuous input journal from the
+`Replay` events' per-segment packed logs (each restarts its own 7-tics-per-felt grouping — D13 —
+so the leaves cannot just be concatenated) and writes a `.hellproof` file with `proofs: []`,
+readable by `parseHellproofFile`/`importRun` unmodified. It is an input log, not a re-provable
+run: the chain publishes inputs, never proof bytes.
+
+Without an indexer, `/stats` and full player history are unavailable (no on-chain view enumerates
+every run or player) — the RPC fallback still serves the board, run details and a player's own
+`player_runs`, just less efficiently (P4.4 exists precisely for the case an indexer answers
+better). See `infra/indexer/README.md` for the indexer's API, schema and reorg handling.
+
 ### The stand-in program, and how `doom_run` drops in
 
 `src/prove/program.ts` is the whole seam: an id, a hash function, the genesis
@@ -390,7 +420,7 @@ assets decoded in 19 ms.
 
 ## Tests
 
-`npm test` — 138 vitest tests.
+`npm test` — 160 vitest tests.
 
 *Renderer and assets* (79): pegging (all four vanilla cases and the row offset),
 wall quad generation (including that it follows moving heights), BSP clipping and
@@ -410,6 +440,12 @@ the stub sim on the real E1M1.
 | `store.test.ts` | IndexedDB round trips, segment+proof atomicity, reopen, `deleteRun`, and `.hellproof` export/import including the renaming collision, a corrupted payload caught by its checksum, and the quota projections |
 | `pipeline.test.ts` | the pipeline against a fake prover: planning and shrinking, the step ceiling, a hung threaded prove killed and retried single-threaded, a segment that fails for good, the prover dropped between segments, resume after a simulated reload (exactly one segment re-proved), waiting mid-game vs cutting at the end, and the event stream |
 | `wrapper.test.ts` | the submitter against a fake server: the per-segment probe and its fallback, skipping what the server holds, retries under the same `run_id`, `keepOffline` refused, gaps refused, failures recorded locally, and the status/batch mirror |
+
+*Leaderboard* (`leaderboard.test.ts`, jsdom): every render function against fixtures (board rows,
+ranking, empty state, pager edges, run detail with/without replay, an attempt vs a finished run,
+Voyager links on sepolia vs the devnet hint), route parsing and `configFromLocation`'s
+indexer/RPC-fallback choice, and the replay journal reconstruction (per-segment repacking, the
+`.hellproof` container's magic/manifest/no-proof-bytes shape).
 
 Tests that need the WAD skip themselves when `test/fixtures/generated/` or
 `public/levels/e1m1.json` is absent, so a clone without the IWAD is still
@@ -431,3 +467,8 @@ then the page is **reloaded** and both are still there, the chain re-checked fro
 IndexedDB, the run exported and every stored proof re-verified by a prover that
 never saw it produced. It skips itself, rather than failing, when
 `public/prover/` has not been staged.
+
+`leaderboard.spec.ts`: the leaderboard page against a tiny in-process stub of `infra/indexer`'s
+read API — the board renders and pages, the score/time tabs switch, a run detail view shows the
+fact and a Voyager link, and the replay download fires with the right `.hellproof` filename.
+Screenshots land in `e2e/artifacts/` alongside `render.spec.ts`'s.
