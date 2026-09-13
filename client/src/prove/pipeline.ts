@@ -152,6 +152,7 @@ export class ProofPipeline {
   private peakMemoryBytes = 0;
   private running = false;
   private stopping = false;
+  private hardStopping = false;
   private flushing = false;
   private loopPromise: Promise<void> | null = null;
   private wake: (() => void) | null = null;
@@ -315,8 +316,9 @@ export class ProofPipeline {
   start(): void {
     if (this.running) return;
     if (!this.run) throw new Error("call attach() before start()");
+    this.lastError = undefined;
     this.running = true;
-    this.stopping = false;
+    this.stopping = false; this.hardStopping = false;
     this.loopPromise = this.loop().catch((error: unknown) => {
       this.dropProver();
       this.program.releasePreparation?.();
@@ -330,7 +332,7 @@ export class ProofPipeline {
   async stop(hard = false): Promise<void> {
     this.stopping = true;
     this.wake?.();
-    if (hard) { this.dropProver(); this.program.releasePreparation?.(); }
+    if (hard) { this.hardStopping = true; this.dropProver(); this.program.releasePreparation?.(); }
     await this.loopPromise?.catch(() => undefined);
     this.running = false;
     await this.flushJournal();
@@ -525,8 +527,13 @@ export class ProofPipeline {
     let singleThread = segment.retriedSingleThread;
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const prover = await this.ensureProver(singleThread ? 1 : undefined);
       try {
+        if (this.hardStopping) throw new Error("proof attempt cancelled by hard stop");
+        const prover = await this.ensureProver(singleThread ? 1 : undefined);
+        const checkActive = () => {
+          if (this.prover !== prover || prover.isDead) throw new Error("proof attempt cancelled by hard stop");
+        };
+        checkActive();
         segment.stage = "executing";
         segment.attempts++;
         this.emitProgress(segment.index, "executing", startedAt);
@@ -550,6 +557,7 @@ export class ProofPipeline {
           throw new ResourceAdmissionError(`fresh execution is not admissible: ${admission.reason}`);
         }
 
+        checkActive();
         segment.stage = "proving";
         this.emitProgress(segment.index, "proving", startedAt);
         const timeout = singleThread
@@ -560,11 +568,13 @@ export class ProofPipeline {
         const proveMs = performance.now() - t0;
         await this.yieldToGame();
 
+        checkActive();
         segment.stage = "verifying";
         this.emitProgress(segment.index, "verifying", startedAt);
         const tVerify = performance.now();
         const valid = await prover.verify(proved.proof);
         const verifyMs = performance.now() - tVerify;
+        checkActive();
         if (!valid) throw new Error("the prover refused its own proof");
 
         // The outputs are re-read from *this* execution: a retry must not inherit
@@ -607,7 +617,7 @@ export class ProofPipeline {
         const timedOut = error instanceof ProverTimeoutError;
         this.dropProver();
         const message = error instanceof Error ? error.message : String(error);
-        if (!(error instanceof ResourceAdmissionError) && attempt === 0 && !singleThread && this.threads > 1) {
+        if (!this.hardStopping && !(error instanceof ResourceAdmissionError) && attempt === 0 && !singleThread && this.threads > 1) {
           // R1-A8: the threaded path is the one that hangs. One retry, single
           // threaded, which has never failed in S2 or P3.1.
           singleThread = true;
@@ -663,6 +673,7 @@ export class ProofPipeline {
   // -- prover lifecycle -----------------------------------------------------
 
   private async ensureProver(forceThreads?: number): Promise<ProverLike> {
+    if (this.hardStopping) throw new Error("prover creation cancelled by hard stop");
     if (this.prover && !this.prover.isDead && (forceThreads === undefined || this.threads === forceThreads)) {
       return this.prover;
     }
@@ -681,22 +692,28 @@ export class ProofPipeline {
       ? this.options.createProver({ onEvent })
       : new ProverClient({ workerUrl: this.options.proverWorkerUrl, onEvent });
     const want = forceThreads ?? (this.options.threads ?? "auto");
-    const info = await prover.init({
-      threads: want === "auto" ? autoThreadCount() : want,
-      ...(this.options.wasmUrl ? { wasmUrl: this.options.wasmUrl } : {}),
-      ...(this.options.threadedWasmUrl ? { threadedWasmUrl: this.options.threadedWasmUrl } : {}),
-    });
-    this.prover = prover;
-    this.proverInfo = info;
-    this.threads = info.threads;
-    this.emit({
-      type: "prover",
-      threads: info.threads,
-      threaded: info.threaded,
-      wasmUrl: info.wasmUrl,
-      instantiateMs: info.instantiateMs,
-    });
-    return prover;
+    this.prover = prover; // Own the Worker before its asynchronous initialization.
+    try {
+      const info = await prover.init({
+        threads: want === "auto" ? autoThreadCount() : want,
+        ...(this.options.wasmUrl ? { wasmUrl: this.options.wasmUrl } : {}),
+        ...(this.options.threadedWasmUrl ? { threadedWasmUrl: this.options.threadedWasmUrl } : {}),
+      });
+      if (this.prover !== prover || prover.isDead || this.hardStopping) throw new Error("prover initialization cancelled");
+      this.proverInfo = info;
+      this.threads = info.threads;
+      this.emit({
+        type: "prover",
+        threads: info.threads,
+        threaded: info.threaded,
+        wasmUrl: info.wasmUrl,
+        instantiateMs: info.instantiateMs,
+      });
+      return prover;
+    } catch (error) {
+      if (this.prover === prover) this.dropProver();
+      throw error;
+    }
   }
 
   private dropProver(): void {

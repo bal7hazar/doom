@@ -44,6 +44,8 @@ export interface ProveSessionOptions {
   /** Base URL of a wrapper service; without one the submit button explains itself. */
   wrapperUrl?: string | null;
   apiKey?: string;
+  signal?: AbortSignal;
+  onImport?: (file: File) => Promise<void>;
 }
 
 /**
@@ -51,9 +53,9 @@ export interface ProveSessionOptions {
  * answer then is "prove later, or on another machine" (R6-A3) rather than a
  * stack trace.
  */
-export async function proverIsAvailable(url = DEFAULT_PROVER_WORKER_URL): Promise<boolean> {
+export async function proverIsAvailable(url = DEFAULT_PROVER_WORKER_URL, signal?: AbortSignal): Promise<boolean> {
   try {
-    const res = await fetch(url, { method: "HEAD" });
+    const res = await fetch(url, { method: "HEAD", signal });
     return res.ok;
   } catch {
     return false;
@@ -61,6 +63,10 @@ export async function proverIsAvailable(url = DEFAULT_PROVER_WORKER_URL): Promis
 }
 
 export class ProveSession {
+  private verification?: ProverClient;
+  private verificationEpoch = 0;
+  private verifying = false;
+  private disposed = false;
   private constructor(
     readonly pipeline: ProofPipeline,
     readonly store: RunStore,
@@ -77,11 +83,11 @@ export class ProveSession {
     let session: ProveSession;
     const panel = new ProofQueuePanel({
       actions: {
-        onProve: () => void session.startProving(),
-        onVerify: () => void session.verifyLocally(),
+        onProve: () => void (program.journalWords ? session.finishAndProve() : session.startProving()).catch(error => panel.log(String(error))),
+        onVerify: () => void session.verifyLocally().catch(error => panel.log(String(error))),
         onKeepOffline: (value) => void session.setKeepOffline(value),
-        onExport: () => void session.exportRun(),
-        onImport: (file) => void session.importRun(file),
+        onExport: () => void session.exportRun().catch(error => panel.log(String(error))),
+        onImport: (file) => void session.importRun(file).catch(error => panel.log(`Import refused: ${String(error)}`)),
         onReset: () => void session.reset(),
         onSubmit: () => void session.submit(),
       },
@@ -98,24 +104,36 @@ export class ProveSession {
       },
     });
 
-    const run = await pipeline.attach(options.runId);
-    if (program.journalWords) await pipeline.syncGameJournal();
-    session = new ProveSession(pipeline, store, panel, run, options);
-    options.host.append(panel.element);
-    panel.setKeepOffline(run.keepOffline);
-    panel.update(pipeline.state, pipeline.segmentRecords);
+    const abort = () => { void pipeline.stop(true).catch(() => undefined); program.dispose?.(); panel.element.remove(); };
+    options.signal?.addEventListener("abort", abort, { once: true });
+    try {
+      options.signal?.throwIfAborted();
+      const run = await pipeline.attach(options.runId);
+      options.signal?.throwIfAborted();
+      if (program.journalWords) await pipeline.syncGameJournal();
+      session = new ProveSession(pipeline, store, panel, run, options);
+      options.host.append(panel.element);
+      panel.setKeepOffline(run.keepOffline);
+      panel.update(pipeline.state, pipeline.segmentRecords);
 
-    const available = await proverIsAvailable(workerUrl);
-    if (!available) {
+      const available = await proverIsAvailable(workerUrl, options.signal);
+      options.signal?.throwIfAborted();
+      if (!available) {
+        panel.log(
+          `no local prover at ${workerUrl}: the run is still recorded and can be exported (.hellproof) and proved elsewhere (R6-A3). Stage one with \`npm run prover\`.`,
+        );
+      }
+      const storage = await readStorageStatus();
       panel.log(
-        `no local prover at ${workerUrl}: the run is still recorded and can be exported (.hellproof) and proved elsewhere (R6-A3). Stage one with \`npm run prover\`.`,
+        `run ${run.id} · ${run.segments} segment(s) on disk · storage ${format(storage.usageBytes)} / ${format(storage.quotaBytes)}${storage.persisted ? " (persisted)" : ""}`,
       );
-    }
-    const storage = await readStorageStatus();
-    panel.log(
-      `run ${run.id} · ${run.segments} segment(s) on disk · storage ${format(storage.usageBytes)} / ${format(storage.quotaBytes)}${storage.persisted ? " (persisted)" : ""}`,
-    );
-    return session;
+      options.signal?.throwIfAborted();
+      return session;
+    } catch (error) {
+      try { await pipeline.stop(true); }
+      finally { program.dispose?.(); panel.element.remove(); store.close(); }
+      throw error;
+    } finally { options.signal?.removeEventListener("abort", abort); }
   }
 
   get element(): HTMLElement {
@@ -145,7 +163,8 @@ export class ProveSession {
     if (this.options.program?.journalWords) await this.pipeline.syncGameJournal();
     await requestPersistence();
     const chain = await this.pipeline.proveAll();
-    this.panel.log(chain?.ok ? `run proved: ${chain.tics} tics` : `chain check failed: ${chain?.reason}`);
+    if (this.pipeline.state.error) this.panel.log(`Proof refused: ${this.pipeline.state.error}. Export .hellproof to keep the journal, arguments and resource report. This run is not certified.`);
+    else this.panel.log(chain?.ok ? `proved chain: ${chain.tics} tics` : `No certified chain: ${chain?.reason ?? "no proof produced"}`);
   }
 
   /**
@@ -153,47 +172,57 @@ export class ProveSession {
    * re-checks the chain from the database — the "verify locally" button.
    */
   async verifyLocally(): Promise<boolean> {
-    const chain = await this.pipeline.verifyPersistedChain();
-    if (!chain.ok) {
-      this.panel.log(`chain rejected: ${chain.reason}`);
-      return false;
-    }
-    const segments = await this.store.listSegments(this.run.id);
-    if (segments.length === 0) {
-      this.panel.log("nothing to verify yet");
-      return false;
-    }
-    const prover = new ProverClient({
-      workerUrl: this.options.proverWorkerUrl ?? DEFAULT_PROVER_WORKER_URL,
-    });
+    if (this.disposed || this.verifying) return false;
+    this.verifying = true;
+    const epoch = this.verificationEpoch;
+    const cancelled = () => this.disposed || epoch !== this.verificationEpoch;
+    let prover: ProverClient | undefined;
     try {
+      const chain = await this.pipeline.verifyPersistedChain();
+      if (cancelled()) return false;
+      if (!chain.ok) { this.panel.log(`chain rejected: ${chain.reason}`); return false; }
+      const segments = await this.store.listSegments(this.run.id);
+      if (cancelled()) return false;
+      if (segments.length === 0) { this.panel.log("nothing to verify yet"); return false; }
+      prover = new ProverClient({ workerUrl: this.options.proverWorkerUrl ?? DEFAULT_PROVER_WORKER_URL });
+      this.verification = prover;
       await prover.init({ threads: 1 });
+      if (cancelled()) return false;
       for (const segment of segments) {
         const proof = await this.store.getProof(this.run.id, segment.index);
-        if (!proof) {
-          this.panel.log(`segment ${segment.index} has no stored proof`);
-          return false;
-        }
-        if (!(await prover.verify(proof))) {
-          this.panel.log(`segment ${segment.index} FAILED verification`);
-          return false;
-        }
+        if (cancelled()) return false;
+        if (!proof) { this.panel.log(`segment ${segment.index} has no stored proof`); return false; }
+        const valid = await prover.verify(proof);
+        if (cancelled()) return false;
+        if (!valid) { this.panel.log(`segment ${segment.index} FAILED verification`); return false; }
         this.panel.log(`segment ${segment.index} verified from disk`);
       }
+      this.panel.log(`all ${segments.length} proof(s) verified and the chain links up (${chain.tics} tics)`);
+      return true;
+    } catch (error) {
+      if (cancelled()) return false;
+      throw error;
     } finally {
-      prover.terminate();
+      if (prover && this.verification === prover) { prover.terminate(); this.verification = undefined; }
+      this.verifying = false;
     }
-    this.panel.log(`all ${segments.length} proof(s) verified and the chain links up (${chain.tics} tics)`);
-    return true;
+  }
+
+  /** Cancel an in-flight local verification immediately, including during init. */
+  cancelVerification(): void {
+    ++this.verificationEpoch;
+    this.verification?.terminate(); this.verification = undefined;
   }
 
   /** C6: nothing leaves this machine until the flag is cleared. */
   async setKeepOffline(keepOffline: boolean): Promise<void> {
     this.run = await this.store.updateRun(this.run.id, { keepOffline });
+    this.panel.setKeepOffline(keepOffline);
     this.panel.log(keepOffline ? "run kept offline (C6)" : "run may be submitted");
   }
 
   async exportRun(): Promise<void> {
+    if (this.options.program?.journalWords) await this.pipeline.syncGameJournal();
     const blob = await exportRunBlob(this.store, this.run.id);
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -205,6 +234,7 @@ export class ProveSession {
   }
 
   async importRun(file: File): Promise<void> {
+    if (this.options.onImport) return this.options.onImport(file);
     const result = await importRun(this.store, await file.arrayBuffer());
     this.panel.log(
       `imported run ${result.runId}: ${result.segments} segment(s), ${result.proofs} proof(s)${result.renamed ? " (renamed: the id was taken)" : ""}`,
@@ -213,14 +243,18 @@ export class ProveSession {
 
   /** Close this proof UI and release both Workers; the game journal remains owned by CairoClient. */
   async dispose(): Promise<void> {
-    await this.pipeline.stop(true);
-    this.options.program?.dispose?.();
-    this.panel.element.remove();
-    this.store.close();
+    this.disposed = true; this.cancelVerification();
+    try { await this.pipeline.stop(true); }
+    finally {
+      this.options.program?.dispose?.();
+      this.panel.element.remove();
+      this.store.close();
+    }
   }
 
   /** The explicit reset C6 demands. */
   async reset(): Promise<void> {
+    this.cancelVerification();
     await this.pipeline.stop(true);
     await this.store.deleteRun(this.run.id);
     this.panel.log(`run ${this.run.id} deleted`);

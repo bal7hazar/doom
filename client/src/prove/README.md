@@ -113,9 +113,42 @@ corrected proof WASM execute/resources returned the same eleven output felts.
 A real browser pipeline refused admission, exported/imported its complete refusal
 and resumed without invoking proof generation.
 
-`main.ts` still needs to supply the live journal, manage the async factory and
-Worker disposal, and connect acknowledgements to proof-session recording. The
-journal provider must remain the same run until the program is disposed. The
-adapter performs no automatic submission. No complete-game proof, proof/render
-concurrency test on 16 GiB hardware, residual C3 latency, or P3.7 completion is
-claimed by this adapter or its execution/resource measurements.
+`main.ts` now connects F4 through `GameProofBridge`. The real route never calls
+`createStubProgram`; the explicitly selected `?sim=demo` route retains the stub.
+The bridge captures each InputJournal object, synchronizes acknowledged commands
+before opening/proving/exporting and once per second while attached. A restart or
+restore retires the old session and preserves separate journal and stored-run
+exports. It never points an old program at a replacement journal.
+
+F4 pauses via PlaySession and releases mouse capture. Closing leaves Resume
+explicit. Preparation is cancellable during initialization; retired and failed
+sessions release their workers. Cached-page suspension stops proof workers while
+the existing game lifecycle retains its VM; reopening creates a verified fresh
+preparation worker. These are synthetic persisted-event tests, not a claim of
+actual browser BFCache admission.
+
+The local panel offers raw game export even when proof assets are missing. Its
+explicit proof action flushes the available acknowledged prefix, checks fresh AIR
+resources and reports refusal without claiming certification. Refused arguments,
+D14 output and resources remain in `.hellproof`. Import/resume requires the exact
+Doom identity before writing the imported run, with old exports still available
+on refusal. The Current game action explicitly leaves the imported run. New UI
+sessions are offline and have no wrapper configured; F4, restore and refusal do
+not start proofs or network submissions. The separate demo/prove routes retain
+their existing explicit wrapper flow.
+
+Unit tests cover deferred-initialization cancellation, captured providers,
+synchronization coalescing, recovery and clearing a stale error before retry.
+Browser tests execute the real game and resource checker, forbid `prove` messages,
+and cover pre-F4 inputs, refusal/export/import, mismatched identity, restart,
+synthetic BFCache events, keyboard pause and focus. Native pointer lock uses
+`HELLPROOF_POINTER_LOCK=1 ... playwright test e2e/gameProof.spec.ts --headed`.
+
+No complete-game proof, proof/render concurrency test on 16 GiB hardware, residual
+C3 latency, or P3.7 completion is claimed by this UI or its resource measurements.
+
+Worker ownership begins before asynchronous initialization. A failed or cancelled
+prover init terminates the instance and cannot reattach it after a hard stop.
+Local verification is owned by ProveSession as well: retirement, cached-page
+suspension, reset and disposal cancel it immediately, including a pending init or
+verification request. A lookup finishing after disposal cannot create a Worker.
