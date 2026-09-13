@@ -399,7 +399,7 @@ fn reset_processor(processor: &mut CairoHintProcessor<'static>, args: &[Felt252]
 
 /// Decode a little-endian felt buffer (32 bytes per felt) into `out`.
 pub fn decode_felts_into(bytes: &[u8], out: &mut Vec<Felt252>) -> Result<()> {
-    if !bytes.len().is_multiple_of(FELT_BYTES) {
+    if bytes.len() % FELT_BYTES != 0 {
         return Err(SimError::BadArgsLength(bytes.len()));
     }
     let n = bytes.len() / FELT_BYTES;

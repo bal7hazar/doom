@@ -243,20 +243,35 @@ async fn metrics_and_health_are_exposed() {
     h.wait_run(a["run_id"].as_str().unwrap(), &["done"], 10_000)
         .await;
 
-    let req = Request::builder()
-        .uri("/metrics")
-        .body(Body::empty())
-        .unwrap();
-    let res = h.router.clone().oneshot_text(req).await;
-    for expected in [
+    // The scheduler persists `done` before exporting its queue/run gauges. Poll the
+    // public endpoint until that eventual update is observable, with a bounded deadline.
+    let expected_metrics = [
         "wrapper_jobs_total{kind=\"verify\",outcome=\"done\"}",
         "wrapper_jobs_total{kind=\"leaf\",outcome=\"done\"}",
         "wrapper_jobs_total{kind=\"fold\",outcome=\"done\"}",
         "wrapper_job_duration_seconds_count{kind=\"fold\"}",
         "wrapper_queue_depth{kind=\"leaf\",state=\"done\"}",
         "wrapper_runs{status=\"done\"}",
-    ] {
-        assert!(res.contains(expected), "missing {expected} in:\n{res}");
+    ];
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let req = Request::builder()
+            .uri("/metrics")
+            .body(Body::empty())
+            .unwrap();
+        let res = h.router.clone().oneshot_text(req).await;
+        let missing: Vec<_> = expected_metrics
+            .iter()
+            .filter(|expected| !res.contains(**expected))
+            .collect();
+        if missing.is_empty() {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "metrics did not converge: missing {missing:?} in:\n{res}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
 
     let req = Request::builder()
