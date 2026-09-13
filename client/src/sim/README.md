@@ -127,14 +127,24 @@ avant publication. Il convertit `Fixed.enc - 2^32` en entier signé, sans
 troncature silencieuse dans le ring. Il transporte le snapshot Cairo brut ainsi
 que `state`, `sprite`, `flags` et `playerstate` dans `CairoFrame`.
 
-Le renderer actuel choisit encore ses familles de sprites par `doomednum` ; il
-ne consomme pas encore le champ `sprite` Cairo pour les missiles et changements
-de famille. Seuls les trois flags communs sont transmis au ring : `CORPSE` (8)
-n'est jamais pris pour `TELEPORTED` (8). Les bits corps/missile restent dans les
-données brutes. Le snapshot Cairo n'expose pas la machine complète des psprites :
-`attackdown` est conservé, aucune machine d'arme JS n'est ajoutée. L'aperçu peut
-donc afficher une animation ou une interpolation incomplète. Une sortie qui
-dépasse les capacités du ring est une erreur explicite, jamais une liste tronquée.
+Le renderer Cairo joint les métadonnées au snapshot du même tic par identifiant
+stable. Il choisit exactement `sprite`/`frame` et les rotations du WAD, avec
+FULLBRIGHT/SHADOW issus du snapshot, sans fallback de famille ni de frame. Le
+personnage caméra exclu est `player.mo` extrait de l'état validé, même non nul ;
+les autres PLAY restent affichables. Les 49 noms viennent du fichier source
+`cairo/doom/doom_things/generated/sprites.json`, distribué avec sa licence
+GPL-2.0-only. Seule la liste des noms est consommée : aucune FSM JS n'est ajoutée.
+L'atlas Freedoom épinglé contient 356 lumps de sprites, 1024 × 1024 RG8 (2 MiB).
+Les ressources manquantes et métadonnées périmées arrêtent explicitement le rendu.
+
+Seuls les trois flags communs sont transmis au ring : `CORPSE` (8) n'est jamais
+pris pour `TELEPORTED` (8). Les bits corps/missile restent dans les données brutes.
+Le HUD traduit les armes compactes Cairo 0..4 : 4 est la tronçonneuse, sans ammo ;
+la démo conserve ses identifiants classiques. Le snapshot v1 ne contient toujours
+pas les psprites, leurs offsets, le flash, viewz ou les compteurs de palette.
+L'arme reste une image statique, la caméra et certains effets restent approximés :
+ce lot ne constitue pas un rendu Doom exact ni un MVP visuel achevé.
+Une sortie dépassant les capacités du ring est une erreur, jamais une troncature.
 
 ## Vérifications reproductibles
 
