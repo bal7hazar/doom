@@ -32,4 +32,15 @@ Vague lancée le 2026-09-13 :
 | Wrapper | Sonnet | upload par segment reprenable (D27) |
 | P4.1 | Fable | −30 % de gas on-chain (inversion par lots, QM31 paresseux) sous tests d'équivalence |
 
+Rendus dans la journée : wrapper par segment (mergé, client basculé par défaut), `doom_monsters`
+(mergé : 55 tests, 93 % de couverture, `monsters_ticker` avec la fenêtre D3 ; **mais 34 014 mots de
+bytecode et 17 540 steps/tic à 5 monstres éveillés, 81 311 à 20**, presque tout dans la physique :
+un tir de zombieman ≈ 14 400 steps, une traversée de vue 7 700–9 700, un pas de chasse ≈ 4 300).
+
+**Risque principal actualisé (R2)** : physique + monstres = 91 k mots (budget 32 k tout compris) et
+≈ 30 k steps/tic à 8 éveillés contre 12 k visés. Réponse : (1) S7 en cours sur la physique (mots et
+`check_sight`), puis la même passe de style sur `doom_monsters` ; (2) profil d'un tic complet dès
+`doom_game` ; (3) leviers si insuffisant : plafond de 4–6 éveillés, hitscan borné en portée/cellules,
+17,5 Hz (R2-A7). Décision à prendre après S7.
+
 Ensuite : `doom_game` + `doom_run` (P1.9), replays dorés (P1.10), Worker sim client (P2.3/P2.4), E2E C3.
