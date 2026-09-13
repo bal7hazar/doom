@@ -123,10 +123,3 @@ cannot be reported by the tool — line coverage is the proxy, and since
 `scarb fmt` puts every branch arm on its own line, a missed arm shows up as
 a missed line. The script exits non-zero below 90 % (C7).
 
-## Transitional
-
-`src/compat.cairo` still exports the Phase-0 skeleton's `StateDef {
-duration, next }`, `Timer`, `start` and `tick`, because
-`cairo/doom/doom_monsters` and `cairo/doom/doom_game` use them. That is
-also why the five-field record here is called `StateRow` rather than
-`StateDef`. Delete the module, and rename `StateRow`, with P1.5.
