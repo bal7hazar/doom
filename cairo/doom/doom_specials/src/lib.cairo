@@ -44,7 +44,6 @@
 //! `USERANGE` trace of `P_UseLines` and the line-crossing test inside
 //! `P_TryMove`. `doom_physics` finds the line; this crate says what it does.
 
-pub mod compat;
 pub mod level;
 pub mod state;
 
@@ -53,7 +52,6 @@ mod tests;
 pub mod thinkers;
 pub mod triggers;
 
-pub use compat::{Door, DoorState, start_opening, think_door};
 pub use level::{NO_SLOT, SpecialsMap, load};
 pub use state::{
     Heights, Light, LightKind, Mover, MoverKind, Phase, SectorTables, SpecialsState, ceiling_of,

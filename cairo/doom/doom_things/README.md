@@ -114,15 +114,15 @@ python3 measure.py --update             # re-baseline after an intended change
 | `WEAPON_*`, 5 × 5 | 25 |
 | scalars (`NUM_STATES`, `NUM_KINDS`, `NUM_ACTIONS`) | 3 |
 | **Total (analytic)** | **2 566** |
-| **Measured** (`bench/size` − `bench/baseline`) | **3 410** |
+| **Measured** (`bench/size` − `bench/baseline`) | **3 408** |
 
-The 844-word gap is the fixed `span()` glue Cairo emits per `const` array
+The 842-word gap is the fixed `span()` glue Cairo emits per `const` array
 (~35 words each, measured on a synthetic array: an empty program is 112
-words, one with a 1 000-element array is 1 147). At 3 410 words the tables
+words, one with a 1 000-element array is 1 147). At 3 408 words the tables
 cost **52 467 steps of bootloader program-hashing per proof segment**, well
 inside the 6 000-word slice of docs/G0.md D4's 20 000 for data — and the
-whole `doom_map` + `doom_things` data comes to 21 722 words, which is the
-number P1.6 has to work against.
+whole `doom_map` + `doom_things` data comes to 20 170 words after D22
+(16 762 + 3 408), which is the number D23 budgets against.
 
 ## Regenerating
 
@@ -143,7 +143,7 @@ against the compiled size, and runs `scarb fmt`.
 
 ## Tests
 
-`scarb test -p doom_things` — **19 tests**:
+`scarb test -p doom_things` — **18 tests**:
 
 * **shape**: `fsm::validate` passes; 266 states, 48 kinds, 26 action ids;
   every column is the same length; row 0 is `S_NULL`;
@@ -168,14 +168,12 @@ against the compiled size, and runs `scarb fmt`.
   `A_PUNCH`/`A_FIREPISTOL`/`A_FIRECGUN` on the right frames;
 * **RNG**: 256 entries, checksum 32 986, spot values, `prng::is_valid_table`,
   and that `from_index(1)` reproduces Doom's `P_Random` order;
-* **transitional agreement**: the compat catalogue's health/radius/height
-  match the generated entry for the same Doom type;
 * **provability**: every `Fixed` stays below 2^33.
 
 ## Coverage
 
 `python3 bench/coverage.py` measures line coverage with `cairo-coverage`
-0.5.0: **19 tests, 53/53 production lines = 100 %**. Unlike `doom_map`, this
+0.5.0: **18 tests, 50/50 production lines = 100 %**. Unlike `doom_map`, this
 crate's 2 566 felts of tables compile under the `inlining-strategy = "avoid"`
 that coverage requires, so the real tests run against the real data. Lines at
 or below an inline `#[cfg(test)]` marker are excluded, as are the generated
@@ -186,14 +184,5 @@ cannot be reported by the tool; line coverage is the proxy, and since
 `scarb fmt` puts every branch arm on its own line, a missed arm shows up as a
 missed line. On top of the figure: the tests reach both outcomes of
 `kind_of_doomednum` (found and not found, and both sides of the binary
-search), all five `weapon_states` arms, all three `compat` variants, and both
-the terminating and looping verdicts of the chain walk.
-
-## Transitional
-
-`src/compat.cairo` still exports the Phase-0 skeleton's three-variant
-`MobjType`, `MobjInfo` and `info_of`, re-exported at the crate root, because
-`doom_physics`, `doom_player`, `doom_monsters` and `doom_game` still import
-them. `compat::kind_of` maps each variant to its generated `KIND_*` index so
-the tests can keep the two from drifting. This is the `doom_things` half of
-the D17 clean-up and disappears with P1.6.
+search), all five `weapon_states` arms, and both the terminating and
+looping verdicts of the chain walk.

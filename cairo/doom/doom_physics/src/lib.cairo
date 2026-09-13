@@ -1,68 +1,70 @@
 // SPDX-License-Identifier: GPL-2.0-only
+//! The movement, collision, sight, hitscan and damage rules of a Doom-like
+//! tic, over `doom_map`'s compiled-in level and `doom_things`' tables:
+//! the `p_map.c`, `p_maputl.c`, `p_mobj.c`, `p_sight.c` and `p_inter.c`
+//! half of linuxdoom-1.10, as pure functions on a [`Mobj`] value.
+//!
+//! # Shape
+//!
+//! * A [`World`] is what a call reads: the level's hot spans (D24), the
+//!   **current** sector heights, the state tables and the RNG table.
+//! * A [`Mobj`] is a value; the list is an `Array<Mobj>` read as a
+//!   `Span<Mobj>` and rebuilt by the tic loop (S1 §7). A [`ThingGrid`]
+//!   holds the blockmap's per-cell thing lists, the one piece of mutable
+//!   spatial state.
+//! * A function that would touch *another* mobj reports it instead:
+//!   [`MoveEvent`]s from a move, [`Hit`] from a shot, the dropped item from a
+//!   kill. `doom_game` applies them.
+//!
+//! # Cost discipline
+//!
+//! Felt-first arithmetic below 2^72, no allocation in `try_move` (R2-A10:
+//! cell lists are read in place), spans hoisted out of every loop (D24),
+//! REJECT before any traversal (R2-A2), the mobj's cell carried in its state
+//! (R2-A11), no `if`-tree tables. `bench/measure.py` asserts the per-function
+//! budgets the README lists.
 
-use doom_map::{Level, is_line_blocking};
-use doom_things::MobjType;
-use fixed::Fixed;
-use geom2d::{Point, point_on_side};
-
-/// The radius a mover of `kind` occupies (delegates to `doom_things`'s
-/// static catalogue; not yet used for collision, see README).
-pub fn mover_radius(kind: MobjType) -> Fixed {
-    doom_things::info_of(kind).radius
-}
-
-/// Whether the straight step from `from` to `to` crosses any blocking line
-/// of `level` (a zero-radius simplification of `P_TryMove`'s core check).
-pub fn can_move(level: @Level, from: Point, to: Point) -> bool {
-    let mut i: u32 = 0;
-    let blocked = loop {
-        if i == level.lines.len() {
-            break false;
-        }
-        if is_line_blocking(level, i) {
-            let line = *level.lines.at(i);
-            let side_from = point_on_side(from, line.a, line.b);
-            let side_to = point_on_side(to, line.a, line.b);
-            let side_a = point_on_side(line.a, from, to);
-            let side_b = point_on_side(line.b, from, to);
-            if side_from != side_to && side_a != side_b {
-                break true;
-            }
-        }
-        i += 1;
-    };
-    !blocked
-}
+pub mod damage;
+pub mod grid;
+pub mod hitscan;
+pub mod maputl;
+pub mod mobj;
+pub mod movement;
+pub mod position;
+pub mod ray;
+pub mod sight;
+pub mod spawn;
 
 #[cfg(test)]
-mod tests {
-    use doom_map::sample_level;
-    use fixed::from_int;
-    use geom2d::Point;
-    use super::can_move;
+mod tests;
+pub mod world;
 
-    fn pt(x: i64, y: i64) -> Point {
-        Point { x: from_int(x), y: from_int(y) }
-    }
-
-    #[test]
-    fn test_crossing_blocking_line_is_rejected() {
-        let level = sample_level();
-        // The sample line runs from (0,0) to (64,0); this step crosses it.
-        assert(!can_move(@level, pt(32, -10), pt(32, 10)), 'crossing is blocked');
-    }
-
-    #[test]
-    fn test_move_not_crossing_any_line_is_allowed() {
-        let level = sample_level();
-        assert(can_move(@level, pt(32, 10), pt(32, 20)), 'clear move is allowed');
-    }
-
-    #[test]
-    fn test_can_move_is_symmetric() {
-        let level = sample_level();
-        let a = pt(32, -10);
-        let b = pt(32, 10);
-        assert(can_move(@level, a, b) == can_move(@level, b, a), 'symmetric verdict');
-    }
-}
+pub use damage::{BASETHRESHOLD, DamageOutcome, damage_mobj, kill_mobj};
+pub use grid::{ThingGrid, link, new_grid, rebuild, things_in, unlink};
+pub use hitscan::{
+    AIMRANGE, Aim, Hit, Intercept, MELEERANGE, MISSILERANGE, aim_line_attack, bleeds, line_attack,
+    path_traverse,
+};
+pub use mobj::{
+    HEALTH_BIAS, KIND_NONE, MAX_MOBJS, MF_AMBUSH, MF_CORPSE, MF_COUNTITEM, MF_COUNTKILL, MF_DROPOFF,
+    MF_DROPPED, MF_FLOAT, MF_INFLOAT, MF_JUSTATTACKED, MF_JUSTHIT, MF_MISSILE, MF_NOBLOCKMAP,
+    MF_NOBLOOD, MF_NOCLIP, MF_NOGRAVITY, MF_NOSECTOR, MF_NOTDMATCH, MF_PICKUP, MF_SHADOW,
+    MF_SHOOTABLE, MF_SKULLFLY, MF_SLIDE, MF_SOLID, MF_SPAWNCEILING, MF_SPECIAL, MF_TELEPORT,
+    MOBJ_FELTS, Mobj, NO_CELL, NO_MOBJ, first_free, has, in_blockmap, is_removed, push, push_felts,
+    removed_mobj, replace, without,
+};
+pub use movement::{
+    Blocker, Check, FRICTION, GRAVITY, MAXMOVE, MAXRADIUS, MAXSTEP, MoveEvent, STOPSPEED, Verdict,
+    XyOutcome, ZOutcome, check_position, slide_move, slide_move_lite, try_move, xy_movement,
+    z_movement,
+};
+pub use position::{
+    Location, link_thing, locate, place, set_thing_position, subsector_from_root, subsector_in_cell,
+    unset_thing_position,
+};
+pub use sight::{check_sight, check_sight_cached};
+pub use spawn::{
+    FIREBALL, MTF_AMBUSH, SpawnZ, explode_missile, set_state, spawn_cell, spawn_map_thing,
+    spawn_missile, spawn_mobj, spawn_player,
+};
+pub use world::{World, ceiling_of, floor_of, with_heights, world_of};

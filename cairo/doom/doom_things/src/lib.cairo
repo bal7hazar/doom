@@ -27,13 +27,10 @@
 //! measured by the crate's tests, and is the bound `doom_monsters` should
 //! use (D15/D17).
 
-pub mod compat;
 pub mod tables;
 
 #[cfg(test)]
 mod tests;
-
-pub use compat::{MobjInfo, MobjType, info_of};
 use fixed::Fixed;
 use fsm::StateTables;
 

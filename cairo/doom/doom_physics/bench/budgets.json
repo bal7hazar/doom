@@ -1,0 +1,109 @@
+{
+  "crate": "doom_physics",
+  "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; 0 bare loop, 1 the varying player record, 2 the record linked into the thing grid). Measured by measure.py on Scarb 2.16.0 over Freedoom E1M1; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4). 'code_words' is the crate's bytecode contribution, measured as bench/size minus bench/baseline and guarded against regression (+10 %); docs/DECISIONS.md D23 targets 5 000 for this crate, see ../README.md.",
+  "code_words": 56961,
+  "operations": [
+    {
+      "name": "try_move, 1 cell, no things (player)",
+      "op": 3,
+      "base": 2,
+      "budget": 964
+    },
+    {
+      "name": "try_move, 2 cells (monster on a boundary)",
+      "op": 4,
+      "base": 2,
+      "budget": 4316
+    },
+    {
+      "name": "try_move, 1 cell, one thing checked",
+      "op": 5,
+      "base": 2,
+      "budget": 1060
+    },
+    {
+      "name": "check_sight, REJECT hit",
+      "op": 6,
+      "base": 1,
+      "budget": 311
+    },
+    {
+      "name": "check_sight, traversal 300 u, visible",
+      "op": 7,
+      "base": 1,
+      "budget": 7703
+    },
+    {
+      "name": "check_sight, traversal 900 u",
+      "op": 8,
+      "base": 1,
+      "budget": 9715
+    },
+    {
+      "name": "line_attack, wall 188 u away",
+      "op": 9,
+      "base": 2,
+      "budget": 6608
+    },
+    {
+      "name": "line_attack, wall 1 740 u away",
+      "op": 10,
+      "base": 2,
+      "budget": 8478
+    },
+    {
+      "name": "aim_line_attack, 1024 u, wall at 188",
+      "op": 11,
+      "base": 2,
+      "budget": 6339
+    },
+    {
+      "name": "xy_movement + z_movement (walking)",
+      "op": 12,
+      "base": 2,
+      "budget": 1704
+    },
+    {
+      "name": "set_thing_position, same cell",
+      "op": 13,
+      "base": 1,
+      "budget": 1158
+    },
+    {
+      "name": "locate",
+      "op": 14,
+      "base": 1,
+      "budget": 740
+    },
+    {
+      "name": "damage_mobj, pain + thrust",
+      "op": 15,
+      "base": 1,
+      "budget": 1471
+    },
+    {
+      "name": "spawn_mobj",
+      "op": 16,
+      "base": 0,
+      "budget": 1150
+    },
+    {
+      "name": "replace, 210-slot list",
+      "op": 17,
+      "base": 1,
+      "budget": 22728
+    },
+    {
+      "name": "slide_move, wall 24 u ahead",
+      "op": 18,
+      "base": 2,
+      "budget": 16314
+    },
+    {
+      "name": "path_traverse, 188 u, lines + things",
+      "op": 19,
+      "base": 2,
+      "budget": 4212
+    }
+  ]
+}

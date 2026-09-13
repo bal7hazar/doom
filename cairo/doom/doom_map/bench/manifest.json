@@ -1,7 +1,7 @@
 {
   "map": "E1M1",
   "scalars": 19,
-  "total_words": 17904,
+  "total_words": 15151,
   "arrays": [
     {
       "name": "L_AB",
@@ -22,13 +22,7 @@
       "words": 1175
     },
     {
-      "name": "L_BOX_LR",
-      "group": "linedefBox",
-      "layout": "packed",
-      "words": 1175
-    },
-    {
-      "name": "L_BOX_BT",
+      "name": "L_BOX",
       "group": "linedefBox",
       "layout": "packed",
       "words": 1175
@@ -106,18 +100,6 @@
       "words": 2064
     },
     {
-      "name": "ACCEL_START",
-      "group": "accelerator",
-      "layout": "planar",
-      "words": 865
-    },
-    {
-      "name": "ACCEL_PACKED",
-      "group": "accelerator",
-      "layout": "packed",
-      "words": 713
-    },
-    {
       "name": "CELL_NODE",
       "group": "accelerator",
       "layout": "planar",
@@ -150,7 +132,6 @@
     "num_things": 221,
     "num_cells": 864,
     "blockmap_entries": 2064,
-    "accel_entries": 3565,
     "reject_blocked": 23490
   },
   "descent_depth": {

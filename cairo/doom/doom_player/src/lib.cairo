@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
+//! **Skeleton** (rewritten in P1.7 on top of `doom_physics`): a player is a
+//! position and a health, moved along `y` by `cmd.forward` with no collision.
 
-use doom_map::Level;
-use doom_physics::can_move;
-use doom_things::{MobjType, info_of};
+use doom_things::tables::KIND_PLAYER;
+use doom_things::thing_info;
 use fixed::{add, from_int};
 use geom2d::Point;
 use ticcmd::TicCmd;
@@ -13,21 +14,17 @@ pub struct PlayerState {
     pub health: u32,
 }
 
-pub fn spawn() -> PlayerState {
-    let info = info_of(MobjType::Player);
-    PlayerState { position: Point { x: from_int(0), y: from_int(0) }, health: info.health }
+pub fn spawn(position: Point) -> PlayerState {
+    PlayerState { position, health: thing_info(KIND_PLAYER).spawnhealth }
 }
 
-/// One tic of `P_PlayerThink`'s movement path: attempt to move forward by
-/// `cmd.forward` fixed-point units along y; rejected moves leave the
-/// player exactly where it was (no partial sliding yet, see README).
-pub fn think(level: @Level, player: PlayerState, cmd: TicCmd) -> PlayerState {
+/// One tic of movement: `cmd.forward` map units along `y`. Collision is
+/// `doom_physics::try_move`'s job and is wired in by P1.7.
+pub fn think(player: PlayerState, cmd: TicCmd) -> PlayerState {
     let delta = from_int(cmd.forward);
-    let new_position = Point { x: player.position.x, y: add(player.position.y, delta) };
-    if can_move(level, player.position, new_position) {
-        PlayerState { position: new_position, health: player.health }
-    } else {
-        player
+    PlayerState {
+        position: Point { x: player.position.x, y: add(player.position.y, delta) },
+        health: player.health,
     }
 }
 
@@ -43,56 +40,40 @@ pub fn apply_damage(player: PlayerState, amount: u32) -> PlayerState {
 
 #[cfg(test)]
 mod tests {
-    use doom_map::sample_level;
     use fixed::from_int;
     use geom2d::Point;
     use ticcmd::TicCmd;
-    use super::{PlayerState, apply_damage, spawn, think};
+    use super::{apply_damage, spawn, think};
+
+    fn origin() -> Point {
+        Point { x: from_int(0), y: from_int(0) }
+    }
 
     fn cmd(forward: i64) -> TicCmd {
         TicCmd { forward, side: 0, angle_turn: 0, buttons: 0 }
     }
 
     #[test]
-    fn test_spawn_has_positive_health() {
-        let player = spawn();
-        assert(player.health > 0, 'spawns alive');
+    fn test_spawn_has_doom_health() {
+        assert(spawn(origin()).health == 100, 'spawns with 100');
     }
 
     #[test]
-    fn test_think_moves_when_clear() {
-        let level = sample_level();
-        // Start well clear of the sample blocking line (y=0, x in [0,64])
-        // so this step neither starts on it nor crosses it.
-        let player = PlayerState {
-            position: Point { x: from_int(32), y: from_int(50) }, health: 100,
-        };
-        let moved = think(@level, player, cmd(10));
-        assert(moved.position.y != player.position.y, 'moved forward');
-    }
-
-    #[test]
-    fn test_think_blocked_by_wall_stays_put() {
-        let level = sample_level();
-        // Sample line blocks y=0 between x in [0,64]; moving from below it
-        // to above it is rejected and the player stays put.
-        let player = PlayerState {
-            position: Point { x: from_int(32), y: from_int(-10) }, health: 100,
-        };
-        let moved = think(@level, player, cmd(20));
-        assert(moved.position == player.position, 'blocked stays put');
+    fn test_think_moves_forward() {
+        let moved = think(spawn(origin()), cmd(10));
+        assert(moved.position.y == from_int(10), 'moved forward');
     }
 
     #[test]
     fn test_apply_damage_saturates_at_zero() {
-        let player = spawn();
+        let player = spawn(origin());
         let dead = apply_damage(player, player.health + 1000);
         assert(dead.health == 0, 'saturates at zero');
     }
 
     #[test]
     fn test_apply_damage_monotonically_decreases() {
-        let player = spawn();
+        let player = spawn(origin());
         let hurt = apply_damage(player, 5);
         assert(hurt.health <= player.health, 'health does not increase');
     }

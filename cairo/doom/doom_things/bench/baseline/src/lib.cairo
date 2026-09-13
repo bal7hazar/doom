@@ -7,13 +7,13 @@
 //! element, and `2 340 + 14.7 × words` steps of bootloader program-hashing
 //! per segment.
 
-use doom_things::{MobjType, info_of};
+use doom_things::{MAX_ZERO_TIC_CHAIN, NO_DOOMEDNUM, num_kinds, num_states};
 
 #[executable]
 fn main(op: u32) -> felt252 {
-    // The transitional hand-written catalogue: no generated constant.
-    let info = info_of(MobjType::Zombieman);
+    // Crate scalars only: no generated table is referenced.
     let mut acc: felt252 = op.into();
-    acc += info.health.into() + info.radius.enc + info.height.enc;
+    acc += NO_DOOMEDNUM.into() + MAX_ZERO_TIC_CHAIN.into();
+    acc += num_kinds().into() + num_states().into();
     acc
 }

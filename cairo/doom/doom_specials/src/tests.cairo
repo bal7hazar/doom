@@ -16,7 +16,6 @@ use doom_map::{LevelId, LevelMap};
 use doom_things::rndtable;
 use fixed::Fixed;
 use prng::{Prng, from_index};
-use super::compat::{DoorState, start_opening, think_door};
 use super::level::{SpecialsMap, tag_sector, tag_sectors};
 use super::state::{Phase, SpecialsState};
 use super::thinkers::{NeverBlocked, SectorBlocking, event};
@@ -670,26 +669,3 @@ fn test_blazing_door_is_four_times_faster() {
     assert(fixed::sub(after, start).enc == fixed::BIAS + super::thinkers::BLAZESPEED, 'one tic');
 }
 
-#[test]
-fn test_compat_door_still_opens_and_closes() {
-    // The transitional shim `doom_game` still imports (D17).
-    let sector = doom_map::Sector { floor_height: 0, ceiling_height: 0, light_level: 200 };
-    let mut door = start_opening(sector, 100, 30);
-    door = think_door(door);
-    assert(door.state == DoorState::Opening, 'still opening');
-    door = think_door(door);
-    door = think_door(door);
-    door = think_door(door);
-    assert(door.state == DoorState::Open, 'reached open');
-    assert(door.sector.ceiling_height == 100, 'clamped at the target');
-    assert(door == think_door(door), 'stable once open');
-    let mut closing = super::compat::Door {
-        sector: door.sector, state: DoorState::Closing, target_ceiling: 0, speed: 40,
-    };
-    closing = think_door(closing);
-    closing = think_door(closing);
-    closing = think_door(closing);
-    assert(closing.state == DoorState::Closed, 'reached closed');
-    assert(closing.sector.ceiling_height == 0, 'clamped at the target');
-    assert(closing == think_door(closing), 'stable once closed');
-}

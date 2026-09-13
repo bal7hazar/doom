@@ -42,7 +42,6 @@
 //! bit and the sign of its deltas ([`linedef_v1`]/[`linedef_v2`]), which is
 //! 3 567 words cheaper than storing VERTEXES plus a linedef→vertex mapping.
 
-pub mod compat;
 pub mod levels;
 
 #[cfg(test)]
@@ -50,8 +49,6 @@ mod tests;
 use bam::{ANG45, Angle};
 use blockmap::{Grid, PackedLists};
 use bsp::Nodes;
-
-pub use compat::{Level, LineDef, Sector, is_line_blocking, sample_level, sector_at};
 use fixed::Fixed;
 use geom2d::{Box, HalfPlane, Point};
 use levels::e1m1;
@@ -63,15 +60,9 @@ pub const NO_SECTOR: u32 = 2047;
 /// Bits of REJECT packed into one felt (A7: the felt stays below 2^72).
 pub const REJECT_BITS: u32 = 64;
 
-/// Width of a subsector id in `ACCEL_PACKED`.
-pub const ACCEL_BITS: u32 = 13;
-/// Subsector ids per `ACCEL_PACKED` felt (5 × 13 = 65 bits, under 2^72).
-pub const ACCEL_PER_FELT: u32 = 5;
-
 // Shifts and widths of the packed records, as `u128` so that the decoders
 // below are plain integer divisions (never `/` on a `felt252`, which is a
 // field division — S1 §7, transverse rule 3).
-const BOX_SHIFT: u128 = 0x400000000; // 2^34, two `Fixed::enc` per felt
 const W16: u128 = 0x10000;
 const W8: u128 = 0x100;
 const W13: u128 = 0x2000;
@@ -116,9 +107,9 @@ pub struct LevelMap {
     pub l_ab: Span<felt252>,
     pub l_bb: Span<felt252>,
     pub l_cb: Span<felt252>,
-    /// Linedef bounding box, two `Fixed::enc` per felt (left‖right, bottom‖top).
-    pub l_box_lr: Span<felt252>,
-    pub l_box_bt: Span<felt252>,
+    /// Linedef bounding box: four 16-bit biased map units in one felt
+    /// (left, bottom, right, top from the low end), see [`unpack_box`].
+    pub l_box: Span<felt252>,
     /// Linedef flags, special, tag, diagonal bit and the two face sectors.
     pub l_packed: Span<felt252>,
     /// BSP node partition predicates and children (`bsp::SUBSECTOR_FLAG`).
@@ -139,12 +130,7 @@ pub struct LevelMap {
     /// The blockmap grid and its linedef lists.
     pub grid: Grid,
     pub blockmap: PackedLists,
-    /// R2-A9: for each cell, the `[start[c], start[c + 1])` slice of
-    /// `accel_packed` listing the subsectors whose BSP region meets it,
-    /// five 13-bit ids per felt.
-    pub accel_start: Span<u32>,
-    pub accel_packed: Span<felt252>,
-    /// R2-A9: the deepest BSP child id whose region contains each cell.
+    /// R2-A9 / D22: the deepest BSP child id whose region contains each cell.
     pub cell_node: Span<u32>,
     /// REJECT, `reject_stride` felts of 64 bits per sector row.
     pub reject: Span<felt252>,
@@ -208,6 +194,43 @@ pub struct Genesis {
     pub num_things: u32,
 }
 
+/// D24, the **hot bundle**: the spans a per-tic consumer hoists once and
+/// indexes directly inside its inner loops.
+///
+/// `LevelMap` has 24 fields and Cairo copies every one of them at each
+/// `@LevelMap` call site (~51 steps, measured in `bench/`); an inner loop
+/// over a blockmap cell's lines must not pay that per line. This bundle is
+/// the subset the simulation reads every tic, with the cold data (`s_meta`,
+/// `things`, `id`) left out. **Sector heights are deliberately absent**: a
+/// door or a lift changes them, so `doom_physics` takes the *current*
+/// floor/ceiling spans from the game state, not from the level constants.
+///
+/// It is still a struct of spans, so the same rule applies to it: pass it
+/// once per top-level operation (`P_TryMove`, `P_CheckSight`) and hoist the
+/// fields into locals before looping.
+#[derive(Copy, Drop)]
+pub struct HotMap {
+    pub l_ab: Span<felt252>,
+    pub l_bb: Span<felt252>,
+    pub l_cb: Span<felt252>,
+    pub l_box: Span<felt252>,
+    pub l_packed: Span<felt252>,
+    pub n_ab: Span<felt252>,
+    pub n_bb: Span<felt252>,
+    pub n_cb: Span<felt252>,
+    pub n_child0: Span<u32>,
+    pub n_child1: Span<u32>,
+    pub root: u32,
+    pub ss_sector: Span<u32>,
+    pub cell_node: Span<u32>,
+    pub grid: Grid,
+    pub bm_start: Span<u32>,
+    pub bm_items: Span<u32>,
+    pub reject: Span<felt252>,
+    pub reject_stride: u32,
+    pub pow2: Span<felt252>,
+}
+
 // ---------------------------------------------------------------------------
 // Loading
 // ---------------------------------------------------------------------------
@@ -223,8 +246,7 @@ pub fn load(level: LevelId) -> LevelMap {
             l_ab: e1m1::L_AB.span(),
             l_bb: e1m1::L_BB.span(),
             l_cb: e1m1::L_CB.span(),
-            l_box_lr: e1m1::L_BOX_LR.span(),
-            l_box_bt: e1m1::L_BOX_BT.span(),
+            l_box: e1m1::L_BOX.span(),
             l_packed: e1m1::L_PACKED.span(),
             n_ab: e1m1::N_AB.span(),
             n_bb: e1m1::N_BB.span(),
@@ -243,14 +265,37 @@ pub fn load(level: LevelId) -> LevelMap {
                 rows: e1m1::BM_ROWS,
             },
             blockmap: PackedLists { start: e1m1::BM_START.span(), items: e1m1::BM_ITEMS.span() },
-            accel_start: e1m1::ACCEL_START.span(),
-            accel_packed: e1m1::ACCEL_PACKED.span(),
             cell_node: e1m1::CELL_NODE.span(),
             reject: e1m1::REJECT_ROWS.span(),
             reject_stride: e1m1::REJECT_STRIDE,
             pow2: e1m1::POW2.span(),
             things: e1m1::THINGS.span(),
         },
+    }
+}
+
+/// The D24 hot bundle of a loaded level (see [`HotMap`]).
+pub fn hot(m: @LevelMap) -> HotMap {
+    HotMap {
+        l_ab: *m.l_ab,
+        l_bb: *m.l_bb,
+        l_cb: *m.l_cb,
+        l_box: *m.l_box,
+        l_packed: *m.l_packed,
+        n_ab: *m.n_ab,
+        n_bb: *m.n_bb,
+        n_cb: *m.n_cb,
+        n_child0: *m.n_child0,
+        n_child1: *m.n_child1,
+        root: *m.root,
+        ss_sector: *m.ss_sector,
+        cell_node: *m.cell_node,
+        grid: *m.grid,
+        bm_start: *m.blockmap.start,
+        bm_items: *m.blockmap.items,
+        reject: *m.reject,
+        reject_stride: *m.reject_stride,
+        pow2: *m.pow2,
     }
 }
 
@@ -280,18 +325,26 @@ fn field(packed: felt252, shift: u128, width: u128) -> u128 {
     (v / shift) % width
 }
 
-/// Split a felt holding two `Fixed::enc` values (`hi * 2^34 + lo`).
-fn split_pair(packed: felt252) -> (Fixed, Fixed) {
-    let v: u128 = packed.try_into().unwrap();
-    let hi = v / BOX_SHIFT;
-    let lo = v - hi * BOX_SHIFT;
-    (Fixed { enc: hi.into() }, Fixed { enc: lo.into() })
-}
-
 /// A 16-bit biased map unit (`u + 2^15`) as a `Fixed`.
 fn coord(biased: u128) -> Fixed {
     let b: felt252 = biased.into();
     Fixed { enc: b * 65536 + COORD_OFFSET }
+}
+
+/// Decode one `L_BOX` felt: `left | bottom << 16 | right << 32 | top << 48`,
+/// each a 16-bit biased map unit.
+///
+/// Public so that `doom_physics` can decode a felt it has already read from
+/// the hoisted span (D24) without paying the `@LevelMap` snapshot. Three
+/// `u128` divmods: **measured ~40 steps** against ~90 for the previous
+/// two-felt form.
+pub fn unpack_box(packed: felt252) -> Box {
+    let v: u128 = packed.try_into().unwrap();
+    let w16: NonZero<u128> = 0x10000;
+    let (q1, left) = DivRem::div_rem(v, w16);
+    let (q2, bottom) = DivRem::div_rem(q1, w16);
+    let (top, right) = DivRem::div_rem(q2, w16);
+    Box { left: coord(left), bottom: coord(bottom), right: coord(right), top: coord(top) }
 }
 
 // ---------------------------------------------------------------------------
@@ -311,9 +364,7 @@ pub fn linedef_half_plane(m: @LevelMap, i: u32) -> HalfPlane {
 
 /// The bounding box of linedef `i`, the first half of `PIT_CheckLine`.
 pub fn linedef_box(m: @LevelMap, i: u32) -> Box {
-    let (left, right) = split_pair(*(*m.l_box_lr).at(i));
-    let (bottom, top) = split_pair(*(*m.l_box_bt).at(i));
-    Box { left, bottom, right, top }
+    unpack_box(*(*m.l_box).at(i))
 }
 
 /// Raw WAD flags word of linedef `i` (`ML_BLOCKING` &c.), the cheapest field
@@ -487,7 +538,7 @@ pub fn subsector_at(m: @LevelMap, p: Point) -> u32 {
     bsp::point_in_subsector(@nodes, *m.root, p)
 }
 
-/// R2-A9, the complete half: the deepest BSP child id whose region contains
+/// R2-A9 as decided in D22: the deepest BSP child id whose region contains
 /// the whole of blockmap cell `cell`.
 ///
 /// A partition is a linear function, so its extremes over an axis-aligned box
@@ -509,26 +560,6 @@ pub fn descent_start(m: @LevelMap, cell: u32) -> u32 {
 pub fn subsector_in_cell(m: @LevelMap, cell: u32, p: Point) -> u32 {
     let nodes = nodes(m);
     bsp::point_in_subsector(@nodes, descent_start(m, cell), p)
-}
-
-/// R2-A9, the list half: the `[from, to)` slice of [`subsector_candidate`]
-/// listing the subsectors whose **BSP region** meets `cell`.
-///
-/// Exact, therefore conservative: a subsector is listed if and only if its
-/// region meets the cell, so the subsector a descent reaches for any point of
-/// the cell is always in the list. (The generator does not use the WAD tool's
-/// seg-bounding-box lists, which are *not* conservative on a vanilla WAD —
-/// see `scripts/gen_level.py`.) 4.13 candidates per cell on E1M1, 21 at most.
-pub fn subsector_candidates(m: @LevelMap, cell: u32) -> (u32, u32) {
-    (*(*m.accel_start).at(cell), *(*m.accel_start).at(cell + 1))
-}
-
-/// One entry of the candidate list: five 13-bit subsector ids per felt, the
-/// slot picked with the same `POW2` table REJECT uses.
-pub fn subsector_candidate(m: @LevelMap, k: u32) -> u32 {
-    let word = *(*m.accel_packed).at(k / ACCEL_PER_FELT);
-    let shift: u128 = (*(*m.pow2).at(ACCEL_BITS * (k % ACCEL_PER_FELT))).try_into().unwrap();
-    field(word, shift, W13).try_into().unwrap()
 }
 
 // ---------------------------------------------------------------------------
@@ -561,10 +592,16 @@ pub fn blockmap_lists(m: @LevelMap) -> PackedLists {
 /// The matrix is symmetric as vanilla node builders emit it; the crate's
 /// tests assert it over all 33 124 pairs.
 pub fn reject(m: @LevelMap, s1: u32, s2: u32) -> bool {
-    let word: u128 = (*(*m.reject).at(s1 * *m.reject_stride + s2 / REJECT_BITS))
-        .try_into()
-        .unwrap();
-    let bit: u128 = (*(*m.pow2).at(s2 % REJECT_BITS)).try_into().unwrap();
+    reject_of(*m.reject, *m.reject_stride, *m.pow2, s1, s2)
+}
+
+/// [`reject`] on the hoisted spans (D24: `HotMap::reject`, `reject_stride`,
+/// `pow2`), for `doom_physics`.
+pub fn reject_of(
+    reject: Span<felt252>, stride: u32, pow2: Span<felt252>, s1: u32, s2: u32,
+) -> bool {
+    let word: u128 = (*reject.at(s1 * stride + s2 / REJECT_BITS)).try_into().unwrap();
+    let bit: u128 = (*pow2.at(s2 % REJECT_BITS)).try_into().unwrap();
     (word / bit) % 2 == 1
 }
 

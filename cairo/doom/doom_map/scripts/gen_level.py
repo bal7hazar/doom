@@ -18,7 +18,8 @@ runtime representation itself, in the exact shapes the generic crates of
 * the blockmap as `blockmap::PackedLists` (`start[cells + 1]`, `items[]`),
   not Doom's offset/terminator format;
 * REJECT bit-packed 64 bits per felt, one row of sectors at a time;
-* the R2-A9 cell -> subsector accelerator, in two parts (see `build`).
+* the R2-A9 location accelerator, `CELL_NODE` (docs/DECISIONS.md D22: the
+  candidate lists of the first version are gone).
 
 Layout policy (S1 sec. 5.9 / docs/G0.md D4): **hot data planar, cold data
 packed**, arbitrated by the measured rule
@@ -65,12 +66,10 @@ CONST_BIAS = 1 << 50  # geom2d::CONST_BIAS
 SUBSECTOR_FLAG = 0x80000000  # bsp::SUBSECTOR_FLAG
 WAD_SUBSECTOR_FLAG = 0x8000  # what the WAD stores
 
-BOX_SHIFT = 1 << 34  # two `enc` values (each < 2^33) in one felt
+BOX_UNIT = 1 << 16  # L_BOX: four 16-bit biased map units in one felt
 COORD_BIAS = 1 << 15  # int16 map units -> [0, 2^16)
 NO_SECTOR = 2047  # 11-bit sentinel in L_PACKED
 REJECT_BITS = 64  # bits of REJECT per felt (< 2^72, A7)
-ACCEL_BITS = 13  # subsector id width in ACCEL_PACKED
-ACCEL_PER_FELT = 5  # 5 * 13 = 65 bits, below the 2^72 cliff (A7)
 
 MAX_CONST_LEN = 32767  # CASM type sizes are i16 (S1 sec. 4)
 
@@ -105,6 +104,21 @@ MTF_NOTSINGLE = 16
 def enc(units: int) -> int:
     """`fixed::Fixed.enc` of an integer map-unit coordinate."""
     return units * FRACUNIT + BIAS
+
+
+def pack_box(left: int, bottom: int, right: int, top: int) -> int:
+    """`L_BOX`: four 16-bit biased map units in one felt, `left` lowest.
+
+    Measured against the earlier two-felt form (two `enc` per felt): a full
+    four-corner decode costs three `u128` divmods (~40 steps) instead of two
+    2^34 splits (~90), and the array is 1 175 words instead of 2 350.
+    """
+    return (
+        (left + COORD_BIAS)
+        | ((bottom + COORD_BIAS) << 16)
+        | ((right + COORD_BIAS) << 32)
+        | ((top + COORD_BIAS) << 48)
+    )
 
 
 # --------------------------------------------------------------------------
@@ -191,18 +205,6 @@ def box_sides(nd: dict, x0: int, y0: int, x1: int, y1: int) -> set[int]:
     }
 
 
-def collect_subsectors(
-    nodes: list[dict], cur: int, x0: int, y0: int, x1: int, y1: int, out: set[int]
-) -> None:
-    """Every subsector whose BSP **region** meets the box -- exactly."""
-    if cur & WAD_SUBSECTOR_FLAG:
-        out.add(cur & (WAD_SUBSECTOR_FLAG - 1))
-        return
-    nd = nodes[cur]
-    for side in box_sides(nd, x0, y0, x1, y1):
-        collect_subsectors(nodes, wad_child(nd, side), x0, y0, x1, y1, out)
-
-
 def cell_start_nodes(doc: dict, bm: dict) -> tuple[list[int], float, float]:
     """For every blockmap cell, the deepest child id whose region contains it.
 
@@ -274,8 +276,7 @@ def build(doc: dict, skill_bit: int) -> tuple[Arrays, dict]:
     l_ab: list[int] = []
     l_bb: list[int] = []
     l_cb: list[int] = []
-    l_lr: list[int] = []
-    l_bt: list[int] = []
+    l_box: list[int] = []
     l_pk: list[int] = []
     for ld in lines:
         v1 = verts[ld["startVertex"]]
@@ -286,8 +287,7 @@ def build(doc: dict, skill_bit: int) -> tuple[Arrays, dict]:
         l_cb.append(cb)
         left, right = min(v1[0], v2[0]), max(v1[0], v2[0])
         bottom, top = min(v1[1], v2[1]), max(v1[1], v2[1])
-        l_lr.append(enc(left) * BOX_SHIFT + enc(right))
-        l_bt.append(enc(bottom) * BOX_SHIFT + enc(top))
+        l_box.append(pack_box(left, bottom, right, top))
 
         front = ld["frontSidedef"]
         back = ld["backSidedef"]
@@ -313,8 +313,7 @@ def build(doc: dict, skill_bit: int) -> tuple[Arrays, dict]:
     arr.add("L_AB", "felt252", l_ab, "linedefPredicates")
     arr.add("L_BB", "felt252", l_bb, "linedefPredicates")
     arr.add("L_CB", "felt252", l_cb, "linedefPredicates")
-    arr.add("L_BOX_LR", "felt252", l_lr, "linedefBox")
-    arr.add("L_BOX_BT", "felt252", l_bt, "linedefBox")
+    arr.add("L_BOX", "felt252", l_box, "linedefBox")
     arr.add("L_PACKED", "felt252", l_pk, "linedefMeta")
 
     # -- BSP nodes --------------------------------------------------------
@@ -365,43 +364,7 @@ def build(doc: dict, skill_bit: int) -> tuple[Arrays, dict]:
     arr.add("BM_START", "u32", bm_start, "blockmap")
     arr.add("BM_ITEMS", "u32", bm_items, "blockmap")
 
-    # -- R2-A9, part 1: cell -> subsector candidates ----------------------
-    # NOT `tools/wad`'s list. That one derives a subsector's extent from the
-    # bounding box of its SEGS, which assumes the node builder closes every
-    # subsector polygon with segs. A *vanilla* builder emits no minisegs
-    # (E1M1 has 2 057 segs, every one referencing a real linedef), so a
-    # subsector's BSP region routinely reaches far outside the box of its own
-    # segs -- subsector 630 has two parallel segs spanning y in [-36, 4]
-    # while its region reaches y = -214 -- and the list then omits the
-    # subsector a descent really returns. Here the candidates come from the
-    # **regions**: descend from the root, recursing into both children
-    # whenever the four corners of the cell straddle the partition. That is
-    # exact (a subsector is listed iff its region meets the cell), hence
-    # conservative.
-    a_start = [0]
-    a_items: list[int] = []
-    for cy in range(bm["rows"]):
-        for cx in range(bm["columns"]):
-            x0 = bm["originX"] + cx * bm["unit"]
-            y0 = bm["originY"] + cy * bm["unit"]
-            found: set[int] = set()
-            collect_subsectors(
-                nodes, len(nodes) - 1, x0, y0, x0 + bm["unit"], y0 + bm["unit"], found
-            )
-            a_items.extend(sorted(found))
-            a_start.append(len(a_items))
-    if len(ssec_sector) >= (1 << ACCEL_BITS):
-        raise SystemExit("subsector ids do not fit in %d bits" % ACCEL_BITS)
-    a_packed: list[int] = []
-    for i in range(0, len(a_items), ACCEL_PER_FELT):
-        word = 0
-        for k, v in enumerate(a_items[i : i + ACCEL_PER_FELT]):
-            word |= v << (ACCEL_BITS * k)
-        a_packed.append(word)
-    arr.add("ACCEL_START", "u32", a_start, "accelerator")
-    arr.add("ACCEL_PACKED", "felt252", a_packed, "accelerator")
-
-    # -- R2-A9, part 2: where a descent may start, for each cell ----------
+    # -- R2-A9 (D22): where a descent may start, for each cell --------------
     cell_node, depth_before, depth_after = cell_start_nodes(doc, bm)
     arr.add("CELL_NODE", "u32", cell_node, "accelerator")
 
@@ -467,7 +430,6 @@ def build(doc: dict, skill_bit: int) -> tuple[Arrays, dict]:
         start=start,
         bbox=doc["boundingBox"],
         blockmap_entries=len(bm_items),
-        accel_entries=len(a_items),
         depth_before=depth_before,
         depth_after=depth_after,
     )
@@ -561,8 +523,8 @@ VECTORS_HEADER = """// SPDX-License-Identifier: GPL-2.0-only
 //!   with `geom2d::half_plane` and compare it to the generated coefficients
 //!   (the "pin the Python builder against `geom2d::half_plane`" test), and
 //!   check the recovered endpoints and boxes against the same source;
-//! * `ACCEL_POINTS` -- sampled points with the subsector a transcription of
-//!   `R_PointInSubsector` reaches, for the R2-A9 conservativeness test.
+//! * `SAMPLE_POINTS` -- sampled points with the subsector a transcription of
+//!   `R_PointInSubsector` reaches, for the `CELL_NODE` (D22) exactness test.
 """
 
 
@@ -571,7 +533,7 @@ def sample_points(doc: dict, lattice: int = 200, centroids: int = 200) -> list[i
 
     Three felts per point: `x, y, subsector`. Two deterministic families: a
     lattice over the whole bounding box -- which reaches the void, where a
-    descent still names a leaf and a candidate list still owes it that leaf --
+    descent still names a leaf and `CELL_NODE` still owes it that leaf --
     and the centroids of the first `centroids` subsectors.
     """
     bb = doc["boundingBox"]
@@ -604,35 +566,6 @@ def sample_points(doc: dict, lattice: int = 200, centroids: int = 200) -> list[i
     return out
 
 
-def check_accelerator(doc: dict, points: list[int], arr: Arrays) -> int:
-    """Assert R2-A9 conservativeness on every sampled point, against the
-    **emitted** arrays. Returns the number of on-grid points checked."""
-    bm = doc["blockmap"]
-    by_name = arr.by_name()
-    a_start, a_packed = by_name["ACCEL_START"], by_name["ACCEL_PACKED"]
-    cols, rows, unit = bm["columns"], bm["rows"], bm["unit"]
-    checked = 0
-    for i in range(0, len(points), 3):
-        x, y, ss = points[i : i + 3]
-        cx = (x - bm["originX"]) // unit
-        cy = (y - bm["originY"]) // unit
-        if not (0 <= cx < cols and 0 <= cy < rows):
-            continue
-        cell = cy * cols + cx
-        cand = [
-            (a_packed[k // ACCEL_PER_FELT] >> (ACCEL_BITS * (k % ACCEL_PER_FELT)))
-            % (1 << ACCEL_BITS)
-            for k in range(a_start[cell], a_start[cell + 1])
-        ]
-        if ss not in cand:
-            raise SystemExit(
-                "R2-A9 accelerator is NOT conservative at (%d, %d): subsector %d "
-                "is not in cell %d's candidate list" % (x, y, ss, cell)
-            )
-        checked += 1
-    return checked
-
-
 def emit_vectors(doc: dict, points: list[int], pinned: int) -> str:
     verts = [(v["x"], v["y"]) for v in doc["vertexes"]]
     lines = doc["linedefs"]
@@ -649,18 +582,16 @@ def emit_vectors(doc: dict, points: list[int], pinned: int) -> str:
     out.append("/// (v1x, v1y, v2x, v2y) in map units, four felts per linedef.\n")
     out.append(emit_array("LINE_VERTICES", "felt252", lv))
     out.append("/// (x, y, subsector) in map units, three felts per sampled point.\n")
-    out.append(emit_array("ACCEL_POINTS", "felt252", points))
+    out.append(emit_array("SAMPLE_POINTS", "felt252", points))
     return "".join(out)
 
 
 PACKED = (
-    "L_BOX_LR",
-    "L_BOX_BT",
+    "L_BOX",
     "L_PACKED",
     "S_META",
     "THINGS",
     "REJECT_ROWS",
-    "ACCEL_PACKED",
 )
 
 SCALAR_WORDS = 19  # LEVEL_ID plus the 18 scalars of `emit_level`
@@ -686,7 +617,6 @@ def main() -> int:
     name = (args.map or doc["map"]).lower()
     arr, meta = build(doc, args.skill_bit)
     points = sample_points(doc)
-    checked = check_accelerator(doc, points, arr)
 
     total = arr.words() + SCALAR_WORDS
     print("%-16s %-18s %-7s %8s" % ("array", "group", "layout", "words"))
@@ -699,12 +629,8 @@ def main() -> int:
     print("%-16s %-18s %-7s %8d" % ("TOTAL", "", "", total))
     print()
     print(
-        "R2-A9: %d of %d sampled points verified against the emitted lists"
-        % (checked, len(points) // 3)
-    )
-    print(
-        "R2-A9: mean BSP descent depth %.2f from the root, %.2f from CELL_NODE"
-        % (meta["depth_before"], meta["depth_after"])
+        "R2-A9 (D22): %d sampled points; mean BSP descent depth %.2f from the root, "
+        "%.2f from CELL_NODE" % (len(points) // 3, meta["depth_before"], meta["depth_after"])
     )
     print(
         "REJECT: %d of %d sector pairs blocked (%.1f %%)"
@@ -750,7 +676,6 @@ def main() -> int:
                 "num_things",
                 "num_cells",
                 "blockmap_entries",
-                "accel_entries",
                 "reject_blocked",
             )
         },

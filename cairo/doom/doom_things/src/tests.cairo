@@ -9,8 +9,8 @@
 use fsm::{FOREVER, NO_ACTION, advance, enter, row, validate};
 use prng::{PrngTrait, from_index, is_valid_table};
 use super::{
-    MobjType, NO_DOOMEDNUM, WeaponId, flags, info_of, kind_of_doomednum, num_kinds, num_states,
-    rndtable, spawn_state, states, tables, thing_info, weapon_states,
+    NO_DOOMEDNUM, WeaponId, flags, kind_of_doomednum, num_kinds, num_states, rndtable, spawn_state,
+    states, tables, thing_info, weapon_states,
 };
 
 /// Longest run of consecutive zero-tic states, the bound `MAX_ZERO_TIC_CHAIN`
@@ -455,24 +455,6 @@ fn test_prng_over_the_table_matches_doom_order() {
     rng = next;
     let (_, c) = rng.next(table);
     assert(a == 8 && b == 109 && c == 220, 'doom order from cursor 1');
-}
-
-// ---------------------------------------------------------------------------
-// The transitional catalogue must agree with the generated one
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_compat_catalogue_matches_the_generated_tables() {
-    let kinds: Array<MobjType> = array![MobjType::Player, MobjType::Zombieman, MobjType::Imp];
-    let mut i: u32 = 0;
-    while i != kinds.len() {
-        let old = info_of(*kinds.at(i));
-        let new = thing_info(super::compat::kind_of(*kinds.at(i)));
-        assert(old.health == new.spawnhealth, 'health agrees');
-        assert(old.radius == new.radius, 'radius agrees');
-        assert(old.height == new.height, 'height agrees');
-        i += 1;
-    }
 }
 
 // ---------------------------------------------------------------------------

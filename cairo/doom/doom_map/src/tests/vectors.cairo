@@ -10,8 +10,8 @@
 //!   with `geom2d::half_plane` and compare it to the generated coefficients
 //!   (the "pin the Python builder against `geom2d::half_plane`" test), and
 //!   check the recovered endpoints and boxes against the same source;
-//! * `ACCEL_POINTS` -- sampled points with the subsector a transcription of
-//!   `R_PointInSubsector` reaches, for the R2-A9 conservativeness test.
+//! * `SAMPLE_POINTS` -- sampled points with the subsector a transcription of
+//!   `R_PointInSubsector` reaches, for the `CELL_NODE` (D22) exactness test.
 
 /// Number of linedefs covered by `LINE_VERTICES`.
 pub const PINNED_LINES: u32 = 1000;
@@ -257,7 +257,7 @@ pub const LINE_VERTICES: [felt252; 4000] = [
 ];
 
 /// (x, y, subsector) in map units, three felts per sampled point.
-pub const ACCEL_POINTS: [felt252; 1200] = [
+pub const SAMPLE_POINTS: [felt252; 1200] = [
     -606, -894, 583, -408, -894, 583, -210, -894, 583, -13, -894, 583, 185, -894, 583, 382, -894,
     583, 580, -894, 583, 778, -894, 567, 975, -894, 567, 1173, -894, 567, 1370, -894, 567, 1568,
     -894, 568, 1766, -894, 568, 1963, -894, 673, 2161, -894, 654, 2358, -894, 654, 2556, -894, 654,

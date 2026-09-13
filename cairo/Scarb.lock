@@ -69,10 +69,15 @@ dependencies = [
 name = "doom_physics"
 version = "0.1.0"
 dependencies = [
+ "bam",
+ "blockmap",
+ "bsp",
  "doom_map",
  "doom_things",
  "fixed",
+ "fsm",
  "geom2d",
+ "prng",
 ]
 
 [[package]]
