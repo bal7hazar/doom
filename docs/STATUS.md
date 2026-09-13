@@ -5,7 +5,8 @@
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
 > AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
 > D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
-> CI générale verte sur `c383f14` (7 jobs, leaf-verify compris) ; reconstruction WASM GitHub indépendante verte.
+> Incident WASM reproduit en mono et quatre threads sur D33 ; natif et ancien WASM valides. Diagnostic S12 en cours.
+> CI générale verte sur `67f618c` (run `34754644282`) ; reconstruction WASM GitHub indépendante verte.
 > P1.9 en intégration `f306c6a` : 565 tests verts, 110 015 mots ; 2 946 tics à 53 309 steps moyens / p99 128 207, D2/D29 non atteints.
 > Simulation avec continuation + D33 : 8,8–16,6 ms/tic, 512 MiB, 386 tics exacts ; latence par frame et client restants (S10).
 > Fuzz ponctuel : 10 000 tics réels sans divergence sur la référence `b11fd7f` ; campagne nocturne P1.10 restante.
@@ -71,6 +72,15 @@ Branches récupérées :
 
 Vague active : taille totale du programme (`codex/run-bytecode`, D29), coût du hash d’état
 (`codex/state-hash-spike`, étude isolée) et corpus/fuzz nocturne (`codex/golden-fuzz`, P1.10).
+**Priorité temporaire :** l’étude S11 est suspendue intacte ; son agent audite le générateur
+WASM dans `codex/proof-triage`. Deux preuves quatre threads du run D33 échouent en FRI
+(`queries do not resolve to their commitment in the first layer`), y compris sous vérifieur
+natif indépendant. Le prouveur natif épinglé produit et vérifie la même exécution en 59,14 s.
+L’ancien WASM produit aussi une preuve valide du même programme (51,44 s), tandis que le
+nouveau échoue en mono et sans appel `resources()`. La vérification native indépendante confirme
+le contrôle valide et le refus de la preuve invalide. Cause encore ouverte ; voir
+[S12](spikes/S12-wasm-proof-triage.md) pour la matrice et les artefacts. Cet incident est distinct
+du refus attendu du registre log20. Aucun programme promu.
 Les compteurs AIR et l’admission wrapper sont intégrés sur `main` ; les deux passes frontière
 et le parcours monstres sont assemblés dans `codex/game-integration`.
 Les passes frontière et armure sont relues et assemblées sur la branche
@@ -254,6 +264,8 @@ Clippy/format verts. Chromium combiné : **8,8–16,6 ms moyens/tic** maintenanc
 recréation de VM tous les 32 tics est compris dans ces mesures. Le client reste à brancher,
 le journal doit commencer au premier tic, et la contention/longue durée/16 GiB restent à mesurer.
 Voir [S10](spikes/S10-live-simulation.md) ; aucun changement de gameplay, de hash ou de budget.
+Le [branchement client](design/real-game-session.md) reste à livrer ; l’audit précise notamment
+le journal F4 incomplet, le checkpoint absent des arguments et les différences de snapshot/flags.
 
 ## Terminé (mergé sur `main`)
 

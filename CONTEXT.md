@@ -100,7 +100,9 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   revalidation root 70 comparaisons proving et 35 cas ABI, pins inchangés. Profil exact 2 946 tics :
   **53 309 steps moyens / p99 128 207**. Les budgets D2/D29 restent dépassés.
 - Ressources du programme boxé : **2 113 239 / 2 152 507 / 2 260 220 steps** pour 0/1/4 tics,
-  15 355 compressions Blake, log21 refusé par le registre courant. Exécution seule, pas de nouvelle preuve.
+  15 355 compressions Blake, log21 refusé par le registre courant. Nouvelle preuve native valide
+  (59,14 s) et ancien WASM valide (51,44 s), mais nouveau WASM en échec, mono et quatre threads.
+  Cause en diagnostic [S12](docs/spikes/S12-wasm-proof-triage.md) ; aucune promotion du jeu complet.
 - Simulation combinée dans Chromium : **386 tics exacts**, **8,8–16,6 ms moyens/tic** maintenance
   comprise, **512 MiB** linéaires, p99 **38,2–45,4 ms** ; onze dépassements sur 386. Onze tests Rust
   verts. Le client et la concurrence avec preuve restent à réaliser ; détails dans S10.
