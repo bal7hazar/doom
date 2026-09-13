@@ -445,7 +445,7 @@ fn test_use_event_reaches_the_specials_and_picked_is_ignored() {
 
 #[test]
 fn test_touch_picks_up_and_removes_an_item_once() {
-    let g = genesis(LevelId::E1M1);
+    let mut g = genesis(LevelId::E1M1);
     let (ctx, _) = plumbing(@g);
     let w = ctx.w;
     let mut grid: ThingGrid = new_grid();
@@ -470,6 +470,44 @@ fn test_touch_picks_up_and_removes_an_item_once() {
     let list = rebuild_list(w, mobjs, ref grid, mo, 0, patches.span(), array![].span());
     assert(is_removed(list.at(1)), 'gone from the list');
     assert(*list.at(0) == mo, 'player written');
+    g.player = p;
+    g.specials = s;
+    g.mobjs = list;
+    g.grid = grid;
+    assert_state_roundtrip(@g);
+}
+
+fn assert_state_roundtrip(g: @GameState) {
+    let saved = serialize(g);
+    let restored = from_felts(saved.span()).expect('lifecycle boundary readable');
+    assert(serialize(@restored) == saved, 'same lifecycle state and grid');
+    assert(hash(@restored) == hash(g), 'same lifecycle hash');
+}
+
+#[test]
+fn test_grid_roundtrip_after_missile_removal_and_drop() {
+    let mut g = genesis(LevelId::E1M1);
+    let w = ctx_of(g.level, g.floor, g.ceil).w;
+    let mut player = *g.mobjs.at(0);
+    let mut missile = spawn_mobj(
+        w, doom_things::tables::KIND_TROOPSHOT, player.x, player.y, SpawnZ::OnFloor,
+    );
+    let mut grid = new_grid();
+    set_thing_position(@w.map, ref grid, ref player, 0);
+    set_thing_position(@w.map, ref grid, ref missile, 1);
+    g.mobjs = array![player, missile].span();
+    g.grid = grid;
+    assert_state_roundtrip(@g);
+    // The same unlink/tombstone transition used by the missile ticker.
+    doom_physics::unset_thing_position(ref g.grid, @missile, 1);
+    let mut out = array![player, removed_mobj()];
+    g.mobjs = out.span();
+    assert_state_roundtrip(@g);
+    let mut clip = spawn_mobj(w, KIND_CLIP, player.x, player.y, SpawnZ::OnFloor);
+    clip.flags = clip.flags | MF_DROPPED;
+    place_drops(w, ref g.grid, ref out, array![clip].span());
+    g.mobjs = out.span();
+    assert_state_roundtrip(@g);
 }
 
 #[test]

@@ -223,7 +223,8 @@ const DEATH_HASH: felt252 =
 
 fn check(name: felt252, state: @GameState, pin: felt252, v1_pin: felt252) {
     // Explicit schema migration: only the committed grid order and version
-    // may change. The five existing gameplay records retain their v1 pins.
+    // may change. The v1 pins retain the gameplay records, apart from the
+    // separately explained R4 DOOR attacker correction above.
     let record = crate::serialize(state);
     let base = crate::state::SCALARS
         + doom_player::PLAYER_FELTS
@@ -351,4 +352,61 @@ fn test_fight_is_associative_across_serialized_boundaries() {
         start += count;
     }
     assert(hash(@whole) == hash(@sliced), 'serialized split associative');
+}
+
+fn check_variable_cuts(log: Span<felt252>, expected: felt252) {
+    let mut state = genesis(LevelId::E1M1);
+    let mut previous_hash = hash(@state);
+    let cuts = array![29, 113, 47];
+    let mut phase = 0;
+    while state.leveltime < log.len() && state.status == Status::Running {
+        let encoded = crate::serialize(@state);
+        state = crate::from_felts(encoded.span()).expect('serialized cut readable');
+        assert(crate::serialize(@state) == encoded, 'exact boundary roundtrip');
+        let start = state.leveltime;
+        let remaining = log.len() - start;
+        let wanted = *cuts.span().at(phase);
+        let count = if remaining < wanted {
+            remaining
+        } else {
+            wanted
+        };
+        let (next, output) = run_segment(state, log.slice(start, count), start, count);
+        assert(output.h_in == previous_hash, 'public hash chain');
+        assert(output.h_out == hash(@next), 'public final state');
+        assert(output.tic_end == next.leveltime, 'public clock');
+        previous_hash = output.h_out;
+        state = next;
+        phase = if phase == 2 {
+            0
+        } else {
+            phase + 1
+        };
+    }
+    assert(previous_hash == expected, 'golden across variable cuts');
+}
+
+#[test]
+fn test_idle_variable_serialized_segments() {
+    check_variable_cuts(idle_log().span(), IDLE_HASH);
+}
+
+#[test]
+fn test_walk_variable_serialized_segments() {
+    check_variable_cuts(walk_log().span(), WALK_HASH);
+}
+
+#[test]
+fn test_door_variable_serialized_segments() {
+    check_variable_cuts(door_log().span(), DOOR_HASH);
+}
+
+#[test]
+fn test_fight_variable_serialized_segments() {
+    check_variable_cuts(fight_log().span(), FIGHT_HASH);
+}
+
+#[test]
+fn test_death_variable_serialized_segments() {
+    check_variable_cuts(death_log().span(), DEATH_HASH);
 }

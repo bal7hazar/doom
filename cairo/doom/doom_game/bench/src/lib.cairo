@@ -30,8 +30,8 @@
 
 use doom_game::{GameState, ctx_of, from_felts, genesis, hash, serialize, snapshot, step_tic};
 use doom_map::LevelId;
-use doom_monsters::{Patch, monsters_ticker, silence};
-use doom_physics::{Mobj, set_state};
+use doom_monsters::{Patch, monsters_ticker_with_defense, silence};
+use doom_physics::{Mobj, PlayerDefense, set_state};
 use doom_player::{PlayerEvent, env_of, player_think};
 use doom_specials::specials_ticker;
 use doom_things::tables::MI_SPAWNSTATE;
@@ -184,9 +184,16 @@ fn main(op: u32, n: u32) -> felt252 {
         let players = array![0].span();
         let mut mobjs = s.mobjs;
         let mut rng = s.prng;
+        let mut defense = PlayerDefense {
+            mo: s.player.mo,
+            armor_points: s.player.armor_points,
+            armor_type: s.player.armor_type,
+            damagecount: s.player.damagecount,
+            attacker: s.player.attacker,
+        };
         while i != n {
-            let (next, r, ev) = monsters_ticker(
-                ctx.w, mobjs, ref g, players, s.noise, s.leveltime + i, rng,
+            let (next, r, ev) = monsters_ticker_with_defense(
+                ctx.w, mobjs, ref g, players, s.noise, s.leveltime + i, rng, ref defense,
             );
             mobjs = next.span();
             rng = r;
