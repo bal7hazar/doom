@@ -150,15 +150,19 @@ variant only. `vendor/` is gitignored and rebuilt by `build.sh vendor`.
 
 | File | Built by | Sizes (st / mt) |
 |---|---|---|
-| `SHA256SUMS` | `./build.sh` on macOS arm64 | 45 035 551 / 45 111 575 B |
-| `SHA256SUMS.linux` | `docker build --platform linux/arm64 -o out -f Dockerfile .` (Debian bookworm arm64) | 45 032 682 / 45 114 562 B |
+| `SHA256SUMS` (historical, before the AIR correction) | `./build.sh` on macOS arm64 | 45 035 551 / 45 111 575 B |
+| `SHA256SUMS.linux` (AIR correction) | `docker build --platform linux/arm64 -o out -f Dockerfile .` (Debian bookworm arm64) | 45 034 502 / 45 073 267 B |
 
 ```sh
 docker build --platform linux/arm64 -o out -f prover/wasm/Dockerfile prover/wasm
 (cd out && shasum -a 256 -c ../prover/wasm/SHA256SUMS.linux)
 ```
 
-Evidence: the macOS build has been reproduced bit-for-bit three times (S2's artifact
+The earlier Linux reference remains in Git history: 45 032 682 / 45 114 562 B,
+`e97232a0…ed48` / `41bba119…1b73` (st / mt). No macOS rebuild was performed for the AIR
+correction, so its hash file still describes the earlier source revision.
+
+Historical same-source evidence: the macOS build has been reproduced bit-for-bit three times (S2's artifact
 `32c031ea…ce02c` from a fresh GitHub clone of the monorepo in a separate target directory, then
 again here), and the container build twice — **the same host always lands on the same bytes**.
 macOS and Linux do *not*: the two artifacts differ by ~3 KB, and a string diff of their data
@@ -189,7 +193,7 @@ resolved digest from that run is now committed. No amd64 byte-identity claim is 
 GitHub's [standard runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 lists `ubuntu-24.04-arm` for public repositories, including this repository.
 
-Audit reproduction on 2026-09-13: a fresh build with the pinned image and **two Cargo jobs**
+Before the AIR correction, audit reproduction on 2026-09-13: a fresh build with the pinned image and **two Cargo jobs**
 recreated both existing Linux hashes byte for byte; `SHA256SUMS.linux` was not changed.
 The container's build step took 754 s (single: 386 s; threaded: 350 s). These exact Linux-built
 artifacts then proved and verified the 16 271-step `k14` program on macOS arm64 in Node
@@ -198,6 +202,26 @@ The non-isolated Chromium page requested four threads, fell back to one, and ver
 (33.4 s). Benchmark reports now hash the actual files in `pkg/wasm`, so Linux artifacts are not
 mislabelled with the macOS baseline. GitHub execution of the repaired jobs remains a separate
 check after merge.
+
+AIR correction rebuild on 2026-09-13: Rust source commit `4309399`, checkout `5ed01d0`,
+the same pinned Dockerfile and two Cargo jobs. The build step took 779.2 s (single: 391 s;
+threaded: 370 s). The two exported files were hashed, checked against the generated manifest,
+and copied unchanged to `dist/`, `pkg/wasm/` and `harness/public/`. Only `SHA256SUMS.linux`
+was refreshed: single-threaded `3e94a4c0…479a5`, threaded `fdb977ad…4277c`.
+
+Both new variants executed the immutable 117,531-word, four-tic `run_segment` under Node
+24.16.0: 2,681,208 VM steps; all original resource counters, all 43 variable claim heights and
+the 11-felt output preimage matched the native reference and existing proof. Each now reports
+`blake_g = 1,303,200`, `log_max_component_size = 21`, `fits_leaf_registry = false`, while
+`max_sequence_log_size = 20` and `fits_preprocessed_trace = true`. No new large proof was needed.
+
+The new files also proved and verified `k14` (16,271 steps, 755,280 proof felts) on macOS arm64:
+Node 24.16.0 single/four threads in 34.88/11.11 s; Chromium 153.0.8010.12 single/four threads
+in 40.1/11.2 s; the non-isolated Chromium fallback requested four threads and verified with
+one in 33.0 s. These are smoke timings from one run per mode, not a performance or reliability
+claim. The client suite passed all 193 tests after preparing the locally cached Freedoom assets,
+including old-artifact rejection and fresh admission checks for persisted segments.
+The independent GitHub ARM64 rebuild and hash comparison remain the next verification step.
 
 ### Versions (pinned)
 
@@ -377,11 +401,14 @@ HELLPROOF_SIZING_EXECUTABLE="$PWD/harness/programs/steps_k/target/dev/main.execu
   cargo test --lib execute_original_microprograms -- --ignored
 ```
 
-**Artifact rollout:** the new counters require rebuilding both WASM variants. The TypeScript
-fields are optional for reading older artifacts; an unknown named maximum uses a conservative
-rounded count. This compatibility fallback cannot repair a maximum that an old artifact omitted
-entirely. Existing artifact hashes are not changed by this source patch; publish the corrected
-binaries only after the reproducible build and the real-program `execute/resources` check.
+**Artifact compatibility:** the new counters require the rebuilt WASM variants recorded in
+`SHA256SUMS.linux`; `SHA256SUMS` remains the earlier macOS reference. The TypeScript fields stay
+optional so older summaries can be decoded, but the client rejects admission when auxiliary
+counters are absent, with an explicit request to update the prover artifacts. Every `prove`
+attempt, including reloads and retries, re-executes and checks fresh resources against the
+current policy. Rejection preserves the segment for a later retry and cannot trigger a proof.
+For a modern summary with an unknown named maximum, the planner uses a conservative rounded
+count. Registry, row margin and step ceilings are unchanged.
 
 Measured on the `steps_k` program (a felt loop that writes one new memory value per iteration, so
 `memory_id_to_small` ≈ steps/2), with `pkg/test/sizing.mjs`:
