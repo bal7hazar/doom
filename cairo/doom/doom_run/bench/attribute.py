@@ -27,7 +27,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 WORKSPACE = HERE.parents[2]
-REPO = HERE.parents[4]
+REPO = HERE.parents[3]
 TOOL_DIR = REPO / "infra" / "sierra_words"
 TOOL = TOOL_DIR / "target" / "release" / "sierra_words"
 CRATES = (
@@ -46,11 +46,7 @@ def sh(args, cwd, env=None):
 
 def build(exe: str) -> Path:
     env = dict(os.environ, ASDF_SCARB_VERSION="2.16.0")
-    # The Sierra is only emitted with `sierra = true` on the target; add it
-    # transiently through the profile of a scratch copy of the manifest? No:
-    # `scarb build` writes `<name>.executable.sierra.json` when the target
-    # says so, and the committed manifest does not (the file is 30 MB). Ask
-    # for it with the env override Scarb honours for profile keys.
+    # All three targets emit Sierra; only generated artifacts carry it.
     sh(["scarb", "--manifest-path", str(WORKSPACE / "Scarb.toml"), "--profile", "proving",
         "build", "-p", "doom_run"], WORKSPACE, env)
     sierra = WORKSPACE / "target" / "proving" / f"{exe}.executable.sierra.json"
@@ -64,7 +60,7 @@ def build(exe: str) -> Path:
 
 def offsets(sierra: Path) -> tuple[dict[int, int], int]:
     if not TOOL.exists():
-        sh(["cargo", "build", "--release"], TOOL_DIR)
+        sh(["cargo", "build", "--release", "--jobs", "2"], TOOL_DIR)
     out = sh([str(TOOL), str(sierra)], HERE)
     words: dict[int, int] = {}
     total = 0
@@ -117,7 +113,7 @@ def main() -> int:
     owner: dict[int, str] = {}
     for k, (ep, f) in enumerate(entries):
         end = entries[k + 1][0] if k + 1 < len(entries) else len(stmts)
-        name = f["id"].get("debug_name", str(f["id"]["id"]))
+        name = f["id"].get("debug_name") or str(f["id"]["id"])
         for i in range(ep, end):
             owner[i] = name
     by_crate = collections.Counter()
