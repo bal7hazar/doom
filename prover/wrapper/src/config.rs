@@ -583,6 +583,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::field_reassign_with_default)]
     fn circuit_proof_slots_follow_the_registry() {
         let mut cfg = Config::default();
         cfg.machine_memory_bytes = Some(64 * 1_000_000_000);

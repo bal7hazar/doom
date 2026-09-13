@@ -22,6 +22,9 @@ use tower::ServiceExt;
 
 pub const KEY: &str = "test-key";
 pub const ADMIN_KEY: &str = "test-admin";
+/// A second, non-admin key on a different account — for checking that ownership is enforced
+/// (unlike `ADMIN_KEY`, which is deliberately allowed to act on anyone's run).
+pub const OTHER_KEY: &str = "test-other";
 
 pub struct Harness {
     pub state: Shared,
@@ -29,6 +32,7 @@ pub struct Harness {
     pub _dir: tempfile::TempDir,
 }
 
+#[allow(clippy::field_reassign_with_default)]
 pub fn config(dir: &std::path::Path, batch_max_runs: usize, batch_max_wait_secs: u64) -> Config {
     let mut cfg = Config::default();
     cfg.data_dir = dir.to_path_buf();
@@ -55,20 +59,41 @@ pub fn config(dir: &std::path::Path, batch_max_runs: usize, batch_max_wait_secs:
         admin: true,
         daily_run_quota: 0,
     });
+    cfg.api_keys.push(ApiKey {
+        key: OTHER_KEY.into(),
+        account: "0x999".into(),
+        admin: false,
+        daily_run_quota: 0,
+    });
     cfg
+}
+
+/// Builds the shared state and router without taking ownership of `dir`, so a caller can drop
+/// and rebuild a wrapper against the same on-disk database (a restart) to check persistence.
+pub fn build(
+    dir: &std::path::Path,
+    batch_max_runs: usize,
+    batch_max_wait_secs: u64,
+) -> (Shared, Router) {
+    std::fs::create_dir_all(dir).unwrap();
+    let exe = dir.join("segment_stub.executable.json");
+    if !exe.exists() {
+        std::fs::write(&exe, b"{}").unwrap();
+    }
+    let cfg = config(dir, batch_max_runs, batch_max_wait_secs);
+    let db = Db::open(&dir.join("queue.sqlite3")).unwrap();
+    db.recover().unwrap();
+    let state = Arc::new(AppState::new(cfg, db));
+    tokio::spawn(Scheduler::new(Arc::clone(&state)).run());
+    let router = api::router(Arc::clone(&state));
+    (state, router)
 }
 
 impl Harness {
     /// Builds a wrapper and starts its scheduler.
     pub fn start(batch_max_runs: usize, batch_max_wait_secs: u64) -> Self {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("segment_stub.executable.json"), b"{}").unwrap();
-        let cfg = config(dir.path(), batch_max_runs, batch_max_wait_secs);
-        let db = Db::open(&dir.path().join("queue.sqlite3")).unwrap();
-        db.recover().unwrap();
-        let state = Arc::new(AppState::new(cfg, db));
-        tokio::spawn(Scheduler::new(Arc::clone(&state)).run());
-        let router = api::router(Arc::clone(&state));
+        let (state, router) = build(dir.path(), batch_max_runs, batch_max_wait_secs);
         Self {
             state,
             router,
@@ -77,11 +102,7 @@ impl Harness {
     }
 
     pub async fn call(&self, req: Request<Body>) -> (StatusCode, Value) {
-        let res = self.router.clone().oneshot(req).await.unwrap();
-        let status = res.status();
-        let bytes = res.into_body().collect().await.unwrap().to_bytes();
-        let value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
-        (status, value)
+        call(&self.router, req).await
     }
 
     pub async fn submit(&self, body: Value) -> (StatusCode, Value) {
@@ -89,9 +110,13 @@ impl Harness {
     }
 
     pub async fn submit_as(&self, key: &str, body: Value) -> (StatusCode, Value) {
+        self.post_as(key, "/v1/runs", body).await
+    }
+
+    pub async fn post_as(&self, key: &str, uri: &str, body: Value) -> (StatusCode, Value) {
         let req = Request::builder()
             .method("POST")
-            .uri("/v1/runs")
+            .uri(uri)
             .header("authorization", format!("Bearer {key}"))
             .header("content-type", "application/json")
             .body(Body::from(serde_json::to_vec(&body).unwrap()))
@@ -99,10 +124,46 @@ impl Harness {
         self.call(req).await
     }
 
+    /// `PUT .../segments/{index}` with a JSON body, as the browser client sends it.
+    pub async fn put_segment_as(
+        &self,
+        key: &str,
+        run_id: &str,
+        segment: &Value,
+    ) -> (StatusCode, Value) {
+        let index = segment["index"].as_u64().unwrap();
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!("/v1/runs/{run_id}/segments/{index}"))
+            .header("authorization", format!("Bearer {key}"))
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(segment).unwrap()))
+            .unwrap();
+        self.call(req).await
+    }
+
+    pub async fn put_segment(&self, run_id: &str, segment: &Value) -> (StatusCode, Value) {
+        self.put_segment_as(KEY, run_id, segment).await
+    }
+
+    pub async fn delete_as(&self, key: &str, uri: &str) -> (StatusCode, Value) {
+        let req = Request::builder()
+            .method("DELETE")
+            .uri(uri)
+            .header("authorization", format!("Bearer {key}"))
+            .body(Body::empty())
+            .unwrap();
+        self.call(req).await
+    }
+
     pub async fn get(&self, uri: &str) -> (StatusCode, Value) {
+        self.get_as(KEY, uri).await
+    }
+
+    pub async fn get_as(&self, key: &str, uri: &str) -> (StatusCode, Value) {
         let req = Request::builder()
             .uri(uri)
-            .header("authorization", format!("Bearer {KEY}"))
+            .header("authorization", format!("Bearer {key}"))
             .body(Body::empty())
             .unwrap();
         self.call(req).await
@@ -135,8 +196,23 @@ impl Harness {
     }
 }
 
+/// Free-standing so a rebuilt router (after simulating a restart) can be driven the same way.
+pub async fn call(router: &Router, req: Request<Body>) -> (StatusCode, Value) {
+    let res = router.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    (status, value)
+}
+
 /// A submission body whose segments chain `h_in`/`h_out` the way `segment_stub` does.
 pub fn run_body(seed: u64, n_segments: u32, solo: bool) -> Value {
+    json!({ "program": "segment_stub", "solo": solo, "segments": run_segments(seed, n_segments) })
+}
+
+/// The segments a whole-run `run_body` would carry, as a standalone array — what the resumable
+/// upload protocol `PUT`s one at a time.
+pub fn run_segments(seed: u64, n_segments: u32) -> Vec<Value> {
     let mut segments = vec![];
     let mut h = seed + 1;
     for i in 0..n_segments {
@@ -159,10 +235,10 @@ pub fn run_body(seed: u64, n_segments: u32, solo: bool) -> Value {
             }
         }));
     }
-    json!({ "program": "segment_stub", "solo": solo, "segments": segments })
+    segments
 }
 
-fn base64_of(s: &str) -> String {
+pub fn base64_of(s: &str) -> String {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.encode(s.as_bytes())
 }

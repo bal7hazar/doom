@@ -220,8 +220,15 @@ async fn invalid_submissions_are_rejected_before_any_work() {
     body["program"] = json!("doom_run");
     assert_eq!(h.submit(body).await.0, StatusCode::BAD_REQUEST);
 
-    // No segments.
+    // No segments: this now creates a `collecting` run for the resumable upload protocol
+    // (see `resumable_uploads.rs`), not an error.
     let body = json!({"program": "segment_stub", "segments": []});
+    let (code, res) = h.submit(body).await;
+    assert_eq!(code, StatusCode::ACCEPTED);
+    assert_eq!(res["status"], "collecting");
+
+    // But an unknown program is still rejected immediately, even with no segments.
+    let body = json!({"program": "doom_run", "segments": []});
     assert_eq!(h.submit(body).await.0, StatusCode::BAD_REQUEST);
 
     // Nothing was queued.
