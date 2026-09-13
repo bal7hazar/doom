@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "sim_continuation"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_game = { path = "../../../../../cairo/doom/doom_game" }
+segment = { path = "../../../../../cairo/crates/segment" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "session"
+function = "sim_continuation::session"
+sierra = true
+
+[cairo]
+enable-gas = false
+
+[profile.proving]
+inherits = "release"
+
+[profile.proving.cairo]
+unsafe-panic = true
+
+[[target.executable]]
+name = "counter"
+function = "sim_continuation::limit_fixture::counter"

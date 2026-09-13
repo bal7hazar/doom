@@ -9,6 +9,7 @@
 //! lives in `prover/wasm` (spike S2).
 
 pub mod clock;
+pub mod continuation;
 pub mod core;
 
 #[cfg(target_arch = "wasm32")]
