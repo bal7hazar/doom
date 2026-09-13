@@ -28,3 +28,17 @@ sierra = true
 
 [cairo]
 enable-gas = false
+
+# `bench/attribute.py` joins these annotations to the CASM offsets
+# `infra/sierra_words` prints; they are debug info only and do not change a
+# single generated word (S7 §3.1).
+unstable-add-statements-functions-debug-info = true
+unstable-add-statements-code-locations-debug-info = true
+
+# docs/DECISIONS.md D29: the proved program is built with
+# `unsafe-panic = true` (a panic becomes an unprovable trap, which it was
+# anyway -- R4-A2). `measure.py` reports the words under this profile too,
+# which also compile-tests the crate under the flag: S7 §6 hit a compiler
+# ICE with it on a `span.at(i)` + `unwrap`.
+[profile.proving.cairo]
+unsafe-panic = true

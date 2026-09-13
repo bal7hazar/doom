@@ -6,11 +6,13 @@
 script splits it, by building `bench/size` five times with the calls of one
 more module switched on each time (`state`, then `+inter`, then `+weapon`,
 then `+think`, then `+tic`). Each step's increment is what that module's
-code and its call sites cost, because the crates *below* `doom_player` are
-already fully linked by `bench/baseline` and by every step.
+code and its call sites introduce, including lower-crate dependencies
+missing from earlier steps. It is a linkage diagnostic, not source ownership;
+`attribute.py` provides source ownership.
 
-The markers are the `// SIZE:<module>` comments in `size/src/lib.cairo`; a
-line carrying one is kept only from the step that switches its module on.
+The markers are the `// SIZE:<module>` comments in `size/src/lib.cairo`; the complete semicolon-terminated statement carrying one is kept only
+from the step that switches its module on, including statements wrapped by
+`scarb fmt`.
 
 Usage: `python3 size_split.py`
 """
@@ -43,11 +45,16 @@ def words(cwd: Path) -> int:
 
 def variant(source: str, enabled: set[str]) -> str:
     kept = []
+    pending = []
     for line in source.splitlines(True):
-        m = re.search(r"// SIZE:(\w+)", line)
-        if m and m.group(1) not in enabled:
+        pending.append(line)
+        if not re.search(r";\s*(?://.*)?$", line):
             continue
-        kept.append(line)
+        m = re.search(r"// SIZE:(\w+)", line)
+        if not m or m.group(1) in enabled:
+            kept.extend(pending)
+        pending = []
+    kept.extend(pending)
     return "".join(kept)
 
 

@@ -14,6 +14,7 @@ use doom_specials::{
 };
 use prng::Prng;
 use super::env::{Env, PlayerEvent};
+use super::num::dec;
 use super::state::{PST_DEAD, Player, has_blue_key};
 use super::think::player_think;
 
@@ -23,6 +24,7 @@ use super::think::player_think;
 /// resolved first (its mobj has not moved yet this tic), then
 /// `P_PlayerThink`, then the use-line the think reported. `doom_game` runs
 /// `specials_ticker` and the thinker pass after this returns.
+#[inline(always)]
 pub fn player_tic(
     env: Env,
     m: @LevelMap,
@@ -42,7 +44,9 @@ pub fn player_tic(
     if p.playerstate != PST_DEAD {
         let w = env.world.unbox();
         let ps = PlayerSector {
-            sector: mo.sector, on_floor: mo.z.enc == *w.floor.at(mo.sector), radiation_suit: false,
+            sector: mo.sector,
+            on_floor: mo.z.enc == doom_physics::maputl::rd(w.floor, mo.sector),
+            radiation_suit: false,
         };
         let (next, effect, ev) = player_in_special_sector(s, m, lm, ps, env.tic);
         s = next;
@@ -54,31 +58,46 @@ pub fn player_tic(
     let before = events.len();
     player_think(env, ref g, ref rng, ref p, ref mo, word, damage, secret, ref events);
 
-    // Apply whatever `P_UseLines` found.
-    let seen = events.span();
-    let n = seen.len();
-    let mut k = before;
-    while k != n {
-        match *seen.at(k) {
+    // Keep both loops outside the wide player/mobj live set (S7 §8 rule 4).
+    let seen = after(events.span(), before);
+    apply_uses(ref s, ref cues, BoxTrait::new(*m), BoxTrait::new(*lm), has_blue_key(@p), seen);
+    (s, cues)
+}
+
+fn after(mut seen: Span<PlayerEvent>, mut skip: u32) -> Span<PlayerEvent> {
+    while skip != 0 {
+        match seen.pop_front() {
+            Option::Some(_) => { skip = dec(skip); },
+            Option::None => { break; },
+        }
+    }
+    seen
+}
+
+fn apply_uses(
+    ref s: SpecialsState,
+    ref cues: Array<Event>,
+    m: Box<LevelMap>,
+    lm: Box<SpecialsMap>,
+    blue: bool,
+    mut seen: Span<PlayerEvent>,
+) {
+    while let Option::Some(e) = seen.pop_front() {
+        match *e {
             PlayerEvent::Use((
                 line, side,
             )) => {
-                let (next, ev, _) = use_line(s, m, lm, line, side, player(has_blue_key(@p)));
+                let (next, ev, _) = use_line(s, @m.unbox(), @lm.unbox(), line, side, player(blue));
                 s = next;
                 append_events(ref cues, ev);
             },
             _ => {},
         }
-        k += 1;
     }
-    (s, cues)
 }
 
-fn append_events(ref out: Array<Event>, more: Span<Event>) {
-    let n = more.len();
-    let mut k: u32 = 0;
-    while k != n {
-        out.append(*more.at(k));
-        k += 1;
+fn append_events(ref out: Array<Event>, mut more: Span<Event>) {
+    while let Option::Some(e) = more.pop_front() {
+        out.append(*e);
     }
 }
