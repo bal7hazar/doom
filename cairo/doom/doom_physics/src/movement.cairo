@@ -30,8 +30,8 @@ use geom2d::{
 };
 use super::grid::{ThingGrid, things_in};
 use super::maputl::{
-    UnitBox, dec, inc, line_box_rejects, line_diagonal, line_hp, line_meta, line_opening, rd, rd32,
-    unit_box,
+    UnitBox, dec, inc, line_box_misses, line_box_rejects, line_diagonal, line_hp, line_meta,
+    line_opening, rd, rd32, unit_box,
 };
 use super::mobj::{
     MF_CORPSE, MF_DROPOFF, MF_FLOAT, MF_INFLOAT, MF_MISSILE, MF_NOCLIP, MF_NOGRAVITY, MF_PICKUP,
@@ -356,28 +356,25 @@ fn things_in_range(
     y: Fixed,
     ref events: Array<MoveEvent>,
 ) -> u32 {
+    // One loop over the range, row-major, two carried counters and no
+    // division (a nested loop is two loop functions, each re-pushing the
+    // whole live set on entry and exit: measured ~250 steps for one cell).
+    let mut cx = wide.x0;
     let mut cy = wide.y0;
     loop {
         if cy > wide.y1 {
             break NO_MOBJ;
         }
-        let mut cx = wide.x0;
-        let hit = loop {
-            if cx > wide.x1 {
-                break NO_MOBJ;
-            }
-            let hit = check_things_in_cell(
-                mobjs, ref g, cell_at(grid, cx, cy), mo, me, x, y, ref events,
-            );
-            if hit != NO_MOBJ {
-                break hit;
-            }
-            cx = inc(cx);
-        };
+        let hit = check_things_in_cell(mobjs, ref g, cell_at(grid, cx, cy), mo, me, x, y, ref events);
         if hit != NO_MOBJ {
             break hit;
         }
-        cy = inc(cy);
+        if cx == wide.x1 {
+            cx = wide.x0;
+            cy = inc(cy);
+        } else {
+            cx = inc(cx);
+        }
     }
 }
 
@@ -501,26 +498,22 @@ fn lines_in_range(
 ) -> LineFold {
     let ub = unit_box(tmbox);
     let mut fold = empty_fold();
+    let mut cx = r.x0;
     let mut cy = r.y0;
     loop {
         if cy > r.y1 {
             break;
         }
-        let mut cx = r.x0;
-        loop {
-            if cx > r.x1 {
-                break;
-            }
-            fold = lines_in_cell(lv, cell_at(grid, cx, cy), tmbox, ub, missile, player, fold);
-            if fold.blocker != NO_LINE {
-                break;
-            }
-            cx = inc(cx);
-        }
+        fold = lines_in_cell(lv, cell_at(grid, cx, cy), tmbox, ub, missile, player, fold);
         if fold.blocker != NO_LINE {
             break;
         }
-        cy = inc(cy);
+        if cx == r.x1 {
+            cx = r.x0;
+            cy = inc(cy);
+        } else {
+            cx = inc(cx);
+        }
     }
     fold
 }
@@ -550,6 +543,7 @@ pub fn check_position(
 
 /// The things and the lines of `P_CheckPosition`, on a clipping thing whose
 /// box covers `r`: the blocker (or `Nothing`) and the line fold.
+#[inline(always)]
 fn clip_against(
     lv: Level,
     mobjs: Span<Mobj>,
@@ -616,7 +610,7 @@ pub fn check_position_in(
     let loc = if !ok {
         Location { cell: NO_CELL, subsector: 0, sector: 0 }
     } else {
-        locate_in(lv, grid, range, p, cached, mo)
+        locate_in(lv, grid, range, p, cached, mo.subsector, mo.sector)
     };
     let floorz = Fixed { enc: rd(lv.floor, loc.sector) };
     let ceilingz = Fixed { enc: rd(lv.ceil, loc.sector) };
@@ -658,7 +652,13 @@ pub fn check_position_in(
 /// from `CELL_NODE` when the point is on the grid and from the root
 /// otherwise.
 fn locate_in(
-    lv: Level, grid: Grid, range: Option<CellRange>, p: Point, cached: bool, mo: Mover,
+    lv: Level,
+    grid: Grid,
+    range: Option<CellRange>,
+    p: Point,
+    cached: bool,
+    cached_subsector: u32,
+    cached_sector: u32,
 ) -> Location {
     let cell = match range {
         Option::Some(r) => cell_in_range(grid, r, p),
@@ -668,7 +668,7 @@ fn locate_in(
     match cell {
         Option::Some(cell) => {
             if cached {
-                Location { cell, subsector: mo.subsector, sector: mo.sector }
+                Location { cell, subsector: cached_subsector, sector: cached_sector }
             } else {
                 let subsector = descend(lv.hot, rd32(map.cell_node, cell), p);
                 Location { cell, subsector, sector: rd32(map.ss_sector, subsector) }
@@ -703,6 +703,7 @@ pub fn try_move(
 }
 
 /// The height rules of `P_TryMove` on a `P_CheckPosition` answer.
+#[inline(always)]
 fn clip_verdict(c: Check, flags: u32, z: Fixed, height: Fixed) -> Verdict {
     if !c.ok {
         return Verdict { ok: false, floatok: false, blocker: c.blocker };
@@ -814,9 +815,11 @@ fn cross_special(
 // P_SlideMove
 // ---------------------------------------------------------------------------
 
+#[cfg(feature: "vanilla_slide")]
 /// "No blocking line found yet" (`bestslidefrac == FRACUNIT + 1`).
 const NO_SLIDE: u32 = 0xFFFF;
 
+#[cfg(feature: "vanilla_slide")]
 /// The slider's fields `PTR_SlideTraverse` reads.
 #[derive(Copy, Drop)]
 struct Slider {
@@ -826,6 +829,7 @@ struct Slider {
     height: Fixed,
 }
 
+#[cfg(feature: "vanilla_slide")]
 /// `PTR_SlideTraverse` over the lines of one cell: the nearest blocking line
 /// so far as `(best, bestline)`.
 fn slide_cell(
@@ -843,8 +847,12 @@ fn slide_cell(
         let map = lv.hot.unbox();
         let line = rd32(map.bm_items, j);
         j = inc(j);
+        let packed_box = rd(map.l_box, line);
+        if line_box_misses(packed_box, tr.unbox().tb) {
+            continue;
+        }
         let hp = line_hp(map.l_ab, map.l_bb, map.l_cb, line);
-        let lbox = match crosses(tr, hp, rd(map.l_box, line)) {
+        let lbox = match crosses(tr, hp, packed_box) {
             Option::Some(b) => b,
             Option::None => { continue; },
         };
@@ -871,6 +879,7 @@ fn slide_cell(
     (best, bestline)
 }
 
+#[cfg(feature: "vanilla_slide")]
 /// `PTR_SlideTraverse` over one trace: the nearest blocking line along
 /// `p1 -> p2` for a thing of `s.height` standing at `s.z`, folded into
 /// `(best, bestline)`.
@@ -899,6 +908,7 @@ fn slide_traverse(
     (best, bestline)
 }
 
+#[cfg(feature: "vanilla_slide")]
 /// `P_HitSlideLine`: clip `(tmx, tmy)` to slide along `line`.
 fn hit_slide_line(lv: Level, mox: Point, line: u32, tmx: Fixed, tmy: Fixed) -> (Fixed, Fixed) {
     let map = lv.hot.unbox();
@@ -946,6 +956,7 @@ fn stairstep(
     mo
 }
 
+#[cfg(feature: "vanilla_slide")]
 /// The three traces of one `P_SlideMove` attempt: the nearest blocking line
 /// along the leading corners of the box, or `NO_SLIDE`.
 fn slide_best(lv: Level, mo: Box<Mobj>) -> (Fixed, u32) {
@@ -994,6 +1005,7 @@ fn slide_best(lv: Level, mo: Box<Mobj>) -> (Fixed, u32) {
 /// stairstep fallback ran, the rest of the momentum was spent, or the slide
 /// along the wall went through), `false` when vanilla loops for another
 /// attempt.
+#[cfg(feature: "vanilla_slide")]
 fn slide_attempt(
     lv: Level,
     mobjs: Span<Mobj>,
@@ -1059,6 +1071,7 @@ pub fn slide_move(
 
 /// [`slide_move`] on a [`Level`]: vanilla's `hitcount` loop, unrolled (two
 /// attempts, then the stairstep).
+#[cfg(feature: "vanilla_slide")]
 pub fn slide_move_in(
     lv: Level,
     mobjs: Span<Mobj>,
@@ -1075,6 +1088,20 @@ pub fn slide_move_in(
     if done {
         return mo;
     }
+    stairstep(lv, mobjs, ref g, mo, me, ref events)
+}
+
+/// Without the `vanilla_slide` feature, [`slide_move`] is the stairstep
+/// alone ([`slide_move_lite`]).
+#[cfg(not(feature: "vanilla_slide"))]
+pub fn slide_move_in(
+    lv: Level,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    mo: Box<Mobj>,
+    me: u32,
+    ref events: Array<MoveEvent>,
+) -> Box<Mobj> {
     stairstep(lv, mobjs, ref g, mo, me, ref events)
 }
 

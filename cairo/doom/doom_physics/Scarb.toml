@@ -14,5 +14,13 @@ fsm = { path = "../../crates/fsm" }
 doom_map = { path = "../doom_map" }
 doom_things = { path = "../doom_things" }
 
+# `vanilla_slide` (default): P_SlideMove's three corner traces and
+# P_HitSlideLine. Without it `slide_move` is `slide_move_lite` (the stairstep
+# alone) and the crate's bytecode loses the slide traversal and the `bam`
+# angle code it pulls in (docs/spikes/S7.md, lever E). The tests need it.
+[features]
+default = ["vanilla_slide"]
+vanilla_slide = []
+
 [dev-dependencies]
 cairo_test.workspace = true
