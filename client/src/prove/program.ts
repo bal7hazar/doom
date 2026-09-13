@@ -2,12 +2,10 @@
  * The **segment program** seam: everything the pipeline needs to know about the
  * Cairo executable it proves, and nothing else.
  *
- * Today the only implementation is the stand-in `segment_stub10`
- * (`spikes/s4/programs/segment_stub10`), which returns the real ten-felt output
- * of decision **D14** over a synthetic input log. When `doom_run` exists it
- * drops in here: a different `*.executable.json`, a different
- * {@link SegmentProgram.encodeArgs}, the same {@link decodeSegmentOutput} — the
- * output layout is the contract, and it is already the final one.
+ * `createStubProgram` preserves the stand-in ABI. `createDoomProgram` is the
+ * pinned D29 adapter: asynchronous preparation replays the tic-zero journal in
+ * a separate Worker and supplies the full state needed by `run_segment`.
+ * Both return the same final ten-felt D14 layout.
  */
 import { feltToNumber, normalizeFelt, toFelt } from "./felt.js";
 import { SEGMENT_OUTPUT_FELTS, SEGMENT_OUTPUT_VERSION, type Felt, type SegmentOutput } from "./types.js";
@@ -37,6 +35,14 @@ export interface SegmentProgram {
   executableJson(): Promise<string>;
   /** Program arguments for one segment, as felts, in the executable's own order. */
   encodeArgs(request: SegmentRequest): Felt[];
+  /** Strong persisted identity for a concrete engine/ABI; absent on the legacy stub. */
+  readonly identity?: string;
+  prepareArgs?(request: SegmentRequest): Promise<Felt[]>;
+  validateOutput?(args: readonly Felt[], preimage: readonly Felt[]): void;
+  /** Full acknowledged journal, including all tics before opening the proof panel. */
+  journalWords?(): readonly number[];
+  validateJournal?(words: readonly number[]): void;
+
 }
 
 /**

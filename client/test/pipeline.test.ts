@@ -438,3 +438,50 @@ describe("ProofPipeline", () => {
     expect(events.filter((e) => e.type === "segment").length).toBeGreaterThanOrEqual(4);
   });
 });
+
+describe("concrete program identity and preparation", () => {
+  it("keeps incompatible concrete runs untouched and rejects identity downgrade", async () => {
+    const concrete = { ...fakeProgram, identity: "pinned-engine-v1" };
+    const run = await makePipeline({}, { program: concrete }).pipeline.attach();
+    const before = await store.getRun(run.id);
+    await expect(makePipeline({}, { program: { ...concrete, identity: "other-engine" } }).pipeline.attach(run.id)).rejects.toThrow(/identity/);
+    await expect(makePipeline().pipeline.attach(run.id)).rejects.toThrow(/identity/);
+    expect(await store.getRun(run.id)).toEqual(before);
+  });
+  it("syncs pre-panel tics and persists exact async args and fresh AIR refusal without proving", async () => {
+    let journal = words(4);
+    let prepared = 0;
+    const concrete: SegmentProgram = { ...fakeProgram, identity: "pinned-engine-v1",
+      journalWords: () => journal,
+      encodeArgs: () => { throw new Error("synchronous path forbidden"); },
+      prepareArgs: async request => { prepared++; return fakeProgram.encodeArgs(request); },
+    };
+    const { pipeline } = makePipeline({ legacySizing: true }, { program: concrete });
+    const run = await pipeline.attach();
+    await pipeline.syncGameJournal();
+    await pipeline.syncGameJournal(); // opening/toggling the panel does not duplicate inputs
+    expect(pipeline.state.ticsRecorded).toBe(4);
+    await pipeline.proveAll();
+    const saved = await store.getRun(run.id);
+    expect(saved?.programIdentity).toBe(concrete.identity);
+    expect(saved?.admissionFailure?.args).toEqual(["0x1", "0x0", "0x4"]);
+    expect(saved?.admissionFailure?.outputPreimage).toHaveLength(11);
+    expect(saved?.admissionFailure?.reason).toMatch(/update the prover artifacts/);
+    expect((await store.getInputs(run.id)).ticCount).toBe(4);
+    expect(prepared).toBe(1); expect(FakeProver.proves).toBe(0);
+    journal = [99, ...journal.slice(1)];
+    await expect(pipeline.syncGameJournal()).rejects.toThrow(/prefix/);
+  });
+  it("refuses persisted argument substitution before requeue or proving", async () => {
+    const concrete: SegmentProgram = { ...fakeProgram, identity: "pinned-engine-v1",
+      prepareArgs: async request => fakeProgram.encodeArgs(request) };
+    const first = makePipeline({ failOn: new Set([0]) }, { program: concrete });
+    const run = await first.pipeline.attach();
+    await first.pipeline.appendTics(words(4)); await first.pipeline.proveAll();
+    const saved = await store.getSegment(run.id, 0);
+    await store.putSegment({ ...saved!, args: ["0xdead", ...saved!.args.slice(1)] });
+    const before = FakeProver.proves;
+    await expect(makePipeline({}, { program: concrete }).pipeline.attach(run.id)).rejects.toThrow(/arguments differ/);
+    expect(FakeProver.proves).toBe(before);
+  });
+});

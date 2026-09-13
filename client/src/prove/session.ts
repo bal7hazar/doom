@@ -10,7 +10,9 @@
  * It is created **lazily**, on the first press of the proof-queue key: a clone
  * without `public/prover/` (the artifacts are 45 MB each and gitignored) must
  * still boot the renderer, and nothing here should cost a frame before the
- * player asks for it.
+ * player asks for it. A concrete Doom program supplies the acknowledged game
+ * journal created at tic zero; create/start/finish synchronize it without losing
+ * inputs recorded before the panel was opened.
  */
 import { exportFileName, exportRunBlob, importRun } from "../store/hellproofFile.js";
 import { readStorageStatus, requestPersistence } from "../store/quota.js";
@@ -97,6 +99,7 @@ export class ProveSession {
     });
 
     const run = await pipeline.attach(options.runId);
+    if (program.journalWords) await pipeline.syncGameJournal();
     session = new ProveSession(pipeline, store, panel, run, options);
     options.host.append(panel.element);
     panel.setKeepOffline(run.keepOffline);
@@ -131,6 +134,7 @@ export class ProveSession {
 
   /** Starts (or resumes) background proving, and asks for persistent storage. */
   async startProving(): Promise<void> {
+    if (this.options.program?.journalWords) await this.pipeline.syncGameJournal();
     await requestPersistence();
     this.pipeline.start();
     this.panel.log("proving started (background; the sim and the renderer keep priority)");
@@ -138,6 +142,7 @@ export class ProveSession {
 
   /** No more tics: prove what is left and settle. */
   async finishAndProve(): Promise<void> {
+    if (this.options.program?.journalWords) await this.pipeline.syncGameJournal();
     await requestPersistence();
     const chain = await this.pipeline.proveAll();
     this.panel.log(chain?.ok ? `run proved: ${chain.tics} tics` : `chain check failed: ${chain?.reason}`);
