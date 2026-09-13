@@ -69,6 +69,7 @@ python3 measure.py --update             # re-baseline after an intended change
 | `trace` | 12 | 0 | two `geom2d::hoist` |
 | `child_box` | 96 | 11 | four `Span` reads |
 | `point_in_subsector` (6 levels) | 631 | 42 | **105 per level** |
+| `point_in_subsector_total` | same | same | the same descent without the malformed-tree panic (S7): what `doom_physics` calls |
 | `cross_bsp`, full crossing | 2 016 | 159 | 4 subsectors, 7 nodes descended twice |
 | `cross_bsp`, stopped at the first | 642 | 44 | the blocked-sight case |
 

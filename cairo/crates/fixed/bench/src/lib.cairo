@@ -24,8 +24,8 @@
 //! The accumulator is returned so that nothing can be optimized away.
 
 use fixed::{
-    BIAS, Fixed, abs, add, div, felt_ge, from_units, ge, is_neg, magnitude, max, min, mul, neg,
-    shr8, split, sub, to_units,
+    BIAS, Fixed, abs, add, div, felt_ge, felt_ge_narrow, from_units, ge, is_neg, magnitude, max,
+    min, mul, neg, shr8, split, sub, to_units,
 };
 
 #[executable]
@@ -150,6 +150,13 @@ fn main(op: u32, n: u32) -> felt252 {
         while i != n {
             let a = Fixed { enc: a0 + i.into() };
             acc += shr8(a).enc;
+            i += 1;
+        }
+    } else if op == 19 {
+        while i != n {
+            let a = Fixed { enc: a0 + i.into() };
+            let b = Fixed { enc: b0 + i.into() };
+            acc += felt_ge_narrow(a.enc, b.enc).into();
             i += 1;
         }
     } else if op == 17 {

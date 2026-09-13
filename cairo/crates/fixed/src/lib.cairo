@@ -189,8 +189,9 @@ pub fn from_int(n: i64) -> Fixed {
 ///
 /// **Measured: 15 steps, 5 range checks.**
 pub fn to_units(a: Fixed) -> felt252 {
-    let e: u128 = to_u128(a.enc);
-    let q: felt252 = (e / 65536).into();
+    let w16: NonZero<u128> = 65536;
+    let (q128, _) = DivRem::div_rem(to_u128(a.enc), w16);
+    let q: felt252 = q128.into();
     // BIAS is exactly 65536 map units, so the shift of the bias is exact.
     q - 65536
 }
@@ -276,8 +277,9 @@ pub fn abs(a: Fixed) -> Fixed {
 ///
 /// **Measured: 15 steps, 5 range checks.**
 pub fn shr8(a: Fixed) -> Fixed {
-    let e: u128 = to_u128(a.enc);
-    let q: felt252 = (e / 256).into();
+    let w8: NonZero<u128> = 256;
+    let (q128, _) = DivRem::div_rem(to_u128(a.enc), w8);
+    let q: felt252 = q128.into();
     Fixed { enc: q - 0x1000000 + BIAS }
 }
 
@@ -294,8 +296,9 @@ pub fn shr8(a: Fixed) -> Fixed {
 /// included here.
 pub fn mul(a: Fixed, b: Fixed) -> Fixed {
     let p = (a.enc - BIAS) * (b.enc - BIAS) + MUL_OFFSET;
-    let u: u128 = to_u128(p);
-    let q: felt252 = (u / 65536).into();
+    let w16: NonZero<u128> = 65536;
+    let (q128, _) = DivRem::div_rem(to_u128(p), w16);
+    let q: felt252 = q128.into();
     Fixed { enc: q - MUL_FIXUP }
 }
 

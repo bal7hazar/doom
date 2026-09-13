@@ -95,22 +95,32 @@ python3 measure.py --update             # re-baseline after an intended change
 |---|---:|---:|---|
 | `hoist` | 3 | 0 | once per point, not per line |
 | `box_around` | 4 | 0 | `tmbbox` |
-| `point_side` (hoisted) | 18 | 2 | S1 §5.5's figure exactly |
-| `point_side_alone` | 21 | 2 | hoists for you |
-| `divline_side` | 20 | 2 | three-valued |
-| `point_side_at` (planar) | 60 | 5 | +42 for three `Span` indexes, 14 each |
-| `point_on_side` (two vertices) | 73 | 12 | rebuilds the predicate; for callers without stored coefficients |
-| `bbox_reject`, far line | 26 | 2 | short-circuits on the first comparison |
-| `bbox_reject`, overlapping | 57 | 8 | all four comparisons |
-| `box_on_line_side` | 66 | 4 | S1 measured 92; its budget was ≤ 100 |
-| **`PIT_CheckLine`, Doom's order** | **29** | 2 | bbox first |
-| `PIT_CheckLine`, inverted | 71 | 4 | half-plane first — S1 §5.7 confirmed |
-| `approx_distance` | 65 | 11 | `P_AproxDistance` |
-| `point_on_side_truncated` | 96 | 22 | Doom's rounding, 5x the exact form |
-| `intercept_fraction` | 228 | 52 | `P_InterceptVector`: 4 `mul`, 4 `shr8`, 1 `div` |
+| `point_side` (hoisted) | 21 | 3 | S1 §5.5's 18 with `felt_ge`; on `felt_ge_narrow` since S7 (see below) |
+| `point_side_alone` | 24 | 3 | hoists for you |
+| `divline_side` | 23 | 3 | three-valued |
+| `point_side_at` (planar) | 51 | 6 | +30 for three `Span` indexes |
+| `point_on_side` (two vertices) | 82 | 13 | rebuilds the predicate; for callers without stored coefficients |
+| `bbox_reject`, far line | 26 | 3 | short-circuits on the first comparison |
+| `bbox_reject`, overlapping | 38 | 8 | all four comparisons |
+| `box_on_line_side` | 56 | 6 | S1 measured 92; its budget was ≤ 100 |
+| **`PIT_CheckLine`, Doom's order** | **33** | 3 | bbox first |
+| `PIT_CheckLine`, inverted | 61 | 6 | half-plane first — S1 §5.7 confirmed |
+| `approx_distance` | 71 | 14 | `P_AproxDistance` |
+| `point_on_side_truncated` | 111 | 23 | Doom's rounding, 5x the exact form |
+| `intercept_fraction` | 261 | 53 | `P_InterceptVector`: 4 `mul`, 4 `shr8`, 1 `div` |
 
-Bytecode: **4 548 words** for the benchmark executable, `fixed` and `bam`
+Bytecode: **4 552 words** for the benchmark executable, `fixed` and `bam`
 included.
+
+Since S7 (docs/spikes/S7.md) every predicate compares with
+`fixed::felt_ge_narrow` and converts with `fixed::to_u128`: no function of
+this crate has a panic path, which is what its callers' bytecode needed (a
+panic site inside an inlined predicate costs the enclosing function its
+whole return width). Measured in isolation the narrow comparison is +3
+steps and the panic-free `mul`/`shr8` +3 each (`intercept_fraction` 228 →
+261); measured in situ on `doom_physics`'s `P_TryMove` the narrow
+`point_side` is 104 steps *cheaper* per move than the `felt_ge` form (the
+`bool` merges into a branch, not into a value) and 684 words smaller.
 
 `intercept_fraction` is the expensive one: 12x a side test. S1 §7's advice
 stands — to *order* two intercepts, compare cross products instead of

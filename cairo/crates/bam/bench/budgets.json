@@ -1,13 +1,13 @@
 {
   "crate": "bam",
   "note": "Step budgets, net of the baseline op that builds the same operands (field 'base'; op 0 is the bare loop, op 1 the angle operand, op 2 the (dx, dy) pair). Measured by measure.py on Scarb 2.16.0; a run over budget by more than 10 % fails (PLAN.md 3.1 rule 4). bytecode_words covers the bench executable, the two tables included.",
-  "bytecode_words": 8551,
+  "bytecode_words": 8689,
   "operations": [
     {
       "name": "add",
       "op": 3,
       "base": 1,
-      "budget": 16
+      "budget": 12
     },
     {
       "name": "sub",
@@ -67,7 +67,7 @@
       "name": "tantoangle",
       "op": 13,
       "base": 1,
-      "budget": 16
+      "budget": 21
     },
     {
       "name": "slope_div",
@@ -79,19 +79,19 @@
       "name": "point_to_angle",
       "op": 15,
       "base": 2,
-      "budget": 118
+      "budget": 126
     },
     {
       "name": "point_to_angle2",
       "op": 16,
       "base": 2,
-      "budget": 122
+      "budget": 130
     },
     {
       "name": "turn + sin_cos (player step)",
       "op": 17,
       "base": 1,
-      "budget": 125
+      "budget": 121
     }
   ]
 }

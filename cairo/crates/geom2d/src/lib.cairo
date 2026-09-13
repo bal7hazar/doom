@@ -371,8 +371,9 @@ pub fn approx_distance(dx: Fixed, dy: Fixed) -> Fixed {
     } else {
         (b, a)
     };
-    let s: u128 = to_u128(small);
-    let half: felt252 = (s / 2).into();
+    let two: NonZero<u128> = 2;
+    let (h, _) = DivRem::div_rem(to_u128(small), two);
+    let half: felt252 = h.into();
     fixed::from_raw(big + small - half)
 }
 

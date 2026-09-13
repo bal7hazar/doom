@@ -131,8 +131,9 @@ fn axis_cell(origin: Fixed, v: Fixed, count: u32) -> (u32, u8) {
     if !felt_ge_narrow(v.enc, origin.enc) {
         return (0, 1);
     }
-    let d = to_u128(v.enc - origin.enc);
-    let q: Option<u32> = (d / CELL_RAW_U128).try_into();
+    let cell_raw: NonZero<u128> = 0x800000;
+    let (d, _) = DivRem::div_rem(to_u128(v.enc - origin.enc), cell_raw);
+    let q: Option<u32> = d.try_into();
     let c: u32 = match q {
         Option::Some(c) => c,
         Option::None => count,
