@@ -1,27 +1,38 @@
-# On-chain verifier — resumable circuit verification with proof sections as calldata (P4.0)
+# On-chain verifier — resumable circuit verification with proof sections as calldata (P4.0, P4.1)
 
 > Design + measured prototype for RISKS.md **R7-A6** (decisions D5/D6), on the verifier pinned at
 > `proving@cd7bc5f`. Everything quantified below is **measured** on the S4 root proof
 > (`spikes/s4/results/N4_doom`, 96 033 felts) with the code under `cairo/doom_contracts/`, in
 > snforge (`--tracked-resource cairo-steps`, see §7) and on **starknet-devnet 0.10.0**
-> (Starknet 0.14.4), 2026-09-12. No transaction was sent to a public network.
+> (Starknet 0.14.4). No transaction was sent to a public network.
+>
+> **P4.1 (2026-09-13)** — the gas lever of §8 landed: the vendored verifier carries a documented
+> patch series (`cairo/doom_contracts/vendor/patches/`: lazily-reduced FRI folds with one batch
+> inversion per layer, lazily-reduced `fri_answers` with one batch inversion per proof) and the
+> phase classes decode the packed sections themselves. **1.540e9 L2 gas per fact on devnet
+> (was 3.810e9, −59.6 %), 5 transactions, worst 38.5 % of the cap, 47.0 STRK ≈ 1.35 $** at the S5
+> price snapshot. What is verified did not change: the optimized phases are compared with the
+> **unmodified** vendored `verify_circuit` (`vendor/stwo_cairo_verifier_ref`) on the real root
+> proofs, accepted and tampered (`crates/stwo_circuit_phases/tests/test_equivalence.cairo`).
+> Numbers marked *P4.0* are the pre-optimization ones, kept for the comparison.
 
 ## 0. Verdict
 
-| Target (R7-A6) | Result |
-|---|---|
-| ≤ 6 invokes per fact | **5 transactions** (or 6 with every tx ≤ 84 % of the cap) |
-| each tx ≤ 90 % of the 1.21e9 L2-gas invoke cap | 5-tx plan: worst tx **90.4 %** (fri1); 6-tx plan: worst **84.0 %** |
-| calldata ≤ ~4 990 felts per tx | worst tx **4 627 felts** (begin) |
-| no proof data in storage | **0 proof felts stored**: 1 storage slot per (caller, proof_id), 3–5 writes per tx |
-| ≤ 2.5e9 L2 gas per fact | **3.81e9** (5 tx) / 3.82e9 (6 tx) — **missed**, see §8: 78 % is verifier compute; the transport is 0.3e9 |
-| cost per fact | **116 STRK ≈ 3.35 $** at the S5 mainnet price snapshot (30.5 gFri, 0.0288 $/STRK); **11.4 STRK ≈ 0.33 $** at the 3 gFri floor. Versus S5's extrapolation of the storage-staged design (≈ 250 STRK / 7.2 $ and 9 tx): **2.15× cheaper**, half the transactions |
-| declares (once) | 4 classes, 7.83e9 L2 gas ≈ 238 STRK at the snapshot price |
+| Target (R7-A6) | P4.0 | **P4.1** |
+|---|---|---|
+| ≤ 6 invokes per fact | 5 transactions (or 6 under the 90 % rule) | **5 transactions** (`--fri-split 2`), the 6-tx plan is no longer needed |
+| each tx ≤ 90 % of the 1.21e9 L2-gas invoke cap | worst tx 90.4 % (fri1) | worst tx **38.5 %** (`answers`, 466 M) |
+| calldata ≤ ~4 990 felts per tx | worst tx 4 627 felts (begin) | unchanged (same calldata format) |
+| no proof data in storage | 0 proof felts stored, 1 slot per (caller, proof_id) | unchanged |
+| ≤ 2.5e9 L2 gas per fact | 3.81e9 — missed | **1.540e9** — met (§3, `results/p41_receipts.json`) |
+| cost per fact | 116 STRK ≈ 3.35 $ at the S5 snapshot (30.5 gFri, 0.0288 $/STRK); 11.4 STRK at the 3 gFri floor | **47.0 STRK ≈ 1.35 $**; **4.6 STRK ≈ 0.13 $** at the floor. Versus S5's storage-staged extrapolation (≈ 250 STRK, 9 tx): **5.3× cheaper** |
+| declares (once) | 4 classes, 7.83e9 L2 gas ≈ 238 STRK | 4 classes, 8.77e9 ≈ 267 STRK (the classes grew by the decoders and the lazy arithmetic; all under the caps, §7) |
 
-The prototype verifies the real S4 root proof **end to end on devnet** (fact registered, `is_valid`
-= true), the same for the `doom_fold4_min` registry with regenerated constants (S4b). The
-remaining gap to 2.5e9 is not in the transport any more; it is the naive (non-opcode) QM31
-arithmetic of the vendored FRI code (§8, levers).
+The optimized classes verify the real S4 root proof end to end on devnet (fact
+`0x6b07de2a…7184be` registered, `is_valid` = true — the same fact as P4.0) and the two proved
+ten-felt batches of P4.2b in snforge, and reject the same tampered proofs as the unmodified
+verifier. The remaining cost is no longer dominated by field arithmetic: the largest transaction
+(`answers`) is bound by VM steps, not range checks (§8).
 
 ## 1. What is verified and where it costs
 
@@ -41,22 +52,31 @@ fri_layers ─── FRI decommit: first (circle) layer + 5 inner layers, fold_s
 ```
 
 Per-stage cost map (snforge, cairo-steps mode = what devnet bills; vendored verifier compiled
-**without** the qm31 opcode, gas enabled, audited libfuncs):
+**without** the qm31 opcode, gas enabled, audited libfuncs). **How the gas is computed** (P4.1
+finding, §7): the fee of a transaction is the *maximum* over VM resources of `count × weight` —
+steps × 100, range checks × 1 600, bitwise × 6 400, … — not their sum; in the vendored verifier
+the range checks dominate the steps two to one (one reduced M31 multiplication costs 3 range
+checks, an inversion 136, the packed `fri_fold` 28), so every P4.0 figure below is its
+range-check count × 1 600, and the P4.1 levers are "fewer reduced field operations". The P4.1
+column includes the decoding of the packed section (P4.0 unpacked in the router, 21 range checks
+per slot, counted in the transport then; the fair P4.0 figure is given with it in brackets):
 
-| Stage | VM steps | L2 gas (steps×100 + builtins) | devnet library call |
-|---|---:|---:|---:|
-| `begin` (whole transcript, incl. OODS eval) | 313 k | 50.6 M | 51.1 M |
-| Merkle tree 0 / 1 / 2 / 3 | 381 k / 565 k / 666 k / 278 k | 67 / 95 / 111 / 51 M | 163.7 M (trees 0+1), 163.3 M (2+3) |
-| `answers` (`fri_answers`) | 4.00 M | 675.7 M | 677.9 M |
-| FRI first layer / inner 0 / 1 / 2 / 3 / 4 | 1.91 M / 1.83 M / 1.68 M / 1.48 M / 350 k / 21 k | 487 / 474 / 410 / 390 / 92 / 5 M | 931.2 M (layers 0-1), 906.1 M (2-5) |
-| **compute total** | **17.5 M** | **≈ 2.93 e9** | **2.89 e9** |
-| monolithic reference (`verify_circuit` on the whole stream) | 28.7 M | 2.87 e9 (incl. 10 M-step deserialization of 96 k felts) | class does not fit calldata |
+| Stage | P4.0 steps / range checks | P4.0 L2 gas (+ unpack) | **P4.1 steps / range checks** | **P4.1 L2 gas** | binding resource |
+|---|---:|---:|---:|---:|---|
+| `begin` (whole transcript, incl. OODS eval) | 313 k / 31.6 k | 50.6 M | 400 k / 38.7 k | 61.9 M | range checks (it now also packs the sampled section for its digest) |
+| Merkle tree 0 / 1 / 2 / 3 (+ decode) | 381 k / 42.0 k … 278 k / 32.0 k | 67 / 95 / 111 / 51 M (+ 13 / 38 / 44 / 22 M unpack) | 523 k / 52.3 k, 716 k / 72.4 k, 822 k / 83.6 k, 415 k / 40.8 k | **84 / 116 / 134 / 65 M** | range checks (decode 2.1 per value, tree walk 4 per node) |
+| `answers` (`fri_answers` + decode) | 4.00 M / 422 k | 676 M (+ 116 M unpack) | 3.88 M / 192 k | **388 M** | **steps** (3.9 M: 22 k column terms, decoding, arrays) |
+| FRI first layer / inner 0 / 1 / 2 / 3 / 4 (+ decode) | 1.91 M / 305 k … 21 k / 3.3 k | 487 / 474 / 410 / 390 / 92 / 5 M (+ 160 M unpack) | 1.11 M / 97.5 k, 1.00 M / 87.6 k, 872 k / 75.2 k, 714 k / 61.1 k, 162 k / 13.6 k, 12 k / 1.0 k | **156 / 140 / 120 / 98 / 22 / 2 M** | range checks (decode ≈ 30 %, Merkle ≈ 10 %, folds + twiddles ≈ 60 %) |
+| **compute + decode total** | 13.5 M / 1.83 M | **≈ 2.93 e9 + 0.46 e9** | 10.6 M / 0.82 M | **≈ 1.39 e9** | |
+| monolithic reference (`verify_circuit`, unmodified vendor, whole stream) | 13.1 M / 1.80 M | 2.87 e9 | — (it is the reference the phases are compared with) | | |
 
-Reading: the transcript (`begin`) is negligible; the two expensive stages are the OODS
-quotient accumulation (`fri_answers`, 23 %) and above all the **FRI decommit walk (63 %)**:
-each of the 6 layers folds 70 subsets of 16 evaluations with `fold_step = 4`, and every QM31
-multiplication/inverse is emulated with `bounded_int` arithmetic (the qm31 opcodes are not in
-`audited.json`). With the opcode the same proof costs 5.3 M steps (S4).
+Reading: the transcript is negligible; after P4.1 the FRI walk costs 0.54e9 instead of 2.0e9
+(one Montgomery batch inversion per layer instead of 1 050 exponentiations, folds on unreduced
+`felt252` limbs reduced once per subset, twiddles from one `to_point` per subset, table bit
+reversal), `fri_answers` 0.39e9 instead of 0.79e9 (numerators accumulated unreduced per sample
+point, one batch inversion of all 630 denominators, one reduction per row) and the transport +
+deserialization 2.1 range checks per proof value instead of 5–6. With the qm31 opcode the same
+proof would cost ≈ 5.3 M steps (S4); the opcode is still not in `audited.json` (R3-A9).
 
 ## 2. Proof anatomy and transport
 
@@ -78,14 +98,22 @@ limb introduces a (low, high) u64 pair; a plain `0xFFFFFFFF` is escaped too — 
 did not, a real 2⁻³² collision bug). Each section is packed independently (own padded last
 slot) so the router can slice the payload by `n_slots(len)` without a second pass.
 
-Measured transport cost on devnet (`tools/devnet_probe.py`, `results/devnet_probe.json`):
+Measured transport cost on devnet (`tools/devnet_probe.py`, `results/devnet_probe.json`, P4.0):
 calldata **5 120 gas/felt** + validate/fee ≈ 6.7 k per felt all-in; `unpack_u32` **35.2 k gas per
-slot** (5.0 k per value; the first u256/u128-divmod version cost 82 k/slot); the library-call
-copy of the unpacked span ≈ 1.9 k per felt. Per proof value: 0.73 k (calldata) + 5.0 k (unpack)
-+ 1.9 k (copy) ≈ 7.7 k, versus 7.0 k if the same value were sent unpacked — packing costs ~10 %
-more gas than raw calldata but divides the transaction count by 7 (96 k felts would need 20
-invokes raw). Total transport ≈ 0.3e9 per fact (the "61× cheaper than storage" of S5 §8.5,
-confirmed: the storage-staged variant was extrapolated at 4.3e9 for staging alone).
+slot** (5.0 k per value = 21 range checks per slot; the first u256/u128-divmod version cost 82
+k/slot); the library-call copy of the unpacked span ≈ 1.9 k per felt.
+
+**P4.1**: the router no longer unpacks. It slices the payload into its packed sections and
+forwards the slices (7× less library-call calldata); the phase class decodes each section
+straight into the verifier's types (`stwo_circuit_phases::decode`): one `felt252 → u256` split
+per slot, the limbs isolated with the bitwise builtin and exact divisions by 2^32 in the field,
+five `u128` re-typings per slot and one range check per value (`u128 → M31` constrain or
+`u128 → u32` downcast) — **15 range checks per slot ≈ 2.1 per value** (3.4 k gas), where P4.0
+paid 3 to unpack plus 2–3 to deserialize (`felt252 → u32 → M31`). The digests that bind the
+re-supplied sections (`d_sampled`, `d_queried`) are now taken over the packed slots, which
+determine the decoded values (decoding is a function of the slots and every value is
+range-checked to its type). Packing costs ~10 % more gas than raw calldata would but divides the
+transaction count by 7 (96 k felts would need 20 invokes raw). The calldata format is unchanged.
 
 ## 3. Phase design (measured)
 
@@ -94,29 +122,31 @@ transcript input and is consumed whole by `begin`; the channel is never checkpoi
 needed after the query sampling); the state carried between transactions is a few hundred felts
 echoed by the caller and pinned by a Poseidon hash in storage.
 
-**5-transaction plan** (`tools/emit_calldata.py --fri-split 2`, `results/devnet_receipts.json`):
+**5-transaction plan** (`tools/emit_calldata.py --fri-split 2`), **P4.1**
+(`results/p41_receipts.json`, devnet 0.10.0, the P4.0 figures of `results/devnet_receipts.json`
+in brackets):
 
-| # | entrypoint | sections | calldata felts | echo felts | L2 gas (devnet) | % of 1.21e9 | of which library call(s) | router (unpack + slicing + hash + storage) | fee @30.5 gFri |
+| # | entrypoint | sections | calldata felts | echo felts | L2 gas (devnet) | % of 1.21e9 | of which library call(s) | router (slicing + hash + storage) + envelope | fee @30.5 gFri |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|
-| 1 | `begin` | head (279 slots) + trees 0, 1 (4 334 slots) | 4 627 | 0 | **459 365 920** | 38.0 % | 51.1 M + 163.7 M | 219 M | 14.0 STRK |
-| 2 | `merkle` | trees 2, 3 (4 346 slots) | 4 585 | 228 | **390 986 880** | 32.3 % | 163.3 M | 203 M | 11.9 |
-| 3 | `answers` | sampled values + queried values of the 4 trees (3 448 slots) | 3 685 | 228 | **861 298 880** | 71.2 % | 677.9 M | 163 M | 26.2 |
-| 4 | `fri` | FRI layers 0, 1 (2 986 slots) | 3 566 | 576 | **1 093 329 600** | **90.4 %** | 931.2 M | 142 M | 33.3 |
-| 5 | `fri` | FRI layers 2..5 (1 785 slots), last-layer check, fact | 2 365 | 576 | **1 004 813 200** | 83.0 % | 906.1 M | 85 M | 30.6 |
-| | **total** | 13 720 slots | | | **3 809 794 480** | | 2.89 e9 | 0.81 e9 | **116.1 STRK** |
+| 1 | `begin` | head (279 slots) + trees 0, 1 (4 334 slots) | 4 627 | 0 | **302 485 920** (459 M) | 25.0 % | 66.9 M + 200.9 M | 34.7 M | 9.22 STRK |
+| 2 | `merkle` | trees 2, 3 (4 346 slots) | 4 585 | 228 | **233 506 880** (391 M) | 19.3 % | 200.5 M | 33.0 M | 7.12 |
+| 3 | `answers` | sampled values + queried values of the 4 trees (3 448 slots) | 3 685 | 228 | **466 418 880** (861 M) | **38.5 %** | 432.9 M | 33.5 M | 14.21 |
+| 4 | `fri` | FRI layers 0, 1 (2 986 slots) | 3 566 | 576 | **294 609 600** (1 093 M) | 24.4 % | 266.3 M | 28.3 M | 8.98 |
+| 5 | `fri` | FRI layers 2..5 (1 785 slots), last-layer check, fact | 2 365 | 576 | **243 213 200** (1 005 M) | 20.1 % | 224.5 M | 18.7 M | 7.41 |
+| | **total** | 13 720 slots | | | **1 540 234 480** (3 810 M) | | 1.39 e9 | 0.15 e9 | **47.0 STRK** |
 
-**6-transaction plan** (`--fri-split 1,3`, `results/devnet_receipts_6tx.json`): same first three
-transactions, then FRI layers {0} 565 664 640 (46.8 %), {1, 2} 1 015 987 200 (84.0 %), {3, 4, 5}
-527 989 760 (43.6 %); total 3 821 293 280 (+0.3 %), 116.7 STRK. This is the plan that respects
-the internal 90 % rule (R7-A5) today; the 5-tx plan is 9.6 % under the hard cap. The client
-chooses the cut at emission time (the walk is chunkable at any layer boundary and the emitter
-asserts the calldata cap), so a proof whose FRI section is a few percent larger simply gets the
-6-tx plan.
+Every transaction is under 40 % of the cap: the internal 90 % rule (R7-A5) holds with the 5-tx
+plan, so **`--fri-split 2` is the recommended plan** and the 6-tx plan (`--fri-split 1,3`, P4.0:
+3.82e9, worst tx 84 %) is only a fallback for a proof whose FRI section grows past the calldata
+cap. The per-transaction envelope (validate 0.32 M + fee transfer 0.4 M + calldata 5.1 k/felt)
+is now a visible share: 105 M of the 1 540 M.
 
 Why not fewer: 13.7 k slots + echoes need ≥ 4 transactions at 4 990 felts, and the section
 granularity (the four 1 372-slot hash witnesses, the 1 653-slot first FRI layer) leaves no
-4-tx packing; the FRI compute (1.84e9 on devnet) needs ≥ 2 transactions on its own. Merging
-`answers` with the first FRI layer would need 5 101 slots.
+4-tx packing; the FRI walk (0.51e9 on devnet) would now fit one transaction by gas but not by
+calldata (4 773 slots + 576 echo). Merging `answers` with the first FRI layer would need 5 101
+slots. The one structural lever left is to fold `fri_answers` into the Merkle transactions
+(§8, lever 2): 4 transactions and no re-supply of the queried values.
 
 ## 4. Checkpoint layout
 
@@ -130,8 +160,8 @@ each).
 
 | State | tag | felts (70 queries) | contents |
 |---|---|---:|---|
-| `Params` (inside both) | — | ≈ 210 | `circuit_hash` [u32;8], `output_hash` [u32;8], 4 tree roots (32), `d_sampled` (poseidon of the sampled-values felts), OODS point (8), `fri_answers` random coeff (4), 70 query positions, FRI first layer + 5 inner layers `{root, alpha, log_degree_bound, fold_step}` (6 × 14), last-layer value (4) |
-| `MerkleState` | 1 | **228** | `Params` + `trees_done` bitmask + `d_queried[4]` (poseidon of each tree's queried-values felts, filled by `merkle`) |
+| `Params` (inside both) | — | ≈ 210 | `circuit_hash` [u32;8], `output_hash` [u32;8], 4 tree roots (32), `d_sampled` (poseidon of the fast-path packed sampled-values section, P4.1 — of its felts in P4.0), OODS point (8), `fri_answers` random coeff (4), 70 query positions, FRI first layer + 5 inner layers `{root, alpha, log_degree_bound, fold_step}` (6 × 14), last-layer value (4) |
+| `MerkleState` | 1 | **228** | `Params` + `trees_done` bitmask + `d_queried[4]` (poseidon of each tree's packed queried-values section, filled by `merkle`) |
 | `FriState` | 2 | **576** | `Params` + `layers_done` + current layer query positions (≤ 70) + `layer_log_domain_size` + carried evaluations (≤ 70 QM31 = 280 felts) |
 | done | 3 | 1 | the registered fact |
 
@@ -149,11 +179,13 @@ Section classes and how each is bound to the transcript (nothing is authenticate
    alphas and OODS point that come out of it are therefore the monolithic verifier's.
 2. **Merkle witnesses / queried values** — self-authenticating: verified against the checkpointed
    roots at the checkpointed positions; a tampered value fails `Root Mismatch` (tested).
-3. **Queried values re-supplied to `answers`** — bound by `d_queried[i]` = poseidon(felts) taken
-   by `merkle` after the tree verified; `answers` requires all 4 `trees_done` bits and the 4
-   digests (tests: tampered, swapped trees, incomplete Merkle phase).
+3. **Queried values re-supplied to `answers`** — bound by `d_queried[i]` = poseidon(packed
+   section) taken by `merkle` after the tree verified; `answers` requires all 4 `trees_done` bits
+   and the 4 digests (tests: tampered, swapped trees, incomplete Merkle phase). The digest is
+   over the packed slots (P4.1): decoding is a function of the slots and every decoded value is
+   range-checked to its type, so equal digests mean equal values.
 4. **Sampled values re-supplied to `answers`** — bound by `d_sampled` taken in `begin` over the
-   raw section felts (also transcript-bound). Tested.
+   fast-path packing of the section (the section is also transcript-bound). Tested.
 5. **FRI layers** — each chunk's layer roots must equal the transcript-bound roots in the state
    (`fri: first/inner commitment`); witnesses are Merkle-verified; the carried evaluations are
    consumed by the next layer's Merkle check, so a forged echo is caught even before the
@@ -236,52 +268,72 @@ felts). The committed default stays `doom` (the S4 measurement proofs); switchin
 
 ## 7. Class sizes and the gas oracle
 
-| Class | Sierra felts (cap 81 920) | class JSON bytes (cap 4 089 446) | CASM felts (cap 81 920) | declare L2 gas |
-|---|---:|---:|---:|---:|
-| `StwoPhasesBegin` (transcript + OODS eval) | 38 402 (47 %) | 2 663 781 (65 %) | 62 403 (76 %) | 4.13e9 (126 STRK) |
-| `StwoPhasesMerkle` (Merkle + `fri_answers`) | 13 432 (16 %) | 1 425 507 (35 %) | 29 907 (37 %) | 1.78e9 (54 STRK) |
-| `StwoPhasesFri` (FRI walk) | 11 191 (14 %) | 1 153 468 (28 %) | 22 765 (28 %) | 1.39e9 (42 STRK) |
-| `StwoCircuitRouter` (with the two calibration probes) | 4 165 (5 %) | 435 541 (11 %) | 9 670 (12 %) | 0.53e9 (16 STRK) |
-| monolithic `verify_circuit` (measurement only) | 48 401 (59 %) | 3 847 068 (**94 %**) | 78 641 (**96 %**) | — |
-| begin + merkle + answers in one class | 48 525 | 3 850 483 | **88 087 (107 %)** | rejected → 3 classes |
+P4.1 (`scarb build`, audited libfuncs; P4.0 CASM in brackets):
 
-The whole vendored verifier compiles under the `audited` libfunc allowlist (no qm31 opcode) and
-fits one class only barely; **library-class splitting is required** once checkpoint serde is
-added, and 3 stateless classes + 1 router is the shape. The vendored crate needed a
-visibility-only patch (`vendor/stwo_cairo_verifier/hellproof-visibility.patch`, 7 files, `pub`
-additions only) to split `verify_circuit` without forking its logic.
+| Class | Sierra felts (cap 81 920) | class JSON bytes (cap 4 089 446) | CASM felts (cap 81 920) | declare L2 gas (devnet) |
+|---|---:|---:|---:|---:|
+| `StwoPhasesBegin` (transcript + OODS eval) | 38 929 (48 %) | 2 694 075 (66 %) | 63 575 (78 %) (62 403) | 4.20e9 (128 STRK) |
+| `StwoPhasesMerkle` (Merkle + `fri_answers` + decoders) | 16 750 (20 %) | 1 666 103 (41 %) | 40 073 (49 %) (29 907) | 2.33e9 (71 STRK) |
+| `StwoPhasesFri` (FRI walk + decoder) | 13 635 (17 %) | 1 354 401 (33 %) | 27 677 (34 %) (22 765) | 1.69e9 (52 STRK) |
+| `StwoCircuitRouter` (with the two calibration probes) | 3 956 (5 %) | 425 543 (10 %) | 9 079 (11 %) (9 670) | 0.54e9 (16 STRK) |
+| monolithic `verify_circuit` (measurement only, **unmodified** vendor) | 48 401 (59 %) | 3 896 125 (95 %) | 78 641 (96 %) | — |
+
+The optimized verifier compiled monolithically no longer fits one class (86 357 CASM felts),
+which is why the measurement-only class stays the pristine copy; the three stateless classes +
+router remain the shape. The vendored crate carries a visibility-only patch and, since P4.1, the
+arithmetic patch series of `vendor/patches/` (per-patch invariant and equivalence argument in its
+README); `vendor/stwo_cairo_verifier_ref/` is the unmodified tree under `*_ref` package names
+(`tools/vendor_ref.sh`) so both can be compiled into one test binary and compared.
 
 **Gas oracle.** snforge's default `sierra-gas` accounting understated devnet by 1.4× (transcript)
-to 2.1× (FRI) and 3.5× (unpack); with `--tracked-resource cairo-steps` (now the workspace
-default) the library calls match the devnet receipts within 3 %: devnet 0.10 / blockifier 0.14.4
-bills these classes by VM steps + builtins. Rule: size phases with cairo-steps snforge numbers
-× 1.05, then confirm on devnet (`tools/devnet_drive.py`, R3-A7).
+to 2.1× (FRI) and 3.5× (unpack); with `--tracked-resource cairo-steps` (the workspace default)
+the library calls match the devnet receipts within 3 %: devnet 0.10 / blockifier 0.14.4 bills
+these classes by VM resources. **The bill is the maximum, not the sum**, of `steps × 100`,
+`range_check × 1 600`, `bitwise × 6 400`, `poseidon × 3 200`, … (P4.1 finding, verified on every
+probe: the P4.0 figures are exactly `range checks × 1 600`). Consequences: (1) the cost of a
+class is its range-check count while `range_check × 1 600 > steps × 100`, i.e. more than one
+range check per 16 steps — the vendored verifier had one per 7; (2) the blake2s and poseidon
+builtins are free while they are not the binding resource (they never are here), and so is the
+bitwise builtin the decoder uses (≈ 5 per slot: at most 147 M of "bitwise gas" in the largest
+transaction against its 302 M bill); (3) once the range checks are down, the steps bind: the
+`answers` class is there (3.9 M steps vs 192 k range checks). Rule: size phases with cairo-steps
+snforge numbers × 1.05 (both resources), then confirm on devnet (`tools/devnet_drive.py`, R3-A7).
 
-## 8. Costs, levers, what P4.1 should do
+## 8. Costs and levers (P4.1 done, what is left)
 
-Where the 3.81e9 goes: FRI walk 1.84e9 (48 %), `fri_answers` 0.68e9 (18 %), Merkle 0.33e9
-(9 %), transcript 0.05e9, transport (calldata + unpack + copies + storage + envelopes) 0.81e9
-(21 %), state echoes/hashing < 0.02e9.
+Where the **1.54e9** goes (devnet, `results/p41_receipts.json`): `answers` class 0.43e9 (28 %),
+FRI walk 0.49e9 (32 %), Merkle trees 0.40e9 (26 %), transcript 0.07e9, router + envelopes +
+calldata 0.15e9 (10 %). P4.0 was 3.81e9: FRI 1.84e9, `fri_answers` 0.68e9, Merkle 0.33e9,
+transport 0.81e9.
 
-Levers, in order of expected value:
+Levers measured in isolation (snforge cairo-steps, S4 fixture; the numbers of §1):
 
-1. **FRI fold arithmetic** (1.84e9): the vendored `fold_coset`/`fold_line`/`fold_circle` do one
-   M31 inverse per fold (a 31-step exponentiation) and naive QM31 products; batch-inverting the
-   twiddles per layer, precomputing the per-layer x-coordinates once instead of per subset, and
-   using the packed-unreduced QM31 accumulators already present in `quotients.cairo` could plausibly
-   halve the FRI phase. This is the lever that brings the fact under 2.5e9; it is a vendored-code
-   optimization to carry as a documented patch (or upstream) — not started here.
-2. **qm31 opcode in `audited.json`** (watch item R3-A9): the same proof costs 5.3 M steps → ≈
-   0.6e9 compute; everything here survives (the phases only get cheaper and fewer).
-3. **`fri_answers`** (0.68e9): 70 rows × 319 columns; the accumulation is already packed-unreduced;
-   fewer columns (registry) or batching across rows are the only gains.
-4. **Transport** (0.81e9): unpack at 5 k gas per value is 2/3 of it; a limb-to-felt path that
-   skips the intermediate array, or letting the Merkle/FRI code consume u32 limbs directly, would
-   cut it by half; sending queried values 8 M31 per felt would save ~400 slots. Second order.
-5. **Fewer transactions** is not a gas lever (each tx envelope ≈ 1 M): 5 vs 6 differs by 0.3 %.
+| Lever (P4.1 brief) | Where | Effect | Status |
+|---|---|---|---|
+| 1. Batch inversion | FRI twiddles: one Montgomery inversion per layer (1 050 twiddles) instead of one 136-range-check exponentiation each; `fri_answers`: one inversion of all 630 denominators (through their norms) instead of 490 CM31 inversions | FRI −55 % alone; the largest single item | done (patches 0002, 0003) |
+| 2. Packed / lazily-reduced arithmetic | FRI folds on 4 unreduced `felt252` limbs, three levels between reductions (bounds < 2^241), reductions by `u256` split (`2^128 ≡ 16 mod P`); `fri_answers` numerators unreduced per sample point, one reduction per row | FRI −74 % and `answers` −43 % with lever 1; range checks per fold node 28 → 0 | done; the `bounded_int` helpers are used for the last reduction step; no `u32`/felt mixing was needed beyond `u128 → M31` |
+| 3. Avoid recomputation | per-layer step multiples and alpha powers hoisted; one `to_point` per subset (the other twiddles are one felt expression each); table bit reversal (143 → 19 range checks per call); `fri_answers` batches at the same point share one denominator; the queried values are iterated once (no per-column lookup) | inside the figures above (≈ 15 % of the FRI gain) | done |
+| 4. Merkle verification | blake2s is free (not the binding resource); the costs were the deserialization (5–6 range checks per hash word / value) → decoder 2.1; the tree walk itself (u32 `div_rem` per node, 4 range checks) is untouched | trees (with their decode) −37 % | partly: the walk (≈ 14 k nodes × 4 range checks ≈ 90 M) is a follow-up |
+| 5. Phase plumbing | the router forwards packed slices (library-call calldata 7× smaller, the 0.18e9 copy of P4.0 is gone); digests over slots; checkpoint sizes unchanged (228 / 576 felts) | transport 0.81e9 → 0.15e9 (with lever 4's decoder) | done |
 
-Realistic P4.1 outcome with lever 1 only: ≈ 2.8e9 and 4–5 transactions; with the opcode, ≈ 1.0e9
-and 2–3 transactions.
+What is left, in order of value:
+
+1. **`answers` is steps-bound** (3.9 M steps, 433 M on devnet): 22 k column terms at ≈ 30 steps
+   each, the decoding of 28 k values, the per-row arrays. A packed two-lane accumulation of the
+   numerators (as the vendored `PackedUnreducedQM31`, 2 felt multiplications per term instead of
+   4) is not possible with the shared-denominator layout (the lanes overflow); a two-column
+   unrolled loop or a smaller decode buffer could bring it to ≈ 3 M steps (−0.1e9).
+2. **Fold `fri_answers` into the Merkle transactions** (4 transactions): each Merkle transaction
+   accumulates its trees' numerator sums per (row, sample point) — 70 × 9 reduced QM31, ≈ 320
+   packed felts in the checkpoint — and the first FRI transaction finishes the rows. Saves the
+   re-supply of the queried values (3 194 slots: calldata + decode + digests ≈ 0.10e9) and one
+   envelope; costs the sampled section in the second Merkle transaction (254 slots) and the
+   quotient constants twice. Net ≈ −0.1e9 and one transaction fewer; changes the emitter's plan
+   (§9) and the checkpoint layout (§4).
+3. **Merkle tree walk**: parity and parent by bitwise + exact division (1 range check + 1
+   bitwise per node instead of 4 range checks): ≈ −0.06e9.
+4. **qm31 opcode in `audited.json`** (R3-A9): the folds and quotients then cost a few steps per
+   operation; everything here survives (the phases only get cheaper).
 
 ## 9. Sequencing UX
 
@@ -295,45 +347,57 @@ and 2–3 transactions.
 - Failure handling: a reverted phase (e.g. under-provisioned gas, as happened in the first drive)
   leaves the slot untouched; the client resends the same phase. A wrong section is rejected
   deterministically before any state change.
-- Sponsoring (R7-A4) is orthogonal: the paymaster signs the same 5–6 calls.
-- Cost display: 116 STRK / 3.35 $ today per fact; per game with M = 8 aggregated games (D6):
-  ≈ 15 STRK / 0.42 $, ≈ 0.04 $ at the price floor.
+- Sponsoring (R7-A4) is orthogonal: the paymaster signs the same 5 calls.
+- Cost display: 47 STRK / 1.35 $ per fact at the S5 snapshot; per game with M = 8 aggregated
+  games (D6): ≈ 5.9 STRK / 0.17 $, ≈ 0.017 $ at the price floor.
+- **Emitter / submitter (P4.1)**: the calldata format and the router ABI are unchanged, so
+  `client/src/chain/calldata.ts` and `infra/submit` need **no format change**. What changes is
+  the plan and the bounds: the recommended cut is `--fri-split 2` (5 transactions, every one
+  under 40 % of the cap); the 6-tx default of `infra/submit` (`--fri-split 1,3`) still works
+  (+1 envelope) but is no longer required by the 90 % rule; the R7-A1 bounds (`l2_gas` =
+  estimate × 1.15) should be re-derived from the P4.1 receipts (`answers` 466 M is the largest
+  transaction now, `fri1` 295 M). The phase class hashes change (new declares, §7): a new router
+  deployment, as for any verifier version (§6). Lever 2 of §8, if taken, would change the plan
+  to 4 transactions and move the sampled-values section into the second Merkle transaction —
+  that one is an emitter change and is not done here.
 
 ## 10. Blockers and open points
 
-1. **2.5e9 target missed** (3.81e9): entirely a compute problem of the FRI walk under naive QM31
-   arithmetic; the transport design is done and cheap (§8 lever 1 is the next step).
-2. **fri1 at 90.4 % of the cap in the 5-tx plan**: use the 6-tx plan (84 %) until lever 1 lands;
-   the emitter switch is `--fri-split 1,3`.
+1. ~~2.5e9 target missed~~ — **met in P4.1: 1.54e9** (§3). The remaining levers (§8) are worth
+   ≈ 0.3e9 together; none is required for Phase 4.
+2. ~~fri1 at 90.4 % of the cap~~ — worst transaction 38.5 % (`answers`); `--fri-split 2` is the
+   plan.
 3. **Account class**: measured with devnet's predeployed OZ-type account; S5 saw ±19 % per
    calldata-heavy tx across account classes — re-measure with the Cartridge Controller before
-   freezing bounds (R7-A1).
-4. **Registry switch** (`doom_fold4_min`, D11): constants regenerated and verified; the committed
-   default stays `doom` until the wrapper switches; then `tools/gen_multiverifier_consts.py
-   --registry doom_fold4_min`, redeclare, redeploy a router.
-5. **Consumer not implemented** (`DoomRuns`): interface and checks specified in §6 for the
-   10-felt outputs; `recursion_outputs` fixtures to regenerate for that width.
+   freezing bounds (R7-A1). With every transaction under 40 % this is a cost question, not a
+   feasibility one.
+4. **Registry switch** (`doom_fold4_min`, D11): `tools/check_registry.sh doom_fold4_min`
+   regenerates the constants of both vendor copies and runs the reference, equivalence, phase and
+   router suites on the S4b golden; the committed default stays `doom` until the wrapper
+   switches; then redeclare, redeploy a router.
+5. **Upstreaming**: the patch series is written against `cd7bc5f` with per-patch invariants
+   (`vendor/patches/README.md`); a bump of the pin re-applies it (`apply.sh`) and re-runs the
+   equivalence suite against the new pristine copy (`tools/vendor_ref.sh`).
 6. **snforge/scarb pins**: scarb 2.18.0 (vendored verifier), starknet-foundry **0.61.0** (0.57.0
-   cannot run the test artifacts of Sierra 1.8: "Unknown value for memory cell" at collection),
-   starknet-devnet 0.10.0.
+   cannot run the test artifacts of Sierra 1.8), starknet-devnet 0.10.0.
 
 ## 11. Reproduce
 
 ```bash
 cd cairo/doom_contracts && sh fixtures/unpack.sh           # scarb 2.18.0, snforge 0.61.0 (.tool-versions)
-scarb build                                                # 4 classes, audited libfuncs, sizes above
-(cd crates/stwo_circuit_phases && snforge test)            # 35 tests: monolithic, phases, packing, cost probe
+scarb build                                                # 5 classes, audited libfuncs, sizes above
+(cd crates/stwo_circuit_phases && snforge test)            # 67 tests: reference, equivalence + tampers, phases, packing, cost probes
 (cd crates/doom_contracts && snforge test)                 # 6 tests: router 5-tx drive + rejections
-tools/check_registry.sh doom_fold4_min                     # regenerated constants vs the S4b root proof
-python3 tools/emit_calldata.py fixtures/n4_root_proof.txt --out calls.json [--fri-split 1,3]
-# devnet (S5 prices): see docs/spikes/S5.md §10 for the flags; port 5066 in this run
-python3 tools/devnet_drive.py --calls calls.json --out results/devnet_receipts.json \
-    --accounts-file accounts.json --url http://127.0.0.1:5066/rpc
-python3 tools/trace_tx.py --blocks 11-16 --url http://127.0.0.1:5066/rpc   # per-call gas
-python3 tools/devnet_probe.py --calls calls.json --deployment results/devnet_receipts_deployment.json \
-    --accounts-file accounts.json --out results/devnet_probe.json           # transport calibration
+tools/check_registry.sh doom_fold4_min                     # the same suites on the S4b golden (regenerated constants)
+python3 tools/emit_calldata.py fixtures/n4_root_proof.txt --out calls.json          # --fri-split 2 (default)
+# devnet (S5 prices): see docs/spikes/S5.md §10 for the flags; port 5091 in the P4.1 run
+python3 tools/devnet_drive.py --calls calls.json --out results/p41_receipts.json \
+    --accounts-file accounts.json --url http://127.0.0.1:5091/rpc --no-live
+python3 tools/trace_tx.py <tx hash> --url http://127.0.0.1:5091/rpc                # per-call gas
+tools/vendor_patches.sh <base commit>                      # regenerate vendor/patches/000N-*.patch from git
 ```
 
-Artefacts: `cairo/doom_contracts/results/devnet_receipts.json` (5-tx receipts verbatim, fact,
-pricing), `devnet_receipts_6tx.json`, `devnet_receipts_deployment.json` (class hashes, declare
-gas), `devnet_probe.json`.
+Artefacts: `cairo/doom_contracts/results/p41_receipts.json` (P4.1: 5-tx receipts verbatim, fact,
+pricing) and `p41_receipts_deployment.json` (class hashes, declare gas); P4.0:
+`devnet_receipts.json`, `devnet_receipts_6tx.json`, `devnet_receipts_deployment.json`,
+`devnet_probe.json`.

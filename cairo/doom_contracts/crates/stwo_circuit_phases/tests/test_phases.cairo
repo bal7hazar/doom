@@ -2,9 +2,10 @@
 //! The phase machine over the S4 fixture: end-to-end equivalence with the monolithic verifier,
 //! a Serde round-trip of every checkpoint between phases, tamper rejections, and the cumulative
 //! cost probe (`cost_*` tests: read the per-test gas and subtract).
-use stwo_circuit_phases::machine::{FriState, MerkleState, answers, begin, fri_layers, merkle};
+use stwo_circuit_phases::machine::{FriState, MerkleState, begin, merkle};
+use stwo_circuit_phases::sections::{Sections, fri_chunk, packed_section, split};
 use super::fixture::{expected_output_hash, load_proof};
-use stwo_circuit_phases::sections::{Sections, fri_chunk, split};
+use super::helpers::{ans, ans_with, fri, fri_raw, fri_state, mk};
 
 fn roundtrip_merkle(state: MerkleState) -> MerkleState {
     let mut s = array![];
@@ -43,29 +44,25 @@ fn phases_end_to_end_n4() {
     assert!(state.params.query_positions.len() == 70, "70 queries");
 
     // Tx 2: trees 0 and 1; tx 3: trees 2 and 3.
-    merkle(ref state, 0, sec.queried_values.at(0).span(), sec.decommitments.at(0).span());
-    merkle(ref state, 1, sec.queried_values.at(1).span(), sec.decommitments.at(1).span());
+    mk(ref state, @sec, 0);
+    mk(ref state, @sec, 1);
     let mut state = roundtrip_merkle(state);
-    merkle(ref state, 2, sec.queried_values.at(2).span(), sec.decommitments.at(2).span());
-    merkle(ref state, 3, sec.queried_values.at(3).span(), sec.decommitments.at(3).span());
+    mk(ref state, @sec, 2);
+    mk(ref state, @sec, 3);
     let state = roundtrip_merkle(state);
     assert!(state.trees_done == 0b1111, "trees done");
 
     // Tx 4: answers.
-    let queried = array![
-        sec.queried_values.at(0).span(), sec.queried_values.at(1).span(),
-        sec.queried_values.at(2).span(), sec.queried_values.at(3).span(),
-    ];
-    let mut state = roundtrip_fri(answers(state, sec.sampled_values.span(), queried.span()));
+    let mut state = roundtrip_fri(ans(state, @sec));
     assert!(state.layer_query_evals.len() == 70, "70 answers");
     assert!(sec.fri_layers.len() == 6, "6 fri layers");
 
     // Tx 5: first layer + inner layer 0; tx 6: inner layers 1..4 (last layer check inside).
-    let r = fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 2).span());
+    let r = fri(ref state, @sec, 0, 2);
     assert!(r.is_none(), "not done after 2 layers");
     let mut state = roundtrip_fri(state);
     assert!(state.layers_done == 2, "layers done");
-    let r = fri_layers(ref state, fri_chunk(@sec.fri_layers, 2, 6).span());
+    let r = fri(ref state, @sec, 2, 6);
     assert!(r.unwrap() == expected_output_hash(), "output hash");
 }
 
@@ -75,24 +72,20 @@ fn fri_walk_chunkings_n4() {
     let sec = sections();
     let mut state = begin(sec.head.span());
     for i in 0..4_u32 {
-        merkle(ref state, i, sec.queried_values.at(i).span(), sec.decommitments.at(i).span());
+        mk(ref state, @sec, i);
     }
-    let queried = array![
-        sec.queried_values.at(0).span(), sec.queried_values.at(1).span(),
-        sec.queried_values.at(2).span(), sec.queried_values.at(3).span(),
-    ];
-    let state = answers(state, sec.sampled_values.span(), queried.span());
+    let state = ans(state, @sec);
 
     // One chunk.
     let mut s1 = roundtrip_fri(state);
-    let r = fri_layers(ref s1, fri_chunk(@sec.fri_layers, 0, 6).span());
+    let r = fri(ref s1, @sec, 0, 6);
     assert!(r.unwrap() == expected_output_hash(), "single chunk");
 
     // Six chunks of one layer, round-tripping between each.
     let mut s6 = s1_reset(@sec);
     let mut i = 0;
     loop {
-        let r = fri_layers(ref s6, fri_chunk(@sec.fri_layers, i, i + 1).span());
+        let r = fri(ref s6, @sec, i, i + 1);
         i += 1;
         if i == 6 {
             assert!(r.unwrap() == expected_output_hash(), "six chunks");
@@ -104,15 +97,7 @@ fn fri_walk_chunkings_n4() {
 }
 
 fn s1_reset(sec: @Sections) -> FriState {
-    let mut state = begin(sec.head.span());
-    for i in 0..4_u32 {
-        merkle(ref state, i, sec.queried_values.at(i).span(), sec.decommitments.at(i).span());
-    }
-    let queried = array![
-        sec.queried_values.at(0).span(), sec.queried_values.at(1).span(),
-        sec.queried_values.at(2).span(), sec.queried_values.at(3).span(),
-    ];
-    answers(state, sec.sampled_values.span(), queried.span())
+    fri_state(sec)
 }
 
 #[test]
@@ -121,16 +106,12 @@ fn answers_rejects_tampered_sampled_values() {
     let sec = sections();
     let mut state = begin(sec.head.span());
     for i in 0..4_u32 {
-        merkle(ref state, i, sec.queried_values.at(i).span(), sec.decommitments.at(i).span());
+        mk(ref state, @sec, i);
     }
     let mut tampered = sec.sampled_values.clone();
     let last = tampered.pop_front().unwrap();
     tampered.append(last + 1);
-    let queried = array![
-        sec.queried_values.at(0).span(), sec.queried_values.at(1).span(),
-        sec.queried_values.at(2).span(), sec.queried_values.at(3).span(),
-    ];
-    answers(state, tampered.span(), queried.span());
+    ans_with(state, @sec, tampered.span(), [0, 1, 2, 3]);
 }
 
 #[test]
@@ -139,13 +120,9 @@ fn answers_requires_all_trees() {
     let sec = sections();
     let mut state = begin(sec.head.span());
     for i in 0..3_u32 {
-        merkle(ref state, i, sec.queried_values.at(i).span(), sec.decommitments.at(i).span());
+        mk(ref state, @sec, i);
     }
-    let queried = array![
-        sec.queried_values.at(0).span(), sec.queried_values.at(1).span(),
-        sec.queried_values.at(2).span(), sec.queried_values.at(3).span(),
-    ];
-    answers(state, sec.sampled_values.span(), queried.span());
+    ans(state, @sec);
 }
 
 #[test]
@@ -154,14 +131,10 @@ fn answers_rejects_queried_values_not_decommitted() {
     let sec = sections();
     let mut state = begin(sec.head.span());
     for i in 0..4_u32 {
-        merkle(ref state, i, sec.queried_values.at(i).span(), sec.decommitments.at(i).span());
+        mk(ref state, @sec, i);
     }
     // Swap trees 0 and 3 in the re-supply.
-    let queried = array![
-        sec.queried_values.at(3).span(), sec.queried_values.at(1).span(),
-        sec.queried_values.at(2).span(), sec.queried_values.at(0).span(),
-    ];
-    answers(state, sec.sampled_values.span(), queried.span());
+    ans_with(state, @sec, sec.sampled_values.span(), [3, 1, 2, 0]);
 }
 
 #[test]
@@ -169,8 +142,8 @@ fn answers_rejects_queried_values_not_decommitted() {
 fn merkle_is_write_once_per_tree() {
     let sec = sections();
     let mut state = begin(sec.head.span());
-    merkle(ref state, 1, sec.queried_values.at(1).span(), sec.decommitments.at(1).span());
-    merkle(ref state, 1, sec.queried_values.at(1).span(), sec.decommitments.at(1).span());
+    mk(ref state, @sec, 1);
+    mk(ref state, @sec, 1);
 }
 
 #[test]
@@ -186,7 +159,9 @@ fn merkle_rejects_tampered_queried_value() {
         tampered.append(*qv.at(i));
         i += 1;
     }
-    merkle(ref state, 0, tampered.span(), sec.decommitments.at(0).span());
+    let (qv, n_qv) = packed_section(tampered.span());
+    let (dec, n_dec) = packed_section(sec.decommitments.at(0).span());
+    merkle(ref state, 0, qv, n_qv, dec, n_dec);
 }
 
 #[test]
@@ -194,9 +169,9 @@ fn merkle_rejects_tampered_queried_value() {
 fn fri_rejects_layer_out_of_order() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 1).span());
+    fri(ref state, @sec, 0, 1);
     // Skip inner layer 0: feed inner layer 1 in its place.
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 2, 3).span());
+    fri(ref state, @sec, 2, 3);
 }
 
 #[test]
@@ -204,7 +179,7 @@ fn fri_rejects_layer_out_of_order() {
 fn fri_rejects_tampered_witness() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 4).span());
+    fri(ref state, @sec, 0, 4);
     // Inner layer 3 (index 4): 192 witness QM31s and no hash witness; flip its first word.
     let layer = sec.fri_layers.at(4);
     let mut tampered = array![1, *layer.at(0), *layer.at(1) + 1];
@@ -213,7 +188,7 @@ fn fri_rejects_tampered_witness() {
         tampered.append(*layer.at(i));
         i += 1;
     }
-    fri_layers(ref state, tampered.span());
+    fri_raw(ref state, tampered.span());
 }
 
 /// A tampered carried evaluation (i.e. a forged state echo) is caught by the next layer's Merkle
@@ -223,7 +198,7 @@ fn fri_rejects_tampered_witness() {
 fn fri_rejects_tampered_carried_evals() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 5).span());
+    fri(ref state, @sec, 0, 5);
     let mut evals = array![];
     let mut first = true;
     for e in state.layer_query_evals.span() {
@@ -235,7 +210,7 @@ fn fri_rejects_tampered_carried_evals() {
         }
     }
     state.layer_query_evals = evals;
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 5, 6).span());
+    fri(ref state, @sec, 5, 6);
 }
 
 // ---- Checkpoint sizes (felts echoed as calldata by the router) ----
@@ -246,15 +221,11 @@ fn checkpoint_sizes_n4() {
     let mut state = begin(sec.head.span());
     let merkle_len = serialized_len(@state);
     for i in 0..4_u32 {
-        merkle(ref state, i, sec.queried_values.at(i).span(), sec.decommitments.at(i).span());
+        mk(ref state, @sec, i);
     }
-    let queried = array![
-        sec.queried_values.at(0).span(), sec.queried_values.at(1).span(),
-        sec.queried_values.at(2).span(), sec.queried_values.at(3).span(),
-    ];
-    let mut state = answers(state, sec.sampled_values.span(), queried.span());
+    let mut state = ans(state, @sec);
     let fri_len_0 = serialized_len(@state);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 2).span());
+    fri(ref state, @sec, 0, 2);
     let fri_len_2 = serialized_len(@state);
     println!(
         "checkpoint felts: merkle {} fri(before walk) {} fri(after 2 layers) {}",
@@ -304,28 +275,28 @@ fn cost_1_begin() {
 fn cost_2_merkle_tree0() {
     let sec = sections();
     let mut state = begin(sec.head.span());
-    merkle(ref state, 0, sec.queried_values.at(0).span(), sec.decommitments.at(0).span());
+    mk(ref state, @sec, 0);
 }
 
 #[test]
 fn cost_3_merkle_tree1() {
     let sec = sections();
     let mut state = begin(sec.head.span());
-    merkle(ref state, 1, sec.queried_values.at(1).span(), sec.decommitments.at(1).span());
+    mk(ref state, @sec, 1);
 }
 
 #[test]
 fn cost_4_merkle_tree2() {
     let sec = sections();
     let mut state = begin(sec.head.span());
-    merkle(ref state, 2, sec.queried_values.at(2).span(), sec.decommitments.at(2).span());
+    mk(ref state, @sec, 2);
 }
 
 #[test]
 fn cost_5_merkle_tree3() {
     let sec = sections();
     let mut state = begin(sec.head.span());
-    merkle(ref state, 3, sec.queried_values.at(3).span(), sec.decommitments.at(3).span());
+    mk(ref state, @sec, 3);
 }
 
 #[test]
@@ -333,13 +304,9 @@ fn cost_6_answers() {
     let sec = sections();
     let mut state = begin(sec.head.span());
     for i in 0..4_u32 {
-        merkle(ref state, i, sec.queried_values.at(i).span(), sec.decommitments.at(i).span());
+        mk(ref state, @sec, i);
     }
-    let queried = array![
-        sec.queried_values.at(0).span(), sec.queried_values.at(1).span(),
-        sec.queried_values.at(2).span(), sec.queried_values.at(3).span(),
-    ];
-    let state = answers(state, sec.sampled_values.span(), queried.span());
+    let state = ans(state, @sec);
     assert!(state.layers_done == 0);
 }
 
@@ -348,7 +315,7 @@ fn cost_7_all_merkle() {
     let sec = sections();
     let mut state = begin(sec.head.span());
     for i in 0..4_u32 {
-        merkle(ref state, i, sec.queried_values.at(i).span(), sec.decommitments.at(i).span());
+        mk(ref state, @sec, i);
     }
     assert!(state.trees_done == 0b1111);
 }
@@ -357,14 +324,14 @@ fn cost_7_all_merkle() {
 fn cost_8_fri_first_and_inner0() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 2).span());
+    fri(ref state, @sec, 0, 2);
 }
 
 #[test]
 fn cost_9_fri_all() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    let r = fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 6).span());
+    let r = fri(ref state, @sec, 0, 6);
     assert!(r.is_some());
 }
 
@@ -372,26 +339,26 @@ fn cost_9_fri_all() {
 fn cost_10_fri_first_only() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 1).span());
+    fri(ref state, @sec, 0, 1);
 }
 
 #[test]
 fn cost_11_fri_first_to_inner1() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 3).span());
+    fri(ref state, @sec, 0, 3);
 }
 
 #[test]
 fn cost_12_fri_first_to_inner2() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 4).span());
+    fri(ref state, @sec, 0, 4);
 }
 
 #[test]
 fn cost_13_fri_first_to_inner3() {
     let sec = sections();
     let mut state = s1_reset(@sec);
-    fri_layers(ref state, fri_chunk(@sec.fri_layers, 0, 5).span());
+    fri(ref state, @sec, 0, 5);
 }

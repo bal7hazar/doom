@@ -6,13 +6,19 @@ name = "bounded_int"
 version = "0.1.0"
 
 [[package]]
+name = "bounded_int_ref"
+version = "0.1.0"
+
+[[package]]
 name = "doom_contracts"
 version = "0.1.0"
 dependencies = [
  "snforge_std",
  "stwo_circuit_air",
+ "stwo_circuit_air_ref",
  "stwo_circuit_phases",
  "stwo_verifier_core",
+ "stwo_verifier_core_ref",
  "stwo_verifier_utils",
 ]
 
@@ -57,14 +63,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "stwo_circuit_air_ref"
+version = "0.1.0"
+dependencies = [
+ "bounded_int_ref",
+ "stwo_constraint_framework_ref",
+ "stwo_verifier_core_ref",
+ "stwo_verifier_utils_ref",
+]
+
+[[package]]
 name = "stwo_circuit_phases"
 version = "0.1.0"
 dependencies = [
  "bounded_int",
  "snforge_std",
  "stwo_circuit_air",
+ "stwo_circuit_air_ref",
  "stwo_constraint_framework",
  "stwo_verifier_core",
+ "stwo_verifier_core_ref",
  "stwo_verifier_utils",
 ]
 
@@ -76,6 +94,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "stwo_constraint_framework_ref"
+version = "0.1.0"
+dependencies = [
+ "stwo_verifier_core_ref",
+]
+
+[[package]]
 name = "stwo_verifier_core"
 version = "0.1.0"
 dependencies = [
@@ -84,8 +109,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "stwo_verifier_core_ref"
+version = "0.1.0"
+dependencies = [
+ "bounded_int_ref",
+ "stwo_verifier_utils_ref",
+]
+
+[[package]]
 name = "stwo_verifier_utils"
 version = "0.1.0"
 dependencies = [
  "bounded_int",
+]
+
+[[package]]
+name = "stwo_verifier_utils_ref"
+version = "0.1.0"
+dependencies = [
+ "bounded_int_ref",
 ]

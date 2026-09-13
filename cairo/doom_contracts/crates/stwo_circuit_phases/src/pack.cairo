@@ -111,6 +111,12 @@ pub fn pack_u32(values: Span<felt252>) -> Array<felt252> {
     pack_limbs(values)
 }
 
+/// Fast-path packing without the `< 2^32` check (pure felt arithmetic): for values known to
+/// be u32 (a proof's own sections in the tests).
+pub fn pack_u32_unchecked(values: Span<felt252>) -> Array<felt252> {
+    pack_limbs(values)
+}
+
 fn pack_limbs(mut limbs: Span<felt252>) -> Array<felt252> {
     let mut slots: Array<felt252> = array![];
     while !limbs.is_empty() {

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Monolithic reference: the vendored `verify_circuit` over the S4 fixture, built with gas
 //! enabled and the naive (non-opcode) QM31 arithmetic — i.e. what a contract would execute.
-use stwo_circuit_air::{
+use stwo_circuit_air_ref::{
     CircuitProof, compute_circuit_hash, get_verification_output, verify_circuit,
 };
-use stwo_verifier_core::Hash;
+use stwo_verifier_core_ref::Hash;
 use super::fixture::{expected_output_hash, load_proof};
 
 #[test]

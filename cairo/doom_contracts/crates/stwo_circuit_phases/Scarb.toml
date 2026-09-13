@@ -17,6 +17,8 @@ bounded_int.workspace = true
 [dev-dependencies]
 snforge_std.workspace = true
 assert_macros.workspace = true
+stwo_circuit_air_ref.workspace = true
+stwo_verifier_core_ref.workspace = true
 
 [scripts]
 test = "snforge test"

@@ -1,0 +1,23 @@
+# Pristine copy of the vendored verifier (see REF.md); own workspace like the original.
+[workspace]
+members = [
+    "crates/bounded_int",
+    "crates/circuit_air",
+    "crates/constraint_framework",
+    "crates/verifier_core",
+    "crates/verifier_utils",
+]
+
+[workspace.dependencies]
+cairo_execute = "2.18.0"
+cairo_test = "2.18.0"
+
+[workspace.tool.cairo-lint]
+collapsible_if_else = false
+double_parens = false
+ifs_same_cond = false
+manual_assert = false
+
+[cairo]
+enable-gas = false
+allow-warnings = false

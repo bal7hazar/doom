@@ -10,6 +10,10 @@
 //! section packed independently and concatenated into one `payload` whose per-section unpacked
 //! lengths are `lens`.
 //!
+//! (P4.1) The router no longer unpacks anything: it slices the payload into its packed sections
+//! and forwards the slices with their felt counts; the phase classes decode them
+//! (`stwo_circuit_phases::decode`), so the library calls carry 7× less calldata.
+//!
 //! Facts: `fact = poseidon(circuit_hash words ‖ output_hash words)` (16 felts), registered by
 //! the last FRI transaction; `is_valid(fact)` is the consumer interface (`DoomRuns`).
 //! The phase class hashes are pinned in the constructor: a router is one immutable verifier
@@ -101,7 +105,7 @@ pub mod StwoCircuitRouter {
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
-    use stwo_circuit_phases::pack::{n_slots, unpack, unpack_u32};
+    use stwo_circuit_phases::pack::{n_slots, unpack_u32};
     use crate::phases::{
         IStwoPhasesBeginDispatcherTrait, IStwoPhasesBeginLibraryDispatcher,
         IStwoPhasesFriDispatcherTrait, IStwoPhasesFriLibraryDispatcher,
@@ -170,12 +174,10 @@ pub mod StwoCircuitRouter {
             let slot = self.checkpoints.entry((caller, proof_id));
             assert(slot.read().tag == TAG_FREE, 'router: proof id in use');
 
-            let head = unpack(head, head_n);
-            let head = head.span();
             let mut sections = split_sections(payload, lens);
             let tree_sections = tree_sections(ref sections, trees);
             let state = IStwoPhasesBeginLibraryDispatcher { class_hash: self.class_begin.read() }
-                .run_begin(head);
+                .run_begin(head, head_n);
             let state = if tree_sections.is_empty() {
                 state
             } else {
@@ -214,9 +216,15 @@ pub mod StwoCircuitRouter {
             let caller = get_caller_address();
             self.check(slot_key(caller, proof_id), TAG_MERKLE, state);
             let mut sections = split_sections(payload, lens);
-            let sampled = sections.pop_front().unwrap();
+            let (sampled, n_sampled) = sections.pop_front().unwrap();
+            let mut queried = array![];
+            let mut n_qv = array![];
+            for (slots, n) in sections {
+                queried.append(slots);
+                n_qv.append(n);
+            }
             let state = IStwoPhasesMerkleLibraryDispatcher { class_hash: self.class_merkle.read() }
-                .run_answers(state, sampled, sections.span());
+                .run_answers(state, sampled, n_sampled, queried.span(), n_qv.span());
             self.store(slot_key(caller, proof_id), TAG_FRI, state.span());
             state
         }
@@ -230,9 +238,9 @@ pub mod StwoCircuitRouter {
         ) -> Array<felt252> {
             let caller = get_caller_address();
             self.check(slot_key(caller, proof_id), TAG_FRI, state);
-            let layers = unpack_u32(payload, n_values);
+            assert(payload.len() == n_slots(n_values), 'router: payload length');
             let (state, done) = IStwoPhasesFriLibraryDispatcher { class_hash: self.class_fri.read() }
-                .run_fri(state, layers);
+                .run_fri(state, payload, n_values);
             match done {
                 Some((circuit_hash, output_hash)) => {
                     let fact = compute_fact(circuit_hash, output_hash);
@@ -293,13 +301,14 @@ pub mod StwoCircuitRouter {
         (caller, proof_id)
     }
 
-    /// Cuts `payload` into its independently fast-path-packed sections of `lens` felts.
-    fn split_sections(payload: Span<felt252>, lens: Span<u32>) -> Array<Span<felt252>> {
+    /// Cuts `payload` into its independently fast-path-packed sections of `lens` felts:
+    /// `(slots, n_felts)` per section, still packed.
+    fn split_sections(payload: Span<felt252>, lens: Span<u32>) -> Array<(Span<felt252>, u32)> {
         let mut sections = array![];
         let mut offset = 0;
         for l in lens {
             let slots = n_slots(*l);
-            sections.append(unpack_u32(payload.slice(offset, slots), *l));
+            sections.append((payload.slice(offset, slots), *l));
             offset += slots;
         }
         assert(offset == payload.len(), 'router: payload length');
@@ -307,12 +316,19 @@ pub mod StwoCircuitRouter {
     }
 
     /// Pairs the remaining sections `(queried_values, decommitment)*` with `trees`.
-    fn tree_sections(ref sections: Array<Span<felt252>>, trees: Span<u32>) -> Array<TreeSection> {
+    fn tree_sections(
+        ref sections: Array<(Span<felt252>, u32)>, trees: Span<u32>,
+    ) -> Array<TreeSection> {
         let mut out = array![];
         for tree_idx in trees {
-            let queried_values = sections.pop_front().expect('router: missing qv');
-            let decommitment = sections.pop_front().expect('router: missing dec');
-            out.append(TreeSection { tree_idx: *tree_idx, queried_values, decommitment });
+            let (queried_values, n_qv) = sections.pop_front().expect('router: missing qv');
+            let (decommitment, n_dec) = sections.pop_front().expect('router: missing dec');
+            out
+                .append(
+                    TreeSection {
+                        tree_idx: *tree_idx, queried_values, n_qv, decommitment, n_dec,
+                    },
+                );
         }
         assert(sections.is_empty(), 'router: extra sections');
         out
