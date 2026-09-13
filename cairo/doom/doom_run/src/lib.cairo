@@ -14,10 +14,12 @@
 //! `tic_start` yields an `ABORT` output (or an empty state with status 3),
 //! never a trap (R4-A2).
 
+mod wire;
 use doom_game::{GameState, from_felts, hash, serialize, snapshot};
 use doom_map::LevelId;
 use segment::{SegmentOutput, Stats, Status, status_felt};
 use state_hash::{inputs_seed, seal};
+use wire::{Felts, felts};
 
 /// D14's `status = 3`.
 const ABORT: felt252 = 3;
@@ -58,9 +60,9 @@ fn aborted(state: Span<felt252>, tic_start: u32) -> SegmentOutput {
 /// `max_tics` caps the tics run (D26: the planner cuts by `resources()`).
 #[executable]
 fn run_segment(
-    state: Array<felt252>, words: Array<felt252>, tic_start: u32, max_tics: u32,
+    state: Span<felt252>, words: Span<felt252>, tic_start: u32, max_tics: u32,
 ) -> SegmentOutput {
-    run_segment_impl(state.span(), words.span(), tic_start, max_tics)
+    run_segment_impl(state, words, tic_start, max_tics)
 }
 
 /// [`run_segment`] on spans, for the tests.
@@ -85,10 +87,9 @@ pub fn run_segment_impl(
 /// whole segment to recover its end state). Stops at the first terminal
 /// status. On a malformed state: `(3, [], [])`.
 #[executable]
-fn step_tic(
-    state: Array<felt252>, words: Array<felt252>,
-) -> (felt252, Array<felt252>, Array<felt252>) {
-    step_tic_impl(state.span(), words.span())
+fn step_tic(state: Span<felt252>, words: Span<felt252>) -> (felt252, Felts, Felts) {
+    let (status, state_out, snapshot_out) = step_tic_impl(state, words);
+    (status, felts(state_out.span()), felts(snapshot_out.span()))
 }
 
 /// [`step_tic`] on spans, for the tests.
@@ -117,8 +118,9 @@ pub fn step_tic_impl(
 /// and its hash — `h_in` of the first segment. Level 0 is E1M1; an unknown
 /// level gives `([], 0)`.
 #[executable]
-fn genesis(level: u32) -> (Array<felt252>, felt252) {
-    genesis_impl(level)
+fn genesis(level: u32) -> (Felts, felt252) {
+    let (state, hash) = genesis_impl(level);
+    (felts(state.span()), hash)
 }
 
 /// [`genesis`], for the tests.
