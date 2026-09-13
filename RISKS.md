@@ -9,10 +9,10 @@
 
 | Id | Risque | Gravité | Probabilité | Priorité | Où il se lève |
 |----|--------|---------|-------------|----------|---------------|
-| R1 | Mémoire du prouveur dans le navigateur | Bloquant | Dépassement mesuré sur jeu réel | **P0** | P1.9, S8, P3.7 |
+| R1 | Mémoire du prouveur dans le navigateur | Bloquant | Registre actuel incompatible, 11,52 GiB WASM Node | **P0** | P1.9, S8, P3.7 |
 | R2 | Budget de steps par tic | Fort | Élevée, dépassement mesuré | **P0** | S8, Phase 1 |
 | R3 | Route on-chain : dimensionnement des circuits, couplage de versions | Fort | Élevée | **P0** | S4, Phase 4 |
-| R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | Défaut C2 confirmé dans P1.9 | **P0** | P1.9, P1.10 |
+| R4 | Exécutions non prouvables et état de segment incomplet | Bloquant | C2 et armure corrigés en intégration, fuzz restant | **P0** | P1.9, P1.10 |
 | R5 | Temps réel : exécution Cairo à 35 Hz dans le navigateur | Fort | Élevée au coût réel mesuré | **P0** | P1.9, P2.3 |
 | R6 | UX de la preuve : durée, contention CPU, perte de travail | Moyen | Élevée | P1 | Phase 2–3 |
 | R7 | Coûts on-chain et limites protocolaires mouvants | Moyen | Moyenne | P1 | S5, Phase 4 |
@@ -31,10 +31,10 @@
   la cible 15 k, mais 30 711 steps/tic à 8 éveillés dans le micro-scénario. S8 doit mesurer un tic
   complet avant tout arbitrage de gameplay. D29 remplace le budget initial de 32 k mots par
   100 k (plafond dur 120 k) ; D26 pilote les segments par AIR, pas par une longueur fixe en tics.
-- **R4 / C2 prioritaire** : P1.9 omet l'ordre des listes `ThingGrid` de l'état canonique. Un cas
-  reproduit donne santé 101 en continu contre 100 après désérialisation. Le test d'associativité
-  en mémoire ne suffisait pas. Correction et preuve native requises avant clôture de P1.9.
-- **R11 réparé localement, validation GitHub attendue** (`30f8d77`) : le build était x86_64 face à
+- **R4 / C2 prioritaire** : P1.9 omettait l'ordre des listes `ThingGrid` de l'état canonique. Un cas
+  reproduisait santé 101 en continu contre 100 après désérialisation. Le test d’associativité
+  en mémoire ne suffisait pas. Correction C2 validée sur la branche d’intégration ; P1.10 reste requis.
+- **R11 : incident de reproductibilité résolu localement et sur GitHub** (`30f8d77`, run WASM `34749101097` vert) : le build était x86_64 face à
   une référence arm64. Rebuild ARM64 sur image épinglée conforme aux deux hashes existants ; cinq
   smokes Node/Chromium vérifiés, y compris repli sans isolation. Aucune référence de hash remplacée.
 - **R1 bloquant avec hash programme Poseidon** (hypothèse D4/D29 ; WASM actuel en **Blake**) :
@@ -45,11 +45,14 @@
   et vérifié en **53,50 s / 11,73 GiB**, 2 681 208 steps, 765 202 felts. R1 reste ouvert pour la
   concurrence avec le jeu ; un succès natif ne clôt pas P3.7. WASM Node : preuve valide 42,225 s /
   11,524 GiB mais **log21 réel (`blake_g`) contre log20 annoncé**, donc registre `doom` incompatible.
-  `doom_21` expérimental construit le circuit ; vérifier le repli final et corriger le dimensionnement.
+  `doom_21` expérimental construit le circuit et le repli : racine **95 325 felts**, vérifieur Cairo
+  existant **5 333 257 steps**, recomposition indépendante exacte. D32 ouvre ce candidat ;
+  correction du dimensionnement et campagne Chromium réelle restent nécessaires ([S9](docs/spikes/S9-proof-sizing.md)).
   S4b généralisait à tort le manque de `seq_21` à tout composant : le cas réel invalide ce NO-GO.
 - **R4 / armure** : absorption après somme des dégâts des monstres, avec arrondis incorrects et
-  effets de mort possibles avant réduction par l'armure. Corriger par impact avant douleur/mort ;
-  tests de deux attaquants, épuisement d'armure et continuité RNG requis avant intégration P1.9.
+  effets de mort possibles avant réduction par l’armure. Correction par impact avant douleur/mort
+  assemblée et testée dans `b11fd7f` : deux attaquants, épuisement, arrondis, RNG, absence de mort
+  prématurée. Les goldens porte changent uniquement le dernier attaquant auparavant faussé par un puff de mur.
 - **R1/R5/R6** : il manque la partie réelle avec jeu et preuve concurrents sur matériel 16 GB.
   C3 PLAN ≤ 10 min après partie ; objectif opérationnel D2 ≤ 5 min. Aucun succès sur les seules
   micro-mesures ne ferme ces risques.
@@ -58,7 +61,15 @@
   un tic idle atteint 585 777 avant dernier style joueur. R5 devient P0. Optimiser cette frontière
   en préservant toutes les validations et les hashes avant tout changement de cadence ou de gameplay.
 
-Les constats datés ci-dessous conservent l'historique des spikes ; les décisions D26–D31 et cette
+- **P1.9 après optimisation frontière et correction armure** : `run_segment` **116 287 mots**,
+  frontière sans tic **288 045 steps** (−45,5 %), 554 tests Cairo verts en intégration. Profil exact
+  2 946 tics : moyenne **83 003**, p99 **168 038**, hors frontière. Les copies du parcours monstres
+  sont le prochain levier sans changement UX ; aucun budget relevé. D2/D29 restent manqués.
+- **Taxe de programme et segmentation** : même zéro tic coûte **2 224 712 steps** avec le bootloader
+  Blake, quatre tics **2 505 814**. Registre log21 nécessaire mais insuffisant : 1,5 M threads et
+  2,3 M mono inchangés, validation Chromium concurrente à construire, aucun GO navigateur déduit de Node.
+
+Les constats datés ci-dessous conservent l’historique des spikes ; les décisions D26–D32 et cette
 requalification priment sur leurs anciens budgets. Voir [STATUS](docs/STATUS.md) pour les suites.
 
 ---

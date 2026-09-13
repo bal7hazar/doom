@@ -6,7 +6,7 @@
 
 ## État mesuré à la reprise du 2026-09-13
 
-Cette section et les décisions D26–D31 remplacent les hypothèses de dimensionnement initiales
+Cette section et les décisions D26–D32 remplacent les hypothèses de dimensionnement initiales
 dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STATUS](docs/STATUS.md).
 
 - `main` après intégration monstres `8471b7e` : **511 tests Cairo** ; la suite spécifique conserve
@@ -36,7 +36,8 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
 - Reproductibilité WASM corrigée par `30f8d77` : build ARM64 sur image épinglée, les deux hashes
   Linux existants sont reproduits bit à bit. Cinq smokes locaux vérifiés avec ces artefacts : Node
   mono/4 threads 37,82/11,99 s ; Chromium 33,09/10,19 s (1,83/1,96 GiB), repli sans isolation 33,4 s.
-  Validation des workflows GitHub en attente ; oracle Python du nouveau contrôle submit corrigé.
+  Workflows GitHub générale `34749101091` et WASM `34749101097` entièrement verts ; oracle Python
+  du nouveau contrôle submit corrigé.
 - **Jeu réel : R1 reste ouvert.** Quatre tics avec `run_segment` 117 531 mots et **hash programme
   Poseidon** (hypothèse D4/D29, différente du WASM actuel en **Blake**) donnent
   1 499 208 steps sous bootloader et 65 138 instances Poseidon. Preuve native interrompue à 180 s,
@@ -47,12 +48,19 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   et reproduit exactement ces compteurs (1,49 s d'exécution Node, 0,673 GiB hors preuve). D31 aligne
   les décisions et scripts sur le code. WASM Node 4 threads : **42,225 s / 11,524 GiB**, preuve
   vérifiée. **Le `blake_g` réel atteint log21**, contre log20 estimé par `resources()` : incompatible
-  avec `doom`, faux positif confirmé. `doom_21` expérimental construit le circuit feuille ; repli
-  final en cours de validation. Le NO-GO universel de S4b §3.2 est infirmé : l'absence de `seq_21`
+  avec `doom`, faux positif confirmé. `doom_21` expérimental construit le circuit feuille, puis le
+  repli produit **95 325 felts**, validés par le vérifieur Cairo existant (**5 333 257 steps**) ;
+  recomposition indépendante des sorties exacte ([S9](docs/spikes/S9-proof-sizing.md), D32). Le NO-GO universel de S4b §3.2 est infirmé : l'absence de `seq_21`
   bloque certains composants seulement, et notre preuve `canonical_small` log21 est valide.
-- P1.9 corrige l'ordre `ThingGrid` dans l'état engagé (schema 2), indispensable au déterminisme des
-  ramassages après frontière. L'audit détecte aussi une absorption d'armure agrégée trop tard :
-  correction par impact avant douleur/mort en cours, sans changer le schéma d'état.
+- P1.9 assemblé `b11fd7f` (branche `codex/game-integration`, pas encore `main`) : ordre `ThingGrid`
+  engagé/restauré, armure par impact avant douleur/mort, frontière sans tic **288 045 steps** (−45,5 %),
+  `run_segment` **116 287 mots proving**. Validation root : **554 tests Cairo / 23 cibles**, format,
+  build, graphe et REUSE verts. Profil VM exact 2 946 tics : moyenne **83 003**, p99 **168 038**,
+  frontière exclue ; D2 et D29 demeurent hors cible. Les budgets historiques hash/serde restent rouges.
+- Programme intégré, bootloader Blake : **2 224 712 / 2 297 659 / 2 505 814 steps pour 0 / 1 / 4 tics**.
+  La taxe fixe dépasse à elle seule 1,5 M steps. `blake_g` atteint log21 (16 137 × 80 lignes),
+  donc registre candidat et correction du planificateur sont nécessaires, sans suffire à lever R2/R5.
+  Les plafonds actuels et les paramètres cryptographiques restent inchangés.
 
 ## 1. Vision et périmètre
 
