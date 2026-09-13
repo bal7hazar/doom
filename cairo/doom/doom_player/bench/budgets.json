@@ -50,7 +50,7 @@
       "budget": 1485
     },
     {
-      "name": "player_think, firing the pistol",
+      "name": "player_think, pistol into the empty hall (a miss)",
       "op": 9,
       "base": 1,
       "budget": 100790
@@ -66,6 +66,12 @@
       "op": 11,
       "base": 1,
       "budget": 4249
+    },
+    {
+      "name": "player_think, pistol at a target 128 u ahead",
+      "op": 13,
+      "base": 1,
+      "budget": 9520
     }
   ],
   "code_words_target": 20000,
