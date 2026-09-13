@@ -111,8 +111,9 @@ def failure_artifact(out, runner, case, error):
     # Reuse the exact serialized checkpoint; only reduce its command suffix. This is a bounded
     # delta-debugging search, not a claim of a globally smallest counterexample.
     retain_whole = ("golden", "profile_equivalence", "timeout", "campaign_timeout", "execution")
-    if case.get("operation") == "genesis" or "previous_d14" in case or error.kind in retain_whole:
-        artifact["minimization"] = "not attempted: full pinned case, setup, execution failure or timeout must be retained"
+    if (case.get("operation") == "genesis" or "previous_d14" in case
+            or "required_status" in case or error.kind in retain_whole):
+        artifact["minimization"] = "not attempted: full pinned/status case, setup, execution failure or timeout must be retained"
     else:
         original, reduced = case["words"], list(case["words"])
         tries, started, granularity = 0, time.monotonic(), 2
@@ -182,6 +183,12 @@ def check_profile(runner, out, case, frame, public, reference):
         raise
 
 
+def require_case_status(frame, case):
+    if "required_status" in case:
+        require(frame.status == case["required_status"], "coverage",
+                f"{case['name']} did not reach required status {case['required_status']}")
+
+
 def reproduce(runner, case):
     if case.get("operation") == "genesis":
         state = genesis(runner)
@@ -190,6 +197,7 @@ def reproduce(runner, case):
         return
     frame, public, _ = replay(runner, case["state"], case["words"], case["seed"], case["many"],
                               case["d14_cuts"], case["boundary"])
+    require_case_status(frame, case)
     if "expected_pin" in case:
         pin = dict(input_sha256=digest(case["words"]), **frame.summary(), d14=[hex(x) for x in public])
         require(pin == case["expected_pin"], "golden", f"{case['name']} pinned output differs")
@@ -227,9 +235,15 @@ def corpus(args):
         for index, case in enumerate(cases):
             seed = SEED + index * 101
             frame, public, counts = invoke_case(runner, args.out, initial, case["words"], seed, case["name"])
-            if "required_status" in case:
-                require(frame.status == case["required_status"], "coverage",
-                        f"{case['name']} did not reach required status {case['required_status']}")
+            try:
+                require_case_status(frame, case)
+            except Failure as error:
+                failure_artifact(args.out, runner, dict(
+                    name=case["name"], state=initial, words=case["words"], seed=seed,
+                    many=True, d14_cuts=True, boundary=True,
+                    required_status=case["required_status"], observed_status=frame.status,
+                    observed_output=frame.raw, observed_d14=public), error)
+                raise
             pin = dict(input_sha256=digest(case["words"]), **frame.summary(), d14=[hex(x) for x in public])
             if expected is not None and expected["cases"][case["name"]] != pin:
                 error = Failure("golden", f"{case['name']} pinned output differs")

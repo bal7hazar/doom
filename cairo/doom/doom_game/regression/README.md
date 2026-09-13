@@ -99,6 +99,9 @@ full corpus coverage. `--record /path/to/new-candidate.json` is only for initial
 it requires all cases and both profiles and refuses to overwrite an existing file. Normal tests
 and CI never record or update pins. Any intentional gameplay change requires separate review
 and justification; do not rebaseline to make a failure disappear.
+An unmet required terminal status also writes the complete `failure.json` and `repro.json`,
+including initial state, commands, observed output/D14 and required status. Reproduction
+rechecks that status; this diagnostic is retained even during initial characterization.
 
 ## Failure artifacts
 

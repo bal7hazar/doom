@@ -9,7 +9,7 @@ import tempfile
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from abi import (Failure, STATE_TAG, decode_frame, expected_d14, input_commitment, packed)
 from corpus import scenarios, word
 from run import check_profile, failure_artifact, invoke_genesis, replay, reproduce
@@ -76,19 +76,45 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(pin["input_sha256"], digest(case["words"]))
         self.assertEqual(provenance["route_commands_sha256"], digest(route))
 
-    def test_exit_case_refuses_a_different_terminal_before_comparing_pins(self):
+    def test_exit_case_preserves_and_reproduces_status_failure_with_or_without_pins(self):
         from run import corpus
-        with tempfile.TemporaryDirectory() as td:
-            args = SimpleNamespace(case=["exit_route"], record=None, goldens=HERE / "goldens.json",
-                                   profiles=["dev"], out=Path(td), timeout=120, target=None,
-                                   max_seconds=3600)
-            with patch("run.Runner", return_value=Mock()), \
-                    patch("run.invoke_genesis", return_value=[]), \
-                    patch("run.invoke_case", return_value=(frame(status=1), None, {})):
-                with self.assertRaises(Failure) as raised:
-                    corpus(args)
+        words = [1, 2, 999, 4, 5, 6]
+        initial = frame().state
+        entry = dict(name="exit_route", purpose="synthetic status failure", words=words,
+                     required_status=2)
+        for recording in (False, True):
+            with self.subTest(recording=recording), tempfile.TemporaryDirectory() as td:
+                out = Path(td)
+                args = SimpleNamespace(case=None if recording else ["exit_route"],
+                                       record=out / "candidate.json" if recording else None,
+                                       goldens=HERE / "goldens.json", profiles=["dev", "proving"],
+                                       out=out, timeout=120, target=None, max_seconds=3600)
+                runner = CountRunner()
+                runner.identity = {"fixture": "counted terminal runner"}
+                # Use the actual replay, artifact writer and reproducer. Only the public
+                # execution boundary is synthetic; no Failure is injected by a mock.
+                entries = [entry] + [dict(entry, name=f"unused-{i}") for i in range(19)]
+                with patch("run.Runner", return_value=runner), \
+                        patch("run.invoke_genesis", return_value=initial), \
+                        patch("run.scenarios", return_value=entries):
+                    with self.assertRaises(Failure) as raised:
+                        corpus(args)
                 self.assertEqual(raised.exception.kind, "coverage")
-                self.assertIn("required status 2", str(raised.exception))
+                self.assertFalse((out / "candidate.json").exists())
+                for name in ("failure.json", "repro.json"):
+                    saved = json.loads((out / name).read_text())
+                    case = saved["case"]
+                    self.assertEqual(saved["identity"], runner.identity)
+                    self.assertEqual(case["words"], words)
+                    self.assertEqual(case["state"], initial)
+                    self.assertEqual((case["required_status"], case["observed_status"]), (2, 1))
+                    self.assertEqual(decode_frame(case["observed_output"]).status, 1)
+                    self.assertEqual(case["observed_d14"][5], 1)
+                    self.assertFalse(saved["minimized"])
+                    with self.assertRaises(Failure) as repeated:
+                        reproduce(CountRunner(), case)
+                    self.assertEqual(repeated.exception.kind, saved["kind"])
+                    self.assertIn("required status 2", str(repeated.exception))
 
     def test_clean_poseidon_package_matches_existing_independent_reference_vectors(self):
         self.assertEqual(input_commitment([]),
