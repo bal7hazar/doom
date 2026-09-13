@@ -1,3 +1,26 @@
+Hellproof patch 0002 over stwo_cairo_verifier@cd7bc5f — FRI folds on unreduced limbs, one
+batch inversion per layer (verifier_core/src/{fri.cairo, fri/lazy.cairo, utils.cairo}).
+
+Invariant: for every query subset of every layer the folded value is the tree of
+fri_fold(v0, v1, 1/x, alpha^(2^l)) over the subset's evaluations that fold_coset / fold_circle
+computed, with the same twiddles in the same order; the Merkle decommitment is checked at the
+same positions against the same leaf values.
+
+Why equivalent: (1) bit_reverse_index: the 32-bit reversal assembled from byte reversals and
+shifted right by 32 - n keeps exactly the reversed low n bits, for every u32 input; (2) the
+twiddles x(p0 + kG) = x0*X_k - y0*Y_k (and y(...)) are the coordinates of the point sum,
+to_point being a homomorphism from indices to points, reduced once from a felt252 expression
+offset by P^2; the doublings are 2x^2 - 1 (double_x); (3) the inverses are the same field
+elements, obtained by the vendored Montgomery batch inversion (a zero twiddle panics in both);
+(4) every node computes (v0 + v1) + alpha * itwid * (v0 - v1) on non-negative unreduced limbs
+congruent to the vendored coordinates modulo P, the subtraction and the product offset by
+multiples of P; one level multiplies the bound by at most 2^70, three levels from reduced inputs
+stay below 2^241 < PRIME, so the integers are exact and the reductions (u256 split with
+2^128 = 16 mod P, or one u128 division below 2^128) return the vendored field element; the alpha
+powers are the per-level squarings of the original loop; (5) the Merkle positions
+f * 2^fold_step / leaf_size + m are the deduplicated shifted decommitment positions, in the same
+order (identity when leaf_size = 1). Details: vendor/patches/README.md.
+
 diff --git a/crates/verifier_core/src/fri.cairo b/crates/verifier_core/src/fri.cairo
 index f85f2e8..c1f4cbb 100644
 --- a/crates/verifier_core/src/fri.cairo

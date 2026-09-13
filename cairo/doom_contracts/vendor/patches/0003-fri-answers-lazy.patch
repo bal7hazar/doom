@@ -1,3 +1,24 @@
+Hellproof patch 0003 over stwo_cairo_verifier@cd7bc5f — fri_answers with lazy numerators and
+one batch inversion of all denominators (verifier_core/src/pcs/quotients.cairo).
+
+Invariant: for every query row, answer = -(sum over batches of reduce(a_b*y + b_b -
+sum over columns of c_{b,col} * v_col) * den_b^-1) with the batches, coefficients
+(QuotientConstantsImpl::gen) and denominators (fused_quotient_denominator) of the original code.
+
+Why equivalent: (1) gen stores its sums and coefficients reduced (the packed sums are offset by
+large_zero() before the reduction, as a packed lane of mul_cm31 may have borrowed across 2^128 —
+the original absorbed it by adding the offset alpha_mul_b_sum before its single reduce); (2) the
+numerators are accumulated per sample point on four unreduced felt252 limbs, offset by P * 2^41
+above the negative column terms; batches of different degree-bound groups sampled at the same
+point (the OODS point, the previous point, the periodicity batch of the largest columns sampled
+at the OODS point) are summed before the multiplication by their common inverse denominator — a
+reassociation of a ring sum; (3) the denominators are the same formula, inverted through their
+norms ((a + bi)^-1 = (a - bi)/(a^2 + b^2), what the vendored CM31 inverse computes) with one
+batch inversion of all the proof's norms; (4) the row sum over the classes is formed on unreduced
+limbs (products below 2^135, offset P * 2^105, sum below 2^141 < 2^248), reduced once and
+negated. Row-by-row equality with the unmodified verifier is asserted by
+crates/stwo_circuit_phases/tests/test_equivalence.cairo. Details: vendor/patches/README.md.
+
 diff --git a/crates/verifier_core/src/pcs/quotients.cairo b/crates/verifier_core/src/pcs/quotients.cairo
 index d0f980d..48f33a6 100644
 --- a/crates/verifier_core/src/pcs/quotients.cairo
