@@ -115,10 +115,18 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
   Correctif runtime WASM intégré `e274bec`, reconstruction Docker bit-identique ;
   incident décrit dans S12 résolu localement. D2/D29 et registre log20 restent ouverts.
 - Corpus/fuzz `a7aadad` + `38d8993` livrés sur branche : 25 replays × deux profils,
-  10 000 tics fuzz, trois morts, zéro divergence ; EXIT absent ; revalidation D29 25/25 par profil, six empreintes inchangées.
+  10 000 tics fuzz, trois morts, zéro divergence ; revalidation D29 25/25 par profil, six empreintes inchangées.
+  L’absence d’EXIT dans ce premier corpus a ensuite été résolue : trajet légal de 677 tics, 29 PV,
+  dev/proving/D14-oracle et ABI complète Worker Chromium identiques. 26e cas intégré (`e998e52` / `7df2520`), 17 mots terminaux exclus.
 - S11 optimisé isolément : BLAKE9 **373 349 steps/hash** contre Poseidon 66 867,
   marche4 leaf **2 889 385 steps**, maximum log21. Aucun changement du hash de production,
   aucune mesure de preuve/RAM justifiant une migration.
+
+- Worker/journal intégrés `3e21031`, correction lifecycle `d027b0f` : 209 tests client
+  sans skip et six smokes Chromium après fusion. Root : 386 tics exacts par mode
+  d’isolation, mémoire linéaire maximale 465 436 672 B ; 10 000 tics idle en 172,47 s
+  avec 39 mesures stables à 258 801 664 B et restauration exacte. Pas de mesure RSS
+  ou 16 GiB, ni de preuve concurrente. Contrôles utilisateur intégrés `8cf6d97` : 222 tests client et neuf smokes verts.
 
 ## 1. Vision et périmètre
 
