@@ -17,7 +17,7 @@ use doom_things::rndtable;
 use fixed::Fixed;
 use prng::{Prng, from_index};
 use super::level::{SpecialsMap, tag_sector, tag_sectors};
-use super::state::{Phase, SpecialsState};
+use super::state::{Phase, SpecialsState, set_felt};
 use super::thinkers::{NeverBlocked, SectorBlocking, event};
 use super::triggers::PlayerSector;
 use super::{
@@ -669,3 +669,33 @@ fn test_blazing_door_is_four_times_faster() {
     assert(fixed::sub(after, start).enc == fixed::BIAS + super::thinkers::BLAZESPEED, 'one tic');
 }
 
+
+#[test]
+fn test_set_felt_preserves_prefix_and_suffix_at_every_position() {
+    let mut values: Array<felt252> = array![];
+    let mut n = 1;
+    while n != 184 {
+        values.append(n.into());
+        // Exercise singleton, first, middle and last positions, including
+        // the 182-sector array; expected values come from an indexed oracle.
+        if n == 1 || n == 5 || n == 15 || n == 182 || n == 183 {
+            let mut index = 0;
+            while index != n {
+                let actual = set_felt(values.span(), index, 999);
+                assert(actual.len() == n, 'same length');
+                let mut j = 0;
+                while j != n {
+                    let expected = if j == index {
+                        999
+                    } else {
+                        (j + 1).into()
+                    };
+                    assert(*actual.at(j) == expected, 'only selected value changes');
+                    j += 1;
+                }
+                index += 1;
+            }
+        }
+        n += 1;
+    }
+}
