@@ -17,7 +17,9 @@
 //! at every panic site and every return point of every one of them.
 //!
 //! So the public entry points below are thin wrappers that box their
-//! operands once, and the whole chain (`*_in`) carries `Box<Env>`,
+//! operands once. These adapters are inlined: an extra call would push the
+//! wide public records before boxing them. The shared algorithms stay out
+//! of the adapter, and the whole chain (`*_in`) carries `Box<Env>`,
 //! `Box<Player>` and `Box<Mobj>` — one felt each. Reading a field through a
 //! box is free (`unbox` emits nothing, the field is a double dereference);
 //! only a **write** pays, one `into_box` of the record's width, and an idle
@@ -154,6 +156,7 @@ fn slot_tics(p: Box<Player>, slot: u32) -> u32 {
 /// NULL`. The zero-tic chain is bounded by
 /// `doom_things::MAX_ZERO_TIC_CHAIN` (measured at 1 on this roster) and the
 /// action's own re-entry by [`MAX_PSPR_DEPTH`].
+#[inline(always)]
 pub fn set_psprite(
     env: Env,
     ref g: ThingGrid,
@@ -215,6 +218,7 @@ fn set_psprite_in(
 
 /// `P_MovePsprites`: one tic of both psprites, then the flash follows the
 /// weapon's offsets (Doom copies them unconditionally).
+#[inline(always)]
 pub fn move_psprites(
     env: Env,
     ref g: ThingGrid,
@@ -270,6 +274,7 @@ fn tick_slot(
 // ---------------------------------------------------------------------------
 
 /// `P_BringUpWeapon`: start raising [`Player::pending_weapon`].
+#[inline(always)]
 pub fn bring_up_weapon(
     env: Env,
     ref g: ThingGrid,
@@ -310,6 +315,7 @@ fn bring_up_weapon_in(
 }
 
 /// `P_DropWeapon`: start lowering the ready weapon (death, or a switch).
+#[inline(always)]
 pub fn drop_weapon(
     env: Env,
     ref g: ThingGrid,
@@ -340,6 +346,7 @@ pub(crate) fn drop_weapon_in(
 ///
 /// The fallback order is Doom's, minus the four weapons this roster does not
 /// carry: chaingun, shotgun, pistol, chainsaw, fist.
+#[inline(always)]
 pub fn check_ammo(
     env: Env,
     ref g: ThingGrid,
@@ -417,6 +424,7 @@ fn enter_mobj_state(env: Box<Env>, ref mo: Box<Mobj>, state: u32) {
 
 /// Run the action of a psprite state (D15: `fsm` hands back the id, the
 /// caller dispatches).
+#[inline(always)]
 pub fn run_action(
     env: Env,
     ref g: ThingGrid,
@@ -700,6 +708,7 @@ fn sub_roll(ref rng: Prng, table: Span<u8>) -> felt252 {
 }
 
 /// `P_BulletSlope`: aim straight ahead, then a degree either side.
+#[inline(always)]
 pub fn bullet_slope(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, mo: @Mobj, me: u32) -> Fixed {
     bullet_slope_at(w, mobjs, ref g, *mo.angle, me)
 }

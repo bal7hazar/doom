@@ -34,49 +34,47 @@ use super::weapon::drop_weapon_in;
 /// Skill 2 is neither `sk_baby` nor `sk_nightmare`, so the doubling vanilla
 /// applies on those two skills is absent (D3).
 pub fn give_ammo(ref p: Player, ammo: u32, num: u32) -> bool {
-    if ammo == AM_NOAMMO || ammo >= 4 {
-        return false;
-    }
-    let max = max_ammo(@p, ammo);
-    let old = ammo_of(@p, ammo);
-    if old == max {
-        return false;
-    }
-    let clip = rd32(CLIPAMMO.span(), ammo);
-    let two: NonZero<u32> = 2;
-    let amount = if num != 0 {
-        mul32(num, clip)
-    } else {
-        div32(clip, two)
-    };
-    let raised = add32(old, amount);
-    let now = if raised > max {
-        max
-    } else {
-        raised
-    };
-    p = set_ammo(p, ammo, now);
-    if old != 0 {
-        // "If non zero ammo, don't change up weapons, player was lower on
-        // purpose."
-        return true;
-    }
-    if ammo == AM_CLIP {
-        if p.ready_weapon == WP_FIST {
-            p.pending_weapon = if owns(@p, WP_CHAINGUN) {
-                WP_CHAINGUN
+    let mut gave = false;
+    if ammo != AM_NOAMMO && ammo < 4 {
+        let max = max_ammo(@p, ammo);
+        let old = ammo_of(@p, ammo);
+        if old != max {
+            let clip = rd32(CLIPAMMO.span(), ammo);
+            let two: NonZero<u32> = 2;
+            let amount = if num != 0 {
+                mul32(num, clip)
             } else {
-                WP_PISTOL
+                div32(clip, two)
             };
-        }
-    } else if ammo == AM_SHELL {
-        if (p.ready_weapon == WP_FIST || p.ready_weapon == WP_PISTOL) && owns(@p, WP_SHOTGUN) {
-            p.pending_weapon = WP_SHOTGUN;
+            let raised = add32(old, amount);
+            let now = if raised > max {
+                max
+            } else {
+                raised
+            };
+            p = set_ammo(p, ammo, now);
+            if old == 0 {
+                if ammo == AM_CLIP {
+                    if p.ready_weapon == WP_FIST {
+                        p
+                            .pending_weapon =
+                                if owns(@p, WP_CHAINGUN) {
+                                    WP_CHAINGUN
+                                } else {
+                                    WP_PISTOL
+                                };
+                    }
+                } else if ammo == AM_SHELL {
+                    if (p.ready_weapon == WP_FIST || p.ready_weapon == WP_PISTOL)
+                        && owns(@p, WP_SHOTGUN) {
+                        p.pending_weapon = WP_SHOTGUN;
+                    }
+                }
+            }
+            gave = true;
         }
     }
-    // `am_cell` and `am_misl` select the plasma rifle and the rocket
-    // launcher, neither of which this roster carries.
-    true
+    gave
 }
 
 /// `P_GiveWeapon`: one clip with a dropped weapon, two with a found one.
@@ -247,25 +245,22 @@ fn take_health(ref p: Player, kind: u32) -> Option<bool> {
         } else {
             2
         };
-        return Option::Some(give_armor(ref p, kinds));
-    }
-    if kind == KIND_MISC10 || kind == KIND_MISC11 {
+        Option::Some(give_armor(ref p, kinds))
+    } else if kind == KIND_MISC10 || kind == KIND_MISC11 {
         let num = if kind == KIND_MISC10 {
             10
         } else {
             25
         };
-        return Option::Some(give_body_p(ref p, num));
-    }
-    if kind == KIND_MISC2 || kind == KIND_MISC12 {
+        Option::Some(give_body_p(ref p, num))
+    } else if kind == KIND_MISC2 || kind == KIND_MISC12 {
         let num = if kind == KIND_MISC2 {
             1
         } else {
             100
         };
-        return Option::Some(bonus_health(ref p, num));
-    }
-    if kind == KIND_MISC3 {
+        Option::Some(bonus_health(ref p, num))
+    } else if kind == KIND_MISC3 {
         Option::Some(bonus_armor(ref p))
     } else if kind == KIND_MISC4 {
         give_card(ref p, CARD_BLUE);
@@ -418,6 +413,7 @@ fn absorb_of(armor_points: u32, armor_type: u32, damage: u32) -> (u32, u32, u32)
 /// that crate documents), and `PST_DEAD` + `P_DropWeapon` on death.
 ///
 /// `thrust` is Doom's `!source->player || readyweapon != wp_chainsaw`.
+#[inline(always)]
 pub fn damage_player(
     env: Env,
     ref g: ThingGrid,

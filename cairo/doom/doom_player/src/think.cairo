@@ -57,6 +57,7 @@ const SIX_UNITS: felt252 = 6 * 65536;
 ///
 /// A `BT_USE` press that finds a special line is reported as
 /// `PlayerEvent::Use`; a shot as `PlayerEvent::Shot`.
+#[inline(always)]
 pub fn player_think(
     env: Env,
     ref g: ThingGrid,
@@ -198,6 +199,7 @@ fn buttons(
 // ---------------------------------------------------------------------------
 
 /// `P_MovePlayer`: turn, then thrust forward and sideways while on ground.
+#[inline(always)]
 pub fn move_player(env: Env, ref p: Player, ref mo: Mobj, forward: i64, side: i64, turn: i64) {
     let (cx, bp, mut bm) = enter(env, @p, @mo);
     move_player_in(cx, ref bm, forward, side, turn);
@@ -267,6 +269,7 @@ fn thrust_of(angle: Angle, move: i64) -> (Fixed, Fixed) {
 /// Vanilla's off-ground branch computes `viewz` twice and throws the first
 /// (clamped) value away; the second assignment is not clamped. That is
 /// reproduced here — `doom_game`'s renderer sees what Doom's does.
+#[inline(always)]
 pub fn calc_height(ref p: Player, mo: @Mobj, tic: u32) {
     let mut bp = BoxTrait::new(p);
     calc_height_in(ref bp, height_of(mo), tic);
@@ -365,6 +368,7 @@ fn spring(viewheight: Fixed, deltaviewheight: Fixed) -> (Fixed, Fixed) {
 /// `BT_USE` starts `PST_REBORN` in vanilla; a proven single-player run has no
 /// respawn — the segment ends with D14's `status = 1 (DEAD)` — so the press
 /// is ignored here and `doom_game` reads [`Player::playerstate`].
+#[inline(always)]
 pub fn death_think(
     env: Env,
     ref g: ThingGrid,
@@ -480,6 +484,7 @@ fn requested_weapon(p: @Player, buttons: u32) -> u32 {
 /// the generic `traverse` would cost this crate its whole bytecode budget
 /// (S1 §5.9, D4: 60–77 words per monomorphisation, on a function that is
 /// ~3 600 Sierra statements in `doom_physics`).
+#[inline(always)]
 pub fn use_lines(env: Env, ref g: ThingGrid, mo: @Mobj, ref events: Array<PlayerEvent>) {
     use_lines_in(BoxTrait::new(env), ref g, BoxTrait::new(*mo), ref events);
 }
