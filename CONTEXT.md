@@ -102,12 +102,23 @@ dans les sections suivantes. L'audit détaillé et les contrôles sont dans [STA
 - Ressources du programme boxé : **2 113 239 / 2 152 507 / 2 260 220 steps** pour 0/1/4 tics,
   15 355 compressions Blake, log21 refusé par le registre courant. Nouvelle preuve native valide
   (59,14 s) et ancien WASM valide (51,44 s), mais nouveau WASM en échec, mono et quatre threads.
-  Cause en diagnostic [S12](docs/spikes/S12-wasm-proof-triage.md) ; aucune promotion du jeu complet.
+  Échec initial désormais corrigé ([S12](docs/spikes/S12-wasm-proof-triage.md), actualisation ci-dessous) ; aucune promotion du jeu complet.
 - Simulation combinée dans Chromium : **386 tics exacts**, **8,8–16,6 ms moyens/tic** maintenance
   comprise, **512 MiB** linéaires, p99 **38,2–45,4 ms** ; onze dépassements sur 386. Onze tests Rust
   verts. Le client et la concurrence avec preuve restent à réaliser ; détails dans S10.
 - [CI D28 34753506939](https://github.com/bal7hazar/doom/actions/runs/34753506939) : sept jobs verts
   sur `c383f14`, sans déploiement ni nouveau reçu réseau.
+
+- Actualisation D29/S12 : intégration jeu `8ae7f1c`, **106 878 mots** ; 565 tests Cairo,
+  cinq Python et six exécutables reconstruits identiques. Preuve quatre tics :
+  **2 208 389 steps / 42,16 s / 11 643 518 976 B linéaires**, vérifiée indépendamment.
+  Correctif runtime WASM intégré `e274bec`, reconstruction Docker bit-identique ;
+  incident décrit dans S12 résolu localement. D2/D29 et registre log20 restent ouverts.
+- Corpus/fuzz `a7aadad` + `38d8993` livrés sur branche : 25 replays × deux profils,
+  10 000 tics fuzz, trois morts, zéro divergence ; EXIT absent et revalidation D29 en cours.
+- S11 optimisé isolément : BLAKE9 **373 349 steps/hash** contre Poseidon 66 867,
+  marche4 leaf **2 889 385 steps**, maximum log21. Aucun changement du hash de production,
+  aucune mesure de preuve/RAM justifiant une migration.
 
 ## 1. Vision et périmètre
 

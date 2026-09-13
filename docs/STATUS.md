@@ -5,11 +5,11 @@
 > CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
 > AIR complet (`d848951`) et admission wrapper/D14 (`14cce87`) intégrés ; 195 tests client verts.
 > D28 appliquée par `b00c90b` : cinq transactions vérifieur par défaut, reprise FRI conservée ; 95 tests submit verts.
-> Incident WASM reproduit en mono et quatre threads sur D33 ; natif et ancien WASM valides. Diagnostic S12 en cours.
+> Correctif WASM S12 intégré `e274bec` : preuves réelles mono/quatre threads valides, build Docker reproduit ; CI distante à revérifier.
 > CI générale verte sur `67f618c` (run `34754644282`) ; reconstruction WASM GitHub indépendante verte.
-> P1.9 en intégration `f306c6a` : 565 tests verts, 110 015 mots ; 2 946 tics à 53 309 steps moyens / p99 128 207, D2/D29 non atteints.
+> P1.9 en intégration `8ae7f1c` : 565 tests verts, 106 878 mots ; preuve quatre tics valide en 42,16 s, D2/D29 non atteints.
 > Simulation avec continuation + D33 : 8,8–16,6 ms/tic, 512 MiB, 386 tics exacts ; latence par frame et client restants (S10).
-> Fuzz ponctuel : 10 000 tics réels sans divergence sur la référence `b11fd7f` ; campagne nocturne P1.10 restante.
+> P1.10 livré sur branche : 25 replays × deux profils, fuzz 10 000 tics exacts ; validation finale D29 en cours, EXIT absent.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -70,17 +70,48 @@ Branches récupérées :
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
 | `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : taille totale du programme (`codex/run-bytecode`, D29), coût du hash d’état
-(`codex/state-hash-spike`, étude isolée) et corpus/fuzz nocturne (`codex/golden-fuzz`, P1.10).
-**Priorité temporaire :** l’étude S11 est suspendue intacte ; son agent audite le générateur
-WASM dans `codex/proof-triage`. Deux preuves quatre threads du run D33 échouent en FRI
-(`queries do not resolve to their commitment in the first layer`), y compris sous vérifieur
-natif indépendant. Le prouveur natif épinglé produit et vérifie la même exécution en 59,14 s.
-L’ancien WASM produit aussi une preuve valide du même programme (51,44 s), tandis que le
-nouveau échoue en mono et sans appel `resources()`. La vérification native indépendante confirme
-le contrôle valide et le refus de la preuve invalide. Cause encore ouverte ; voir
-[S12](spikes/S12-wasm-proof-triage.md) pour la matrice et les artefacts. Cet incident est distinct
-du refus attendu du registre log20. Aucun programme promu.
+Vague active : revalidation des 25 pins sur les six exécutables D29 figés (agent
+`ci_recovery`) et Worker Cairo réel/journal d’inputs (agent `game_finalize`,
+`codex/client-cairo-worker`), ainsi que garde CI runtime WASM (agent
+`player_finalize`, `codex/wasm-runtime-ci`). Les précédentes missions ont terminé ; elles ne
+restent pas actives automatiquement après livraison.
+
+**S12 résolu localement, intégré `e274bec`** : quatre chargements SIMD tronquaient
+les adresses Memory64 dans Liftoff des versions V8 de Node testées. Chromium 153
+exécute correctement le binaire original. Une transformation structurée du build
+préserve les adresses et la sémantique ; les deux modules Docker reconstruits en
+763 s sont identiques aux copies validées par de vraies preuves. Root a revalidé
+les tests Rust, 400 024 contrôles runtime et REUSE après merge. Aucune modification
+AIR, paramètres, registre ou plafonds. [Matrice S12](spikes/S12-wasm-proof-triage.md).
+
+**D29 assemblée `8ae7f1c`** : 110 015 → **106 878 mots**, cible 100k toujours rouge.
+565 tests Cairo / 23 cibles, cinq tests Python, build dev/proving, graphe et REUSE
+verts ; les six exécutables root sont identiques aux candidats de l’agent.
+35 comparaisons ABI proving et quatre enveloppes malformées revalidées par root ;
+l’agent a aussi validé 70 comparaisons de replays et 35 ABI par profil.
+Contreparties publiées : replays proving −0,83 % à +0,25 %, dev +1,01 % à +1,75 % ;
+aucune accélération générale revendiquée. Preuve du nouveau programme : **2 208 389
+steps**, **42,16 s**, **11 643 518 976 octets** linéaires à quatre threads ;
+vérification native indépendante/bzip2 vertes et dix sorties D14 exactes.
+Ce segment de quatre tics reste RUNNING et log21 ; ce n’est pas P3.7.
+
+**P1.10 livré `a7aadad` + `38d8993`**, non promu sur main : 25 scénarios dans chacun
+des profils dev/proving, 6 898 tics logiques par profil, 24 états finaux distincts,
+couverture mort/ramassage/combat ; pas d’EXIT. Fuzz : **10 000 tics réellement
+avancés**, 158 cas / 11 épisodes, trois morts, 57 mots non consommés exclus,
+zéro panique/ABORT/divergence. Contrôles aux frontières : 493 états et 492 rendus
+exposés, pas 10 000 snapshots intermédiaires. Onze tests du harnais verts.
+La campagne sur D29 utilise ces mêmes pins sans les réécrire ; le garde CI 100k
+reste strict et rouge, le workflow ne le contourne pas.
+
+**S11 livré puis optimisé `4936c2` / `0e3ca8c`**, isolé sans migration : le hash
+BLAKE9 passe de 700 997 à **373 349 steps**, contre 66 867 pour Poseidon.
+Marche4 leaf : **2 889 385 steps** après optimisation, maximum toujours log21 ;
+bytecode wrapper 111 052 mots. Le format, le digest complet et les sorties de jeu
+restent exacts. Malgré la réduction des auxiliaires Poseidon, ce candidat dépasse
+les plafonds et accroît le coût VM ; **Poseidon reste le hash d’état de production**.
+Aucune preuve S11 ni économie RAM/temps de preuve n’a été mesurée.
+
 Les compteurs AIR et l’admission wrapper sont intégrés sur `main` ; les deux passes frontière
 et le parcours monstres sont assemblés dans `codex/game-integration`.
 Les passes frontière et armure sont relues et assemblées sur la branche

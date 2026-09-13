@@ -99,13 +99,16 @@
 - **D28/R7 alignés** : défaut cinq vérifications intégré `b00c90b`, reprise FRI sauvegardée ou
   refus explicite d’une reprise ambiguë, simulation/marges conservées. 95 tests submit + 195 client
   et CI sept jobs verts sur `c383f14`. Aucun nouveau reçu ; coûts P4.1 historiques seulement.
-- **R1/R11 : génération WASM en défaut sur D33** : natif et ancien WASM valides, nouveau
-  WASM en échec en mono et quatre threads, avec ou sans appel `resources()`. La vérification
-  indépendante confirme un refus FRI ; les smokes arithmétiques CI ne couvrent pas cette trace.
-  [S12](docs/spikes/S12-wasm-proof-triage.md) consigne les preuves et contrôles, sans attribution
-  prématurée au jeu Cairo ni au registre. L’étude S11 est suspendue pour ce diagnostic.
+- **R1/R11 : défaut runtime S12 corrigé `e274bec`** : preuve D33 valide en mono et
+  quatre threads, modules Docker reconstruits identiques ; validation runtime root verte.
+  La CI distante reste à contrôler. Le registre log20 et les plafonds restent inchangés.
+- **D29 après passe bornée** : 106 878 mots, 565 tests verts, mêmes sorties ; la preuve
+  réelle quatre tics est vérifiée, mais ne clôt ni le budget 100k ni le scénario P3.7.
+- **S11 après optimisation** : BLAKE9 373 349 steps/hash contre Poseidon 66 867 ;
+  marche4 leaf 2 889 385, maximum log21. Les auxiliaires Poseidon baissent, sans preuve
+  d’un gain RAM ou de durée. Aucun changement de hash d’état en production.
 - **D34, étude de coût de hash** : les traces auxiliaires Poseidon restent larges après D31.
-  Un prototype isolé comparera encodage Blake2s, oracles et ressources avant preuve. Aucune
+  Le prototype isolé a comparé encodage Blake2s, oracles et ressources sans preuve. Aucune
   migration de hash d’état, aucun gain mémoire déduit des seules colonnes, aucun paramètre relevé.
 
 Les constats datés ci-dessous conservent l’historique des spikes ; les décisions D26–D34 et cette
