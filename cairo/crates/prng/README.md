@@ -85,10 +85,3 @@ cannot be reported by the tool — line coverage is the proxy, and since
 `scarb fmt` puts every branch arm on its own line, a missed arm shows up as
 a missed line. The script exits non-zero below 90 % (C7).
 
-## Transitional
-
-`src/compat.cairo` still exports the Phase-0 skeleton's `value(index)` /
-`next(index)` pair, which embeds a placeholder byte formula, because
-`cairo/doom/doom_monsters` imports `prng::next`. Delete both — and this
-paragraph — when `doom_monsters` moves to `PrngTrait` and takes Doom's
-`rndtable` from `doom_things`.

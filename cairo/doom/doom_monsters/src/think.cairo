@@ -11,7 +11,7 @@
 use doom_physics::maputl::{inc, opaque_zero, rd32};
 use doom_physics::{
     Blocker, KIND_NONE, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, MF_SOLID, Mobj, MoveEvent, NO_MOBJ,
-    ThingGrid, World, XyOutcome, explode_missile, first_free, maputl, removed_mobj,
+    PlayerDefense, ThingGrid, World, XyOutcome, explode_missile, first_free, maputl, removed_mobj,
     unset_thing_position, xy_movement, z_movement,
 };
 use doom_things::tables::{
@@ -113,13 +113,15 @@ pub fn in_window(rank: u32, tic: u32, n: u32) -> bool {
     // `match` is what keeps the function without a panic site, and `8 t` is
     // folded in the field rather than through `u32`'s overflow-checked
     // multiplication (S7 §8 rule 1).
-    let nz: NonZero<u32> = match n.try_into() {
+    let wide_n: u128 = n.into();
+    let nz: NonZero<u128> = match wide_n.try_into() {
         Option::Some(v) => v,
         Option::None => 1,
     };
-    let (_, start) = DivRem::div_rem(maputl::low32(fixed::to_u128(WINDOW.into() * tic.into())), nz);
-    let (_, k) = DivRem::div_rem(maputl::add32(maputl::sub32(rank, start), n), nz);
-    k < WINDOW
+    let (_, start) = DivRem::div_rem(fixed::to_u128(WINDOW.into() * tic.into()), nz);
+    let distance = fixed::to_u128(rank.into() + n.into() - start.into());
+    let (_, k) = DivRem::div_rem(distance, nz);
+    k < WINDOW.into()
 }
 
 /// Run one action id on `mo`, and return the action of the state it entered
@@ -141,6 +143,7 @@ fn dispatch(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
+    ref defense: Box<PlayerDefense>,
 ) -> u32 {
     if action == A_CHASE {
         if !may_chase {
@@ -169,27 +172,38 @@ fn dispatch(
     }
     if action == A_POSATTACK {
         if aimed {
-            a_pos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
+            a_pos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref defense);
         }
         return fsm::NO_ACTION;
     }
     if action == A_SPOSATTACK {
         if aimed {
-            a_spos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
+            a_spos_attack_in(
+                e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref defense,
+            );
         }
         return fsm::NO_ACTION;
     }
     if action == A_TROOPATTACK {
         if aimed {
             a_troop_attack_in(
-                e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref spawn_at,
+                e,
+                mobjs,
+                ref g,
+                ref rng,
+                ref mo,
+                me,
+                ref patches,
+                ref ev,
+                ref spawn_at,
+                ref defense,
             );
         }
         return fsm::NO_ACTION;
     }
     if action == A_SARGATTACK {
         if aimed {
-            a_sarg_attack_in(e, mobjs, ref rng, ref mo, me, ref patches, ref ev);
+            a_sarg_attack_in(e, mobjs, ref rng, ref mo, me, ref patches, ref ev, ref defense);
         }
         return fsm::NO_ACTION;
     }
@@ -219,6 +233,7 @@ fn run_chain(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
+    ref defense: Box<PlayerDefense>,
 ) {
     let mut a = action;
     let mut depth: u32 = opaque_zero(action);
@@ -237,6 +252,7 @@ fn run_chain(
                 ref patches,
                 ref ev,
                 ref spawn_at,
+                ref defense,
             );
         depth = inc(depth);
     }
@@ -257,6 +273,7 @@ fn think_state(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
+    ref defense: Box<PlayerDefense>,
 ) {
     let m0 = mo.unbox();
     if m0.tics == fsm::FOREVER {
@@ -277,6 +294,7 @@ fn think_state(
         ref patches,
         ref ev,
         ref spawn_at,
+        ref defense,
     );
     let m1 = mo.unbox();
     if m1.tics == 0 {
@@ -295,6 +313,7 @@ fn think_state(
             ref patches,
             ref ev,
             ref spawn_at,
+            ref defense,
         );
     }
 }
@@ -314,6 +333,7 @@ pub fn mobj_thinker(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) -> bool {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
     let alive = mobj_thinker_in(
         env_of(ctx),
@@ -327,6 +347,7 @@ pub fn mobj_thinker(
         ref patches,
         ref ev,
         ref spawn_at,
+        ref defense,
     );
     mo = b.unbox();
     alive
@@ -345,6 +366,7 @@ pub(crate) fn mobj_thinker_in(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
+    ref defense: Box<PlayerDefense>,
 ) -> bool {
     let mut m = mo.unbox();
     let missile = doom_physics::has(m.flags, MF_MISSILE);
@@ -378,7 +400,18 @@ pub(crate) fn mobj_thinker_in(
             let r: u32 = low.into();
             // `hurt_in` writes a *patch* on another mobj, never on us, so
             // the actor need not be boxed around it.
-            hurt_in(e, mobjs, ref rng, hit, me, m.target, scale(r, dmg_per), ref patches, ref ev);
+            hurt_in(
+                e,
+                mobjs,
+                ref rng,
+                hit,
+                me,
+                m.target,
+                scale(r, dmg_per),
+                ref patches,
+                ref ev,
+                ref defense,
+            );
         }
         match xy {
             XyOutcome::MissileHit(b) => {
@@ -398,7 +431,18 @@ pub(crate) fn mobj_thinker_in(
     mo = BoxTrait::new(m);
     // The state machine, with `A_Look` held back (see below).
     think_state(
-        e, mobjs, ref g, ref rng, ref mo, me, false, may_chase, ref patches, ref ev, ref spawn_at,
+        e,
+        mobjs,
+        ref g,
+        ref rng,
+        ref mo,
+        me,
+        false,
+        may_chase,
+        ref patches,
+        ref ev,
+        ref spawn_at,
+        ref defense,
     );
     // **`A_Look` runs on the cadence, not on the frame.** Vanilla only
     // reaches `A_Look` when the two-frame idle loop turns over, which on
@@ -427,6 +471,7 @@ pub(crate) fn mobj_thinker_in(
             ref patches,
             ref ev,
             ref spawn_at,
+            ref defense,
         );
     }
     // `S_NULL` with `FOREVER` is Doom's "remove me".
@@ -442,7 +487,7 @@ pub(crate) fn mobj_thinker_in(
 ///
 /// Returns the rebuilt list, the advanced RNG and the tic's events. The
 /// thing grid is updated in place (it is derived data and is not hashed).
-pub fn monsters_ticker(
+fn monsters_ticker_in(
     w: World,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
@@ -450,6 +495,7 @@ pub fn monsters_ticker(
     noise: Noise,
     tic: u32,
     rng: Prng,
+    ref defense: Box<PlayerDefense>,
 ) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
     let e = Env { w: BoxTrait::new(w), players, noise, tic };
     let mut r = rng;
@@ -543,6 +589,7 @@ pub fn monsters_ticker(
                 ref patches,
                 ref ev,
                 ref spawn_at,
+                ref defense,
             );
             out.append(b.unbox());
             i = inc(i);
@@ -561,6 +608,7 @@ pub fn monsters_ticker(
             ref patches,
             ref ev,
             ref spawn_at,
+            ref defense,
         );
         if alive {
             out.append(b.unbox());
@@ -613,4 +661,38 @@ fn apply(out: Array<Mobj>, patches: Span<Patch>, n: u32) -> Array<Mobj> {
 #[inline(always)]
 pub(crate) fn scale(r: u32, mul: u32) -> u32 {
     maputl::low32(fixed::to_u128((r.into() + 1) * mul.into()))
+}
+
+/// Compatibility entry point: no player-specific damage bookkeeping.
+#[inline(always)]
+pub fn monsters_ticker(
+    w: World,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    players: Span<u32>,
+    noise: Noise,
+    tic: u32,
+    rng: Prng,
+) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
+    monsters_ticker_in(w, mobjs, ref g, players, noise, tic, rng, ref defense)
+}
+
+/// The same ordered ticker with player armor applied before each health,
+/// pain and death decision. Its patches expose the net health to later actors.
+#[inline(always)]
+pub fn monsters_ticker_with_defense(
+    w: World,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    players: Span<u32>,
+    noise: Noise,
+    tic: u32,
+    rng: Prng,
+    ref defense: PlayerDefense,
+) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
+    let mut boxed = BoxTrait::new(defense);
+    let out = monsters_ticker_in(w, mobjs, ref g, players, noise, tic, rng, ref boxed);
+    defense = boxed.unbox();
+    out
 }

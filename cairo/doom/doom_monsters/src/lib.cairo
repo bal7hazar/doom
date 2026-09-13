@@ -48,7 +48,10 @@ use doom_physics::{Mobj, World, maputl};
 pub use event::{
     EV_BLOOD, EV_CROSS, EV_DROP, EV_KILLED, EV_PUFF, EV_SOUND, EV_USE, EV_WAKE, MonsterEvent,
 };
-pub use think::{awake_count, in_window, is_awake, is_dormant, mobj_thinker, monsters_ticker};
+pub use think::{
+    awake_count, in_window, is_awake, is_dormant, mobj_thinker, monsters_ticker,
+    monsters_ticker_with_defense,
+};
 
 /// How many tics a sight verdict is cached for (R2-A3; the `doom_physics`
 /// README asks `doom_monsters` for `ttl >= 8`).

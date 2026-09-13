@@ -34,9 +34,9 @@ use doom_physics::maputl::{add32, dec, inc, low32, opaque_zero, rd, rd32};
 use doom_physics::spawn::{roll, set_state_in};
 use doom_physics::{
     Aim, DamageOutcome, FIREBALL, Hit, MELEERANGE, MF_AMBUSH, MF_JUSTATTACKED, MF_JUSTHIT,
-    MF_SHADOW, MF_SHOOTABLE, MF_SOLID, MISSILERANGE, Mobj, MoveEvent, NO_MOBJ, ThingGrid, Verdict,
-    aim_line_attack, bleeds, check_sight_cached, damage_mobj, has, line_attack, maputl,
-    spawn_missile, try_move, without,
+    MF_SHADOW, MF_SHOOTABLE, MF_SOLID, MISSILERANGE, Mobj, MoveEvent, NO_MOBJ, PlayerDefense,
+    ThingGrid, Verdict, aim_line_attack, bleeds, check_sight_cached, damage_mobj_with_defense, has,
+    line_attack, maputl, spawn_missile, try_move, without,
 };
 use doom_things::tables::{
     MI_MELEESTATE, MI_MISSILESTATE, MI_RADIUS, MI_SEESTATE, MI_SPAWNSTATE, MI_SPEED,
@@ -828,6 +828,7 @@ fn shoot(
     damage: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let hit = line_attack(e.w.unbox(), mobjs, ref g, me, angle, MISSILERANGE, slope);
     match hit {
@@ -848,7 +849,7 @@ fn shoot(
                 EV_PUFF
             };
             ev.append(MonsterEvent { kind, who: me, a: idx, b: damage, at: p });
-            hurt_in(e, mobjs, ref rng, idx, me, me, damage, ref patches, ref ev);
+            hurt_in(e, mobjs, ref rng, idx, me, me, damage, ref patches, ref ev, ref defense);
         },
     }
 }
@@ -868,8 +869,18 @@ pub fn hurt(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     hurt_in(
-        env_of(ctx), mobjs, ref rng, target_idx, inflictor, source, damage, ref patches, ref ev,
+        env_of(ctx),
+        mobjs,
+        ref rng,
+        target_idx,
+        inflictor,
+        source,
+        damage,
+        ref patches,
+        ref ev,
+        ref defense,
     );
 }
 
@@ -883,10 +894,20 @@ pub(crate) fn hurt_in(
     damage: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let mut t = read_mobj(mobjs, patches.span(), target_idx);
-    let out: DamageOutcome = damage_mobj(
-        e.w.unbox(), mobjs, ref rng, ref t, target_idx, inflictor, source, damage, true,
+    let out: DamageOutcome = damage_mobj_with_defense(
+        e.w.unbox(),
+        mobjs,
+        ref rng,
+        ref t,
+        target_idx,
+        inflictor,
+        source,
+        damage,
+        true,
+        ref defense,
     );
     if run_passive(e.w.unbox().rndtable, ref rng, t.kind, target_idx, out.action, ref ev) {
         t.flags = without(t.flags, MF_SOLID);
@@ -969,8 +990,11 @@ pub fn a_pos_attack(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
-    a_pos_attack_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev);
+    a_pos_attack_in(
+        env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev, ref defense,
+    );
     mo = b.unbox();
 }
 
@@ -983,6 +1007,7 @@ pub(crate) fn a_pos_attack_in(
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
@@ -994,7 +1019,7 @@ pub(crate) fn a_pos_attack_in(
     ev.append(sound(me, SFX_PISTOL));
     let angle = spread_angle(rnd, ref rng, base);
     let damage = roll_damage(rnd, ref rng, FIVE, 3);
-    shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev);
+    shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev, ref defense);
 }
 
 /// `A_SPosAttack`: the shotgun guy's three pellets, one aim for all three.
@@ -1008,8 +1033,11 @@ pub fn a_spos_attack(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
-    a_spos_attack_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev);
+    a_spos_attack_in(
+        env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev, ref defense,
+    );
     mo = b.unbox();
 }
 
@@ -1022,6 +1050,7 @@ pub(crate) fn a_spos_attack_in(
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
@@ -1036,7 +1065,19 @@ pub(crate) fn a_spos_attack_in(
         i = inc(i);
         let angle = spread_angle(rnd, ref rng, base);
         let damage = roll_damage(rnd, ref rng, FIVE, 3);
-        shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev);
+        shoot(
+            e,
+            mobjs,
+            ref g,
+            ref rng,
+            me,
+            angle,
+            aim.slope,
+            damage,
+            ref patches,
+            ref ev,
+            ref defense,
+        );
     }
 }
 
@@ -1059,9 +1100,19 @@ pub fn a_troop_attack(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
     a_troop_attack_in(
-        env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev, ref spawn_at,
+        env_of(ctx),
+        mobjs,
+        ref g,
+        ref rng,
+        ref b,
+        me,
+        ref patches,
+        ref ev,
+        ref spawn_at,
+        ref defense,
     );
     mo = b.unbox();
 }
@@ -1076,6 +1127,7 @@ pub(crate) fn a_troop_attack_in(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
+    ref defense: Box<PlayerDefense>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
@@ -1086,7 +1138,7 @@ pub(crate) fn a_troop_attack_in(
     if check_melee_range_in(e, ref mo, target) {
         ev.append(sound(me, SFX_CLAW));
         let damage = roll_damage(rnd, ref rng, EIGHT_U8, 3);
-        hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev);
+        hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev, ref defense);
         return;
     }
     // Launch a missile.
@@ -1113,8 +1165,9 @@ pub fn a_sarg_attack(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
-    a_sarg_attack_in(env_of(ctx), mobjs, ref rng, ref b, me, ref patches, ref ev);
+    a_sarg_attack_in(env_of(ctx), mobjs, ref rng, ref b, me, ref patches, ref ev, ref defense);
     mo = b.unbox();
 }
 
@@ -1126,6 +1179,7 @@ pub(crate) fn a_sarg_attack_in(
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
@@ -1137,5 +1191,5 @@ pub(crate) fn a_sarg_attack_in(
         return;
     }
     let damage = roll_damage(rnd, ref rng, TEN, 4);
-    hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev);
+    hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev, ref defense);
 }
