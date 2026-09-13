@@ -256,10 +256,14 @@ pub fn new_chase_dir(
     ref ev: Array<MonsterEvent>,
 ) {
     let mut b = BoxTrait::new(mo);
-    new_chase_dir_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, target, ref ev);
+    new_chase_dir_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, *target.x, *target.y, ref ev);
     mo = b.unbox();
 }
 
+/// The direction search takes the target's **two coordinates**, not a
+/// `@Mobj`: a snapshot is not pruned to the fields that are read, so those
+/// 27 felts were pushed at the call and kept live across all six
+/// `P_TryWalk` attempts (S7 §8 rule 3).
 pub(crate) fn new_chase_dir_in(
     e: Env,
     mobjs: Span<Mobj>,
@@ -267,15 +271,16 @@ pub(crate) fn new_chase_dir_in(
     ref rng: Prng,
     ref mo: Box<Mobj>,
     me: u32,
-    target: @Mobj,
+    tx: Fixed,
+    ty: Fixed,
     ref ev: Array<MonsterEvent>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let m = mo.unbox();
     let olddir = m.move_dir;
     let turnaround = rd32(OPPOSITE.span(), olddir);
-    let deltax = fixed::sub(*target.x, m.x);
-    let deltay = fixed::sub(*target.y, m.y);
+    let deltax = fixed::sub(tx, m.x);
+    let deltay = fixed::sub(ty, m.y);
     let ten = Fixed { enc: BIAS + 10 * 65536 };
     let east = fixed::gt(deltax, ten);
     let west = fixed::lt(deltax, fixed::neg(ten));
@@ -389,18 +394,22 @@ pub(crate) fn new_chase_dir_in(
 /// sight (through the R2-A3 cache).
 pub fn check_melee_range(ctx: Ctx, ref mo: Mobj, target: @Mobj) -> bool {
     let mut b = BoxTrait::new(mo);
-    let r = check_melee_range_in(env_of(ctx), ref b, target);
+    let r = check_melee_range_in(env_of(ctx), ref b, BoxTrait::new(*target));
     mo = b.unbox();
     r
 }
 
-pub(crate) fn check_melee_range_in(e: Env, ref mo: Box<Mobj>, target: @Mobj) -> bool {
+/// The target travels boxed too: `check_sight_cached` wants a `@Mobj`, and
+/// one `unbox` at the point of the call is cheaper than 27 felts pushed at
+/// every level above it (S7 §8 rule 3).
+pub(crate) fn check_melee_range_in(e: Env, ref mo: Box<Mobj>, target: Box<Mobj>) -> bool {
     let mut m = mo.unbox();
-    let dist = approx_distance(fixed::sub(*target.x, m.x), fixed::sub(*target.y, m.y));
-    if fixed::ge(dist, fixed::add(MELEE_SLACK, radius_of(*target.kind))) {
+    let t = target.unbox();
+    let dist = approx_distance(fixed::sub(t.x, m.x), fixed::sub(t.y, m.y));
+    if fixed::ge(dist, fixed::add(MELEE_SLACK, radius_of(t.kind))) {
         return false;
     }
-    let seen = check_sight_cached(e.w.unbox(), ref m, target, e.tic, SIGHT_TTL);
+    let seen = check_sight_cached(e.w.unbox(), ref m, @t, e.tic, SIGHT_TTL);
     mo = BoxTrait::new(m);
     seen
 }
@@ -412,16 +421,17 @@ pub(crate) fn check_melee_range_in(e: Env, ref mo: Box<Mobj>, target: @Mobj) -> 
 /// exactly as in C, so RNG consumption does not depend on the geometry.
 pub fn check_missile_range(ctx: Ctx, ref rng: Prng, ref mo: Mobj, target: @Mobj) -> bool {
     let mut b = BoxTrait::new(mo);
-    let r = check_missile_range_in(env_of(ctx), ref rng, ref b, target);
+    let r = check_missile_range_in(env_of(ctx), ref rng, ref b, BoxTrait::new(*target));
     mo = b.unbox();
     r
 }
 
 pub(crate) fn check_missile_range_in(
-    e: Env, ref rng: Prng, ref mo: Box<Mobj>, target: @Mobj,
+    e: Env, ref rng: Prng, ref mo: Box<Mobj>, target: Box<Mobj>,
 ) -> bool {
     let mut m = mo.unbox();
-    let seen = check_sight_cached(e.w.unbox(), ref m, target, e.tic, SIGHT_TTL);
+    let t = target.unbox();
+    let seen = check_sight_cached(e.w.unbox(), ref m, @t, e.tic, SIGHT_TTL);
     // "The target just hit us: fight back", folded into the one write-back
     // so that the function boxes the actor once whichever way it answers.
     let fight_back = seen && has(m.flags, MF_JUSTHIT);
@@ -438,7 +448,7 @@ pub(crate) fn check_missile_range_in(
     if m.reaction_time != 0 {
         return false;
     }
-    let mut dist = approx_distance(fixed::sub(m.x, *target.x), fixed::sub(m.y, *target.y));
+    let mut dist = approx_distance(fixed::sub(m.x, t.x), fixed::sub(m.y, t.y));
     dist = fixed::sub(dist, MISSILE_NEAR);
     if meleestate_of(m.kind) == 0 {
         dist = fixed::sub(dist, MISSILE_FAR);
@@ -658,6 +668,9 @@ pub(crate) fn a_chase_in(
     } else {
         m
     };
+    // Boxed once: the four calls below would otherwise push its 27 felts
+    // each (S7 §8 rule 3).
+    let tbox = BoxTrait::new(target);
     // Modify the target threshold.
     if m.threshold != 0 {
         if !has_target || target.health <= 0 {
@@ -702,12 +715,12 @@ pub(crate) fn a_chase_in(
     // Do not attack twice in a row.
     if has(flags, MF_JUSTATTACKED) {
         mo = BoxTrait::new(Mobj { flags: without(flags, MF_JUSTATTACKED), ..mo.unbox() });
-        new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, @target, ref ev);
+        new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, target.x, target.y, ref ev);
         return fsm::NO_ACTION;
     }
     // Melee.
     let melee = meleestate_of(kind);
-    if melee != 0 && check_melee_range_in(e, ref mo, @target) {
+    if melee != 0 && check_melee_range_in(e, ref mo, tbox) {
         let s = sound_of(MI_ATTACKSOUND.span(), kind);
         if s != SFX_NONE {
             ev.append(sound(me, s));
@@ -716,7 +729,7 @@ pub(crate) fn a_chase_in(
     }
     // Missile. Skill 2 is below nightmare, so `movecount` gates it.
     let missile = missilestate_of(kind);
-    if missile != 0 && move_count == 0 && check_missile_range_in(e, ref rng, ref mo, @target) {
+    if missile != 0 && move_count == 0 && check_missile_range_in(e, ref rng, ref mo, tbox) {
         let firing = mo.unbox();
         mo = BoxTrait::new(Mobj { flags: firing.flags | MF_JUSTATTACKED, ..firing });
         return state_to(e, ref mo, missile);
@@ -724,11 +737,11 @@ pub(crate) fn a_chase_in(
     // Chase towards the player. Doom's `--movecount < 0` on a signed int:
     // the counter only ever matters by its sign, and `P_TryWalk` re-arms it.
     if move_count == 0 {
-        new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, @target, ref ev);
+        new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, target.x, target.y, ref ev);
     } else {
         mo = BoxTrait::new(Mobj { move_count: dec(move_count), ..mo.unbox() });
         if !p_move_in(e, mobjs, ref g, ref mo, me, ref ev) {
-            new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, @target, ref ev);
+            new_chase_dir_in(e, mobjs, ref g, ref rng, ref mo, me, target.x, target.y, ref ev);
         }
     }
     // Make an active sound.
@@ -752,16 +765,26 @@ pub fn a_face_target(ctx: Ctx, ref rng: Prng, ref mo: Mobj, target: @Mobj) {
 }
 
 /// [`a_face_target`] on the `rndtable` alone: two felts instead of a
-/// context. The actor travels by `ref` and not boxed here: this is a leaf
-/// its callers reach with an unboxed local in hand.
+/// context. **Inlined**: its callers all hold an unboxed local, and out of
+/// line it would push and return the actor's 27 felts at each of its five
+/// sites; the work itself is in the narrow [`face_angle`].
+#[inline(always)]
 pub(crate) fn face_target(rnd: Span<u8>, ref rng: Prng, ref mo: Mobj, target: @Mobj) {
     mo.flags = without(mo.flags, MF_AMBUSH);
-    let mut an = point_to_angle2(mo.x, mo.y, *target.x, *target.y);
-    if has(*target.flags, MF_SHADOW) {
-        let s = sub_roll(rnd, ref rng);
-        an = reduce_at(an.into() + s * 0x200000 + 0x100000000);
+    mo.angle = face_angle(rnd, ref rng, mo.x, mo.y, *target.x, *target.y, *target.flags);
+}
+
+/// The angle `A_FaceTarget` turns to, spread against a `MF_SHADOW` target.
+/// Seven felts in, one out.
+fn face_angle(
+    rnd: Span<u8>, ref rng: Prng, x: Fixed, y: Fixed, tx: Fixed, ty: Fixed, tflags: u32,
+) -> Angle {
+    let an = point_to_angle2(x, y, tx, ty);
+    if !has(tflags, MF_SHADOW) {
+        return an;
     }
-    mo.angle = an;
+    let s = sub_roll(rnd, ref rng);
+    reduce_at(an.into() + s * 0x200000 + 0x100000000)
 }
 
 /// `(P_Random() - P_Random()) << 20` added to an angle: the hitscan spread.
@@ -853,7 +876,9 @@ pub(crate) fn hurt_in(
     let out: DamageOutcome = damage_mobj(
         e.w.unbox(), mobjs, ref rng, ref t, target_idx, inflictor, source, damage, true,
     );
-    run_passive(e.w.unbox().rndtable, ref rng, ref t, target_idx, out.action, ref ev);
+    if run_passive(e.w.unbox().rndtable, ref rng, t.kind, target_idx, out.action, ref ev) {
+        t.flags = without(t.flags, MF_SOLID);
+    }
     if out.counts_kill {
         ev.append(event(EV_KILLED, target_idx, source, 0));
     }
@@ -869,39 +894,46 @@ pub(crate) fn hurt_in(
 pub fn passive(
     ctx: Ctx, ref rng: Prng, ref mo: Mobj, me: u32, action: u32, ref ev: Array<MonsterEvent>,
 ) {
-    run_passive(ctx.w.rndtable, ref rng, ref mo, me, action, ref ev);
-}
-
-/// [`passive`] on the `rndtable` alone. The actor travels by `ref` here:
-/// this is also run on the *target*'s copy by [`hurt_in`], which holds a
-/// plain `Mobj`, and the function has no panic site of its own.
-pub(crate) fn run_passive(
-    rnd: Span<u8>, ref rng: Prng, ref mo: Mobj, me: u32, action: u32, ref ev: Array<MonsterEvent>,
-) {
-    if action == doom_things::tables::A_PAIN {
-        let s = sound_of(MI_PAINSOUND.span(), mo.kind);
-        if s != SFX_NONE {
-            ev.append(sound(me, s));
-        }
-    } else if action == doom_things::tables::A_SCREAM {
-        scream(rnd, ref rng, ref mo, me, ref ev);
-    } else if action == doom_things::tables::A_XSCREAM {
-        ev.append(sound(me, SFX_SLOP));
-    } else if action == doom_things::tables::A_FALL {
+    if run_passive(ctx.w.rndtable, ref rng, mo.kind, me, action, ref ev) {
         mo.flags = without(mo.flags, MF_SOLID);
     }
 }
 
-/// `A_Scream`: the death sound, picked inside its family.
-pub fn a_scream(ctx: Ctx, ref rng: Prng, ref mo: Mobj, me: u32, ref ev: Array<MonsterEvent>) {
-    scream(ctx.w.rndtable, ref rng, ref mo, me, ref ev);
+/// [`passive`] on the `rndtable` and the actor's `kind`, answering whether
+/// `A_Fall` fired — i.e. whether the caller has to clear `MF_SOLID`.
+///
+/// Six felts in and four out instead of the actor's 27 in *and* 27 out: the
+/// three sounding arms read one column of `mobjinfo` and the fourth is a
+/// single bit (S7 §8 rule 3). It also spares its two callers a re-box, since
+/// only `A_Fall` writes anything.
+pub(crate) fn run_passive(
+    rnd: Span<u8>, ref rng: Prng, kind: u32, me: u32, action: u32, ref ev: Array<MonsterEvent>,
+) -> bool {
+    if action == doom_things::tables::A_PAIN {
+        let s = sound_of(MI_PAINSOUND.span(), kind);
+        if s != SFX_NONE {
+            ev.append(sound(me, s));
+        }
+    } else if action == doom_things::tables::A_SCREAM {
+        scream(rnd, ref rng, kind, me, ref ev);
+    } else if action == doom_things::tables::A_XSCREAM {
+        ev.append(sound(me, SFX_SLOP));
+    } else if action == doom_things::tables::A_FALL {
+        return true;
+    }
+    false
 }
 
-/// [`a_scream`] on the `rndtable` alone.
+/// `A_Scream`: the death sound, picked inside its family.
+pub fn a_scream(ctx: Ctx, ref rng: Prng, ref mo: Mobj, me: u32, ref ev: Array<MonsterEvent>) {
+    scream(ctx.w.rndtable, ref rng, mo.kind, me, ref ev);
+}
+
+/// [`a_scream`] on the `rndtable` and the `kind`.
 pub(crate) fn scream(
-    rnd: Span<u8>, ref rng: Prng, ref mo: Mobj, me: u32, ref ev: Array<MonsterEvent>,
+    rnd: Span<u8>, ref rng: Prng, kind: u32, me: u32, ref ev: Array<MonsterEvent>,
 ) {
-    let base = sound_of(MI_DEATHSOUND.span(), mo.kind);
+    let base = sound_of(MI_DEATHSOUND.span(), kind);
     if base == SFX_NONE {
         return;
     }
@@ -1039,7 +1071,7 @@ pub(crate) fn a_troop_attack_in(
     let target = read_mobj(mobjs, patches.span(), target_idx);
     face_target(rnd, ref rng, ref m, @target);
     mo = BoxTrait::new(m);
-    if check_melee_range_in(e, ref mo, @target) {
+    if check_melee_range_in(e, ref mo, BoxTrait::new(target)) {
         ev.append(sound(me, SFX_CLAW));
         let damage = roll_damage(rnd, ref rng, EIGHT_U8, 3);
         hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev);
@@ -1088,7 +1120,7 @@ pub(crate) fn a_sarg_attack_in(
     let target = read_mobj(mobjs, patches.span(), target_idx);
     face_target(rnd, ref rng, ref m, @target);
     mo = BoxTrait::new(m);
-    if !check_melee_range_in(e, ref mo, @target) {
+    if !check_melee_range_in(e, ref mo, BoxTrait::new(target)) {
         return;
     }
     let damage = roll_damage(rnd, ref rng, TEN, 4);

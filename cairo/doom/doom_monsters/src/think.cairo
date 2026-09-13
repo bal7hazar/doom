@@ -10,9 +10,9 @@
 
 use doom_physics::maputl::{inc, opaque_zero, rd32};
 use doom_physics::{
-    Blocker, KIND_NONE, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, Mobj, MoveEvent, NO_MOBJ, ThingGrid,
-    World, XyOutcome, explode_missile, first_free, maputl, removed_mobj, unset_thing_position,
-    xy_movement, z_movement,
+    Blocker, KIND_NONE, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, MF_SOLID, Mobj, MoveEvent, NO_MOBJ,
+    ThingGrid, World, XyOutcome, explode_missile, first_free, maputl, removed_mobj,
+    unset_thing_position, xy_movement, z_movement,
 };
 use doom_things::tables::{
     A_CHASE, A_FACETARGET, A_LOOK, A_POSATTACK, A_SARGATTACK, A_SPOSATTACK, A_TROOPATTACK,
@@ -196,9 +196,11 @@ fn dispatch(
     // `A_Pain`, `A_Scream`, `A_XScream`, `A_Fall`: none of them changes the
     // state again. Everything else (the weapon and flash actions) belongs to
     // `doom_player` and is ignored here.
-    let mut m = mo.unbox();
-    run_passive(e.w.unbox().rndtable, ref rng, ref m, me, action, ref ev);
-    mo = BoxTrait::new(m);
+    let m = mo.unbox();
+    if run_passive(e.w.unbox().rndtable, ref rng, m.kind, me, action, ref ev) {
+        // `A_Fall`, the one passive action that writes anything.
+        mo = BoxTrait::new(Mobj { flags: doom_physics::without(m.flags, MF_SOLID), ..m });
+    }
     fsm::NO_ACTION
 }
 
