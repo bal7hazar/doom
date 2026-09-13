@@ -6,6 +6,23 @@
 //! Cairo has no function pointers, so a state carries an **action id**
 //! (D15); [`run_action`] is this crate's dispatch table for the eleven ids
 //! `d_items.c`'s five weapon chains can reach.
+//!
+//! # Everything crosses a call behind a pointer (S7 §8 rule 3)
+//!
+//! The chain is five levels deep on an idle tic (`move_psprites` →
+//! `tick_slot` → `set_psprite` → `run_action` → `A_WeaponReady`). Carrying
+//! the `Player` (36 felts), the `Mobj` (27) and the [`Env`] (16) by value or
+//! by `ref` cost **79 felts in and 63 out at every level** — and, because a
+//! panic site stores the enclosing function's whole return width, 63 more
+//! at every panic site and every return point of every one of them.
+//!
+//! So the public entry points below are thin wrappers that box their
+//! operands once, and the whole chain (`*_in`) carries `Box<Env>`,
+//! `Box<Player>` and `Box<Mobj>` — one felt each. Reading a field through a
+//! box is free (`unbox` emits nothing, the field is a double dereference);
+//! only a **write** pays, one `into_box` of the record's width, and an idle
+//! tic writes three fields. That is the trade S7 §4.3 measured: 26 steps for
+//! a boxed call against 91 for the struct by value.
 
 use bam::{Angle, point_to_angle2};
 use doom_physics::spawn::{roll, state_entry};
@@ -20,7 +37,7 @@ use doom_things::tables::{
 use doom_things::{WeaponId, WeaponStates, weapon_states};
 use fixed::{BIAS, Fixed};
 use prng::Prng;
-use super::env::{Env, PlayerEvent};
+use super::env::{Env, PlayerEvent, enter, leave};
 use super::num::{add32, dec, fine_of, half_fine, inc, mul32, rd32};
 use super::state::{
     AM_NOAMMO, BT_ATTACK, MAXBOB, PST_DEAD, Player, RAISESPEED, WEAPONBOTTOM, WEAPONTOP,
@@ -86,29 +103,47 @@ pub fn chain(weapon: u32) -> WeaponStates {
 // The two psprite slots
 // ---------------------------------------------------------------------------
 
-fn set_slot(ref p: Player, slot: u32, state: u32, tics: u32) {
-    if slot == PS_WEAPON {
-        p.psp_state = state;
-        p.psp_tics = tics;
+/// Write one slot's `(state, tics)`, in one `into_box`: the two arms pick
+/// the four values, and the record is rebuilt once (two struct literals
+/// would keep two 36-felt live sets alive, S7 §4.2).
+///
+/// **A slot that already holds `(state, tics)` is not rebuilt.** Rebuilding
+/// a boxed `Player` reads 36 felts and writes 36 (measured at 111 steps);
+/// two comparisons decide it. That is not a rare case: every "ready" and
+/// "hold" state in `p_pspr.c` re-enters itself with the same tic count, so
+/// `A_WeaponReady` reaches this with nothing to change on every tic a weapon
+/// is simply up.
+fn set_slot(ref p: Box<Player>, slot: u32, state: u32, tics: u32) {
+    let cur = p.unbox();
+    let (ws, wt, fs, ft) = if slot == PS_WEAPON {
+        (state, tics, cur.flash_state, cur.flash_tics)
     } else {
-        p.flash_state = state;
-        p.flash_tics = tics;
+        (cur.psp_state, cur.psp_tics, state, tics)
+    };
+    if ws == cur.psp_state && wt == cur.psp_tics && fs == cur.flash_state && ft == cur.flash_tics {
+        return;
+    }
+    p =
+        BoxTrait::new(
+            Player { psp_state: ws, psp_tics: wt, flash_state: fs, flash_tics: ft, ..cur },
+        );
+}
+
+#[inline(always)]
+fn slot_state(p: Box<Player>, slot: u32) -> u32 {
+    if slot == PS_WEAPON {
+        p.psp_state
+    } else {
+        p.flash_state
     }
 }
 
-fn slot_state(p: @Player, slot: u32) -> u32 {
+#[inline(always)]
+fn slot_tics(p: Box<Player>, slot: u32) -> u32 {
     if slot == PS_WEAPON {
-        *p.psp_state
+        p.psp_tics
     } else {
-        *p.flash_state
-    }
-}
-
-fn slot_tics(p: @Player, slot: u32) -> u32 {
-    if slot == PS_WEAPON {
-        *p.psp_tics
-    } else {
-        *p.flash_tics
+        p.flash_tics
     }
 }
 
@@ -130,6 +165,25 @@ pub fn set_psprite(
     stnum: u32,
     depth: u32,
 ) {
+    let (cx, mut bp, mut bm) = enter(env, @p, @mo);
+    set_psprite_in(cx, ref g, ref rng, ref bp, ref bm, ref events, slot, stnum, depth);
+    leave(bp, bm, ref p, ref mo);
+}
+
+fn set_psprite_in(
+    env: Box<Env>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
+    ref events: Array<PlayerEvent>,
+    slot: u32,
+    stnum: u32,
+    depth: u32,
+) {
+    // `env.states` is read through the box at each use rather than hoisted:
+    // ten felts held live across the loop's merges and across `run_action_in`
+    // would be re-stored at every one of them (S7 §4.2).
     let mut st = stnum;
     let mut guard: u32 = 0;
     loop {
@@ -140,15 +194,15 @@ pub fn set_psprite(
         let (tics, action) = state_entry(env.states, st);
         set_slot(ref p, slot, st, tics);
         if action != fsm::NO_ACTION && depth < MAX_PSPR_DEPTH {
-            run_action(env, ref g, ref rng, ref p, ref mo, ref events, action, depth + 1);
+            run_action_in(env, ref g, ref rng, ref p, ref mo, ref events, action, inc(depth));
         }
         // Doom re-reads `psp->state` here: the action may have replaced it,
         // in which case the nested call already ran the whole chain.
-        let now = slot_state(@p, slot);
+        let now = slot_state(p, slot);
         if now == 0 || now != st {
             break;
         }
-        if slot_tics(@p, slot) != 0 {
+        if slot_tics(p, slot) != 0 {
             break;
         }
         st = rd32(env.states.next_state, st);
@@ -169,24 +223,37 @@ pub fn move_psprites(
     ref mo: Mobj,
     ref events: Array<PlayerEvent>,
 ) {
+    let (cx, mut bp, mut bm) = enter(env, @p, @mo);
+    move_psprites_in(cx, ref g, ref rng, ref bp, ref bm, ref events);
+    leave(bp, bm, ref p, ref mo);
+}
+
+pub(crate) fn move_psprites_in(
+    env: Box<Env>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
+    ref events: Array<PlayerEvent>,
+) {
     tick_slot(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON);
     tick_slot(env, ref g, ref rng, ref p, ref mo, ref events, PS_FLASH);
 }
 
 fn tick_slot(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     slot: u32,
 ) {
-    let st = slot_state(@p, slot);
+    let st = slot_state(p, slot);
     if st == 0 {
         return;
     }
-    let tics = slot_tics(@p, slot);
+    let tics = slot_tics(p, slot);
     if tics == fsm::FOREVER {
         return;
     }
@@ -194,8 +261,8 @@ fn tick_slot(
         set_slot(ref p, slot, st, dec(tics));
         return;
     }
-    let next = rd32(env.states.next_state, st);
-    set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, slot, next, 0);
+    let next = rd32(env.unbox().states.next_state, st);
+    set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, slot, next, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -212,13 +279,34 @@ pub fn bring_up_weapon(
     ref events: Array<PlayerEvent>,
     depth: u32,
 ) {
-    if p.pending_weapon == WP_NOCHANGE {
-        p.pending_weapon = p.ready_weapon;
-    }
-    let newstate = chain(p.pending_weapon).up;
-    p.pending_weapon = WP_NOCHANGE;
-    p.psp_sy = Fixed { enc: BIAS + WEAPONBOTTOM };
-    set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, newstate, depth);
+    let (cx, mut bp, mut bm) = enter(env, @p, @mo);
+    bring_up_weapon_in(cx, ref g, ref rng, ref bp, ref bm, ref events, depth);
+    leave(bp, bm, ref p, ref mo);
+}
+
+fn bring_up_weapon_in(
+    env: Box<Env>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
+    ref events: Array<PlayerEvent>,
+    depth: u32,
+) {
+    let cur = p.unbox();
+    let up = if cur.pending_weapon == WP_NOCHANGE {
+        cur.ready_weapon
+    } else {
+        cur.pending_weapon
+    };
+    let newstate = chain(up).up;
+    p =
+        BoxTrait::new(
+            Player {
+                pending_weapon: WP_NOCHANGE, psp_sy: Fixed { enc: BIAS + WEAPONBOTTOM }, ..cur,
+            },
+        );
+    set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, newstate, depth);
 }
 
 /// `P_DropWeapon`: start lowering the ready weapon (death, or a switch).
@@ -230,8 +318,21 @@ pub fn drop_weapon(
     ref mo: Mobj,
     ref events: Array<PlayerEvent>,
 ) {
-    let down = chain(p.ready_weapon).down;
-    set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, down, 0);
+    let (cx, mut bp, mut bm) = enter(env, @p, @mo);
+    drop_weapon_in(cx, ref g, ref rng, ref bp, ref bm, ref events);
+    leave(bp, bm, ref p, ref mo);
+}
+
+pub(crate) fn drop_weapon_in(
+    env: Box<Env>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
+    ref events: Array<PlayerEvent>,
+) {
+    let down = chain(p.unbox().ready_weapon).down;
+    set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, down, 0);
 }
 
 /// `P_CheckAmmo`: `true` when the ready weapon can fire; otherwise pick the
@@ -248,52 +349,66 @@ pub fn check_ammo(
     ref events: Array<PlayerEvent>,
     depth: u32,
 ) -> bool {
-    let ammo = weapon_ammo(p.ready_weapon);
-    if ammo == AM_NOAMMO || ammo_of(@p, ammo) >= 1 {
+    let (cx, mut bp, mut bm) = enter(env, @p, @mo);
+    let ok = check_ammo_in(cx, ref g, ref rng, ref bp, ref bm, ref events, depth);
+    leave(bp, bm, ref p, ref mo);
+    ok
+}
+
+fn check_ammo_in(
+    env: Box<Env>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
+    ref events: Array<PlayerEvent>,
+    depth: u32,
+) -> bool {
+    let cur = p.unbox();
+    let ammo = weapon_ammo(cur.ready_weapon);
+    if ammo == AM_NOAMMO || ammo_of(@cur, ammo) >= 1 {
         return true;
     }
-    p
-        .pending_weapon =
-            if owns(@p, WP_CHAINGUN) && ammo_of(@p, weapon_ammo(WP_CHAINGUN)) != 0 {
-                WP_CHAINGUN
-            } else if owns(@p, WP_SHOTGUN) && ammo_of(@p, weapon_ammo(WP_SHOTGUN)) != 0 {
-                WP_SHOTGUN
-            } else if ammo_of(@p, weapon_ammo(WP_PISTOL)) != 0 {
-                WP_PISTOL
-            } else if owns(@p, WP_CHAINSAW) {
-                WP_CHAINSAW
-            } else {
-                WP_FIST
-            };
-    let down = chain(p.ready_weapon).down;
-    set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, down, depth);
+    let pending = if owns(@cur, WP_CHAINGUN) && ammo_of(@cur, weapon_ammo(WP_CHAINGUN)) != 0 {
+        WP_CHAINGUN
+    } else if owns(@cur, WP_SHOTGUN) && ammo_of(@cur, weapon_ammo(WP_SHOTGUN)) != 0 {
+        WP_SHOTGUN
+    } else if ammo_of(@cur, weapon_ammo(WP_PISTOL)) != 0 {
+        WP_PISTOL
+    } else if owns(@cur, WP_CHAINSAW) {
+        WP_CHAINSAW
+    } else {
+        WP_FIST
+    };
+    let down = chain(cur.ready_weapon).down;
+    p = BoxTrait::new(Player { pending_weapon: pending, ..cur });
+    set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, down, depth);
     false
 }
 
 /// `P_FireWeapon`.
 fn fire_weapon(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     depth: u32,
 ) {
-    if !check_ammo(env, ref g, ref rng, ref p, ref mo, ref events, depth) {
+    if !check_ammo_in(env, ref g, ref rng, ref p, ref mo, ref events, depth) {
         return;
     }
     enter_mobj_state(env, ref mo, S_PLAY_ATK);
-    let atk = chain(p.ready_weapon).attack;
-    set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, atk, depth);
+    let atk = chain(p.unbox().ready_weapon).attack;
+    set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, atk, depth);
 }
 
 /// `P_SetMobjState` on the player's own mobj: `fsm::enter` without the
 /// `doom_physics::set_state` wrapper, which would want the whole `World`.
-fn enter_mobj_state(env: Env, ref mo: Mobj, state: u32) {
-    let (tics, _) = state_entry(env.states, state);
-    mo.state = state;
-    mo.tics = tics;
+fn enter_mobj_state(env: Box<Env>, ref mo: Box<Mobj>, state: u32) {
+    let (tics, _) = state_entry(env.unbox().states, state);
+    mo = BoxTrait::new(Mobj { state, tics, ..mo.unbox() });
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +423,21 @@ pub fn run_action(
     ref rng: Prng,
     ref p: Player,
     ref mo: Mobj,
+    ref events: Array<PlayerEvent>,
+    action: u32,
+    depth: u32,
+) {
+    let (cx, mut bp, mut bm) = enter(env, @p, @mo);
+    run_action_in(cx, ref g, ref rng, ref bp, ref bm, ref events, action, depth);
+    leave(bp, bm, ref p, ref mo);
+}
+
+fn run_action_in(
+    env: Box<Env>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     action: u32,
     depth: u32,
@@ -331,111 +461,136 @@ pub fn run_action(
     } else if action == A_SAW {
         a_melee(env, ref g, ref rng, ref p, ref mo, ref events, true);
     } else if action == A_LIGHT0 {
-        p.extralight = 0;
+        set_extralight(ref p, 0);
     } else if action == A_LIGHT1 {
-        p.extralight = 1;
+        set_extralight(ref p, 1);
     } else if action == A_LIGHT2 {
-        p.extralight = 2;
+        set_extralight(ref p, 2);
     }
+}
+
+/// `A_Light0`/`1`/`2`, out of line so the three arms of the dispatch share
+/// one `into_box` (S7 §8 rule 6).
+fn set_extralight(ref p: Box<Player>, level: u32) {
+    p = BoxTrait::new(Player { extralight: level, ..p.unbox() });
 }
 
 /// `A_WeaponReady`.
 fn a_weapon_ready(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     depth: u32,
 ) {
-    if mo.state == S_PLAY_ATK {
+    if mo.unbox().state == S_PLAY_ATK {
         enter_mobj_state(env, ref mo, S_PLAY);
     }
-    if p.pending_weapon != WP_NOCHANGE || p.health == 0 {
-        let down = chain(p.ready_weapon).down;
-        set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, down, depth);
+    let cur = p.unbox();
+    if cur.pending_weapon != WP_NOCHANGE || cur.health == 0 {
+        let down = chain(cur.ready_weapon).down;
+        set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, down, depth);
         return;
     }
-    if (env.buttons & BT_ATTACK) != 0 {
+    if (env.unbox().buttons & BT_ATTACK) != 0 {
         // Doom lets the rocket launcher and the BFG require a re-press;
         // neither is in this roster, so every weapon fires while held.
-        p.attackdown = true;
+        p = BoxTrait::new(Player { attackdown: true, ..cur });
         fire_weapon(env, ref g, ref rng, ref p, ref mo, ref events, depth);
         return;
     }
-    p.attackdown = false;
-    // Bob the weapon with the player's speed.
-    let idx = fine_of(128, env.tic);
-    p.psp_sx = fixed::add(fixed::FRACUNIT, fixed::mul(p.bob, bam::finecosine(idx)));
+    // Bob the weapon with the player's speed. One `into_box` for the three
+    // fields: `attackdown` is written on this arm too.
+    let idx = fine_of(128, env.unbox().tic);
+    let bob = cur.bob;
+    let sx = fixed::add(fixed::FRACUNIT, fixed::mul(bob, bam::finecosine(idx)));
     let top = Fixed { enc: BIAS + WEAPONTOP };
-    p.psp_sy = fixed::add(top, fixed::mul(p.bob, bam::finesine(half_fine(idx))));
+    let sy = fixed::add(top, fixed::mul(bob, bam::finesine(half_fine(idx))));
+    // Same rule as `set_slot`: three comparisons rather than a 111-step
+    // rebuild of the record with the values it already holds (a weapon that
+    // is up over a player who is not moving bobs by zero).
+    if sx == cur.psp_sx && sy == cur.psp_sy && !cur.attackdown {
+        return;
+    }
+    p = BoxTrait::new(Player { attackdown: false, psp_sx: sx, psp_sy: sy, ..cur });
 }
 
 /// `A_ReFire`.
 fn a_refire(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     depth: u32,
 ) {
-    if (env.buttons & BT_ATTACK) != 0 && p.pending_weapon == WP_NOCHANGE && p.health != 0 {
-        p.refire = inc(p.refire);
+    let cur = p.unbox();
+    if (env.unbox().buttons & BT_ATTACK) != 0
+        && cur.pending_weapon == WP_NOCHANGE
+        && cur.health != 0 {
+        p = BoxTrait::new(Player { refire: inc(cur.refire), ..cur });
         fire_weapon(env, ref g, ref rng, ref p, ref mo, ref events, depth);
     } else {
-        p.refire = 0;
-        check_ammo(env, ref g, ref rng, ref p, ref mo, ref events, depth);
+        p = BoxTrait::new(Player { refire: 0, ..cur });
+        check_ammo_in(env, ref g, ref rng, ref p, ref mo, ref events, depth);
     }
 }
 
 /// `A_Lower`.
 fn a_lower(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     depth: u32,
 ) {
-    p.psp_sy = Fixed { enc: p.psp_sy.enc + RAISESPEED };
-    if fixed::lt(p.psp_sy, Fixed { enc: BIAS + WEAPONBOTTOM }) {
+    let cur = p.unbox();
+    let sy = Fixed { enc: cur.psp_sy.enc + RAISESPEED };
+    let bottom = Fixed { enc: BIAS + WEAPONBOTTOM };
+    if fixed::lt(sy, bottom) {
+        p = BoxTrait::new(Player { psp_sy: sy, ..cur });
         return;
     }
-    if p.playerstate == PST_DEAD {
-        p.psp_sy = Fixed { enc: BIAS + WEAPONBOTTOM };
+    if cur.playerstate == PST_DEAD {
+        p = BoxTrait::new(Player { psp_sy: bottom, ..cur });
         return;
     }
-    if p.health == 0 {
+    if cur.health == 0 {
         // The player is dead but has not entered PST_DEAD yet: take the
         // weapon off the screen for good.
-        set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, 0, depth);
+        p = BoxTrait::new(Player { psp_sy: sy, ..cur });
+        set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, 0, depth);
         return;
     }
-    p.ready_weapon = p.pending_weapon;
-    bring_up_weapon(env, ref g, ref rng, ref p, ref mo, ref events, depth);
+    p = BoxTrait::new(Player { psp_sy: sy, ready_weapon: cur.pending_weapon, ..cur });
+    bring_up_weapon_in(env, ref g, ref rng, ref p, ref mo, ref events, depth);
 }
 
 /// `A_Raise`.
 fn a_raise(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     depth: u32,
 ) {
-    p.psp_sy = Fixed { enc: p.psp_sy.enc - RAISESPEED };
-    if fixed::gt(p.psp_sy, Fixed { enc: BIAS + WEAPONTOP }) {
+    let cur = p.unbox();
+    let raised = Fixed { enc: cur.psp_sy.enc - RAISESPEED };
+    let top = Fixed { enc: BIAS + WEAPONTOP };
+    if fixed::gt(raised, top) {
+        p = BoxTrait::new(Player { psp_sy: raised, ..cur });
         return;
     }
-    p.psp_sy = Fixed { enc: BIAS + WEAPONTOP };
-    let ready = chain(p.ready_weapon).ready;
-    set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, ready, depth);
+    p = BoxTrait::new(Player { psp_sy: top, ..cur });
+    let ready = chain(cur.ready_weapon).ready;
+    set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, ready, depth);
 }
 
 // ---------------------------------------------------------------------------
@@ -446,24 +601,28 @@ fn a_raise(
 /// differ only in how many pellets leave the barrel and, for the shotgun,
 /// in never being accurate.
 fn a_fire_gun(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     shots: u32,
     depth: u32,
 ) {
     enter_mobj_state(env, ref mo, S_PLAY_ATK);
-    let ammo = weapon_ammo(p.ready_weapon);
+    let cur = p.unbox();
+    let ammo = weapon_ammo(cur.ready_weapon);
     // `P_CheckAmmo` ran first, so the counter is at least one; `dec` is that
     // subtraction without the underflow panic (S7 §8 rule 1).
-    p = set_ammo(p, ammo, dec(ammo_of(@p, ammo)));
-    let flash = chain(p.ready_weapon).flash;
-    set_psprite(env, ref g, ref rng, ref p, ref mo, ref events, PS_FLASH, flash, depth);
-    let accurate = shots == 1 && p.refire == 0;
-    shoot(env, ref g, ref rng, @mo, ref events, shots, accurate);
+    let spent = set_ammo(cur, ammo, dec(ammo_of(@cur, ammo)));
+    let flash = chain(cur.ready_weapon).flash;
+    p = BoxTrait::new(spent);
+    set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_FLASH, flash, depth);
+    // `refire` and the angle are read *after* the flash, as `A_FirePistol`
+    // does (the flash states only run `A_Light*`, so neither can change).
+    let accurate = shots == 1 && p.unbox().refire == 0;
+    shoot(env, ref g, ref rng, ref events, mo.unbox().angle, shots, accurate);
 }
 
 /// `A_FireCGun`.
@@ -475,33 +634,42 @@ fn a_fire_gun(
 /// tic — a renderer-only difference, on a weapon that is not obtainable on
 /// E1M1 at skill 2 (README, "Known departures").
 fn a_fire_cgun(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     depth: u32,
 ) {
-    let ammo = weapon_ammo(p.ready_weapon);
-    if ammo_of(@p, ammo) == 0 {
+    let cur = p.unbox();
+    let ammo = weapon_ammo(cur.ready_weapon);
+    if ammo_of(@cur, ammo) == 0 {
         return;
     }
     a_fire_gun(env, ref g, ref rng, ref p, ref mo, ref events, 1, depth);
 }
 
 /// `P_BulletSlope` + `shots` × `P_GunShot`.
+///
+/// The `Player` and the `Mobj` do not come along: `line_attack` reads the
+/// shooter out of `env.mobjs` (which is the list as the tic began, exactly
+/// as `P_PlayerThink` running before the thinker pass guarantees), so all
+/// this needs of the mobj is the angle it fires along.
 fn shoot(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    mo: @Mobj,
     ref events: Array<PlayerEvent>,
+    an: Angle,
     shots: u32,
     accurate: bool,
 ) {
-    let w = env.world.unbox();
-    let slope = bullet_slope(w, env.mobjs, ref g, mo, env.me);
+    let e = env.unbox();
+    let w = e.world.unbox();
+    let mobjs = e.mobjs;
+    let me = e.me;
+    let slope = bullet_slope_at(w, mobjs, ref g, an, me);
     let rnd = w.rndtable;
     let mut k: u32 = 0;
     while k != shots {
@@ -509,11 +677,11 @@ fn shoot(
         let (_, r) = DivRem::div_rem(roll(ref rng, rnd), three);
         let damage: u32 = mul32(5, add32(r.into(), 1));
         let angle = if accurate {
-            *mo.angle
+            an
         } else {
-            spread(*mo.angle, sub_roll(ref rng, rnd))
+            spread(an, sub_roll(ref rng, rnd))
         };
-        let hit = line_attack(w, env.mobjs, ref g, env.me, angle, MISSILERANGE, slope);
+        let hit = line_attack(w, mobjs, ref g, me, angle, MISSILERANGE, slope);
         events.append(PlayerEvent::Shot((hit, damage)));
         k = inc(k);
     }
@@ -533,18 +701,29 @@ fn sub_roll(ref rng: Prng, table: Span<u8>) -> felt252 {
 
 /// `P_BulletSlope`: aim straight ahead, then a degree either side.
 pub fn bullet_slope(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, mo: @Mobj, me: u32) -> Fixed {
-    let an = *mo.angle;
+    bullet_slope_at(w, mobjs, ref g, *mo.angle, me)
+}
+
+/// [`bullet_slope`] on the angle alone: the public form takes a `@Mobj`,
+/// which Cairo pushes in full (27 felts) because a snapshot is not pruned to
+/// the field that is read (S7 §4.3).
+///
+/// **The two side traces only happen when the first found nothing**, which
+/// is `P_BulletSlope`'s own short-circuit: `if (!linetarget)`. A shot with a
+/// target in front of the player costs one `P_AimLineAttack`; a shot into
+/// empty space costs three (README, "Measured step costs").
+fn bullet_slope_at(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, an: Angle, me: u32) -> Fixed {
     let aim = aim_line_attack(w, mobjs, ref g, me, an, AIMRANGE);
     if aim.target != NO_MOBJ {
         return aim.slope;
     }
-    let an = bam::add(an, 0x4000000); // 1 << 26
-    let aim = aim_line_attack(w, mobjs, ref g, me, an, AIMRANGE);
+    let left = bam::add(an, 0x4000000); // 1 << 26
+    let aim = aim_line_attack(w, mobjs, ref g, me, left, AIMRANGE);
     if aim.target != NO_MOBJ {
         return aim.slope;
     }
-    let an = bam::sub(an, 0x8000000); // 2 << 26
-    aim_line_attack(w, mobjs, ref g, me, an, AIMRANGE).slope
+    let right = bam::sub(left, 0x8000000); // 2 << 26
+    aim_line_attack(w, mobjs, ref g, me, right, AIMRANGE).slope
 }
 
 /// `angle + (P_SubRandom() << 18)`, reduced once in the field (S1 §7).
@@ -555,61 +734,63 @@ fn spread(angle: Angle, sub: felt252) -> Angle {
 /// `A_Punch` and `A_Saw`: the two melee attacks, which differ in damage,
 /// range, how they turn toward what they hit, and `MF_JUSTATTACKED`.
 fn a_melee(
-    env: Env,
+    env: Box<Env>,
     ref g: ThingGrid,
     ref rng: Prng,
-    ref p: Player,
-    ref mo: Mobj,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
     ref events: Array<PlayerEvent>,
     saw: bool,
 ) {
-    let w = env.world.unbox();
+    let e = env.unbox();
+    let w = e.world.unbox();
+    let mobjs = e.mobjs;
+    let me = e.me;
     let rnd = w.rndtable;
     let ten: NonZero<u8> = 10;
     let (_, r) = DivRem::div_rem(roll(ref rng, rnd), ten);
     let base: u32 = mul32(2, add32(r.into(), 1));
-    let damage = if !saw && p.strength != 0 {
+    let damage = if !saw && p.unbox().strength != 0 {
         mul32(base, 10)
     } else {
         base
     };
-    let angle = spread(mo.angle, sub_roll(ref rng, rnd));
+    let cur = mo.unbox();
+    let angle = spread(cur.angle, sub_roll(ref rng, rnd));
     let range = if saw {
         Fixed { enc: MELEERANGE.enc + 1 }
     } else {
         MELEERANGE
     };
-    let aim = aim_line_attack(w, env.mobjs, ref g, env.me, angle, range);
-    let hit = line_attack(w, env.mobjs, ref g, env.me, angle, range, aim.slope);
+    let aim = aim_line_attack(w, mobjs, ref g, me, angle, range);
+    let hit = line_attack(w, mobjs, ref g, me, angle, range, aim.slope);
     events.append(PlayerEvent::Shot((hit, damage)));
     if aim.target == NO_MOBJ {
         return;
     }
-    let t = match env.mobjs.get(aim.target) {
+    let t = match mobjs.get(aim.target) {
         Option::Some(b) => b.unbox(),
         Option::None => { return; },
     };
-    let facing = point_to_angle2(mo.x, mo.y, *t.x, *t.y);
+    let facing = point_to_angle2(cur.x, cur.y, *t.x, *t.y);
     if !saw {
-        mo.angle = facing;
+        mo = BoxTrait::new(Mobj { angle: facing, ..cur });
         return;
     }
     // `A_Saw` turns toward the target by at most ANG90/20 a tic.
-    let delta = bam::sub(facing, mo.angle);
-    mo
-        .angle =
-            if delta > 0x80000000 {
-                if delta < NEG_SAW_STEP {
-                    bam::add(facing, SAW_SNAP)
-                } else {
-                    bam::sub(mo.angle, SAW_STEP)
-                }
-            } else if delta > SAW_STEP {
-                bam::sub(facing, SAW_SNAP)
-            } else {
-                bam::add(mo.angle, SAW_STEP)
-            };
-    mo.flags = mo.flags | MF_JUSTATTACKED;
+    let delta = bam::sub(facing, cur.angle);
+    let turned = if delta > 0x80000000 {
+        if delta < NEG_SAW_STEP {
+            bam::add(facing, SAW_SNAP)
+        } else {
+            bam::sub(cur.angle, SAW_STEP)
+        }
+    } else if delta > SAW_STEP {
+        bam::sub(facing, SAW_SNAP)
+    } else {
+        bam::add(cur.angle, SAW_STEP)
+    };
+    mo = BoxTrait::new(Mobj { angle: turned, flags: cur.flags | MF_JUSTATTACKED, ..cur });
 }
 
 /// `MAXBOB` re-exported for the tests, which check `P_CalcHeight`'s clamp.

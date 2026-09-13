@@ -15,14 +15,14 @@ use doom_things::tables::{
 };
 use fixed::{BIAS, Fixed};
 use prng::Prng;
-use super::env::{Env, PlayerEvent};
+use super::env::{Env, PlayerEvent, enter, leave};
 use super::num::{add32, div32, inc, mul32, rd32, sub32};
 use super::state::{
     AM_CELL, AM_CLIP, AM_MISL, AM_NOAMMO, AM_SHELL, BONUSADD, CARD_BLUE, CLIPAMMO, MAXARMOR_BONUS,
     MAXDAMAGECOUNT, MAXHEALTH, MAXHEALTH_BONUS, PST_DEAD, Player, WP_CHAINGUN, WP_CHAINSAW, WP_FIST,
     WP_PISTOL, WP_SHOTGUN, ammo_of, max_ammo, owns, set_ammo, weapon_ammo, weapon_bit,
 };
-use super::weapon::drop_weapon;
+use super::weapon::drop_weapon_in;
 
 // ---------------------------------------------------------------------------
 // P_Give*
@@ -327,22 +327,31 @@ fn backpack(ref p: Player) -> bool {
 ///
 /// Returns the damage that reaches the player's health.
 pub fn absorb(ref p: Player, damage: u32) -> u32 {
-    if p.armor_type == 0 {
-        return damage;
+    let (points, kind, net) = absorb_of(p.armor_points, p.armor_type, damage);
+    p.armor_points = points;
+    p.armor_type = kind;
+    net
+}
+
+/// [`absorb`] as a pure function: `(armor_points, armor_type, net damage)`,
+/// so the caller folds the two writes into whatever rebuild it already does.
+fn absorb_of(armor_points: u32, armor_type: u32, damage: u32) -> (u32, u32, u32) {
+    if armor_type == 0 {
+        return (armor_points, armor_type, damage);
     }
     let third: NonZero<u32> = 3;
     let half: NonZero<u32> = 2;
-    let mut saved = if p.armor_type == 1 {
+    let full = if armor_type == 1 {
         div32(damage, third)
     } else {
         div32(damage, half)
     };
-    if p.armor_points <= saved {
-        saved = p.armor_points;
-        p.armor_type = 0;
-    }
-    p.armor_points = sub32(p.armor_points, saved);
-    sub32(damage, saved)
+    let (saved, kind) = if armor_points <= full {
+        (armor_points, 0)
+    } else {
+        (full, armor_type)
+    };
+    (sub32(armor_points, saved), kind, sub32(damage, saved))
 }
 
 /// `P_DamageMobj` on the player: armor, `damagecount`, `attacker`, then
@@ -362,6 +371,31 @@ pub fn damage_player(
     damage: u32,
     thrust: bool,
 ) -> DamageOutcome {
+    let (cx, mut bp, mut bm) = enter(env, @p, @mo);
+    let out = damage_player_in(
+        cx, ref g, ref rng, ref bp, ref bm, ref events, inflictor, source, damage, thrust,
+    );
+    leave(bp, bm, ref p, ref mo);
+    out
+}
+
+/// [`damage_player`] on the boxed operands the tic already carries.
+///
+/// One `return`: `DamageOutcome` is seven felts and the compiler copies a
+/// return into every branch that reaches it (S7 §8 rule 2), so the "not
+/// shootable" arm and the damaged arm meet at the end.
+pub(crate) fn damage_player_in(
+    env: Box<Env>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref p: Box<Player>,
+    ref mo: Box<Mobj>,
+    ref events: Array<PlayerEvent>,
+    inflictor: u32,
+    source: u32,
+    damage: u32,
+    thrust: bool,
+) -> DamageOutcome {
     let mut out = DamageOutcome {
         died: false,
         pain: false,
@@ -370,28 +404,51 @@ pub fn damage_player(
         counts_kill: false,
         drop: Option::None,
     };
-    if !has(mo.flags, MF_SHOOTABLE) || mo.health <= 0 {
-        return out;
-    }
-    // Skill 2 is not `sk_baby`, so vanilla's `damage >>= 1` does not apply.
-    let net = absorb(ref p, damage);
-    p.health = if net >= p.health {
-        0
-    } else {
-        sub32(p.health, net)
-    };
-    p.attacker = source;
-    let count = add32(p.damagecount, net);
-    p.damagecount = if count > MAXDAMAGECOUNT {
-        MAXDAMAGECOUNT
-    } else {
-        count
-    };
-    let w = env.world.unbox();
-    out = damage_mobj(w, env.mobjs, ref rng, ref mo, env.me, inflictor, source, net, thrust);
-    if out.died {
-        p.playerstate = PST_DEAD;
-        drop_weapon(env, ref g, ref rng, ref p, ref mo, ref events);
+    if has(mo.flags, MF_SHOOTABLE) && mo.health > 0 {
+        // Skill 2 is not `sk_baby`, so vanilla's `damage >>= 1` does not
+        // apply. `absorb` also writes `armor_points`/`armor_type`, so the
+        // record is rebuilt once with everything the hit changes.
+        let cur = p.unbox();
+        let (armor_points, armor_type, net) = absorb_of(cur.armor_points, cur.armor_type, damage);
+        let count = add32(cur.damagecount, net);
+        p =
+            BoxTrait::new(
+                Player {
+                    armor_points,
+                    armor_type,
+                    health: if net >= cur.health {
+                        0
+                    } else {
+                        sub32(cur.health, net)
+                    },
+                    attacker: source,
+                    damagecount: if count > MAXDAMAGECOUNT {
+                        MAXDAMAGECOUNT
+                    } else {
+                        count
+                    },
+                    ..cur,
+                },
+            );
+        // `damage_mobj` is `doom_physics`' and wants the record itself.
+        let mut m = mo.unbox();
+        out =
+            damage_mobj(
+                env.world.unbox(),
+                env.mobjs,
+                ref rng,
+                ref m,
+                env.me,
+                inflictor,
+                source,
+                net,
+                thrust,
+            );
+        mo = BoxTrait::new(m);
+        if out.died {
+            p = BoxTrait::new(Player { playerstate: PST_DEAD, ..p.unbox() });
+            drop_weapon_in(env, ref g, ref rng, ref p, ref mo, ref events);
+        }
     }
     out
 }
