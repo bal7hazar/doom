@@ -6,6 +6,8 @@ No protobuf dependency is needed. Unknown generated function IDs are resolved
 from the first Sierra statement annotation at their entry; they remain marked
 as generated loops, never presented as separately measured source functions.
 Flat costs are disjoint; cumulative costs overlap and must not be summed.
+Build the pprof with --show-inlined-functions and a depth sufficient for
+recursive roster loops (512 for the measured 210-slot game, not default 100).
 """
 import argparse
 import collections
@@ -56,7 +58,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('profile', type=Path)
     ap.add_argument('--sierra', type=Path, required=True)
-    ap.add_argument('--focus', default='doom_monsters::think::ticker')
+    ap.add_argument('--focus', default='doom_monsters::think::monsters_ticker')
     ap.add_argument('--limit', type=int, default=20)
     ap.add_argument('--json', type=Path)
     args = ap.parse_args()
@@ -94,6 +96,7 @@ def main():
         for name in set(stack): cumulative[name] += steps
         owner = next((name for name in stack if name.startswith('doom_')), stack[0])
         owners[owner] += steps
+    if not selected: raise ValueError(f'no step samples matched focus {args.focus}')
     result = dict(profile=str(args.profile), focus=args.focus, total_steps=total,
         selected_steps=selected, max_selected_frames=max_selected_frames,
         flat=flat.most_common(), cumulative=cumulative.most_common(),

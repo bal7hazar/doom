@@ -51,8 +51,9 @@ The actual Scarb 2.16.0 executable loads and executes through
 measured ABI result, not a general cross-version promise. The probe
 `bench/sim_probe.rs` uses the exact `SimProgram`, canonical 32-byte LE felt
 buffers and a cached executable. It accepts one line of hex felts per call
-and returns `steps output_felts...`; the standalone Scarb wrapper adds 14
-steps to the measured native calls in this build.
+and returns `steps output_felts...`; on the integrated four-tic segment the
+native runner uses 693,422 steps versus 693,425 for Scarb standalone, with
+identical output felts.
 
 `bench/prove_segment.sh /tmp/doom-leaf fight 4` builds the proving artifact,
 executes genesis and a real walking segment, records resources, then proves

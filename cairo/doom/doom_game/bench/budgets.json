@@ -1,6 +1,6 @@
 {
   "crate": "doom_game",
-  "note": "Step budgets of a whole tic and of its subsystems on the golden scenarios (docs/spikes/S8-tic-profile.md), net of the scene-building op of the same scene (op x0). Measured by measure.py on Scarb 2.16.0; a run over the recorded budget by more than 10 % fails (PLAN.md 3.1 rule 4). Budgets of 0 are 'not yet baselined': run measure.py --update.",
+  "note": "Historical pre-C2 step regression limits recovered from the initial P1.9 work. These values are not D2 success targets and were not rebased after schema 2 or the integrated optimizations. measure.py reports every +10% regression (PLAN 3.1 rule 4); S8 explains actual costs. The n/2n differential for mutable operations samples the last n iterations, not every replay tic.",
   "iterations": 4,
   "operations": [
     {
@@ -24,7 +24,7 @@
       "budget": 140
     },
     {
-      "name": "idle: hash (5 829 felts)",
+      "name": "idle: hash (schema 2)",
       "op": 5,
       "budget": 76686
     },
@@ -69,7 +69,7 @@
       "budget": 201740
     },
     {
-      "name": "fight: player_think (firing)",
+      "name": "fight: player_think (pistol held between shots)",
       "op": 22,
       "budget": 2025
     },
