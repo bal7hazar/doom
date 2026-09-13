@@ -678,3 +678,47 @@ are per iteration before subtracting the operand baseline:
 
 The 29-dormant raw cost rises 3.07%; eight-awake raw cost rises 0.34%. The
 full-roster improvement is not a universal ticker speedup.
+
+## Scalar-mask pass (Cairo 2.16.0)
+
+The look phase now uses `value & 3`, and `A_Chase`'s two octant
+remainders use `value & 7`. These replace `DivRem` by a **literal,
+power-of-two** divisor, with exactly the same result on the entire `u32`
+domain. Angular quotients, signed arithmetic, RNG draws, the four-tic look
+cadence and the eight-monster window are unchanged. Tests compare every
+roster index and values around all 32 clock bit boundaries against integer
+remainders; existing scene/model tests still cover the actual turn and look
+rules (62 monster tests passed).
+
+This is a measured local choice, not a rule that division or bitwise always
+wins in Cairo. The same `bench/measure.py` inputs (`n = 20, 40`, runtime
+operation selector and loop counter) produced the following **raw per-loop
+iteration** resources, before subtraction of each operation's baseline:
+
+| Real scene | VM steps before → after | Range checks before → after | Bitwise instances before → after |
+|---|---:|---:|---:|
+| Player only | 443 → 438 | 5 → 2 | 2 → 3 |
+| 29 dormant monsters | 13 249.95 → 13 128.95 | 365.90 → 275.90 | 89.20 → 119.20 |
+| 5 awake monsters | 12 782.45 → 12 747.70 | 703.85 → 680.15 | 55.70 → 63.60 |
+| 8 awake monsters | 30 077.10 → 30 025.60 | 1 916.60 → 1 881.80 | 126.05 → 137.65 |
+| 20 awake monsters | 59 588.05 → 59 475.30 | 3 758.15 → 3 685.85 | 282.00 → 306.10 |
+| Cached `A_Chase` | 8 233 → 8 228 | 439 → 433 | 15 → 17 |
+
+The cadence change saves 13 CASM words in the ticker's proving differential;
+the octant change saves another 6: **12 954 → 12 935**. The complete step
+benchmark shrinks **78 521 → 78 502** words. The full API differential is
+**16 672 → 16 653** proving words and **20 013 → 19 994** dev words;
+ticker-only dev is **15 024 → 15 005**. These are this module's existing
+harness metrics, not a fresh full-game bytecode or proof-admission result.
+All existing budget checks passed without changing any baseline or limit.
+
+[`bench/scalar-masks.json`](bench/scalar-masks.json) records the paired
+measurements and resource counts, including the cadence-only intermediate.
+Each replacement adds a bitwise instance while removing range checks and a
+few VM steps. A whole-game proof must still account for all builtin table
+sizes; no AIR, proof-duration or framerate claim follows from this table.
+
+The audit also checked mask-based sets: weapon ownership and hitscan batch
+membership already use them. `doom_map::reject_of` was left unchanged:
+its public `pow2` span can contain an arbitrary divisor, so replacing its
+division by an unchecked bitwise mask would change that API's behavior.

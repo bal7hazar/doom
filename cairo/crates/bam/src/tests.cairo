@@ -178,6 +178,22 @@ fn test_sin_cos_pair_matches_the_separate_lookups() {
 }
 
 #[test]
+fn test_sin_cos_shared_fold_every_fine_index_and_low_bits() {
+    // The old independent sine/cosine paths are the oracle. Check both
+    // ends of every fine-angle bucket, including u32::MAX in the last.
+    let mut index: u32 = 0;
+    while index != 8192 {
+        let first = index * 524288;
+        let last = first + 524287;
+        let (s0, c0) = sin_cos(first);
+        let (s1, c1) = sin_cos(last);
+        assert(s0 == sine(first) && c0 == cosine(first), 'first bucket angle');
+        assert(s1 == sine(last) && c1 == cosine(last), 'last bucket angle');
+        index += 1;
+    }
+}
+
+#[test]
 fn test_sine_squared_plus_cosine_squared_is_one() {
     // Property: the table is a real sine to within its own resolution.
     // Each of s and c is truncated by up to 1 ulp and `mul` floors, so
