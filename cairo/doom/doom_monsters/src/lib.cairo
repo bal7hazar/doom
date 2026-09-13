@@ -92,6 +92,9 @@ pub struct Patch {
 
 /// The read-only half of a tic: everything an action needs besides the mobj
 /// it is running on.
+///
+/// This is the **public boundary** type; inside the crate every call carries
+/// the six-felt [`Env`] instead (see it for why).
 #[derive(Copy, Drop)]
 pub struct Ctx {
     pub w: World,
@@ -99,6 +102,31 @@ pub struct Ctx {
     pub players: Span<u32>,
     pub noise: Noise,
     pub tic: u32,
+}
+
+/// [`Ctx`] as the crate's own calls carry it: the 67-felt [`World`] behind
+/// **one pointer**, so the whole context is six felts.
+///
+/// docs/spikes/S7.md §8 rule 3: a struct pushed at a call costs one word of
+/// bytecode and one step per felt, a `Box` costs one, and reading a field
+/// through a box is free. A `Ctx` crossing the six call levels of the
+/// dispatcher chain (`monsters_ticker` → `mobj_thinker` → `think_state` →
+/// `run_chain` → `dispatch` → an action → `p_move`) was 4 980 words of
+/// `store_temp<Ctx>` and ~430 steps per thinking monster per tic. The
+/// `World` is rebuilt on the stack only where `doom_physics` asks for one,
+/// which is where those felts had to be pushed anyway.
+#[derive(Copy, Drop)]
+pub(crate) struct Env {
+    pub w: Box<World>,
+    pub players: Span<u32>,
+    pub noise: Noise,
+    pub tic: u32,
+}
+
+/// The [`Env`] of a public [`Ctx`], at the one boundary that pays for it.
+#[inline(always)]
+pub(crate) fn env_of(ctx: Ctx) -> Env {
+    Env { w: BoxTrait::new(ctx.w), players: ctx.players, noise: ctx.noise, tic: ctx.tic }
 }
 
 /// Mobj `i` as it stands *now*: the pending patch if the tic has already

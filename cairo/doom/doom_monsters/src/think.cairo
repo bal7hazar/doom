@@ -19,11 +19,11 @@ use doom_things::tables::{
 };
 use prng::{Prng, PrngTrait};
 use super::actions::{
-    a_chase, a_face_target, a_look, a_pos_attack, a_sarg_attack, a_spos_attack, a_troop_attack,
-    hurt, passive,
+    a_chase_in, a_look_in, a_pos_attack_in, a_sarg_attack_in, a_spos_attack_in, a_troop_attack_in,
+    face_target, hurt_in, run_passive,
 };
 use super::event::{MonsterEvent, drain, missile_hit};
-use super::{Ctx, LOOK_CADENCE, Noise, Patch, WINDOW, read_mobj};
+use super::{Ctx, Env, LOOK_CADENCE, Noise, Patch, WINDOW, env_of, read_mobj};
 
 /// How many actions may chain off one state change before the dispatcher
 /// gives up. Doom's `P_SetMobjState` runs the action of every state it
@@ -101,7 +101,7 @@ pub fn in_window(rank: u32, tic: u32, n: u32) -> bool {
 /// this tic and an `A_Chase` outside the window are skipped, and the monster
 /// keeps counting down its idle or run frames as it would have.
 fn dispatch(
-    ctx: Ctx,
+    e: Env,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
@@ -118,58 +118,58 @@ fn dispatch(
         if !may_chase {
             return fsm::NO_ACTION;
         }
-        return a_chase(ctx, mobjs, ref g, ref rng, ref mo, me, patches.span(), ref ev);
+        return a_chase_in(e, mobjs, ref g, ref rng, ref mo, me, patches.span(), ref ev);
     }
     if action == A_LOOK {
         if !may_look {
             return fsm::NO_ACTION;
         }
-        return a_look(ctx, mobjs, ref rng, ref mo, me, ref ev);
+        return a_look_in(e, mobjs, ref rng, ref mo, me, ref ev);
     }
     if action == A_FACETARGET {
         if mo.target != NO_MOBJ && mo.target < mobjs.len() {
             let t = read_mobj(mobjs, patches.span(), mo.target);
-            a_face_target(ctx, ref rng, ref mo, @t);
+            face_target(e.w.unbox().rndtable, ref rng, ref mo, @t);
         }
         return fsm::NO_ACTION;
     }
     if action == A_POSATTACK {
         if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            a_pos_attack(ctx, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
+            a_pos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
     }
     if action == A_SPOSATTACK {
         if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            a_spos_attack(ctx, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
+            a_spos_attack_in(e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
     }
     if action == A_TROOPATTACK {
         if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            a_troop_attack(
-                ctx, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref spawn_at,
+            a_troop_attack_in(
+                e, mobjs, ref g, ref rng, ref mo, me, ref patches, ref ev, ref spawn_at,
             );
         }
         return fsm::NO_ACTION;
     }
     if action == A_SARGATTACK {
         if mo.target != NO_MOBJ && mo.target < mobjs.len() {
-            a_sarg_attack(ctx, mobjs, ref rng, ref mo, me, ref patches, ref ev);
+            a_sarg_attack_in(e, mobjs, ref rng, ref mo, me, ref patches, ref ev);
         }
         return fsm::NO_ACTION;
     }
     // `A_Pain`, `A_Scream`, `A_XScream`, `A_Fall`: none of them changes the
     // state again. Everything else (the weapon and flash actions) belongs to
     // `doom_player` and is ignored here.
-    passive(ctx, ref rng, ref mo, me, action, ref ev);
+    run_passive(e.w.unbox().rndtable, ref rng, ref mo, me, action, ref ev);
     fsm::NO_ACTION
 }
 
 /// `P_SetMobjState`'s chain: run `action`, then the action of whatever state
 /// it entered, up to [`MAX_ACTION_CHAIN`] deep.
 fn run_chain(
-    ctx: Ctx,
+    e: Env,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
@@ -187,7 +187,7 @@ fn run_chain(
     while a != fsm::NO_ACTION && depth != MAX_ACTION_CHAIN {
         a =
             dispatch(
-                ctx,
+                e,
                 mobjs,
                 ref g,
                 ref rng,
@@ -208,7 +208,7 @@ fn run_chain(
 /// state it entered, and the single zero-tic hop `doom_things`'
 /// `MAX_ZERO_TIC_CHAIN` allows.
 fn think_state(
-    ctx: Ctx,
+    e: Env,
     mobjs: Span<Mobj>,
     ref g: ThingGrid,
     ref rng: Prng,
@@ -223,11 +223,11 @@ fn think_state(
     if mo.tics == fsm::FOREVER {
         return;
     }
-    let (state, tics, action) = fsm::advance(ctx.w.states, mo.state, mo.tics);
+    let (state, tics, action) = fsm::advance(e.w.unbox().states, mo.state, mo.tics);
     mo.state = state;
     mo.tics = tics;
     run_chain(
-        ctx,
+        e,
         mobjs,
         ref g,
         ref rng,
@@ -241,11 +241,11 @@ fn think_state(
         ref spawn_at,
     );
     if mo.tics == 0 {
-        let (s2, t2, a2) = fsm::advance(ctx.w.states, mo.state, 0);
+        let (s2, t2, a2) = fsm::advance(e.w.unbox().states, mo.state, 0);
         mo.state = s2;
         mo.tics = t2;
         run_chain(
-            ctx,
+            e,
             mobjs,
             ref g,
             ref rng,
@@ -276,6 +276,35 @@ pub fn mobj_thinker(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) -> bool {
+    mobj_thinker_in(
+        env_of(ctx),
+        mobjs,
+        ref g,
+        ref rng,
+        ref mo,
+        me,
+        may_look,
+        may_chase,
+        ref patches,
+        ref ev,
+        ref spawn_at,
+    )
+}
+
+/// [`mobj_thinker`] on the narrow [`Env`].
+pub(crate) fn mobj_thinker_in(
+    e: Env,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    ref rng: Prng,
+    ref mo: Mobj,
+    me: u32,
+    may_look: bool,
+    may_chase: bool,
+    ref patches: Array<Patch>,
+    ref ev: Array<MonsterEvent>,
+    ref spawn_at: u32,
+) -> bool {
     let missile = doom_physics::has(mo.flags, MF_MISSILE);
     // Momentum, in `P_MobjThinker`'s order and under its two guards: Doom
     // calls `P_XYMovement` only when there is momentum to spend (or a lost
@@ -291,7 +320,7 @@ pub fn mobj_thinker(
         || doom_physics::has(mo.flags, doom_physics::MF_SKULLFLY);
     let mut xy = XyOutcome::Moved;
     if moving {
-        xy = xy_movement(ctx.w, mobjs, ref g, ref mo, me, false, false, ref moves);
+        xy = xy_movement(e.w.unbox(), mobjs, ref g, ref mo, me, false, false, ref moves);
         drain(moves.span(), me, ref ev);
     }
     let mut exploded = false;
@@ -301,15 +330,15 @@ pub fn mobj_thinker(
             // `PIT_CheckThing` damages inline in C; the crate reports it, so
             // the draw happens here — still before anything else draws.
             let dmg_per: u32 = *MI_DAMAGE.span().at(mo.kind);
-            let (next, roll) = rng.next(ctx.w.rndtable);
+            let (next, roll) = rng.next(e.w.unbox().rndtable);
             rng = next;
             let r: u32 = (roll % 8).into();
-            hurt(ctx, mobjs, ref rng, hit, me, mo.target, (r + 1) * dmg_per, ref patches, ref ev);
+            hurt_in(e, mobjs, ref rng, hit, me, mo.target, (r + 1) * dmg_per, ref patches, ref ev);
         }
         match xy {
             XyOutcome::MissileHit(b) => {
                 let _: Blocker = b;
-                explode_missile(ctx.w, ref rng, ref mo);
+                explode_missile(e.w.unbox(), ref rng, ref mo);
                 exploded = true;
             },
             _ => {},
@@ -318,12 +347,12 @@ pub fn mobj_thinker(
     if !exploded && (mo.z != mo.floorz || mo.momz != fixed::ZERO) {
         let z = z_movement(ref mo, Option::None);
         if missile && z.missile_hit {
-            explode_missile(ctx.w, ref rng, ref mo);
+            explode_missile(e.w.unbox(), ref rng, ref mo);
         }
     }
     // The state machine, with `A_Look` held back (see below).
     think_state(
-        ctx, mobjs, ref g, ref rng, ref mo, me, false, may_chase, ref patches, ref ev, ref spawn_at,
+        e, mobjs, ref g, ref rng, ref mo, me, false, may_chase, ref patches, ref ev, ref spawn_at,
     );
     // **`A_Look` runs on the cadence, not on the frame.** Vanilla only
     // reaches `A_Look` when the two-frame idle loop turns over, which on
@@ -340,7 +369,7 @@ pub fn mobj_thinker(
     // unless it actually wakes, so the RNG stream is untouched.
     if may_look {
         run_chain(
-            ctx,
+            e,
             mobjs,
             ref g,
             ref rng,
@@ -375,7 +404,7 @@ pub fn monsters_ticker(
     tic: u32,
     rng: Prng,
 ) -> (Array<Mobj>, Prng, Array<MonsterEvent>) {
-    let ctx = Ctx { w, players, noise, tic };
+    let e = Env { w: BoxTrait::new(w), players, noise, tic };
     let mut r = rng;
     let mut ev: Array<MonsterEvent> = array![];
     let mut patches: Array<Patch> = array![];
@@ -438,7 +467,7 @@ pub fn monsters_ticker(
             }
             if may_look {
                 run_chain(
-                    ctx,
+                    e,
                     mobjs,
                     ref g,
                     ref r,
@@ -456,8 +485,8 @@ pub fn monsters_ticker(
             i += 1;
             continue;
         }
-        let alive = mobj_thinker(
-            ctx,
+        let alive = mobj_thinker_in(
+            e,
             mobjs,
             ref g,
             ref r,
