@@ -73,3 +73,9 @@ executable timeline (chunked quantiles are explicitly unavailable).
 See `docs/spikes/S8-tic-profile.md` for methodology, exact-version results
 and open D2/D29 limits. Recorded regression budgets are not success targets:
 D2 remains **12,000 mean / 25,000 p99 steps per tic**.
+
+The follow-up consumer-size pass is documented in
+[`bench_sizing/README.md`](bench_sizing/README.md): 111,321 proving words,
+275,020 native steps for an empty Worker call, unchanged schema-2 felts in
+both compiler profiles. Its fixtures separately measure the journal's
+linear boundary cost; neither D2 nor D29 is declared satisfied.

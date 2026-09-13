@@ -1,0 +1,597 @@
+{
+  "profile": "dev",
+  "identity": {
+    "reference": {
+      "genesis": {
+        "sha256": "50d21c133454c55b566b223c1384d435846b6327f217b6dc8d65702ee9ddf33d",
+        "words": 52036
+      },
+      "step_tic": {
+        "sha256": "3878fe21905dc8c2ba1a9b1c72d4dd9607bf6405d98ba3b06c77815e0bffe101",
+        "words": 137102
+      },
+      "run_segment": {
+        "sha256": "9cc39dcb2a997a482eeb694c28df36ab96d1e59931bd56258c686c029cb58e09",
+        "words": 136861
+      }
+    },
+    "current": {
+      "genesis": {
+        "sha256": "10f168cb01d56725a4ce1978c0341a68752bf2548930844b8788f83e20cb2920",
+        "words": 51742
+      },
+      "step_tic": {
+        "sha256": "e82bc1d4e7c4413588caa186e60d1892b2494867295bbbb3ec3386950c61f50e",
+        "words": 130379
+      },
+      "run_segment": {
+        "sha256": "40d7a88ca837a159b06ebbbb345cb0ebb38eb48fa6bf06eae9cc38e731f4a9be",
+        "words": 130254
+      }
+    }
+  },
+  "cases": [
+    {
+      "case": "genesis",
+      "executable": "genesis",
+      "before_steps": 827776,
+      "after_steps": 771357,
+      "output_felts": 6364,
+      "output_sha256": "e86f1dc907482bd8c249069bd25bc32a3641139587d7a7fa456e188244e36a13"
+    },
+    {
+      "case": "call_0",
+      "executable": "step_tic",
+      "before_steps": 293047,
+      "after_steps": 279583,
+      "output_felts": 8827,
+      "output_sha256": "9c12d12ef681a2858944f5d801332b05b6a47294e55a81d2aee01ad74fffe5f2"
+    },
+    {
+      "case": "segment_0",
+      "executable": "run_segment",
+      "before_steps": 414621,
+      "after_steps": 404461,
+      "output_felts": 10,
+      "output_sha256": "07c0c2bb3b67a2e8b9bffb453a799a7697d4f45fd5d7a475f50db0fe2b7b8e4a"
+    },
+    {
+      "case": "call_1",
+      "executable": "step_tic",
+      "before_steps": 367692,
+      "after_steps": 353160,
+      "output_felts": 8827,
+      "output_sha256": "deb79ad897a2048f6b625ec90b10f4b3545384504ffa99b62906e178daad5349"
+    },
+    {
+      "case": "segment_1",
+      "executable": "run_segment",
+      "before_steps": 489295,
+      "after_steps": 478067,
+      "output_felts": 10,
+      "output_sha256": "1dfb3767af53109388225caedd4be0aa3030f9eacb023e91886ac5fac97eb683"
+    },
+    {
+      "case": "call_4",
+      "executable": "step_tic",
+      "before_steps": 580682,
+      "after_steps": 562946,
+      "output_felts": 8827,
+      "output_sha256": "3bb22a4de34ea3b3ff3ace35382e5c05410c8e086db9664e09d0b4266441e353"
+    },
+    {
+      "case": "segment_4",
+      "executable": "run_segment",
+      "before_steps": 702366,
+      "after_steps": 687934,
+      "output_felts": 10,
+      "output_sha256": "41cd877f096cb383c2ff3d039105ba0c1efa864dd0c5adc1d5cd81d8d06c2d3b"
+    },
+    {
+      "case": "idle:whole",
+      "executable": "step_tic",
+      "before_steps": 38302351,
+      "after_steps": 37669387,
+      "output_felts": 8827,
+      "output_sha256": "3918ce85b9e49aecadfed9e344d6467f96cf03d9f9f3d629c91202dbc3c3b986"
+    },
+    {
+      "case": "idle:D14",
+      "executable": "run_segment",
+      "before_steps": 38443325,
+      "after_steps": 37813665,
+      "output_felts": 10,
+      "output_sha256": "b4bf25a90f7822134b1ae868af937337847f5d7ceffeb0d0a8ab733e047f2240"
+    },
+    {
+      "case": "idle:cut0",
+      "executable": "step_tic",
+      "before_steps": 1867345,
+      "after_steps": 1828216,
+      "output_felts": 8827,
+      "output_sha256": "48952301c9287ba11443848c84caa2ee74b866057bdda5a16f76e801c04d525e"
+    },
+    {
+      "case": "idle:cut1",
+      "executable": "step_tic",
+      "before_steps": 6421766,
+      "after_steps": 6308297,
+      "output_felts": 8827,
+      "output_sha256": "a75966fd82e9d76fd064904652d2d52890a5dff04e7ae08935e7acf5bde5421e"
+    },
+    {
+      "case": "idle:cut2",
+      "executable": "step_tic",
+      "before_steps": 2844822,
+      "after_steps": 2789763,
+      "output_felts": 8827,
+      "output_sha256": "1996427ea1c5d140300e2aa2bd149eb627442b019e2fd02f1a633fa18d983911"
+    },
+    {
+      "case": "idle:cut3",
+      "executable": "step_tic",
+      "before_steps": 1867975,
+      "after_steps": 1828846,
+      "output_felts": 8827,
+      "output_sha256": "8b7f5886a566689349c63456d2589f7c34dbfce56d80fd18e382de173321612d"
+    },
+    {
+      "case": "idle:cut4",
+      "executable": "step_tic",
+      "before_steps": 6428611,
+      "after_steps": 6315142,
+      "output_felts": 8827,
+      "output_sha256": "20f4542d51ca714e64f91419e183e131ce2c864c7245ad01623ea9cfc59df19b"
+    },
+    {
+      "case": "idle:cut5",
+      "executable": "step_tic",
+      "before_steps": 2845473,
+      "after_steps": 2790414,
+      "output_felts": 8827,
+      "output_sha256": "d547c60b098c4c609c957ac0043abd4ec047fcfac4567b10a98ee107367fa8ea"
+    },
+    {
+      "case": "idle:cut6",
+      "executable": "step_tic",
+      "before_steps": 1869529,
+      "after_steps": 1830400,
+      "output_felts": 8827,
+      "output_sha256": "028f30a6542cde7c701cbf6a767776f19cda5451b138807dbb67f00ef1c3bc02"
+    },
+    {
+      "case": "idle:cut7",
+      "executable": "step_tic",
+      "before_steps": 6424653,
+      "after_steps": 6311184,
+      "output_felts": 8827,
+      "output_sha256": "5575e8babb27a7e8f8157945e0c23e7e731b1185661fc4a2248c076f9ce0696c"
+    },
+    {
+      "case": "idle:cut8",
+      "executable": "step_tic",
+      "before_steps": 2844292,
+      "after_steps": 2789233,
+      "output_felts": 8827,
+      "output_sha256": "a38f4596cd168631d9c1709d229885edfb935b7207e1ed7e1f014f8f734bda4f"
+    },
+    {
+      "case": "idle:cut9",
+      "executable": "step_tic",
+      "before_steps": 1875100,
+      "after_steps": 1835971,
+      "output_felts": 8827,
+      "output_sha256": "a4f8b022a5ff7c279c65fe12da1553bfc72673be5683fb1aa5bca871d2ecb2ed"
+    },
+    {
+      "case": "idle:cut10",
+      "executable": "step_tic",
+      "before_steps": 5943255,
+      "after_steps": 5837751,
+      "output_felts": 8827,
+      "output_sha256": "3918ce85b9e49aecadfed9e344d6467f96cf03d9f9f3d629c91202dbc3c3b986"
+    },
+    {
+      "case": "idle:end_boundary",
+      "executable": "step_tic",
+      "before_steps": 293047,
+      "after_steps": 279583,
+      "output_felts": 8827,
+      "output_sha256": "3918ce85b9e49aecadfed9e344d6467f96cf03d9f9f3d629c91202dbc3c3b986"
+    },
+    {
+      "case": "walk:whole",
+      "executable": "step_tic",
+      "before_steps": 31663881,
+      "after_steps": 31333484,
+      "output_felts": 8813,
+      "output_sha256": "d38dcc4cde2050cc2a96a55ecf57908bf808824492c786c5d2e7d0c39c2b3372"
+    },
+    {
+      "case": "walk:D14",
+      "executable": "run_segment",
+      "before_steps": 31795352,
+      "after_steps": 31468259,
+      "output_felts": 10,
+      "output_sha256": "ff704e38978b2d4c6227ec0d39e820a5f4446647b6418115abe639b4e61f83d6"
+    },
+    {
+      "case": "walk:cut0",
+      "executable": "step_tic",
+      "before_steps": 2351186,
+      "after_steps": 2306750,
+      "output_felts": 8825,
+      "output_sha256": "b5001e0d891b54acdd5692079880b59434ad3563cbfbd969642383a853e0fb40"
+    },
+    {
+      "case": "walk:cut1",
+      "executable": "step_tic",
+      "before_steps": 10887903,
+      "after_steps": 10768738,
+      "output_felts": 8820,
+      "output_sha256": "4db44608c8fc80ffa3052161a72f5bafa5cc34051d1f77eae5a1787a937ee796"
+    },
+    {
+      "case": "walk:cut2",
+      "executable": "step_tic",
+      "before_steps": 5193783,
+      "after_steps": 5142817,
+      "output_felts": 8820,
+      "output_sha256": "18baf09e8dc498c05ef789c3e22d7baa45e80e6e4ff75f8341116aff33f99c1e"
+    },
+    {
+      "case": "walk:cut3",
+      "executable": "step_tic",
+      "before_steps": 3357644,
+      "after_steps": 3320708,
+      "output_felts": 8820,
+      "output_sha256": "efbf9d2e85090ca0d186b4cdefe8d9f7479cfa9f46d22562a90dba0331bdc922"
+    },
+    {
+      "case": "walk:cut4",
+      "executable": "step_tic",
+      "before_steps": 9457843,
+      "after_steps": 9345285,
+      "output_felts": 8813,
+      "output_sha256": "d286fe1ff283c0d85db8e1827463d8831cf83ef5831dd44f25c410fe47243698"
+    },
+    {
+      "case": "walk:cut5",
+      "executable": "step_tic",
+      "before_steps": 1914338,
+      "after_steps": 1880603,
+      "output_felts": 8813,
+      "output_sha256": "d38dcc4cde2050cc2a96a55ecf57908bf808824492c786c5d2e7d0c39c2b3372"
+    },
+    {
+      "case": "walk:end_boundary",
+      "executable": "step_tic",
+      "before_steps": 292413,
+      "after_steps": 278970,
+      "output_felts": 8813,
+      "output_sha256": "d38dcc4cde2050cc2a96a55ecf57908bf808824492c786c5d2e7d0c39c2b3372"
+    },
+    {
+      "case": "fight:whole",
+      "executable": "step_tic",
+      "before_steps": 74478490,
+      "after_steps": 73696680,
+      "output_felts": 8844,
+      "output_sha256": "19a433313a1475685f11d3b1e2783d84674892ce2dd306af3fb3bceb3553bea4"
+    },
+    {
+      "case": "fight:D14",
+      "executable": "run_segment",
+      "before_steps": 74619423,
+      "after_steps": 73840917,
+      "output_felts": 10,
+      "output_sha256": "4de0c01bc13a576fb4546bd00b5b140e4074d3b24b1a8310d9202deda25187c9"
+    },
+    {
+      "case": "fight:cut0",
+      "executable": "step_tic",
+      "before_steps": 2351186,
+      "after_steps": 2306750,
+      "output_felts": 8825,
+      "output_sha256": "b5001e0d891b54acdd5692079880b59434ad3563cbfbd969642383a853e0fb40"
+    },
+    {
+      "case": "fight:cut1",
+      "executable": "step_tic",
+      "before_steps": 11415059,
+      "after_steps": 11286778,
+      "output_felts": 8816,
+      "output_sha256": "8e9db08b22324949eaedbaf5ef9fb223cb559bbe74469eb1dd2001560d27dc3e"
+    },
+    {
+      "case": "fight:cut2",
+      "executable": "step_tic",
+      "before_steps": 6183105,
+      "after_steps": 6123673,
+      "output_felts": 8818,
+      "output_sha256": "54b343ee418d9cfacc913bd1fab3a99af099c5f91ee82f891f7613849ff58792"
+    },
+    {
+      "case": "fight:cut3",
+      "executable": "step_tic",
+      "before_steps": 4082901,
+      "after_steps": 4039160,
+      "output_felts": 8820,
+      "output_sha256": "7a801a073b6833a542b91ed820fb6de3ebce96b2a75f6369b0c7d782d8b6831b"
+    },
+    {
+      "case": "fight:cut4",
+      "executable": "step_tic",
+      "before_steps": 13110141,
+      "after_steps": 12964056,
+      "output_felts": 8852,
+      "output_sha256": "6c8a4b5d98c6644eff63b741f53504595b86f613a5623f9c8f6a283031e5b175"
+    },
+    {
+      "case": "fight:cut5",
+      "executable": "step_tic",
+      "before_steps": 5187522,
+      "after_steps": 5123166,
+      "output_felts": 8852,
+      "output_sha256": "f8adfc12668ec724c0b9b1e80fe49e1b2a144cad2732aab2ce0fb0bf510ee392"
+    },
+    {
+      "case": "fight:cut6",
+      "executable": "step_tic",
+      "before_steps": 3257822,
+      "after_steps": 3212298,
+      "output_felts": 8852,
+      "output_sha256": "b8c8ffa4f26a9652665fb932616e1e3a6dd2258979237a5f31b932bb0124f010"
+    },
+    {
+      "case": "fight:cut7",
+      "executable": "step_tic",
+      "before_steps": 11925170,
+      "after_steps": 11784150,
+      "output_felts": 8848,
+      "output_sha256": "9c41d432146ebe288ed4dd51a5bc9ccd5be4b360e8de687180add893c8cdbfcd"
+    },
+    {
+      "case": "fight:cut8",
+      "executable": "step_tic",
+      "before_steps": 5335157,
+      "after_steps": 5269087,
+      "output_felts": 8848,
+      "output_sha256": "b6367bcca364f31c18bd04457b8ebecf1483ce9b63622a3cc5ae5201dfdd47ca"
+    },
+    {
+      "case": "fight:cut9",
+      "executable": "step_tic",
+      "before_steps": 3307617,
+      "after_steps": 3262505,
+      "output_felts": 8848,
+      "output_sha256": "924e0d9590f7cee414b834bf6b3f71637a6d7145789d60c1dad0e84bda0fa73f"
+    },
+    {
+      "case": "fight:cut10",
+      "executable": "step_tic",
+      "before_steps": 11293582,
+      "after_steps": 11161149,
+      "output_felts": 8844,
+      "output_sha256": "19a433313a1475685f11d3b1e2783d84674892ce2dd306af3fb3bceb3553bea4"
+    },
+    {
+      "case": "fight:end_boundary",
+      "executable": "step_tic",
+      "before_steps": 292609,
+      "after_steps": 279190,
+      "output_felts": 8844,
+      "output_sha256": "19a433313a1475685f11d3b1e2783d84674892ce2dd306af3fb3bceb3553bea4"
+    },
+    {
+      "case": "door:whole",
+      "executable": "step_tic",
+      "before_steps": 38275518,
+      "after_steps": 37940518,
+      "output_felts": 8842,
+      "output_sha256": "d5b190c3fdc4f31f95064d7dc6356e0579dd2d3aac0204ff3e5f54986a3461b1"
+    },
+    {
+      "case": "door:D14",
+      "executable": "run_segment",
+      "before_steps": 38405352,
+      "after_steps": 38073656,
+      "output_felts": 10,
+      "output_sha256": "6152caa0e16c764fa539956319b5749224b9d8ee5fa14d4df9166d4fd86dc90f"
+    },
+    {
+      "case": "door:cut0",
+      "executable": "step_tic",
+      "before_steps": 2351186,
+      "after_steps": 2306750,
+      "output_felts": 8825,
+      "output_sha256": "b5001e0d891b54acdd5692079880b59434ad3563cbfbd969642383a853e0fb40"
+    },
+    {
+      "case": "door:cut1",
+      "executable": "step_tic",
+      "before_steps": 10938392,
+      "after_steps": 10818878,
+      "output_felts": 8806,
+      "output_sha256": "5a831c87f243a8b54ffdfa56b28cd0603005b53ebaa07f2a61cfa9c980954f3c"
+    },
+    {
+      "case": "door:cut2",
+      "executable": "step_tic",
+      "before_steps": 5508754,
+      "after_steps": 5454575,
+      "output_felts": 8792,
+      "output_sha256": "6f78f830ce8c45ec67bb0bbe1f7c71d5774d6b32e72fa6a368604f7449b97c4a"
+    },
+    {
+      "case": "door:cut3",
+      "executable": "step_tic",
+      "before_steps": 3628813,
+      "after_steps": 3590082,
+      "output_felts": 8792,
+      "output_sha256": "410d29eeb0da5d1cb00b406c466bee34d23cbac6a3324ea4cbc99e0a0c3247da"
+    },
+    {
+      "case": "door:cut4",
+      "executable": "step_tic",
+      "before_steps": 14714747,
+      "after_steps": 14599618,
+      "output_felts": 8840,
+      "output_sha256": "088c4d547649605c1da2d8996bc8a4f8c2b98d07d57a14827deee9765815dd88"
+    },
+    {
+      "case": "door:cut5",
+      "executable": "step_tic",
+      "before_steps": 2642585,
+      "after_steps": 2612293,
+      "output_felts": 8842,
+      "output_sha256": "d5b190c3fdc4f31f95064d7dc6356e0579dd2d3aac0204ff3e5f54986a3461b1"
+    },
+    {
+      "case": "door:end_boundary",
+      "executable": "step_tic",
+      "before_steps": 304599,
+      "after_steps": 291107,
+      "output_felts": 8842,
+      "output_sha256": "d5b190c3fdc4f31f95064d7dc6356e0579dd2d3aac0204ff3e5f54986a3461b1"
+    },
+    {
+      "case": "death:whole",
+      "executable": "step_tic",
+      "before_steps": 69817163,
+      "after_steps": 69018765,
+      "output_felts": 8836,
+      "output_sha256": "dc4021b83750fd2797f4324374effad57a545acdf7dab0fe479ac7f4f14329d3"
+    },
+    {
+      "case": "death:D14",
+      "executable": "run_segment",
+      "before_steps": 69962338,
+      "after_steps": 69167244,
+      "output_felts": 10,
+      "output_sha256": "4bac8d5d6368c40526404d1f05d53f4ca6804d424b8d681d7ed3ba36fd034a9a"
+    },
+    {
+      "case": "death:cut0",
+      "executable": "step_tic",
+      "before_steps": 2351186,
+      "after_steps": 2306750,
+      "output_felts": 8825,
+      "output_sha256": "b5001e0d891b54acdd5692079880b59434ad3563cbfbd969642383a853e0fb40"
+    },
+    {
+      "case": "death:cut1",
+      "executable": "step_tic",
+      "before_steps": 10942265,
+      "after_steps": 10822751,
+      "output_felts": 8806,
+      "output_sha256": "777df29ed707e1d0c2f067ebbbcdc273bbe57c9407990df22dc9c79cfe05176f"
+    },
+    {
+      "case": "death:cut2",
+      "executable": "step_tic",
+      "before_steps": 5508100,
+      "after_steps": 5453990,
+      "output_felts": 8806,
+      "output_sha256": "e2e7ea3fb6e07b33004a0fbb4bd72f923e15263d961e364893dab403ab94c6b5"
+    },
+    {
+      "case": "death:cut3",
+      "executable": "step_tic",
+      "before_steps": 3418313,
+      "after_steps": 3384601,
+      "output_felts": 8806,
+      "output_sha256": "91db2d26282ab5a5c351ca3348c01e040c1c5b376b7c9f31bc011b7a7fe0c171"
+    },
+    {
+      "case": "death:cut4",
+      "executable": "step_tic",
+      "before_steps": 9995486,
+      "after_steps": 9880697,
+      "output_felts": 8797,
+      "output_sha256": "c59472cb44615c5f232e98520a53ffda57f4b9377822f0344ae710a35686acb1"
+    },
+    {
+      "case": "death:cut5",
+      "executable": "step_tic",
+      "before_steps": 3673294,
+      "after_steps": 3617651,
+      "output_felts": 8836,
+      "output_sha256": "eecf99a47b8709d527bab8baa6404a60e9d5cbdc05e9637f86fbfc9621a63c77"
+    },
+    {
+      "case": "death:cut6",
+      "executable": "step_tic",
+      "before_steps": 2416083,
+      "after_steps": 2376978,
+      "output_felts": 8836,
+      "output_sha256": "6bbed18d2c7848f7b8ef9881e1cd2e85bc26c5464096c854eb20ba4b4cfb7bcd"
+    },
+    {
+      "case": "death:cut7",
+      "executable": "step_tic",
+      "before_steps": 8717243,
+      "after_steps": 8597137,
+      "output_felts": 8836,
+      "output_sha256": "31f01ed8a23650b621a89b0b1f5bffb43d2cba0732d16333b2fca664d7020afa"
+    },
+    {
+      "case": "death:cut8",
+      "executable": "step_tic",
+      "before_steps": 3824987,
+      "after_steps": 3766951,
+      "output_felts": 8838,
+      "output_sha256": "4a80f2cd8a199e3af7925faed929007b1edd16e1075c6a8e418651d66d742c3b"
+    },
+    {
+      "case": "death:cut9",
+      "executable": "step_tic",
+      "before_steps": 2565480,
+      "after_steps": 2523067,
+      "output_felts": 8836,
+      "output_sha256": "2acd8b37a0b551b828bc652fd69508535806e2965cfdd2198606d8739a265289"
+    },
+    {
+      "case": "death:cut10",
+      "executable": "step_tic",
+      "before_steps": 8756378,
+      "after_steps": 8636254,
+      "output_felts": 8836,
+      "output_sha256": "b3805ab8130ebc7773904127c1a1c06dc32c7ef4d61ee0cc32d698f7ec0ab3f3"
+    },
+    {
+      "case": "death:cut11",
+      "executable": "step_tic",
+      "before_steps": 3766636,
+      "after_steps": 3709570,
+      "output_felts": 8836,
+      "output_sha256": "b09c9f863f22410d8497a81ce70dc3c3c8088dece4c12cf3a43d2a0371c8a15f"
+    },
+    {
+      "case": "death:cut12",
+      "executable": "step_tic",
+      "before_steps": 2917540,
+      "after_steps": 2873055,
+      "output_felts": 8836,
+      "output_sha256": "4ef778199fb67fda2ab93b1f7fa662b7f452c991f242e3de2a91118e9c6d0fd0"
+    },
+    {
+      "case": "death:cut13",
+      "executable": "step_tic",
+      "before_steps": 4803349,
+      "after_steps": 4733655,
+      "output_felts": 8836,
+      "output_sha256": "dc4021b83750fd2797f4324374effad57a545acdf7dab0fe479ac7f4f14329d3"
+    },
+    {
+      "case": "death:end_boundary",
+      "executable": "step_tic",
+      "before_steps": 292774,
+      "after_steps": 279334,
+      "output_felts": 8836,
+      "output_sha256": "dc4021b83750fd2797f4324374effad57a545acdf7dab0fe479ac7f4f14329d3"
+    }
+  ],
+  "exact_felt_equivalence": true,
+  "cuts_equivalent": true
+}

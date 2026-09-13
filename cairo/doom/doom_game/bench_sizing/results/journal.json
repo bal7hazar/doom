@@ -1,0 +1,30 @@
+{
+  "cases": [
+    {
+      "unlink_link_pairs": 0,
+      "construction_steps": 628746,
+      "full_steps": 749546,
+      "boundary_hash_steps": 120800
+    },
+    {
+      "unlink_link_pairs": 64,
+      "construction_steps": 638026,
+      "full_steps": 762026,
+      "boundary_hash_steps": 124000
+    },
+    {
+      "unlink_link_pairs": 1000,
+      "construction_steps": 773746,
+      "full_steps": 944546,
+      "boundary_hash_steps": 170800
+    },
+    {
+      "unlink_link_pairs": 10000,
+      "construction_steps": 2078746,
+      "full_steps": 2699546,
+      "boundary_hash_steps": 620800
+    }
+  ],
+  "all_hashes_equal": true,
+  "hash": "1274278165169918663920846137645782095596786929756411483948674016230306792794"
+}
