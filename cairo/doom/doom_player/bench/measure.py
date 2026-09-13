@@ -9,13 +9,15 @@ Two measurements, both required of every crate (PLAN.md §3.1 rule 4):
    operation's `net` cost subtracts its baseline op — the one that builds the
    same operands and does nothing else. Fails at +10 % over `budgets.json`.
 
-2. **Bytecode words.** `bench/size/` calls every public entry point of the
-   crate once; `bench/baseline/` links the same crate graph *and calls every
-   `doom_physics` / `doom_specials` / `bam` / `fsm` / `ticcmd` function
-   `doom_player` reaches*, so the difference is this crate's own code. By
-   S1 §5.9 that is `2 340 + 14.7 x words` steps of bootloader
-   program-hashing **per proof segment**; the budget is **4 000 words**, this
-   crate's slice of docs/DECISIONS.md D23's 12 000 for code.
+2. **Bytecode words, under both profiles.** `bench/size/` calls every public
+   entry point of the crate once; `bench/baseline/` links the same crate
+   graph *and calls every `doom_physics` / `doom_specials` / `bam` / `fsm` /
+   `ticcmd` function `doom_player` reaches*, so the difference is this
+   crate's own code. It is measured with the default `[cairo]` table and
+   again under the `proving` profile (`unsafe-panic = true`, D29) — which
+   also compile-tests the crate under that flag, as S7 §6 asks. By S1 §5.9
+   a word is `14.7` steps of bootloader program-hashing **per proof
+   segment**; D29 allots **20 000 words** to this crate.
 
 Usage:
     python3 measure.py            # measure, print the tables, check budgets
@@ -38,7 +40,7 @@ SIZE = HERE / "size"
 BASELINE = HERE / "baseline"
 RE_RESOURCE = re.compile(r"^\s*([a-z_0-9 ]+):\s*([0-9,]+)\s*$")
 TOLERANCE = 1.10
-CODE_WORD_BUDGET = 4000  # docs/DECISIONS.md D23, this crate's slice
+CODE_WORD_BUDGET = 20000  # docs/DECISIONS.md D29, this crate's allocation
 BOOTLOADER_PER_WORD = 14.7  # S1 §5.9 / S0 §5.2
 BOOTLOADER_FIXED = 2340
 
@@ -50,18 +52,26 @@ def scarb(args: list[str], cwd: Path = HERE) -> subprocess.CompletedProcess:
     )
 
 
-def build(cwd: Path) -> None:
-    p = scarb(["build"], cwd)
+def build(cwd: Path, profile: str = "dev") -> None:
+    args = ["build"] if profile == "dev" else ["--profile", profile, "build"]
+    p = scarb(args, cwd)
     if p.returncode != 0:
         raise SystemExit(p.stdout + p.stderr)
 
 
-def bytecode_words(cwd: Path) -> int:
-    candidates = sorted((cwd / "target" / "dev").glob("*.executable.json"))
+def bytecode_words(cwd: Path, profile: str = "dev") -> int:
+    candidates = sorted((cwd / "target" / profile).glob("*.executable.json"))
     if not candidates:
-        raise SystemExit("no executable built in %s" % cwd)
+        raise SystemExit("no executable built in %s (%s)" % (cwd, profile))
     program = json.loads(candidates[0].read_text())
     return len(program["program"]["bytecode"])
+
+
+def words_of(profile: str) -> int:
+    """`bench/size` minus `bench/baseline` under one Scarb profile."""
+    build(SIZE, profile)
+    build(BASELINE, profile)
+    return bytecode_words(SIZE, profile) - bytecode_words(BASELINE, profile)
 
 
 def run(op: int, n: int) -> dict[str, int]:
@@ -105,9 +115,8 @@ def main() -> int:
     budgets = json.loads((HERE / "budgets.json").read_text())
 
     build(HERE)
-    build(SIZE)
-    build(BASELINE)
-    words = bytecode_words(SIZE) - bytecode_words(BASELINE)
+    words = words_of("dev")
+    proving = words_of("proving")
 
     bases: dict[int, float] = {}
     for op in sorted({b["base"] for b in budgets["operations"]}):
@@ -129,30 +138,40 @@ def main() -> int:
             spec["budget"] = int(round(max(net, 1)))
 
     print(
-        "\nbytecode: %d words of `doom_player` code (budget %d) = %.0f steps of"
+        "\nbytecode: %d words of `doom_player` code (D29 budget %d) = %.0f steps of"
         " bootloader program-hashing per segment"
         % (words, CODE_WORD_BUDGET, BOOTLOADER_FIXED + BOOTLOADER_PER_WORD * words)
     )
+    print("          %d words under the `proving` profile (unsafe-panic)" % proving)
     if words > CODE_WORD_BUDGET:
-        # Not a failure, the way `doom_physics` reports the same gap: the
-        # target is a D23 allocation the crate does not meet as written, and
-        # ../README.md says why. What CI must catch is a *regression*.
+        # Reported, not failed, while the levers of the S7 §8 pass land; the
+        # final commit of that pass turns this into an assertion.
         print(
-            "  NOTE: %d words over the %d-word D23 target (see ../README.md)"
+            "  NOTE: %d words over the %d-word D29 allocation (see ../README.md)"
             % (words - CODE_WORD_BUDGET, CODE_WORD_BUDGET)
         )
     recorded = budgets.get("code_words", CODE_WORD_BUDGET)
     if words > recorded * TOLERANCE and not args.update:
         failures.append("bytecode regression: %d > %d words" % (words, recorded))
+    recorded_proving = budgets.get("code_words_proving", proving)
+    if proving > recorded_proving * TOLERANCE and not args.update:
+        failures.append(
+            "bytecode regression (proving): %d > %d words" % (proving, recorded_proving)
+        )
 
     if args.update:
         budgets["code_words"] = words
+        budgets["code_words_proving"] = proving
         (HERE / "budgets.json").write_text(json.dumps(budgets, indent=2) + "\n")
         print("budgets.json updated")
         return 0
     if args.json:
         Path(args.json).write_text(
-            json.dumps(dict(operations=results, code_words=words), indent=2) + "\n"
+            json.dumps(
+                dict(operations=results, code_words=words, code_words_proving=proving),
+                indent=2,
+            )
+            + "\n"
         )
     if failures:
         print("\nOVER BUDGET:\n  " + "\n  ".join(failures))

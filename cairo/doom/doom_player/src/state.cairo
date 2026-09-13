@@ -13,6 +13,7 @@ use bam::Angle;
 use doom_physics::{MF_NOTDMATCH, Mobj, World, spawn_player};
 use fixed::Fixed;
 use geom2d::Point;
+use super::num::{add32, rd32};
 
 // ---------------------------------------------------------------------------
 // Constants (p_local.h, p_pspr.h, p_inter.c, d_items.c)
@@ -58,6 +59,10 @@ pub const BT_CHANGE: u32 = 4;
 pub const BT_WEAPONMASK: u32 = 8 + 16 + 32;
 /// `BT_WEAPONSHIFT`.
 pub const BT_WEAPONSHIFT: u32 = 8;
+/// The same, as the `NonZero` literal `P_PlayerThink` divides by: `/` on a
+/// `u32` keeps a "division by zero" arm the compiler does not fold, and that
+/// arm costs the enclosing function its whole return width (S7 §8 rule 1).
+pub const BT_WEAPONSHIFT_NZ: NonZero<u32> = 8;
 
 // Weapons, compacted to the five `doom_things::WeaponId` carries.
 /// `wp_fist`.
@@ -240,9 +245,9 @@ pub fn max_ammo(p: @Player, ammo: u32) -> u32 {
     if ammo >= 4 {
         return 0;
     }
-    let base = *MAXAMMO.span().at(ammo);
+    let base = rd32(MAXAMMO.span(), ammo);
     if *p.backpack {
-        base * 2
+        add32(base, base)
     } else {
         base
     }
@@ -263,8 +268,7 @@ pub fn weapon_ammo(weapon: u32) -> u32 {
     if weapon >= NUM_WEAPONS {
         return AM_NOAMMO;
     }
-    let w = WEAPON_AMMO.span();
-    *w.at(weapon)
+    rd32(WEAPON_AMMO.span(), weapon)
 }
 
 // ---------------------------------------------------------------------------

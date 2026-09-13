@@ -29,14 +29,23 @@
 //!
 //! # Cost discipline
 //!
-//! Felt-first arithmetic below 2^72, planar `const` spans instead of
-//! if-tree tables, no generic monomorphisation (the use-line trace goes
-//! through `doom_physics::path_traverse`, not through a second instance of
-//! its generic `traverse`), and no `#[inline(always)]` — `bench/measure.py`
-//! asserts the per-function budgets and the bytecode the README lists.
+//! The rules of docs/spikes/S7.md §8, which `doom_physics` measured on
+//! itself: **no panic site on the proving path** (`num`, and
+//! `doom_physics`' panic-free table twins), **nothing wide across a call**,
+//! **one return per wide function**,
+//! one small function per loop, and no second monomorphisation of a heavy
+//! generic (the use-line trace goes through `doom_physics::path_traverse`,
+//! not through the `Traverser` trait). Felt-first arithmetic below 2^72,
+//! planar `const` spans where the table is *data* — and `if` trees where it
+//! is a dispatch, which is measured, not assumed (README).
+//! `bench/measure.py` asserts the per-function budgets and both bytecode
+//! figures; `bench/attribute.py` says where every word goes.
 
 pub mod env;
 pub mod inter;
+/// Panic-free scalar arithmetic (S7 §8 rule 1). Crate-private: it is a cost
+/// discipline, not an API.
+mod num;
 pub mod state;
 
 #[cfg(test)]

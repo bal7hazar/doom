@@ -27,3 +27,8 @@ sierra = true
 
 [cairo]
 enable-gas = false
+
+# The other side of the proving-profile figure `measure.py` reports; see
+# ../size/Scarb.toml.
+[profile.proving.cairo]
+unsafe-panic = true

@@ -13,14 +13,14 @@
 
 use doom_map::{LevelId, genesis, load};
 use doom_physics::{
-    MF_SPECIAL, Mobj, NO_MOBJ, ThingGrid, World, new_grid, removed_mobj, set_thing_position,
-    world_of,
+    MF_SHOOTABLE, MF_SPECIAL, Mobj, NO_MOBJ, ThingGrid, World, new_grid, removed_mobj,
+    set_thing_position, world_of,
 };
 use doom_player::{
-    Env, Player, PlayerEvent, calc_height, damage_player, env_of, move_psprites, player_think,
-    push_felts, spawn, touch_special, use_lines,
+    Env, Player, PlayerEvent, calc_height, damage_player, env_of, hit_thing, move_psprites,
+    player_think, push_felts, spawn, touch_special, use_lines,
 };
-use doom_things::tables::KIND_MISC2;
+use doom_things::tables::{KIND_MISC2, KIND_POSSESSED};
 use prng::from_index;
 use ticcmd::TicCmd;
 
@@ -29,13 +29,44 @@ fn word(forward: i64, side: i64, buttons: u8) -> felt252 {
 }
 
 /// A health bonus one unit away, varying with `i` so nothing is hoisted.
+///
+/// `kind` is derived from `i` too (`i - i` is a zero the compiler cannot
+/// see): a literal there let the lowering specialise `touch_special` and
+/// `take_health` on it, folding the 22-arm dispatch to the one arm this
+/// measures — S7 §8 rule 7, and 950 words of a duplicate in `bench/size`.
 fn bonus(i: u32) -> Mobj {
     let mut mo = removed_mobj();
-    mo.kind = KIND_MISC2;
+    mo.kind = KIND_MISC2 + (i - i);
     mo.flags = MF_SPECIAL + 0x800000; // MF_COUNTITEM
     mo.z = fixed::from_units((i % 4).into());
     mo.height = fixed::from_units(16);
     mo
+}
+
+/// A shootable thing `dist` units straight in front of `base`, sized like a
+/// former human.
+///
+/// It is what tells a *typical* shot from a *missed* one: `P_BulletSlope`
+/// tries the player's own angle first and only widens by a degree either
+/// side `if (!linetarget)`, so a shot with something in front of the barrel
+/// costs one `P_AimLineAttack` and a shot into an empty hall costs three
+/// (and the `P_LineAttack` that follows stops at the thing instead of
+/// walking `MISSILERANGE` of cells).
+fn target_in_front(base: Mobj, dist: felt252) -> Mobj {
+    let (s, c) = bam::sin_cos(base.angle);
+    let d = fixed::from_units(dist);
+    let mut t = removed_mobj();
+    // A real kind: `linkable` refuses to put a `KIND_NONE` (removed) thing
+    // in the grid, so an aim trace would never see it.
+    t.kind = KIND_POSSESSED;
+    t.x = fixed::add(base.x, fixed::mul(d, c));
+    t.y = fixed::add(base.y, fixed::mul(d, s));
+    t.z = base.z;
+    t.radius = fixed::from_units(20);
+    t.height = fixed::from_units(56);
+    t.flags = MF_SHOOTABLE;
+    t.health = 60;
+    t
 }
 
 #[executable]
@@ -188,6 +219,39 @@ fn main(op: u32, n: u32) -> felt252 {
             let q = base_p;
             let mo = base_mo;
             acc += q.health.into() + mo.x.enc + i.into();
+            i += 1;
+        }
+    } else if op == 13 {
+        // P_PlayerThink firing the pistol at a thing 128 units in front: the
+        // typical shot, where `P_BulletSlope` short-circuits on the first
+        // `P_AimLineAttack`. Compare with op 9, the same shot into the empty
+        // hall (three aim traces and a 2 048-unit `P_LineAttack`).
+        let mut tgt = target_in_front(base_mo, 128);
+        set_thing_position(@w.map, ref g, ref tgt, 1);
+        while i != n {
+            let mut q = base_p;
+            q.psp_state = doom_player::chain(doom_player::WP_PISTOL).attack;
+            q.psp_tics = 1;
+            let mut mo = base_mo;
+            let e = env_of(w, array![mo, tgt].span(), 0, i, 1);
+            let mut events: Array<PlayerEvent> = array![];
+            player_think(e, ref g, ref rng, ref q, ref mo, fire, 0, false, ref events);
+            // 1000 per pellet that found the thing, so the caller can check
+            // with `--print-program-output` that the target really was hit.
+            let mut seen = events.span();
+            while let Option::Some(ev) = seen.pop_front() {
+                match *ev {
+                    PlayerEvent::Shot((
+                        h, _,
+                    )) => {
+                        acc += match hit_thing(h) {
+                            Option::Some(_) => 1000,
+                            Option::None => 1,
+                        };
+                    },
+                    _ => {},
+                }
+            }
             i += 1;
         }
     } else if op == 11 {

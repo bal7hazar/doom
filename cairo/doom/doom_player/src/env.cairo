@@ -3,6 +3,7 @@
 
 use doom_physics::{Hit, Mobj, World};
 use fsm::StateTables;
+use super::state::Player;
 
 /// The read-only side of one tic, built once by `doom_game` and passed down
 /// the (short) action chain.
@@ -34,6 +35,28 @@ pub struct Env {
 /// Bundle one tic's read-only inputs.
 pub fn env_of(w: World, mobjs: Span<Mobj>, me: u32, tic: u32, buttons: u32) -> Env {
     Env { world: BoxTrait::new(w), states: w.states, mobjs, me, tic, buttons }
+}
+
+/// Put a tic's three wide operands behind pointers, once, at a public entry
+/// point (S7 §8 rule 3).
+///
+/// An [`Env`] is 16 felts, a `Player` 36 and a `Mobj` 27; every one of them
+/// is pushed in full at every call that carries it, and a panic site or a
+/// return point stores the enclosing function's whole width again. Behind a
+/// `Box` each is one felt, reading a field through it is free, and only a
+/// *write* pays — one `into_box` of that record's width. The whole inside of
+/// this crate (`*_in`) therefore works on boxes and the public functions are
+/// the wrappers that box on the way in and [`leave`] on the way out.
+#[inline(always)]
+pub(crate) fn enter(env: Env, p: @Player, mo: @Mobj) -> (Box<Env>, Box<Player>, Box<Mobj>) {
+    (BoxTrait::new(env), BoxTrait::new(*p), BoxTrait::new(*mo))
+}
+
+/// Write the boxed records back into a public entry point's `ref`s.
+#[inline(always)]
+pub(crate) fn leave(bp: Box<Player>, bm: Box<Mobj>, ref p: Player, ref mo: Mobj) {
+    p = bp.unbox();
+    mo = bm.unbox();
 }
 
 /// What a player tic did to *other* things, for `doom_game` to apply — the
