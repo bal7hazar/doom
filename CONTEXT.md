@@ -413,6 +413,15 @@ sierra-gas sous-estime de 1,4–3,5× → `tracked_resource = "cairo-steps"`. Ou
 altéré → `fact not registered` ; les mêmes inputs sous un autre fait → `already registered`. Aucun écart
 entre la sérialisation de `cairo/crates/segment` et le contrat.
 
+**P4.1 (2026-09-13) : gas de vérification on-chain −60 %.** Le blockifier facture ces classes au **maximum des
+ressources VM** (steps ×100, range_check ×1 600…), et le vérifieur vendu fait un range check tous les 7 steps :
+les leviers étaient « moins d'opérations de corps réduites ». Inversion par lots (une par couche FRI, une pour
+les 630 dénominateurs), limbes `felt252` non réduits sur trois niveaux de repli, hoisting des puissances
+d'alpha, décodeur typé (le coût Merkle était la désérialisation, blake2s est gratuit) : sur devnet
+**5 tx, 1,540e9 L2 gas, 47 STRK ≈ 1,35 $ par fait** (était 3,81e9 / 116 STRK), pire tx à 38,5 % du plafond.
+Série de patches sur le vendu avec argument d'équivalence par patch ; référence non modifiée conservée ;
+13 points d'altération × 2 vérifieurs rejettent à l'identique. Format de calldata et ABI du routeur inchangés.
+
 Les classes déployées par modeofO sont inutilisables pour nous (vérifieur vendu plus ancien, hashes de
 phases figés dans le constructeur) : le registry sera redéployé depuis nos sources épinglées.
 
