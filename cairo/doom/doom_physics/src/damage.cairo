@@ -5,18 +5,26 @@
 //! read from the tic's `Span<Mobj>`. Player-specific bookkeeping (armor,
 //! god mode, `damagecount`, dropping the weapon, `PST_DEAD`) is
 //! `doom_player`'s: it reduces the damage first and reads the outcome.
+//!
+//! The public functions return a 27-felt `Mobj` and a `DamageOutcome` with
+//! an `Option<Mobj>` inside: every return point and every panic site in
+//! their frame costs that whole width in bytecode (S7 §2), so each has a
+//! single return, the helpers take and return **scalars** (never the
+//! `Mobj`), the arithmetic that can panic (the thrust) is one of them, and
+//! the dropped item is spawned last.
 
 use bam::point_to_angle2;
+use doom_things::ThingInfo;
 use doom_things::tables::{KIND_CLIP, KIND_PLAYER, KIND_POSSESSED, KIND_SHOTGUN, KIND_SHOTGUY};
-use doom_things::thing_info;
-use fixed::{BIAS, Fixed};
-use prng::{Prng, PrngTrait};
+use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
+use fsm::StateTables;
+use prng::Prng;
 use super::mobj::{
     MF_CORPSE, MF_COUNTKILL, MF_DROPOFF, MF_DROPPED, MF_FLOAT, MF_JUSTHIT, MF_NOCLIP, MF_NOGRAVITY,
     MF_SHOOTABLE, MF_SKULLFLY, MF_SOLID, Mobj, NO_MOBJ, has, without,
 };
-use super::spawn::{SpawnZ, set_state, spawn_mobj};
-use super::world::World;
+use super::spawn::{SpawnZ, info_of, roll, shorten_tics, spawn_in, state_entry};
+use super::world::{Level, World, level_of};
 
 /// `BASETHRESHOLD`: tics a target is kept after retaliating.
 pub const BASETHRESHOLD: u32 = 100;
@@ -40,57 +48,219 @@ pub struct DamageOutcome {
     pub drop: Option<Mobj>,
 }
 
-/// `P_KillMobj` on `target` (health already ≤ 0): corpse flags, the death
-/// or gib state with Doom's random tic shortening, and the dropped item.
-pub fn kill_mobj(w: World, ref rng: Prng, ref target: Mobj) -> (u32, Option<Mobj>) {
-    let info = thing_info(target.kind);
-    target.flags = without(target.flags, MF_SHOOTABLE + MF_FLOAT + MF_SKULLFLY);
-    if target.kind != super::spawn::KIND_SKULL {
-        target.flags = without(target.flags, MF_NOGRAVITY);
+/// `h >> 2` on a positive height.
+fn quarter(h: Fixed) -> Fixed {
+    let v = to_u128(h.enc - BIAS);
+    let q: felt252 = (v / 4).into();
+    Fixed { enc: q + BIAS }
+}
+
+/// `health < -spawnhealth`: the corpse gibs.
+fn gibs(health: i32, spawnhealth: u32) -> bool {
+    // health + spawnhealth < 0, in the field with a bias (both terms are
+    // below 2^31 in magnitude).
+    let h: felt252 = health.into();
+    let s: felt252 = spawnhealth.into();
+    !felt_ge_narrow(h + s + BIAS, BIAS)
+}
+
+/// What `P_KillMobj` writes back: the corpse's flags, height, state and
+/// tics, the action of the death state and the kind of item to drop.
+#[derive(Copy, Drop)]
+struct Kill {
+    flags: u32,
+    height: Fixed,
+    state: u32,
+    tics: u32,
+    action: u32,
+    item: u32,
+}
+
+/// `P_KillMobj` minus the drop, on the fields it reads.
+fn kill_core(
+    states: StateTables,
+    rnd: Span<u8>,
+    ref rng: Prng,
+    kind: u32,
+    flags: u32,
+    height: Fixed,
+    health: i32,
+    info: ThingInfo,
+) -> Kill {
+    let mut flags = without(flags, MF_SHOOTABLE + MF_FLOAT + MF_SKULLFLY);
+    if kind != super::spawn::KIND_SKULL {
+        flags = without(flags, MF_NOGRAVITY);
     }
-    target.flags = target.flags | MF_CORPSE | MF_DROPOFF;
-    target.height = quarter(target.height);
-    if target.kind == KIND_PLAYER {
-        target.flags = without(target.flags, MF_SOLID);
+    flags = flags | MF_CORPSE | MF_DROPOFF;
+    if kind == KIND_PLAYER {
+        flags = without(flags, MF_SOLID);
     }
-    let spawnhealth: i32 = info.spawnhealth.try_into().unwrap();
-    let state = if target.health < -spawnhealth && info.xdeathstate != 0 {
+    let state = if info.xdeathstate != 0 && gibs(health, info.spawnhealth) {
         info.xdeathstate
     } else {
         info.deathstate
     };
-    let action = set_state(w, ref target, state);
-    let (next, roll) = rng.next(w.rndtable);
-    rng = next;
-    let shorten: u32 = (roll % 4).into();
-    target.tics = if target.tics > shorten + 1 {
-        target.tics - shorten
-    } else {
-        1
-    };
+    let (tics, action) = state_entry(states, state);
     // Drop stuff: the same random-position-free spawn as `P_KillMobj`.
-    let item = if target.kind == KIND_POSSESSED {
+    let item = if kind == KIND_POSSESSED {
         KIND_CLIP
-    } else if target.kind == KIND_SHOTGUY {
+    } else if kind == KIND_SHOTGUY {
         KIND_SHOTGUN
     } else {
         NO_MOBJ
     };
-    let drop = if item == NO_MOBJ {
-        Option::None
-    } else {
-        let mut mo = spawn_mobj(w, item, target.x, target.y, SpawnZ::OnFloor);
-        mo.flags = mo.flags | MF_DROPPED; // special versions of items
-        Option::Some(mo)
-    };
-    (action, drop)
+    Kill {
+        flags, height: quarter(height), state, tics: shorten_tics(rnd, ref rng, tics), action, item,
+    }
 }
 
-/// `h >> 2` on a positive height.
-fn quarter(h: Fixed) -> Fixed {
-    let v: u128 = (h.enc - BIAS).try_into().unwrap();
-    let q: felt252 = (v / 4).into();
-    Fixed { enc: q + BIAS }
+/// The dropped item of a kill (`MF_DROPPED` set), when there is one.
+fn drop_of(lv: Level, states: StateTables, item: u32, x: Fixed, y: Fixed) -> Option<Mobj> {
+    if item == NO_MOBJ {
+        return Option::None;
+    }
+    let mut mo = spawn_in(lv, states, item, x, y, SpawnZ::OnFloor);
+    mo.flags = mo.flags | MF_DROPPED; // special versions of items
+    Option::Some(mo)
+}
+
+/// `P_KillMobj` on `target` (health already ≤ 0): corpse flags, the death
+/// or gib state with Doom's random tic shortening, and the dropped item.
+pub fn kill_mobj(w: World, ref rng: Prng, ref target: Mobj) -> (u32, Option<Mobj>) {
+    let k = kill_core(
+        w.states,
+        w.rndtable,
+        ref rng,
+        target.kind,
+        target.flags,
+        target.height,
+        target.health,
+        info_of(target.kind),
+    );
+    target.flags = k.flags;
+    target.height = k.height;
+    target.state = k.state;
+    target.tics = k.tics;
+    (k.action, drop_of(level_of(w), w.states, k.item, target.x, target.y))
+}
+
+/// The momentum `P_DamageMobj` adds to a target hit from `inflictor`:
+/// `damage * (FRACUNIT >> 3) * 100 / mass` along the angle from the
+/// inflictor, quadrupled and reversed when the blow makes it fall forward.
+fn thrust_of(
+    rnd: Span<u8>,
+    ref rng: Prng,
+    mobjs: Span<Mobj>,
+    inflictor: u32,
+    x: Fixed,
+    y: Fixed,
+    z: Fixed,
+    health: i32,
+    mass: u32,
+    damage: u32,
+) -> (Fixed, Fixed) {
+    let (ix, iy, iz) = match mobjs.get(inflictor) {
+        Option::Some(b) => {
+            let inf = b.unbox();
+            (*inf.x, *inf.y, *inf.z)
+        },
+        Option::None => (x, y, z),
+    };
+    let mut ang = point_to_angle2(ix, iy, x, y);
+    // thrust = damage * (FRACUNIT >> 3) * 100 / mass, in the field then one
+    // u128 division (a zero mass reads as 1, as in the original).
+    let d_felt: felt252 = damage.into();
+    let mass_opt: Option<NonZero<u128>> = to_u128(mass.into()).try_into();
+    let mass_nz: NonZero<u128> = match mass_opt {
+        Option::Some(m) => m,
+        Option::None => 1,
+    };
+    let (q, _) = DivRem::div_rem(to_u128(d_felt * 819200), mass_nz);
+    let mut thrust_raw: felt252 = q.into();
+    // Make fall forwards sometimes.
+    let h: felt252 = health.into();
+    if damage < 40
+        && felt_ge_narrow(d_felt, h + 1)
+        && fixed::gt(fixed::sub(z, iz), Fixed { enc: BIAS + 64 * 65536 }) {
+        let r = roll(ref rng, rnd);
+        let two: NonZero<u8> = 2;
+        let (_, odd) = DivRem::div_rem(r, two);
+        if odd == 1 {
+            ang = bam::add(ang, bam::ANG180);
+            thrust_raw = thrust_raw * 4;
+        }
+    }
+    let thrust_fixed = Fixed { enc: BIAS + thrust_raw };
+    let (s, c) = bam::sin_cos(ang);
+    (fixed::mul(thrust_fixed, c), fixed::mul(thrust_fixed, s))
+}
+
+/// `health - damage` on the signed health, in the field (no overflow
+/// path: both are below 2^31).
+fn hurt(health: i32, damage: u32) -> i32 {
+    let h: felt252 = health.into() - damage.into();
+    let r: Option<i32> = h.try_into();
+    match r {
+        Option::Some(v) => v,
+        Option::None => health,
+    }
+}
+
+/// What a surviving target's reaction writes back.
+#[derive(Copy, Drop)]
+struct Reaction {
+    pain: bool,
+    retaliated: bool,
+    action: u32,
+    flags: u32,
+    threshold: u32,
+    target: u32,
+    /// The state entered, if any: `(state, tics)`.
+    entered: Option<(u32, u32)>,
+}
+
+/// The reaction of a target that survived the blow (`P_DamageMobj` after
+/// the health test): pain and retaliation, on the fields it reads.
+fn react(
+    states: StateTables,
+    rnd: Span<u8>,
+    ref rng: Prng,
+    flags: u32,
+    state: u32,
+    threshold: u32,
+    target: u32,
+    target_idx: u32,
+    source: u32,
+    info: ThingInfo,
+) -> Reaction {
+    let r: u32 = roll(ref rng, rnd).into();
+    let mut flags = flags;
+    let mut state = state;
+    let mut action = fsm::NO_ACTION;
+    let mut entered = Option::None;
+    let pain = r < info.painchance && !has(flags, MF_SKULLFLY);
+    if pain {
+        flags = flags | MF_JUSTHIT; // fight back!
+        let (tics, a) = state_entry(states, info.painstate);
+        action = a;
+        state = info.painstate;
+        entered = Option::Some((info.painstate, tics));
+    }
+    let mut threshold = threshold;
+    let mut target = target;
+    let retaliated = threshold == 0 && source != NO_MOBJ && source != target_idx;
+    if retaliated {
+        // If not intent on another player, chase after this one.
+        target = source;
+        threshold = BASETHRESHOLD;
+        // The state *after* the pain transition, as in `P_DamageMobj`.
+        if state == info.spawnstate && info.seestate != 0 {
+            let (tics, a) = state_entry(states, info.seestate);
+            action = a;
+            entered = Option::Some((info.seestate, tics));
+        }
+    }
+    Reaction { pain, retaliated, action, flags, threshold, target, entered }
 }
 
 /// `P_DamageMobj`: `damage` points to `target` (index `target_idx`) from
@@ -109,89 +279,106 @@ pub fn damage_mobj(
     damage: u32,
     thrust: bool,
 ) -> DamageOutcome {
-    let mut out = DamageOutcome {
-        died: false,
-        pain: false,
-        retaliated: false,
-        action: fsm::NO_ACTION,
-        counts_kill: false,
-        drop: Option::None,
-    };
-    if !has(target.flags, MF_SHOOTABLE) {
-        return out; // shouldn't happen...
-    }
-    if target.health <= 0 {
-        return out;
-    }
-    if has(target.flags, MF_SKULLFLY) {
-        target.momx = fixed::ZERO;
-        target.momy = fixed::ZERO;
-        target.momz = fixed::ZERO;
-    }
-    // Some close combat weapons should not inflict thrust on the target.
-    if inflictor != NO_MOBJ && !has(target.flags, MF_NOCLIP) && thrust {
-        let inf = mobjs.at(inflictor);
-        let info = thing_info(target.kind);
-        let mut ang = point_to_angle2(*inf.x, *inf.y, target.x, target.y);
-        // thrust = damage * (FRACUNIT >> 3) * 100 / mass
-        let mass: u128 = if info.mass == 0 {
-            1
+    let alive = has(target.flags, MF_SHOOTABLE) && target.health > 0;
+    let mut died = false;
+    let mut pain = false;
+    let mut retaliated = false;
+    let mut action = fsm::NO_ACTION;
+    let mut counts_kill = false;
+    let mut item = NO_MOBJ;
+    // The fields the blow may change, written back once at the end.
+    let mut flags = target.flags;
+    let mut momx = target.momx;
+    let mut momy = target.momy;
+    let mut momz = target.momz;
+    let mut health = target.health;
+    let mut state = target.state;
+    let mut tics = target.tics;
+    let mut height = target.height;
+    let mut reaction_time = target.reaction_time;
+    let mut threshold = target.threshold;
+    let mut chasing = target.target;
+    if alive {
+        if has(flags, MF_SKULLFLY) {
+            momx = fixed::ZERO;
+            momy = fixed::ZERO;
+            momz = fixed::ZERO;
+        }
+        let info = info_of(target.kind);
+        // Some close combat weapons should not inflict thrust on the target.
+        if inflictor != NO_MOBJ && !has(flags, MF_NOCLIP) && thrust {
+            let (dx, dy) = thrust_of(
+                w.rndtable,
+                ref rng,
+                mobjs,
+                inflictor,
+                target.x,
+                target.y,
+                target.z,
+                health,
+                info.mass,
+                damage,
+            );
+            momx = fixed::add(momx, dx);
+            momy = fixed::add(momy, dy);
+        }
+        // Do the damage.
+        health = hurt(health, damage);
+        if health <= 0 {
+            died = true;
+            counts_kill = has(flags, MF_COUNTKILL);
+            let k = kill_core(
+                w.states, w.rndtable, ref rng, target.kind, flags, height, health, info,
+            );
+            flags = k.flags;
+            height = k.height;
+            state = k.state;
+            tics = k.tics;
+            action = k.action;
+            item = k.item;
         } else {
-            info.mass.into()
-        };
-        let d: u128 = damage.into();
-        let mut thrust_raw: u128 = d * 8192 * 100 / mass;
-        // Make fall forwards sometimes.
-        let health: felt252 = target.health.into();
-        let d_felt: felt252 = damage.into();
-        if damage < 40
-            && fixed::felt_ge(d_felt, health + 1)
-            && fixed::gt(fixed::sub(target.z, *inf.z), Fixed { enc: BIAS + 64 * 65536 }) {
-            let (next, roll) = rng.next(w.rndtable);
-            rng = next;
-            if roll % 2 == 1 {
-                ang = bam::add(ang, bam::ANG180);
-                thrust_raw = thrust_raw * 4;
+            let r = react(
+                w.states,
+                w.rndtable,
+                ref rng,
+                flags,
+                state,
+                threshold,
+                chasing,
+                target_idx,
+                source,
+                info,
+            );
+            pain = r.pain;
+            retaliated = r.retaliated;
+            action = r.action;
+            flags = r.flags;
+            reaction_time = 0; // we're awake now...
+            threshold = r.threshold;
+            chasing = r.target;
+            if let Option::Some((s, t)) = r.entered {
+                state = s;
+                tics = t;
             }
         }
-        let t: felt252 = thrust_raw.into();
-        let thrust_fixed = Fixed { enc: BIAS + t };
-        let (s, c) = bam::sin_cos(ang);
-        target.momx = fixed::add(target.momx, fixed::mul(thrust_fixed, c));
-        target.momy = fixed::add(target.momy, fixed::mul(thrust_fixed, s));
     }
-
-    // Do the damage.
-    let d: i32 = damage.try_into().unwrap();
-    target.health = target.health - d;
-    if target.health <= 0 {
-        out.died = true;
-        out.counts_kill = has(target.flags, MF_COUNTKILL);
-        let (action, drop) = kill_mobj(w, ref rng, ref target);
-        out.action = action;
-        out.drop = drop;
-        return out;
+    target.flags = flags;
+    target.momx = momx;
+    target.momy = momy;
+    target.momz = momz;
+    target.health = health;
+    target.state = state;
+    target.tics = tics;
+    target.height = height;
+    target.reaction_time = reaction_time;
+    target.threshold = threshold;
+    target.target = chasing;
+    DamageOutcome {
+        died,
+        pain,
+        retaliated,
+        action,
+        counts_kill,
+        drop: drop_of(level_of(w), w.states, item, target.x, target.y),
     }
-
-    let info = thing_info(target.kind);
-    let (next, roll) = rng.next(w.rndtable);
-    rng = next;
-    let roll32: u32 = roll.into();
-    if roll32 < info.painchance && !has(target.flags, MF_SKULLFLY) {
-        target.flags = target.flags | MF_JUSTHIT; // fight back!
-        out.pain = true;
-        out.action = set_state(w, ref target, info.painstate);
-    }
-    target.reaction_time = 0; // we're awake now...
-
-    if target.threshold == 0 && source != NO_MOBJ && source != target_idx {
-        // If not intent on another player, chase after this one.
-        target.target = source;
-        target.threshold = BASETHRESHOLD;
-        out.retaliated = true;
-        if target.state == info.spawnstate && info.seestate != 0 {
-            out.action = set_state(w, ref target, info.seestate);
-        }
-    }
-    out
 }

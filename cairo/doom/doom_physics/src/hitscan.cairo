@@ -19,6 +19,11 @@
 //! sorting alone for a 1 700-unit shot down E1M1's hall) with a handful of
 //! comparisons per cell.
 //!
+//! The collection of a cell's intercepts ([`cell_intercepts`]) is one
+//! concrete function; only the short dispatch loop of [`traverse`] is
+//! generic over the traverser (S7: the whole walk used to be monomorphised
+//! once per traverser).
+//!
 //! Puffs and blood are **events**, not mobjs: the [`Hit`] carries the point
 //! where `P_SpawnPuff`/`P_SpawnBlood` would have put one, for the caller to
 //! hand to the renderer. Spawning them as mobjs would cost a `locate`
@@ -26,16 +31,18 @@
 //! visual effect that the simulation never reads back.
 
 use bam::Angle;
+use core::num::traits::WrappingAdd;
 use doom_map::ML_TWOSIDED;
-use fixed::{BIAS, Fixed, felt_ge};
+use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
 use geom2d::{DivLine, Point, intercept_fraction};
 use super::grid::{ThingGrid, things_in};
-use super::maputl::{line_flags, line_hp, line_meta, line_opening};
+use super::maputl::{inc, line_hp, line_opening, line_sides, opaque_zero, rd, rd32};
 use super::mobj::{MF_NOBLOOD, MF_SHOOTABLE, Mobj, NO_MOBJ, has};
 use super::ray::{
-    crosses, crossing_fraction, ray_advance, ray_cell, ray_next_entry, ray_start, trace_side,
+    Cursor, Trace, crosses, crossing_fraction, ray_advance, ray_cell, ray_next_entry, ray_start,
+    trace_of, trace_side,
 };
-use super::world::World;
+use super::world::{Level, World, level_of};
 
 /// `MISSILERANGE` — 32 × 64 units, `P_LineAttack`'s range for guns.
 pub const MISSILERANGE: Fixed = Fixed { enc: BIAS + 32 * 64 * 65536 };
@@ -74,33 +81,132 @@ fn before(a: Intercept, b: Intercept) -> bool {
     }
 }
 
-/// The nearest intercept of `list` after `prev` (`None`: the nearest of
-/// all) — `P_TraverseIntercepts`'s "pick the closest remaining", on the
-/// short per-cell batch.
-fn next_intercept(list: Span<Intercept>, prev: Option<Intercept>) -> Option<Intercept> {
-    let n = list.len();
-    let mut best: Option<Intercept> = Option::None;
-    let mut k: u32 = 0;
-    while k != n {
-        let it = *list.at(k);
-        k += 1;
-        let after_prev = match prev {
-            Option::Some(p) => before(p, it),
-            Option::None => true,
-        };
-        if !after_prev {
+/// The nearest intercept of `list` not yet `taken` (a bit per position:
+/// the batch of one cell holds a handful) — `P_TraverseIntercepts`'s "pick
+/// the closest remaining". Returns its position bit and the intercept.
+fn next_intercept(mut list: Span<Intercept>, taken: u32) -> Option<(u32, Intercept)> {
+    let mut best: Option<(u32, Intercept)> = Option::None;
+    let mut bit: u32 = 1;
+    while let Option::Some(item) = list.pop_front() {
+        let it = *item;
+        let this = bit;
+        bit = bit.wrapping_add(bit);
+        if taken & this != 0 {
             continue;
         }
         best = match best {
-            Option::Some(b) => if before(it, b) {
-                Option::Some(it)
+            Option::Some((b_bit, b)) => if before(it, b) {
+                Option::Some((this, it))
             } else {
-                Option::Some(b)
+                Option::Some((b_bit, b))
             },
-            Option::None => Option::Some(it),
+            Option::None => Option::Some((this, it)),
         };
     }
     best
+}
+
+/// The lines of `cell` crossed inside the trace's span `[entry, exit)`
+/// through it, appended to `batch`.
+fn cell_lines(
+    lv: Level, tr: Box<Trace>, cell: u32, entry: Fixed, exit: Fixed, ref batch: Array<Intercept>,
+) {
+    let bm_start = lv.hot.unbox().bm_start;
+    let mut j = rd32(bm_start, cell);
+    let end = rd32(bm_start, inc(cell));
+    loop {
+        if j == end {
+            break;
+        }
+        let map = lv.hot.unbox();
+        let line = rd32(map.bm_items, j);
+        j = inc(j);
+        let hp = line_hp(map.l_ab, map.l_bb, map.l_cb, line);
+        let lbox = match crosses(tr, hp, rd(map.l_box, line)) {
+            Option::Some(b) => b,
+            Option::None => { continue; },
+        };
+        let frac = crossing_fraction(tr, hp, lbox);
+        if !fixed::ge(frac, entry) || !fixed::lt(frac, exit) {
+            continue; // crossed in another cell, or behind the source
+        }
+        batch.append(Intercept { frac, is_line: true, id: line });
+    }
+}
+
+/// The things whose centre is in `cell` and whose box diagonal the trace
+/// crosses (`PIT_AddThingIntercepts`), appended to `batch`.
+fn cell_things(
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    tr: Box<Trace>,
+    cell: u32,
+    tracepositive: bool,
+    shooter: u32,
+    ref batch: Array<Intercept>,
+) {
+    let mut list = things_in(ref g, cell);
+    loop {
+        let idx = match list.pop_front() {
+            Option::Some(i) => *i,
+            Option::None => { break; },
+        };
+        if idx == shooter {
+            continue;
+        }
+        let t = match mobjs.get(idx) {
+            Option::Some(b) => b.unbox(),
+            Option::None => { continue; },
+        };
+        let r = *t.radius;
+        let (c1, c2) = if tracepositive {
+            (
+                Point { x: fixed::sub(*t.x, r), y: fixed::add(*t.y, r) },
+                Point { x: fixed::add(*t.x, r), y: fixed::sub(*t.y, r) },
+            )
+        } else {
+            (
+                Point { x: fixed::sub(*t.x, r), y: fixed::sub(*t.y, r) },
+                Point { x: fixed::add(*t.x, r), y: fixed::add(*t.y, r) },
+            )
+        };
+        let dl = tr.unbox().dl;
+        if trace_side(dl, c1) == trace_side(dl, c2) {
+            continue; // the diagonal isn't crossed
+        }
+        let diag = DivLine {
+            x: c1.x, y: c1.y, dx: fixed::sub(c2.x, c1.x), dy: fixed::sub(c2.y, c1.y),
+        };
+        let frac = intercept_fraction(dl, diag);
+        if fixed::is_neg(frac) || !fixed::lt(frac, fixed::FRACUNIT) {
+            continue;
+        }
+        batch.append(Intercept { frac, is_line: false, id: idx });
+    }
+}
+
+/// Every intercept of the current cell of `cur`, unsorted.
+fn cell_intercepts(
+    lv: Level,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    tr: Box<Trace>,
+    cur: Cursor,
+    cell: u32,
+    add_things: bool,
+    tracepositive: bool,
+    shooter: u32,
+) -> Array<Intercept> {
+    let mut batch: Array<Intercept> = array![];
+    let mut exit = ray_next_entry(cur);
+    if fixed::gt(exit, fixed::FRACUNIT) {
+        exit = fixed::FRACUNIT;
+    }
+    cell_lines(lv, tr, cell, cur.entry, exit, ref batch);
+    if add_things {
+        cell_things(mobjs, ref g, tr, cell, tracepositive, shooter, ref batch);
+    }
+    batch
 }
 
 /// `P_PathTraverse` with `PT_ADDLINES` (and `PT_ADDTHINGS` when
@@ -117,112 +223,60 @@ pub fn traverse<T, impl V: Traverser<T>, +Drop<T>>(
     shooter: u32,
     ref visitor: T,
 ) -> bool {
-    let grid = w.map.grid;
-    let mut ray = match ray_start(grid, p1, p2) {
+    traverse_in::<T, V>(level_of(w), mobjs, ref g, p1, p2, add_things, shooter, ref visitor)
+}
+
+/// [`traverse`] on a [`Level`].
+pub fn traverse_in<T, impl V: Traverser<T>, +Drop<T>>(
+    lv: Level,
+    mobjs: Span<Mobj>,
+    ref g: ThingGrid,
+    p1: Point,
+    p2: Point,
+    add_things: bool,
+    shooter: u32,
+    ref visitor: T,
+) -> bool {
+    let grid = lv.hot.unbox().grid;
+    let mut cur = match ray_start(grid, p1, p2) {
         Option::Some(r) => r,
         Option::None => { return true; },
     };
-    let l_ab = w.map.l_ab;
-    let l_bb = w.map.l_bb;
-    let l_cb = w.map.l_cb;
-    let l_box = w.map.l_box;
-    let bm_start = w.map.bm_start;
-    let bm_items = w.map.bm_items;
+    let tr = trace_of(p1, p2);
     // The thing test crosses the trace with the box diagonal facing it.
-    let tracepositive = fixed::is_neg(ray.dl.dx) == fixed::is_neg(ray.dl.dy);
-    let mut walked = true;
+    let dl = tr.unbox().dl;
+    let tracepositive = fixed::is_neg(dl.dx) == fixed::is_neg(dl.dy);
     loop {
-        let cell = match ray_cell(@ray, grid) {
+        let cell = match ray_cell(cur, grid) {
             Option::Some(c) => c,
-            Option::None => { break; },
+            Option::None => { break true; },
         };
-        let entry = ray.entry;
-        let mut exit = ray_next_entry(@ray);
-        if fixed::gt(exit, fixed::FRACUNIT) {
-            exit = fixed::FRACUNIT;
-        }
-        let mut batch: Array<Intercept> = array![];
-        // Lines crossed inside this cell's span of the trace.
-        let mut j = *bm_start.at(cell);
-        let end = *bm_start.at(cell + 1);
-        while j != end {
-            let line = *bm_items.at(j);
-            j += 1;
-            let hp = line_hp(l_ab, l_bb, l_cb, line);
-            let lbox = match crosses(@ray, hp, l_box, line) {
-                Option::Some(b) => b,
-                Option::None => { continue; },
-            };
-            let frac = crossing_fraction(@ray, hp, lbox);
-            if !fixed::ge(frac, entry) || !fixed::lt(frac, exit) {
-                continue; // crossed in another cell, or behind the source
-            }
-            batch.append(Intercept { frac, is_line: true, id: line });
-        }
-        // Things whose centre is in this cell.
-        if add_things {
-            let list = things_in(ref g, cell);
-            let n = list.len();
-            let mut k: u32 = 0;
-            while k != n {
-                let idx = *list.at(k);
-                k += 1;
-                if idx == shooter {
-                    continue;
-                }
-                let t = mobjs.at(idx);
-                let r = *t.radius;
-                let (c1, c2) = if tracepositive {
-                    (
-                        Point { x: fixed::sub(*t.x, r), y: fixed::add(*t.y, r) },
-                        Point { x: fixed::add(*t.x, r), y: fixed::sub(*t.y, r) },
-                    )
-                } else {
-                    (
-                        Point { x: fixed::sub(*t.x, r), y: fixed::sub(*t.y, r) },
-                        Point { x: fixed::add(*t.x, r), y: fixed::add(*t.y, r) },
-                    )
-                };
-                if trace_side(@ray.dl, c1) == trace_side(@ray.dl, c2) {
-                    continue; // the diagonal isn't crossed
-                }
-                let dl = DivLine {
-                    x: c1.x, y: c1.y, dx: fixed::sub(c2.x, c1.x), dy: fixed::sub(c2.y, c1.y),
-                };
-                let frac = intercept_fraction(ray.dl, dl);
-                if fixed::is_neg(frac) || !fixed::lt(frac, fixed::FRACUNIT) {
-                    continue;
-                }
-                batch.append(Intercept { frac, is_line: false, id: idx });
-            }
-        }
+        let batch = cell_intercepts(
+            lv, mobjs, ref g, tr, cur, cell, add_things, tracepositive, shooter,
+        );
         // Visit the cell's crossings in order.
         let items = batch.span();
-        let mut prev: Option<Intercept> = Option::None;
-        let mut stopped = false;
-        loop {
-            let it = match next_intercept(items, prev) {
+        let mut taken: u32 = opaque_zero(items.len());
+        let stopped = loop {
+            let (bit, it) = match next_intercept(items, taken) {
                 Option::Some(i) => i,
-                Option::None => { break; },
+                Option::None => { break false; },
             };
-            prev = Option::Some(it);
+            taken = taken | bit;
             let go_on = if it.is_line {
                 visitor.line(it.id, it.frac)
             } else {
                 visitor.thing(it.id, it.frac)
             };
             if !go_on {
-                stopped = true;
-                break;
+                break true;
             }
-        }
+        };
         if stopped {
-            walked = false;
-            break;
+            break false;
         }
-        ray_advance(ref ray);
+        ray_advance(ref cur, grid.columns, grid.rows);
     }
-    walked
 }
 
 /// A traverser that only collects (tests, tools): every intercept, in
@@ -266,9 +320,29 @@ fn trace_end(p: Point, angle: Angle, range: Fixed) -> Point {
 
 /// `t1->z + (t1->height >> 1) + 8 * FRACUNIT`: the gun's height.
 fn shoot_z(t: @Mobj) -> Fixed {
-    let h: u128 = (*t.height.enc - BIAS).try_into().unwrap();
+    let h = to_u128(*t.height.enc - BIAS);
     let half: felt252 = (h / 2).into();
     Fixed { enc: *t.z.enc + half + 8 * 65536 }
+}
+
+/// What both attacks' traversers read at every intercept, behind one
+/// pointer.
+#[derive(Copy, Drop)]
+struct ShotCtx {
+    lv: Level,
+    mobjs: Span<Mobj>,
+    tr: Box<Trace>,
+}
+
+/// `P_LineOpening` of `line` from its packed felt, or `None` for a one-sided
+/// line.
+fn opening_of(ctx: Box<ShotCtx>, line: u32) -> Option<super::maputl::Opening> {
+    let c = ctx.unbox();
+    let (flags, front, back) = line_sides(rd(c.lv.hot.unbox().l_packed, line));
+    if !has(flags, ML_TWOSIDED) {
+        return Option::None;
+    }
+    Option::Some(line_opening(c.lv.floor, c.lv.ceil, front, back))
 }
 
 // ---------------------------------------------------------------------------
@@ -285,12 +359,9 @@ pub struct Aim {
 }
 
 /// `PTR_AimTraverse`'s state.
-#[derive(Drop)]
+#[derive(Copy, Drop)]
 struct Aimer {
-    mobjs: Span<Mobj>,
-    l_packed: Span<felt252>,
-    floor: Span<felt252>,
-    ceil: Span<felt252>,
+    ctx: Box<ShotCtx>,
     shootz: Fixed,
     range: Fixed,
     topslope: Fixed,
@@ -300,13 +371,11 @@ struct Aimer {
 
 impl AimerTraverser of Traverser<Aimer> {
     fn line(ref self: Aimer, line: u32, frac: Fixed) -> bool {
-        let packed = *self.l_packed.at(line);
-        if !has(line_flags(packed), ML_TWOSIDED) {
-            return false; // stop
-        }
-        let meta = line_meta(packed);
-        let o = line_opening(self.floor, self.ceil, meta.front, meta.back);
-        if felt_ge(o.bottom.enc, o.top.enc) {
+        let o = match opening_of(self.ctx, line) {
+            Option::Some(o) => o,
+            Option::None => { return false; } // stop
+        };
+        if felt_ge_narrow(o.bottom.enc, o.top.enc) {
             return false; // stop
         }
         let dist = fixed::mul(self.range, frac);
@@ -326,7 +395,10 @@ impl AimerTraverser of Traverser<Aimer> {
     }
 
     fn thing(ref self: Aimer, idx: u32, frac: Fixed) -> bool {
-        let t = self.mobjs.at(idx);
+        let t = match self.ctx.unbox().mobjs.get(idx) {
+            Option::Some(b) => b.unbox(),
+            Option::None => { return true; },
+        };
         if !has(*t.flags, MF_SHOOTABLE) {
             return true; // corpse or something
         }
@@ -363,21 +435,23 @@ impl AimerTraverser of Traverser<Aimer> {
 pub fn aim_line_attack(
     w: World, mobjs: Span<Mobj>, ref g: ThingGrid, shooter: u32, angle: Angle, distance: Fixed,
 ) -> Aim {
-    let t1 = mobjs.at(shooter);
+    let lv = level_of(w);
+    let t1 = match mobjs.get(shooter) {
+        Option::Some(b) => b.unbox(),
+        Option::None => { return Aim { slope: fixed::ZERO, target: NO_MOBJ }; },
+    };
     let p1 = Point { x: *t1.x, y: *t1.y };
     let p2 = trace_end(p1, angle, distance);
+    let tr = trace_of(p1, p2);
     let mut aimer = Aimer {
-        mobjs,
-        l_packed: w.map.l_packed,
-        floor: w.floor,
-        ceil: w.ceil,
+        ctx: BoxTrait::new(ShotCtx { lv, mobjs, tr }),
         shootz: shoot_z(t1),
         range: distance,
         topslope: Fixed { enc: BIAS + AIM_SLOPE },
         bottomslope: Fixed { enc: BIAS - AIM_SLOPE },
         aim: Aim { slope: fixed::ZERO, target: NO_MOBJ },
     };
-    traverse(w, mobjs, ref g, p1, p2, true, shooter, ref aimer);
+    traverse_in(lv, mobjs, ref g, p1, p2, true, shooter, ref aimer);
     aimer.aim
 }
 
@@ -399,13 +473,9 @@ pub enum Hit {
 }
 
 /// `PTR_ShootTraverse`'s state.
-#[derive(Drop)]
+#[derive(Copy, Drop)]
 struct Shooter {
-    mobjs: Span<Mobj>,
-    l_packed: Span<felt252>,
-    floor: Span<felt252>,
-    ceil: Span<felt252>,
-    dl: DivLine,
+    ctx: Box<ShotCtx>,
     shootz: Fixed,
     range: Fixed,
     slope: Fixed,
@@ -419,34 +489,49 @@ fn point_along(dl: DivLine, frac: Fixed) -> Point {
     }
 }
 
+/// Where a shot that stops at `frac`, pulled back by `pullback` units,
+/// lands: `(point, z)`.
+fn impact(
+    ctx: Box<ShotCtx>, shootz: Fixed, range: Fixed, slope: Fixed, frac: Fixed, pullback: Fixed,
+) -> (Point, Fixed) {
+    let back = fixed::sub(frac, fixed::div(pullback, range));
+    let z = fixed::add(shootz, fixed::mul(slope, fixed::mul(back, range)));
+    (point_along(ctx.unbox().tr.unbox().dl, back), z)
+}
+
 impl ShooterTraverser of Traverser<Shooter> {
     fn line(ref self: Shooter, line: u32, frac: Fixed) -> bool {
-        let packed = *self.l_packed.at(line);
-        let mut hitline = !has(line_flags(packed), ML_TWOSIDED);
-        if !hitline {
-            let meta = line_meta(packed);
-            let o = line_opening(self.floor, self.ceil, meta.front, meta.back);
-            let dist = fixed::mul(self.range, frac);
-            if o.floors_differ
-                && fixed::gt(fixed::div(fixed::sub(o.bottom, self.shootz), dist), self.slope) {
-                hitline = true;
-            } else if o.ceilings_differ
-                && fixed::lt(fixed::div(fixed::sub(o.top, self.shootz), dist), self.slope) {
-                hitline = true;
-            }
-        }
+        let hitline = match opening_of(self.ctx, line) {
+            Option::None => true,
+            Option::Some(o) => {
+                let dist = fixed::mul(self.range, frac);
+                if o.floors_differ
+                    && fixed::gt(fixed::div(fixed::sub(o.bottom, self.shootz), dist), self.slope) {
+                    true
+                } else if o.ceilings_differ
+                    && fixed::lt(fixed::div(fixed::sub(o.top, self.shootz), dist), self.slope) {
+                    true
+                } else {
+                    false
+                }
+            },
+        };
         if !hitline {
             return true; // shot continues
         }
         // Hit line: the puff is pulled back 4 units along the trace.
-        let back = fixed::sub(frac, fixed::div(Fixed { enc: BIAS + 4 * 65536 }, self.range));
-        let z = fixed::add(self.shootz, fixed::mul(self.slope, fixed::mul(back, self.range)));
-        self.hit = Hit::Wall((line, point_along(self.dl, back), z));
+        let (p, z) = impact(
+            self.ctx, self.shootz, self.range, self.slope, frac, Fixed { enc: BIAS + 4 * 65536 },
+        );
+        self.hit = Hit::Wall((line, p, z));
         false
     }
 
     fn thing(ref self: Shooter, idx: u32, frac: Fixed) -> bool {
-        let t = self.mobjs.at(idx);
+        let t = match self.ctx.unbox().mobjs.get(idx) {
+            Option::Some(b) => b.unbox(),
+            Option::None => { return true; },
+        };
         if !has(*t.flags, MF_SHOOTABLE) {
             return true;
         }
@@ -460,9 +545,10 @@ impl ShooterTraverser of Traverser<Shooter> {
             return true; // shot under the thing
         }
         // Hit thing: the blood is pulled back 10 units along the trace.
-        let back = fixed::sub(frac, fixed::div(Fixed { enc: BIAS + 10 * 65536 }, self.range));
-        let z = fixed::add(self.shootz, fixed::mul(self.slope, fixed::mul(back, self.range)));
-        self.hit = Hit::Thing((idx, point_along(self.dl, back), z));
+        let (p, z) = impact(
+            self.ctx, self.shootz, self.range, self.slope, frac, Fixed { enc: BIAS + 10 * 65536 },
+        );
+        self.hit = Hit::Thing((idx, p, z));
         false
     }
 }
@@ -484,21 +570,22 @@ pub fn line_attack(
     distance: Fixed,
     slope: Fixed,
 ) -> Hit {
-    let t1 = mobjs.at(shooter);
+    let lv = level_of(w);
+    let t1 = match mobjs.get(shooter) {
+        Option::Some(b) => b.unbox(),
+        Option::None => { return Hit::Nothing; },
+    };
     let p1 = Point { x: *t1.x, y: *t1.y };
     let p2 = trace_end(p1, angle, distance);
+    let tr = trace_of(p1, p2);
     let mut s = Shooter {
-        mobjs,
-        l_packed: w.map.l_packed,
-        floor: w.floor,
-        ceil: w.ceil,
-        dl: DivLine { x: p1.x, y: p1.y, dx: fixed::sub(p2.x, p1.x), dy: fixed::sub(p2.y, p1.y) },
+        ctx: BoxTrait::new(ShotCtx { lv, mobjs, tr }),
         shootz: shoot_z(t1),
         range: distance,
         slope,
         hit: Hit::Nothing,
     };
-    traverse(w, mobjs, ref g, p1, p2, true, shooter, ref s);
+    traverse_in(lv, mobjs, ref g, p1, p2, true, shooter, ref s);
     s.hit
 }
 

@@ -230,17 +230,16 @@ pub fn in_blockmap(m: @Mobj) -> bool {
 /// *plus* its squash, on every access, every tic) and this is the cheaper
 /// shape for a list that is rebuilt once per tic anyway.
 pub fn replace(ref mobjs: Array<Mobj>, i: u32, m: Mobj) {
-    let old = mobjs.span();
-    let n = old.len();
+    let mut old = mobjs.span();
     let mut out: Array<Mobj> = array![];
-    let mut k: u32 = 0;
-    while k != n {
+    let mut k: u32 = super::maputl::opaque_zero(i);
+    while let Option::Some(o) = old.pop_front() {
         if k == i {
             out.append(m);
         } else {
-            out.append(*old.at(k));
+            out.append(*o);
         }
-        k += 1;
+        k = super::maputl::inc(k);
     }
     mobjs = out;
 }
@@ -259,18 +258,19 @@ pub fn push(ref mobjs: Array<Mobj>, m: Mobj) -> u32 {
 
 /// The index of the first removed slot, or [`NO_MOBJ`]. `doom_game` reuses
 /// it for a spawn once the list is full (O(n), cold path).
-pub fn first_free(mobjs: Span<Mobj>) -> u32 {
-    let n = mobjs.len();
-    let mut k: u32 = 0;
-    let mut found = NO_MOBJ;
-    while k != n {
-        if is_removed(mobjs.at(k)) {
-            found = k;
-            break;
+pub fn first_free(mut mobjs: Span<Mobj>) -> u32 {
+    let mut k: u32 = super::maputl::opaque_zero(mobjs.len());
+    loop {
+        match mobjs.pop_front() {
+            Option::Some(m) => {
+                if is_removed(m) {
+                    break k;
+                }
+                k = super::maputl::inc(k);
+            },
+            Option::None => { break NO_MOBJ; },
         }
-        k += 1;
     }
-    found
 }
 
 /// The record of a removed slot: keeps the index stable for every `target`

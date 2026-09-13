@@ -40,7 +40,7 @@ mod tests;
 pub mod world;
 
 pub use damage::{BASETHRESHOLD, DamageOutcome, damage_mobj, kill_mobj};
-pub use grid::{ThingGrid, link, new_grid, rebuild, things_in, unlink};
+pub use grid::{ThingGrid, link, new_grid, rebuild, relink, things_in, unlink};
 pub use hitscan::{
     AIMRANGE, Aim, Hit, Intercept, MELEERANGE, MISSILERANGE, aim_line_attack, bleeds, line_attack,
     path_traverse,
@@ -59,12 +59,12 @@ pub use movement::{
     z_movement,
 };
 pub use position::{
-    Location, link_thing, locate, place, set_thing_position, subsector_from_root, subsector_in_cell,
-    unset_thing_position,
+    Location, link_thing, locate, locate_boxed, place, set_thing_position, subsector_from_root,
+    subsector_in_cell, unset_thing_position,
 };
 pub use sight::{check_sight, check_sight_cached};
 pub use spawn::{
     FIREBALL, MTF_AMBUSH, SpawnZ, explode_missile, set_state, spawn_cell, spawn_map_thing,
     spawn_missile, spawn_mobj, spawn_player,
 };
-pub use world::{World, ceiling_of, floor_of, with_heights, world_of};
+pub use world::{Level, World, ceiling_of, floor_of, level_of, with_heights, world_of};
