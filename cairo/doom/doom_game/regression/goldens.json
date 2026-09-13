@@ -1,0 +1,1148 @@
+{
+  "schema": 1,
+  "provenance": {
+    "engine_commit": "91719f8fca61426077712b2052a19e8f8e804da4",
+    "scarb": "2.16.0",
+    "poseidon_py": "0.1.5",
+    "method": "initial characterization: exact dev/proving outputs, random cuts, independent D13/D14 oracle",
+    "seed": 20260913,
+    "identity": {
+      "dev": {
+        "genesis": {
+          "words": 51742,
+          "executable_sha256": "10f168cb01d56725a4ce1978c0341a68752bf2548930844b8788f83e20cb2920",
+          "bytecode_sha256": "60e4c5f4bcadd070c99ec9d9ac75a640572ca260c8be5206723adbd933044a85"
+        },
+        "step_tic": {
+          "words": 129877,
+          "executable_sha256": "cbd6b3918620d6eb2b0aa28ab6fc8c8788fa5c9bf2362efb0dd7c2e35d3fcc2b",
+          "bytecode_sha256": "ecb2e3c9908bdc742b239938bb7e276bf07b064aa6ef0d452a9f9379f4b5bcec"
+        },
+        "run_segment": {
+          "words": 129752,
+          "executable_sha256": "9980d957845b954cd88b4df6b34c9aca210f62e1256b96c1dd4c548cd968aabb",
+          "bytecode_sha256": "a42e3df06f0b61ca17bd658cf2329c80355efba5ee0811d18fc7a1ffaa2cab5d"
+        }
+      },
+      "proving": {
+        "genesis": {
+          "words": 47426,
+          "executable_sha256": "9a8a3dec248965aeb23145efd6efcf3dcbff1cbfecd7bfeecb15ed460c9fa9f1",
+          "bytecode_sha256": "ec5b45ed6a23c4fb23dcb87779b2b1e376d56efbf2e04c1d30ef8e33b73c6c1a"
+        },
+        "step_tic": {
+          "words": 112334,
+          "executable_sha256": "f9a36d53aaa121aa569b8c40aa0382751963e877e71c077a9a5c01694d761a55",
+          "bytecode_sha256": "b6067873baea631815beda83e3c98a005df2ebfe655636d96978dda0b41a462c"
+        },
+        "run_segment": {
+          "words": 110848,
+          "executable_sha256": "663028863fef87341e215928abd4e738817104167292655193e448544a57b021",
+          "bytecode_sha256": "e71f776d900d2b3773b7adc5e01126ff77a5c8c4c792e06d63325788ee4d7fc9"
+        }
+      }
+    }
+  },
+  "cases": {
+    "idle": {
+      "input_sha256": "97ad3616831c5a84a12b89f8216142096f310b278b8fbd88f97ea29df10b2234",
+      "status": 0,
+      "tic": 700,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267704320,
+        4311744512,
+        4294967296
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 143,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "9dec905da51673bd1e57c9a06e3eba694c4943ad580a9baf8f0800ebed6bb400",
+      "snapshot_sha256": "d404d070c5b14d73486518f2ada197e83c688e6866a380cf609f5d4dd97ff3cd",
+      "output_sha256": "3918ce85b9e49aecadfed9e344d6467f96cf03d9f9f3d629c91202dbc3c3b986",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x4c4c75a41a4086d3c766843c004b69e9460b64dfbec36107d95e0d3bedd5530",
+        "0x0",
+        "0x2bc",
+        "0x0",
+        "0x296f6711e82e6eec2aff07dc53199e49540e300c0e8f758e82a789376577ece",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "walk_lift": {
+      "input_sha256": "a71acc10d0253ddca8e2ebfd1a1a6d834e07ecc14cd218cfe9fcfb802a62d50d",
+      "status": 0,
+      "tic": 350,
+      "health": 77,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4326400433,
+        4312134047,
+        4286578688
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        1,
+        0
+      ],
+      "prng": 118,
+      "mrng": 1,
+      "state_felts": 6359,
+      "snapshot_felts": 2451,
+      "state_sha256": "c4200b1d033bed08334a6b87a10d1c5cef63fa0266c7d0592eb6413a2f0de1ee",
+      "snapshot_sha256": "5270b2e7ae75ce6a8ace775c53979a99ae88939fa3c4999aa250effaaae16597",
+      "output_sha256": "d38dcc4cde2050cc2a96a55ecf57908bf808824492c786c5d2e7d0c39c2b3372",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x7a7bf26fd116502fb0dc1d8fdbb435a4d92a10b4c44e6d2bf603e5f455e3489",
+        "0x0",
+        "0x15e",
+        "0x0",
+        "0x765fc14ffad4ece48bf8d33bd4ddfe1a382d01ce876bd40de9371dfa256c693",
+        "0x0",
+        "0x1",
+        "0x0"
+      ]
+    },
+    "door_pickups": {
+      "input_sha256": "49295573ca28644026222dc6662dc720c9881f094ae99e55c1d01672fba2169f",
+      "status": 0,
+      "tic": 350,
+      "health": 70,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4346560090,
+        4352724551,
+        4286578688
+      ],
+      "angle": 1073741824,
+      "stats": [
+        0,
+        3,
+        0
+      ],
+      "prng": 108,
+      "mrng": 1,
+      "state_felts": 6388,
+      "snapshot_felts": 2451,
+      "state_sha256": "c6cb0584c197279f1f56ca6f4e1f05d3046febc9bc81d7337cd4bd82776a81f1",
+      "snapshot_sha256": "b01ef466d65b2244e4d22227135a76970a85ae08e70e234f41fc4d273526f10f",
+      "output_sha256": "d5b190c3fdc4f31f95064d7dc6356e0579dd2d3aac0204ff3e5f54986a3461b1",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x95461d72f16ebf5529b477d5a4aff0cdeec8463f28d1b6e4718b2158706c78",
+        "0x0",
+        "0x15e",
+        "0x0",
+        "0x71a25db2fee6db2e0948605cb956fdeca55af137339bb5fd85d3edd19d05b0b",
+        "0x0",
+        "0x3",
+        "0x0"
+      ]
+    },
+    "fight_sweep": {
+      "input_sha256": "1c688797211ca0b393f2582486051ededa1821cfec67603f8ad3239e21c6043f",
+      "status": 0,
+      "tic": 700,
+      "health": 92,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        8,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4327581382,
+        4311857885,
+        4286578688
+      ],
+      "angle": 436207616,
+      "stats": [
+        1,
+        1,
+        0
+      ],
+      "prng": 88,
+      "mrng": 1,
+      "state_felts": 6379,
+      "snapshot_felts": 2462,
+      "state_sha256": "553f2dddb74b0a1e3f9d530cf01dcd6272586076704aa337c130099dcf45dba8",
+      "snapshot_sha256": "1bed0fe4111466adbe9ca375538542049f548f4bef6dffc2ad473298bc9e170a",
+      "output_sha256": "19a433313a1475685f11d3b1e2783d84674892ce2dd306af3fb3bceb3553bea4",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x38edbe028be102de655ec5056962f7a398d165a43cf866b4386ff4988d4bc0c",
+        "0x0",
+        "0x2bc",
+        "0x0",
+        "0x35e309eb32fb1b1fd86be32328393b434ec1c834db290d6c6985b7ce31f2cc8",
+        "0x1",
+        "0x1",
+        "0x0"
+      ]
+    },
+    "death": {
+      "input_sha256": "454cceafb707448f1feed995872ffc273045c5abf6994d9c6011568b928f4b93",
+      "status": 1,
+      "tic": 846,
+      "health": 0,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4340060256,
+        4308603306,
+        4286578688
+      ],
+      "angle": 117440512,
+      "stats": [
+        0,
+        2,
+        0
+      ],
+      "prng": 153,
+      "mrng": 1,
+      "state_felts": 6382,
+      "snapshot_felts": 2451,
+      "state_sha256": "b0127befc23f1ea7f51a5ba78e521c9b0bdc1d145b6479bb5766e07a61cd826a",
+      "snapshot_sha256": "426cda46e6ee9dc32b0cf715e05ab4d0cf7b140e9570786c87051a18cefe6348",
+      "output_sha256": "dc4021b83750fd2797f4324374effad57a545acdf7dab0fe479ac7f4f14329d3",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x40a34ffa5b3dfbcf4f57249e08a3ed024075d062300160ecd07100915396558",
+        "0x0",
+        "0x34e",
+        "0x1",
+        "0x545245aac1b39b4c82a83d6380a4e9df0eee93f1ad57f4bab416a03b3b80ea",
+        "0x0",
+        "0x2",
+        "0x0"
+      ]
+    },
+    "reverse_wall": {
+      "input_sha256": "ae519b4873c0832555ac9e577e2882875e5fa15a80619991d30fbd9de193b561",
+      "status": 0,
+      "tic": 180,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4262462817,
+        4311716680,
+        4294967296
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 26,
+      "mrng": 1,
+      "state_felts": 6360,
+      "snapshot_felts": 2462,
+      "state_sha256": "261307e404f6c73c00e50f64ad1b52b78e5fab8239e0d8017765b42b313533f9",
+      "snapshot_sha256": "0bd171c5bccca9088019ececa71cb3e00fa19040ba7e2dc2f4551cff44218991",
+      "output_sha256": "fc1a1e91cd6478fa1a4e4c80224e1444dce91d7e32e32f2759b9882399bfa637",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x685862e282711f4289f6a602857ec0ffb4c7d9510cf0d68055e79d13dc44053",
+        "0x0",
+        "0xb4",
+        "0x0",
+        "0xb2419264db13087613dd53e096cede200c9c617b47b6e763ea5ee9f766e2c4",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "strafe_left": {
+      "input_sha256": "bbd548143bd27636fbb280b7b5ff688499edcac4a884ec9f15f68cdc89e7b661",
+      "status": 0,
+      "tic": 140,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267670780,
+        4323276498,
+        4296015872
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 17,
+      "mrng": 1,
+      "state_felts": 6360,
+      "snapshot_felts": 2462,
+      "state_sha256": "8197b64c6745109c2ee6b6cfcd6fc654547cfe803e70bb165628cc810f293e45",
+      "snapshot_sha256": "978d9a934c7c234858a13edda85e6cf378047e82045a201bad7ef580be7eb0fa",
+      "output_sha256": "85a5032c041546fa4604fbace7dbbb2e95823c3943f5ab85842a710e6c4d52cb",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x7c8dae916c0374bceaa5e88317e84a85d96145e5f6fc1e27096961ac7538be3",
+        "0x0",
+        "0x8c",
+        "0x0",
+        "0x239eaee32c7c20b8cf7f6a25fbad22d19bc3889c08456484e6e8b5b2a0f99fe",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "strafe_right": {
+      "input_sha256": "53eac6182f209739a132fe20820801fc09a814eb6b04d98b2340c5e3dde91138",
+      "status": 0,
+      "tic": 145,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267736358,
+        4300212781,
+        4296015872
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 20,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "ecb55ea68a8ad55aea915e3d31366138805dab874f4d061bc29de43cbe5386c1",
+      "snapshot_sha256": "90459e6ba361ea8a905052db08a986b4ade755a791741cf36ce3820e979b1e22",
+      "output_sha256": "17724beb0479de058a2510d0f5dd925b13e78900cb048ebb763f1879faa30d31",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x4638a4c4c58f683271ad666860baf950a386ba5cffa5b15fe7de4cf28f75b4b",
+        "0x0",
+        "0x91",
+        "0x0",
+        "0x4f69af5ccf5a4cb5500582906c40cdb810480319ca8482d6941fdf57b784538",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "turn_clockwise": {
+      "input_sha256": "35ebe434aa4935f7326f86d2f86bed8e8d18cad279e8f139ab821052e81a35d4",
+      "status": 0,
+      "tic": 129,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267704320,
+        4311744512,
+        4294967296
+      ],
+      "angle": 33554432,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 14,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "cb77dce9bf18d2dc9877635771132427f1d56f90689ee7a3147fda54ab211b93",
+      "snapshot_sha256": "55583c2220afd340e1965746c896ce0ebfa41f8b01aa024c16a0f76cf324719a",
+      "output_sha256": "26d988421afed45a4f65e8c40e83a6cb47c318cc848451385629d9c50ea3929f",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x38d344554b885ef2e0c7c4c288bb83e6945470b1c48093f97a9a420581a847a",
+        "0x0",
+        "0x81",
+        "0x0",
+        "0x35019f8836c60b5870ba663558c17da1338f43e26d33c44c14200f5cf5941eb",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "reverse_turn": {
+      "input_sha256": "2f671f898ecc99cb3dcb8af47132f80dfd7ea2d2d04142fa40d9dd3b213b874c",
+      "status": 0,
+      "tic": 120,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4265712970,
+        4323277327,
+        4296015872
+      ],
+      "angle": 2281701376,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 14,
+      "mrng": 1,
+      "state_felts": 6360,
+      "snapshot_felts": 2462,
+      "state_sha256": "6b3c73632b0f212e7d151c735be3d4b3020b276b18748ff75cab2ecb43cb282f",
+      "snapshot_sha256": "dc31c154e90b9ef0865875b886bd7613d3b6a8a85609b7cd73f7721f3e4a9481",
+      "output_sha256": "09d8fd002c7ce25e239c20102d7ec5415411a444e1db835d9df00b443c1cc578",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0xae5fa602afcc3404361b4bc7f6d4c17d20131ad277758e7c56ec296b2d2c97",
+        "0x0",
+        "0x78",
+        "0x0",
+        "0x551a274c8aa4127f7e919e0e223f2355e7da23f81464351f2f4225b8a884729",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "diagonal_sprint": {
+      "input_sha256": "4000c76f16a7635a7fbee2ba7f962b901f1fb1c4e208e5d1118fa341e41d8d1f",
+      "status": 0,
+      "tic": 220,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4277138261,
+        4300212660,
+        4296015872
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 33,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "22e0b49917aea462f5288d67ed2d97c035d6a6195a8213e2375e428cdc08943b",
+      "snapshot_sha256": "f7832f5602b5188cdd70e0ccbff1ca4347f23986ac11d848f870021c45a15fce",
+      "output_sha256": "7c887ebc996393d2404e0fd9292ce864c664c33a34f467cac97ab754fe62108f",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x633de76b519669f3bd7bda965eb378e0d33f5f36d8c4504e32221084aeb0776",
+        "0x0",
+        "0xdc",
+        "0x0",
+        "0x54a9bfbccefa20a94c67684162bcb68777d2598c1d860f80a1e735f818a9121",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "zigzag": {
+      "input_sha256": "b329d9e289cb2bf1d719be320fcef97288590e7b24910795cc724457d0eaf476",
+      "status": 0,
+      "tic": 180,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4268540095,
+        4323271423,
+        4296015872
+      ],
+      "angle": 2013265920,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 26,
+      "mrng": 1,
+      "state_felts": 6360,
+      "snapshot_felts": 2462,
+      "state_sha256": "b2ecddda97419d6bbcee027476b62d5f7257217b3e41c41d775fb9c594b06cc3",
+      "snapshot_sha256": "b780855661608c45b8af4aa1ec2cfc2845d1f539717bd87555abd55df5c6474f",
+      "output_sha256": "1b5e4eb72bfdf47ab28b959c6b668e7c42088ecb68a8b66e8220292e9d995dca",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x2c8e5709b5c1fe66e435b8775dec1c20c9028e4bdf299075a510b9f91b90224",
+        "0x0",
+        "0xb4",
+        "0x0",
+        "0x367eb777ae831ec626a93891c7785e690a75974afbe87a2d4c35d00421ed886",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "coast_reverse": {
+      "input_sha256": "7572fc77aa9a7718556972ff30593d1bbc0b21ea0b839ddf013491244561d7ac",
+      "status": 0,
+      "tic": 200,
+      "health": 102,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4300213218,
+        4311750003,
+        4292345856
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        2,
+        0
+      ],
+      "prng": 105,
+      "mrng": 1,
+      "state_felts": 6363,
+      "snapshot_felts": 2440,
+      "state_sha256": "358d7a2dece95ca04da0a2e9961a657c46a10779c1bb98be9ca7482fa0c15035",
+      "snapshot_sha256": "11d36e1c20a20d9024bd5645b0026c8f60c10d283161ea7d21397eadf4f3c187",
+      "output_sha256": "26b568a2a1d0e021cc06e10e714da1f8be3ae9ceda20847d9a023366857e7743",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x32fca420787248ba97daba2796295023e9e20482ecf354f4509e888dca74501",
+        "0x0",
+        "0xc8",
+        "0x0",
+        "0x2b0a6d00346404ea0b1277ad761c05c1938b26d3d38ef8f40d4d604629a281",
+        "0x0",
+        "0x2",
+        "0x0"
+      ]
+    },
+    "pistol_spawn": {
+      "input_sha256": "75f500c085d4707032fd9f2aaca4804c419485640b69c2c052ffbd6853816868",
+      "status": 0,
+      "tic": 120,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        42,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267704320,
+        4311744512,
+        4294967296
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 36,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "a486ced2dc9772f609044a2beaaeeb63e9f768325a1112c68ca1adefe0156382",
+      "snapshot_sha256": "ce004e6c9e34654927bffecf3be34324a3337c741099f102c009cb67287b8bea",
+      "output_sha256": "c6c3099c4e5bb48088c86800fc8904f8f16b260f29ba70f4a3b4778dd5daa65b",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x7fb90d794a7cbb3718ac5dbe1afbedd0bc8719324d1e30d8aae28db563d1315",
+        "0x0",
+        "0x78",
+        "0x0",
+        "0x7be34a2c7675eafa4baa237a56a47bafad1f9bb185e9ea41a0633313c6783ea",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "fist_attack": {
+      "input_sha256": "9db5cbeb7a49b03f5f373cc56ab434726309642170cb7802d135efd5a4a66358",
+      "status": 0,
+      "tic": 131,
+      "health": 100,
+      "armor": 0,
+      "weapon": 0,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267704320,
+        4311744512,
+        4294967296
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 30,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "3fa40a8ccc6e288e3a5fdffe51f0abf7d78644ee305fb0b20e6296d68ae7970d",
+      "snapshot_sha256": "b5dcfe2c63dee563b4d44a3704b507e386c199b83aab00144e6c5c7d034542dc",
+      "output_sha256": "690e1accbff1284dd52038d17a31290bbe20ba3b8df06aa09deca78022c66070",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x75feb8ea32800ad40b3e7fc370a54989f33076da4f2204bd5cfa7a56a291c05",
+        "0x0",
+        "0x83",
+        "0x0",
+        "0x4c45f7935911e47f9e670bd8ea6bd719a90af0a3402252d895b79bb7b14a19a",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "pistol_taps": {
+      "input_sha256": "e63456aa652cd724994111647d59a7e232e0e4410514d6c1678288bc95ab127b",
+      "status": 0,
+      "tic": 132,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        45,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267704320,
+        4311744512,
+        4294967296
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 20,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "beb3cf31a03b235c64c91df889ad553ca37eaee4d4da9ddfcdbccb76cbb87844",
+      "snapshot_sha256": "e854d355fc329acb7bb59b6eb98fc4094f9dd37604016b2027f77b0e415717fa",
+      "output_sha256": "e95d6a536623ad02b914be675a7b9f6230873e443be42c73db1e158eae4ccdc9",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x37f10792999fc52605299a2e1fe5374e883047b1813ea29f1a05ee11c722ec4",
+        "0x0",
+        "0x84",
+        "0x0",
+        "0x1d7a9f380d67845f02a6b1b244774c518b329917a262a083be1dad63de403e8",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "weapon_requests": {
+      "input_sha256": "33779e496c5a93fd8a5f8751a5c51aed0ca9d28615f47c17727fd0eed8be289f",
+      "status": 0,
+      "tic": 123,
+      "health": 100,
+      "armor": 0,
+      "weapon": 0,
+      "ammo": [
+        48,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267704320,
+        4311744512,
+        4294967296
+      ],
+      "angle": 0,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 29,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "2554e5868ec5a4faeda1e3cc58eafdb120777efa30fd7e3b7157c4dd9e9ef8bd",
+      "snapshot_sha256": "f7f26afc911c14f3aa2c7b2a5780a0f4b2916b4975601e7d94a276149a924257",
+      "output_sha256": "e51281c7371dc28d9c4015344ab2c1021d87921fc8e64ed9b47078507c19ea71",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0xe3bb86ae502f8296c51f3ea4b6200b5bacec5a05ad7e41ea219fccd9dcbc2e",
+        "0x0",
+        "0x7b",
+        "0x0",
+        "0x3aa0d04243d90dd14c317adf99457f8296f5d44ea4b1a0af4b08a8061880f2c",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "door_without_use": {
+      "input_sha256": "b58b936f2a6cbd4de6edec251242de7770df10a9928e58edbfc1b115bee753ed",
+      "status": 0,
+      "tic": 350,
+      "health": 91,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4346747654,
+        4327471789,
+        4286578688
+      ],
+      "angle": 1073741824,
+      "stats": [
+        0,
+        3,
+        0
+      ],
+      "prng": 178,
+      "mrng": 1,
+      "state_felts": 6353,
+      "snapshot_felts": 2429,
+      "state_sha256": "c9f751b9cb71b1e0ee2503fb72fd455d983598dd62d001ddf7bd116cfa0aaf72",
+      "snapshot_sha256": "5f41716343ef0eab2f86bf710f5d192f51c8d225cbcbd035bf27120aebcd0125",
+      "output_sha256": "686341540a4c0be377a012371a00322f6ef1d986d6706cad7a79f7e29a78d739",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x38bd5f50e1f447ff7c318619769ea8efdfdc797118dc38991346b41caa1d97a",
+        "0x0",
+        "0x15e",
+        "0x0",
+        "0x14410832a4b07e4e16b64021f409b4601cdb69202f77d514f8395a67e76bd87",
+        "0x0",
+        "0x3",
+        "0x0"
+      ]
+    },
+    "door_held_use": {
+      "input_sha256": "09864f20d0fceaa9783ce33e07f6d44568114a3b7da30dd98f66c4bf7e4081a9",
+      "status": 0,
+      "tic": 350,
+      "health": 91,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4346747654,
+        4327471789,
+        4286578688
+      ],
+      "angle": 1073741824,
+      "stats": [
+        0,
+        3,
+        0
+      ],
+      "prng": 178,
+      "mrng": 1,
+      "state_felts": 6353,
+      "snapshot_felts": 2429,
+      "state_sha256": "c9f751b9cb71b1e0ee2503fb72fd455d983598dd62d001ddf7bd116cfa0aaf72",
+      "snapshot_sha256": "5f41716343ef0eab2f86bf710f5d192f51c8d225cbcbd035bf27120aebcd0125",
+      "output_sha256": "686341540a4c0be377a012371a00322f6ef1d986d6706cad7a79f7e29a78d739",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x38bd5f50e1f447ff7c318619769ea8efdfdc797118dc38991346b41caa1d97a",
+        "0x0",
+        "0x15e",
+        "0x0",
+        "0x28e1953c2e36b8a7239526718e2407efdebf19b67d4c3f3d0c3e4c3e069632a",
+        "0x0",
+        "0x3",
+        "0x0"
+      ]
+    },
+    "door_retreat": {
+      "input_sha256": "2329022eb2504c91bb668c532a946ca1ad1690308abca167c8050eb07e810220",
+      "status": 0,
+      "tic": 420,
+      "health": 46,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4345997110,
+        4333766265,
+        4286578688
+      ],
+      "angle": 1073741824,
+      "stats": [
+        0,
+        3,
+        0
+      ],
+      "prng": 31,
+      "mrng": 1,
+      "state_felts": 6390,
+      "snapshot_felts": 2473,
+      "state_sha256": "558069f0e0aa7d852b6d06b1e6d71b830a8dcdfafcd141471141554c1a454c83",
+      "snapshot_sha256": "617937c29ec4468d892e0dd56da03fbc11d8ed9f51cdcdeeb5e6f08965b1887c",
+      "output_sha256": "3e652efff5729576b72f05c52663e31b042540c1d028c7d743863425855b480b",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x240f748056ccd4206ba2ae752fca23b9a28ace8bb3ebe144d901479a5cf96ac",
+        "0x0",
+        "0x1a4",
+        "0x0",
+        "0x3f0ef70e46f6e6a23dab25fa5f242ad948820b74ab60f3c1bbd9183e3d5756c",
+        "0x0",
+        "0x3",
+        "0x0"
+      ]
+    },
+    "pickup_then_fire": {
+      "input_sha256": "10380aad9e74ffd2a334ea498952d233da98fdfec682906e7f25224c99954faf",
+      "status": 0,
+      "tic": 451,
+      "health": 31,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        43,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4345016355,
+        4351182846,
+        4286578688
+      ],
+      "angle": 4127195136,
+      "stats": [
+        0,
+        3,
+        0
+      ],
+      "prng": 224,
+      "mrng": 1,
+      "state_felts": 6468,
+      "snapshot_felts": 2506,
+      "state_sha256": "67ebea21e79daaf47e4ee0db4a31247342f7fdd0f64664416d89146b2cc267f3",
+      "snapshot_sha256": "030dd3c03ce4564dfbd19d4189ce53de622724c3a244a8961956fd85ba309ec8",
+      "output_sha256": "ad32b5825d8c00d83d3ae73cf53044a153a6f4b6271650867a3a90352abb88b6",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x9e4219ee3398cc7eabf0eff1475d117d8b3cc7284d608442047d0fb27df917",
+        "0x0",
+        "0x1c3",
+        "0x0",
+        "0x8ce24170d9240e1bcf0e2d3ecd2574bcd5bd2f206374bc99b5423e823d5763",
+        "0x0",
+        "0x3",
+        "0x0"
+      ]
+    },
+    "sprint_combat": {
+      "input_sha256": "d7cdfb3a5958ada48693c53cc4f6a21eb60c9e0681881adbc3674d6b41551fb5",
+      "status": 0,
+      "tic": 236,
+      "health": 91,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        42,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4330465717,
+        4308602626,
+        4286578688
+      ],
+      "angle": 1711276032,
+      "stats": [
+        1,
+        3,
+        0
+      ],
+      "prng": 191,
+      "mrng": 1,
+      "state_felts": 6376,
+      "snapshot_felts": 2429,
+      "state_sha256": "650fb5124aef62fd1df4a48ffbd42f3fd9be101e43e34a000bd1ba40e1523ff4",
+      "snapshot_sha256": "26b628f4965c66b341a2a2074724a0915bc48fd37bf37b8d3f737928cf59f1b3",
+      "output_sha256": "66da27d80ade53e639218c9295051d273330fb9612168c3b4f0862f93ccb0994",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x68230d5cbbaada8a00e589ad69cb11072563c7be5e5f5f2e0d17e6ceb501455",
+        "0x0",
+        "0xec",
+        "0x0",
+        "0x696b758e3bc6099150042aec0166aa8ba4345bd753a45f0fcceaec9266b8da4",
+        "0x1",
+        "0x3",
+        "0x0"
+      ]
+    },
+    "legal_extremes": {
+      "input_sha256": "ad45aa731ba0f1a518531792c256521cbc18418a020d71f024b2033690ba3447",
+      "status": 0,
+      "tic": 96,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        45,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267539108,
+        4310147872,
+        4294967296
+      ],
+      "angle": 3489660928,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 23,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "7425b8425833b0edf941bdede6ee46c354840a3b681664583ff27193d76bdcaa",
+      "snapshot_sha256": "61d90bd87ff223673d1f01ae73f3b1f0a7092c5f3c0848072a7f6064ee2902a2",
+      "output_sha256": "14e567f9180f2c8eb337b2497209c08c642037a7725dc89310adb92be2ed69c4",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x6578fa3999645ab8a22bb9b178af470736c916bdee42e4039e17160217f5561",
+        "0x0",
+        "0x60",
+        "0x0",
+        "0xdc0bf15a502727f024999b306049b8f3421c5590d8f09b4582da42bc542ee9",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "use_blocked_wall": {
+      "input_sha256": "2693d936a8f75ca96b8f280e4f0f5b30d9f25f8bdfcead8fb8ebe84c0433ba37",
+      "status": 0,
+      "tic": 101,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4267717945,
+        4300211873,
+        4296015872
+      ],
+      "angle": 3221225472,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 14,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "bffa89ca03263a6669391b83913ea80dd065aac97d9852a89c8c0255edd5eb6f",
+      "snapshot_sha256": "5224f7820eea9eef2ca9e403c410897e504c1410a8733a80911ad042110baf09",
+      "output_sha256": "c8613106d72302fe712acad0c1db0f40648e4975a22150ccde1cd498911fc3e9",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x6a293859a4ebf3a02423ed1f5a12d2dee546858bebb7c772f843ba7e5a690cf",
+        "0x0",
+        "0x65",
+        "0x0",
+        "0x736310ce96b1927d1d7b63d46a4f008156b377304c9464b39566444ac193ef5",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    "seeded_u32": {
+      "input_sha256": "dd99eec71e1f05a223905ef966a89027b274b92fe8e96ba8440f207ae4f5b212",
+      "status": 0,
+      "tic": 128,
+      "health": 100,
+      "armor": 0,
+      "weapon": 1,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "xyz": [
+        4276103623,
+        4319326347,
+        4296015872
+      ],
+      "angle": 1509949440,
+      "stats": [
+        0,
+        0,
+        0
+      ],
+      "prng": 29,
+      "mrng": 1,
+      "state_felts": 6362,
+      "snapshot_felts": 2462,
+      "state_sha256": "f8ede8e5072bc1dbcfdd02a72f06c12ae4cd4d232b534315f0258f26962b2889",
+      "snapshot_sha256": "069a4e893426d3d67df5b6a30a74b6be8ef462d2d706b3fd7f7c9275a9adccd3",
+      "output_sha256": "7614c47a917d9a82e91cdd5218addef56426e6b3842bc7718792203ccde6f5f8",
+      "d14": [
+        "0x1",
+        "0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a",
+        "0x74b09641d034f93fe049dcdb3cfade4f6f4c05c43be1a930539b69bb5dc5d11",
+        "0x0",
+        "0x80",
+        "0x0",
+        "0x79ecc50597ce3c7843591d4a5f6f2e49348b4cf943ecbe68ea88dabced0db48",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    }
+  }
+}
