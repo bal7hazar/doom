@@ -1,0 +1,331 @@
+{
+  "reference": {
+    "resources": {
+      "steps": 20694,
+      "max memory address": 20835,
+      "memory holes": 1,
+      "output_builtin": 2066,
+      "range_check_builtin": 2,
+      "execution": 16554,
+      "output": 2066,
+      "range_check": 2
+    },
+    "output_felts": 2066,
+    "output_sha256": "6f1f5f291319c712589b06cedd1a85e5c5ef77e1143449c447d84622ea99eba3"
+  },
+  "candidate": {
+    "resources": {
+      "steps": 86111,
+      "max memory address": 83973,
+      "memory holes": 348,
+      "range_check_builtin": 11015,
+      "output_builtin": 2066,
+      "execution": 64763,
+      "range_check": 11015,
+      "output": 2066
+    },
+    "output_felts": 2066,
+    "output_sha256": "6f1f5f291319c712589b06cedd1a85e5c5ef77e1143449c447d84622ea99eba3"
+  },
+  "identities": {
+    "reference": {
+      "sha256": "e540a3f17f914c338dbd22803e3480da8f92e0b4b7ed9439373bd50c5685f24c",
+      "sierra_sha256": "fcb1cbcb29a6fcfc4686f0510c73f9317d6bb54f57cdbed780db53e6ead1ad13",
+      "total_words": 2196,
+      "instruction_words": 114,
+      "constant_words": 2064,
+      "framing_words": 18
+    },
+    "candidate": {
+      "sha256": "6d21f20ebffaab81866eb42b750b181e22174a38cd11ae7b177adf6730a14a87",
+      "sierra_sha256": "5951e54ead5aa240764873796610a54c0af87c61c95134b192de16494ea82fa0",
+      "total_words": 757,
+      "instruction_words": 395,
+      "constant_words": 344,
+      "framing_words": 18
+    },
+    "inspect_decode": {
+      "sha256": "4ae51ceec3640b4b72c061af1f2fbdd930570c6fdf264e1ecb0e7f0a28aa660b",
+      "sierra_sha256": "ce627a814e1567799e0fc952ad941ad1ec7c9f59ef2a3d87d0afcf297fbedad0",
+      "total_words": 483,
+      "instruction_words": 466,
+      "constant_words": 0,
+      "framing_words": 17
+    }
+  },
+  "saved_words": 1439,
+  "extra_decode_steps": 65417,
+  "estimated_blake_steps_saved": 21225.25,
+  "passes_cost_filter": false,
+  "cases": [
+    {
+      "name": "empty",
+      "count": 0,
+      "expected": [
+        0,
+        0
+      ],
+      "resources": {
+        "steps": 124,
+        "max memory address": 607,
+        "memory holes": 4,
+        "range_check_builtin": 7,
+        "output_builtin": 2,
+        "execution": 103,
+        "range_check": 7,
+        "output": 2
+      }
+    },
+    {
+      "name": "one",
+      "count": 1,
+      "expected": [
+        0,
+        1,
+        2047
+      ],
+      "resources": {
+        "steps": 219,
+        "max memory address": 682,
+        "memory holes": 4,
+        "range_check_builtin": 15,
+        "output_builtin": 3,
+        "execution": 177,
+        "range_check": 15,
+        "output": 3
+      }
+    },
+    {
+      "name": "zero",
+      "count": 1,
+      "expected": [
+        0,
+        1,
+        0
+      ],
+      "resources": {
+        "steps": 219,
+        "max memory address": 682,
+        "memory holes": 4,
+        "range_check_builtin": 15,
+        "output_builtin": 3,
+        "execution": 177,
+        "range_check": 15,
+        "output": 3
+      }
+    },
+    {
+      "name": "six",
+      "count": 6,
+      "expected": [
+        0,
+        6,
+        2047,
+        2047,
+        2047,
+        2047,
+        2047,
+        2047
+      ],
+      "resources": {
+        "steps": 389,
+        "max memory address": 860,
+        "memory holes": 5,
+        "range_check_builtin": 40,
+        "output_builtin": 8,
+        "execution": 302,
+        "range_check": 40,
+        "output": 8
+      }
+    },
+    {
+      "name": "seven",
+      "count": 7,
+      "expected": [
+        0,
+        7,
+        2047,
+        2047,
+        2047,
+        2047,
+        2047,
+        2047,
+        9
+      ],
+      "resources": {
+        "steps": 484,
+        "max memory address": 935,
+        "memory holes": 5,
+        "range_check_builtin": 48,
+        "output_builtin": 9,
+        "execution": 376,
+        "range_check": 48,
+        "output": 9
+      }
+    },
+    {
+      "name": "partial-five",
+      "count": 5,
+      "expected": [
+        0,
+        5,
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "resources": {
+        "steps": 355,
+        "max memory address": 834,
+        "memory holes": 4,
+        "range_check_builtin": 35,
+        "output_builtin": 7,
+        "execution": 277,
+        "range_check": 35,
+        "output": 7
+      }
+    },
+    {
+      "name": "padding",
+      "count": 1,
+      "expected": [
+        1
+      ],
+      "resources": {
+        "steps": 183,
+        "max memory address": 649,
+        "memory holes": 1,
+        "range_check_builtin": 15,
+        "output_builtin": 1,
+        "execution": 146,
+        "range_check": 15,
+        "output": 1
+      }
+    },
+    {
+      "name": "highbits",
+      "count": 6,
+      "expected": [
+        1
+      ],
+      "resources": {
+        "steps": 303,
+        "max memory address": 782,
+        "memory holes": 2,
+        "range_check_builtin": 40,
+        "output_builtin": 1,
+        "execution": 231,
+        "range_check": 40,
+        "output": 1
+      }
+    },
+    {
+      "name": "u128max",
+      "count": 6,
+      "expected": [
+        1
+      ],
+      "resources": {
+        "steps": 308,
+        "max memory address": 782,
+        "memory holes": 2,
+        "range_check_builtin": 40,
+        "output_builtin": 1,
+        "execution": 231,
+        "range_check": 40,
+        "output": 1
+      }
+    },
+    {
+      "name": "truncated",
+      "count": 7,
+      "expected": [
+        1
+      ],
+      "resources": {
+        "steps": 102,
+        "max memory address": 583,
+        "memory holes": 1,
+        "range_check_builtin": 8,
+        "output_builtin": 1,
+        "execution": 80,
+        "range_check": 8,
+        "output": 1
+      }
+    },
+    {
+      "name": "surplus",
+      "count": 6,
+      "expected": [
+        1
+      ],
+      "resources": {
+        "steps": 117,
+        "max memory address": 594,
+        "memory holes": 1,
+        "range_check_builtin": 9,
+        "output_builtin": 1,
+        "execution": 91,
+        "range_check": 9,
+        "output": 1
+      }
+    },
+    {
+      "name": "empty-extra",
+      "count": 0,
+      "expected": [
+        1
+      ],
+      "resources": {
+        "steps": 102,
+        "max memory address": 583,
+        "memory holes": 1,
+        "range_check_builtin": 8,
+        "output_builtin": 1,
+        "execution": 80,
+        "range_check": 8,
+        "output": 1
+      }
+    },
+    {
+      "name": "bound",
+      "count": 2065,
+      "expected": [
+        1
+      ],
+      "resources": {
+        "steps": 67,
+        "max memory address": 558,
+        "memory holes": 1,
+        "range_check_builtin": 3,
+        "output_builtin": 1,
+        "execution": 55,
+        "range_check": 3,
+        "output": 1
+      }
+    },
+    {
+      "name": "u32max",
+      "count": 4294967295,
+      "expected": [
+        1
+      ],
+      "resources": {
+        "steps": 67,
+        "max memory address": 558,
+        "memory holes": 1,
+        "range_check_builtin": 3,
+        "output_builtin": 1,
+        "execution": 55,
+        "range_check": 3,
+        "output": 1
+      }
+    }
+  ],
+  "invalid_count_pairs": 4,
+  "base_commit": "0c8a3a8",
+  "decision": "NO-GO: additional VM work exceeds estimated Blake program-hash saving",
+  "estimated_net_steps_increase": 44191.75,
+  "source_sha256": "5df43de1045878c374a249456a6575e6fcb287d2f2ba5d58a64bb2de09fee310"
+}
