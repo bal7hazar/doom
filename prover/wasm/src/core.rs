@@ -31,13 +31,13 @@ use std::sync::OnceLock;
 
 use anyhow::{Context, Result, anyhow, bail};
 use cairo_air::CairoProof;
+use cairo_air::components::memory_address_to_id::MEMORY_ADDRESS_TO_ID_SPLIT as ADDRESS_TO_ID_SPLIT;
 use cairo_air::verifier::verify_cairo_ex;
 use cairo_lang_executable::executable::{EntryPointKind, Executable};
 use cairo_lang_execute_utils::program_and_hints_from_executable;
 use cairo_lang_runner::Arg;
 use cairo_program_runner_lib::types::{
-    Cairo1Executable, HashFunc, PrivacySimpleBootloaderInput, SimpleBootloaderInput, Task,
-    TaskSpec,
+    Cairo1Executable, HashFunc, PrivacySimpleBootloaderInput, SimpleBootloaderInput, Task, TaskSpec,
 };
 use cairo_program_runner_lib::utils::get_cairo_run_config;
 use cairo_program_runner_lib::{ProgramInput, cairo_run_program};
@@ -55,7 +55,6 @@ use stwo::prover::backend::BackendForChannel;
 use stwo::prover::backend::simd::SimdBackend;
 use stwo_cairo_adapter::ProverInput;
 use stwo_cairo_adapter::adapter::adapt;
-use cairo_air::components::memory_address_to_id::MEMORY_ADDRESS_TO_ID_SPLIT as ADDRESS_TO_ID_SPLIT;
 use stwo_cairo_common::preprocessed_columns::preprocessed_trace::PreProcessedTraceVariant;
 use stwo_cairo_prover::prover::{ChannelHash, LiftingSizePolicy, ProverParameters, prove_cairo};
 use stwo_cairo_serialize::CairoSerialize;
@@ -63,7 +62,8 @@ use stwo_cairo_serialize::CairoSerialize;
 /// `crates/stwo_run_and_prove_recursive_tree/test_data/leaf_simple_bootloader_compiled.json` of
 /// the monorepo @ cd7bc5f (sha256 5e2befae…82f5 of the JSON), gzip -9. The leaf program of the
 /// `canonical_small` circuit registry.
-static LEAF_BOOTLOADER_GZ: &[u8] = include_bytes!("../resources/leaf_simple_bootloader_compiled.json.gz");
+static LEAF_BOOTLOADER_GZ: &[u8] =
+    include_bytes!("../resources/leaf_simple_bootloader_compiled.json.gz");
 
 fn leaf_bootloader_program() -> Result<&'static Program> {
     static PROGRAM: OnceLock<Program> = OnceLock::new();
@@ -114,14 +114,23 @@ pub fn default_params() -> ProverParameters {
 
 /// Parses a `ProverParameters` JSON; an empty/blank string selects [`DEFAULT_PARAMS_JSON`].
 pub fn parse_params(params_json: &str) -> Result<ProverParameters> {
-    let src = if params_json.trim().is_empty() { DEFAULT_PARAMS_JSON } else { params_json };
+    let src = if params_json.trim().is_empty() {
+        DEFAULT_PARAMS_JSON
+    } else {
+        params_json
+    };
     let params: ProverParameters =
         serde_json::from_str(src).context("invalid prover_params JSON")?;
-    let FriConfig { log_blowup_factor, .. } = params.fri_config;
+    let FriConfig {
+        log_blowup_factor, ..
+    } = params.fri_config;
     if !(1..=16).contains(&log_blowup_factor) {
         bail!("log_blowup_factor must be in [1, 16]");
     }
-    if matches!(params.preprocessed_trace, PreProcessedTraceVariant::Canonical) {
+    if matches!(
+        params.preprocessed_trace,
+        PreProcessedTraceVariant::Canonical
+    ) {
         tracing::warn!(
             "preprocessed_trace = canonical needs > 16 GiB and cannot fit in Memory64; use \
              canonical_small"
@@ -171,7 +180,10 @@ pub fn parse_args(args_json: &str) -> Result<Vec<Arg>> {
     }
     let values: Vec<serde_json::Value> =
         serde_json::from_str(args_json).context("invalid args JSON (expected an array)")?;
-    values.iter().map(|v| parse_felt(v).map(Arg::Value)).collect()
+    values
+        .iter()
+        .map(|v| parse_felt(v).map(Arg::Value))
+        .collect()
 }
 
 fn hex(f: &Felt252) -> String {
@@ -197,12 +209,19 @@ pub fn execute(executable_json: &str, args_json: &str) -> Result<(ProverInput, E
         .context("executable has no Bootloader entry point")?;
     let (program, string_to_hint) = program_and_hints_from_executable(&executable, entrypoint)
         .context("failed to build program from executable")?;
-    let task = Task::Cairo1Program(Cairo1Executable { program, user_args, string_to_hint });
+    let task = Task::Cairo1Program(Cairo1Executable {
+        program,
+        user_args,
+        string_to_hint,
+    });
     let bootloader_input = PrivacySimpleBootloaderInput {
         simple_bootloader_input: SimpleBootloaderInput {
             fact_topologies_path: None,
             single_page: true,
-            tasks: vec![TaskSpec { task: Rc::new(task), program_hash_function: HashFunc::Blake }],
+            tasks: vec![TaskSpec {
+                task: Rc::new(task),
+                program_hash_function: HashFunc::Blake,
+            }],
         },
         // Empty path = keep the preimage in the execution scopes only (patch proving-0001).
         output_preimage_dump_path: PathBuf::new(),
@@ -226,7 +245,9 @@ pub fn execute(executable_json: &str, args_json: &str) -> Result<(ProverInput, E
         .map_err(|e| anyhow!("cairo-vm run failed: {e}"))?
     };
 
-    let resources = runner.get_execution_resources().map_err(|e| anyhow!("{e}"))?;
+    let resources = runner
+        .get_execution_resources()
+        .map_err(|e| anyhow!("{e}"))?;
     let mut builtins: Vec<(String, usize)> = resources
         .builtin_instance_counter
         .iter()
@@ -236,9 +257,16 @@ pub fn execute(executable_json: &str, args_json: &str) -> Result<(ProverInput, E
 
     let output = {
         let mut buf = String::new();
-        runner.vm.write_output(&mut buf).map_err(|e| anyhow!("{e}"))?;
+        runner
+            .vm
+            .write_output(&mut buf)
+            .map_err(|e| anyhow!("{e}"))?;
         buf.lines()
-            .map(|l| Felt252::from_dec_str(l.trim()).map(|f| hex(&f)).unwrap_or_else(|_| l.to_string()))
+            .map(|l| {
+                Felt252::from_dec_str(l.trim())
+                    .map(|f| hex(&f))
+                    .unwrap_or_else(|_| l.to_string())
+            })
             .collect::<Vec<_>>()
     };
     let output_preimage: Vec<String> = runner
@@ -262,123 +290,282 @@ pub fn execute(executable_json: &str, args_json: &str) -> Result<(ProverInput, E
     Ok((prover_input, stats))
 }
 
-/// What the prover would have to build for a given `ProverInput`, derived from the adapter's
-/// `ExecutionResources` — i.e. *without* generating any trace (milliseconds, no extra memory).
-///
-/// The client uses this to size segments: a segment is provable by the recursion leaf as long as
-/// every AIR component stays within `2^20` rows (the registry's `trace_log_size = 20`), which is
-/// **not** the same as "at most 2^20 steps": the steps are spread over one component per opcode.
+/// AIR height estimates for a valid input returned by [`execute`], without generating traces.
+/// Variable-height components determine the planner's remaining room; fixed tables and lifting
+/// are reported separately. None of these counters is a RAM or proof-success guarantee.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceSummary {
-    /// VM steps = number of state transitions (sum of the per-opcode counters).
     pub n_steps: usize,
-    /// Per-opcode instance counts — one AIR component each, `count` rows.
     pub opcodes: Vec<(String, usize)>,
-    /// Per-builtin instance counts (after the adapter's padding to a power of two).
+    /// Builtin counts after adapter padding; output is public memory, not its own AIR component.
     pub builtins: Vec<(String, usize)>,
-    /// Unique aggregator inputs per aggregator-backed builtin (pedersen/poseidon).
     pub unique_aggregator_inputs: Vec<(String, usize)>,
-    /// Rows of the `memory_address_to_id` component.
     pub memory_address_to_id: usize,
-    /// Rows of the `memory_id_to_big` table, *before* the `opt_n_id_to_big_components` split.
     pub memory_id_to_big: usize,
-    /// Rows of the `memory_id_to_small` component.
     pub memory_id_to_small: usize,
-    /// Rows of the `verify_instruction` component (unique pc values).
     pub verify_instruction: usize,
-    /// Largest component row count derivable from the counters above, and the name of the
-    /// component that reaches it.
+    /// Auxiliary variable-height component counts before each component's own padding.
+    pub auxiliary_components: Vec<(String, usize)>,
+    /// Largest variable-height component, excluding fixed lookup tables and lifting floors.
     pub max_component_rows: usize,
     pub max_component: String,
-    /// `ceil(log2(max_component_rows))` — the `trace_log_size` the proof will end up with, unless
-    /// a component this summary cannot see (padding, range-check/multiplicity components) is
-    /// taller. Compare with `ProofStats::max_log_size`, which is exact but only known after
-    /// proving.
     pub log_max_component_size: u32,
-    /// Whether that fits the leaf registry (`trace_log_size <= 20`).
+    /// Largest fixed lookup-table height (log2 rows), not a variable planner budget.
+    pub fixed_component_log_size: u32,
+    /// Largest Seq(log_size) actually requested by a component. In particular Blake G and
+    /// Poseidon round/cube components do not request a Seq of their own height.
+    pub max_sequence_log_size: u32,
+    /// Required Seq and Pedersen tables are available in the selected preprocessing variant.
+    pub fits_preprocessed_trace: bool,
+    /// Estimated registry key after the selected lifting policy, excluding FRI blowup.
+    pub estimated_trace_log_size: u32,
+    /// Height, preprocessing, lifting and big-table count checks for the current `doom` log20
+    /// registry. Does not validate all cryptographic parameters, multiplicities or available RAM.
     pub fits_leaf_registry: bool,
-    /// How many `memory_id_to_big` components the table needs; the parameters allow
-    /// `opt_n_id_to_big_components` (16 for the leaf), and proving panics above that.
     pub n_memory_id_to_big_components: usize,
 }
 
+const LEAF_REGISTRY_LOG_SIZE: u32 = 20;
+
 fn log2_ceil(n: usize) -> u32 {
-    if n <= 1 { 0 } else { usize::BITS - (n - 1).leading_zeros() }
+    if n <= 1 {
+        0
+    } else {
+        usize::BITS - (n - 1).leading_zeros()
+    }
 }
 
-/// Rows a component with `n` entries actually gets: padded to a power of two, at least one SIMD
-/// lane row (`N_LANES = 16`), which is what every witness generator does.
+/// Witness generators pad nonempty variable traces to a power of two and at least 16 lanes.
+/// Saturation makes an unrepresentable synthetic count fail the height check rather than wrap.
 fn component_rows(n: usize) -> usize {
-    n.max(16).next_power_of_two()
+    n.max(16).checked_next_power_of_two().unwrap_or(usize::MAX)
 }
 
-/// Computes a [`ResourceSummary`] from a `ProverInput`. `opt_n_id_to_big_components` of the
-/// parameters is taken into account (it splits the `memory_id_to_big` table into that many
-/// components).
+/// Computes heights using the exact active-row/padded-row dependency rules at proving cd7bc5f.
 pub fn resources(input: &ProverInput, params: &ProverParameters) -> ResourceSummary {
     let _s = tracing::info_span!("resources").entered();
-    let r = stwo_cairo_adapter::ExecutionResources::from_prover_input(input);
-    let mut opcodes: Vec<(String, usize)> =
-        r.opcodes_instance_counter.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    summarize_resources(
+        stwo_cairo_adapter::ExecutionResources::from_prover_input(input),
+        params,
+    )
+}
+
+fn requires_sequence(name: &str) -> bool {
+    matches!(
+        name,
+        "blake_compress_opcode"
+            | "memory_address_to_id"
+            | "memory_id_to_big"
+            | "memory_id_to_small"
+            | "poseidon_aggregator"
+            | "pedersen_aggregator_window_bits_9"
+            | "pedersen_aggregator_window_bits_18"
+            | "add_mod_builtin"
+            | "bitwise_builtin"
+            | "mul_mod_builtin"
+            | "pedersen_builtin"
+            | "pedersen_builtin_narrow_windows"
+            | "poseidon_builtin"
+            | "range_check96_builtin"
+            | "range_check_builtin"
+            | "ec_op_builtin"
+    )
+}
+
+fn summarize_resources(
+    r: stwo_cairo_adapter::ExecutionResources,
+    params: &ProverParameters,
+) -> ResourceSummary {
+    let mut opcodes: Vec<_> = r
+        .opcodes_instance_counter
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     opcodes.sort();
-    let mut builtins: Vec<(String, usize)> =
-        r.builtin_instance_counter.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut builtins: Vec<_> = r
+        .builtin_instance_counter
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     builtins.sort();
-    let mut unique_aggregator_inputs: Vec<(String, usize)> =
-        r.unique_aggregator_inputs.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut unique_aggregator_inputs: Vec<_> = r
+        .unique_aggregator_inputs
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     unique_aggregator_inputs.sort();
 
-    // How many rows each component ends up with, from the witness generators:
-    //
-    // * one component per opcode, `next_pow2(count)` rows, and the same for `verify_instruction`;
-    // * `memory_address_to_id` splits its table over `MEMORY_ADDRESS_TO_ID_SPLIT` (= 16) column
-    //   groups, so `next_pow2(len / 16)` rows;
-    // * `memory_id_to_small` is a single component of `next_pow2(len)` rows;
-    // * `memory_id_to_big` is cut into chunks of at most the preprocessed max size (2^20 with
-    //   `canonical_small`), at most `opt_n_id_to_big_components` of them;
-    // * builtins: one component per builtin, `next_pow2(instances)` rows (the adapter has already
-    //   padded the segments to powers of two).
     let big_chunk_rows = 1usize << params.preprocessed_trace.max_log_trace_size();
     let big_len = r.memory_tables_sizes.memory_id_to_big;
-    let id_to_big_rows = component_rows(big_len.min(big_chunk_rows));
+    let id_to_big_count = big_len.min(big_chunk_rows);
     let n_id_to_big_components = big_len.div_ceil(big_chunk_rows).max(1);
-
-    let mut candidates: Vec<(String, usize)> =
-        opcodes.iter().map(|(k, v)| (k.clone(), component_rows(*v))).collect();
-    candidates.extend(builtins.iter().map(|(k, v)| (k.clone(), component_rows(*v))));
+    let mut candidates: Vec<_> = opcodes
+        .iter()
+        .filter(|(_, n)| *n > 0)
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
+    candidates.extend(
+        builtins
+            .iter()
+            .filter(|(k, n)| *n > 0 && k != "output_builtin")
+            .map(|(k, v)| (k.clone(), *v)),
+    );
+    // Address zero is excluded by memory_address_to_id::ClaimGenerator::new.
     candidates.push((
         "memory_address_to_id".into(),
-        component_rows(r.memory_tables_sizes.memory_address_to_id.div_ceil(ADDRESS_TO_ID_SPLIT)),
+        r.memory_tables_sizes
+            .memory_address_to_id
+            .saturating_sub(1)
+            .div_ceil(ADDRESS_TO_ID_SPLIT),
     ));
-    candidates.push(("memory_id_to_big".into(), id_to_big_rows));
+    candidates.push(("memory_id_to_big".into(), id_to_big_count));
     candidates.push((
         "memory_id_to_small".into(),
-        component_rows(r.memory_tables_sizes.memory_id_to_small),
+        r.memory_tables_sizes.memory_id_to_small,
     ));
-    candidates.push(("verify_instruction".into(), component_rows(r.verify_instruction)));
-    let (max_component, max_component_rows) = candidates
-        .into_iter()
-        .max_by_key(|(_, v)| *v)
-        .unwrap_or_else(|| ("none".to_string(), 0));
+    candidates.push(("verify_instruction".into(), r.verify_instruction));
 
+    let mut auxiliary_components = Vec::new();
+    let mut add = |name: &str, active: usize| {
+        if active > 0 {
+            auxiliary_components.push((name.to_owned(), active));
+        }
+    };
+    let blake = r
+        .opcodes_instance_counter
+        .get("blake_compress_opcode")
+        .copied()
+        .unwrap_or(0);
+    // components/blake_compress_opcode.rs forwards n_active_rows to 10 rounds and 8 XORs;
+    // blake_round.rs forwards its n_active_rows to 8 Gs, without propagating trace padding.
+    add("blake_round", blake.saturating_mul(10));
+    add("blake_g", blake.saturating_mul(80));
+    add("triple_xor_32", blake.saturating_mul(8));
+
+    let builtin = |name: &str| r.builtin_instance_counter.get(name).copied().unwrap_or(0);
+    let aggregator = |name: &str| {
+        let instances = builtin(name);
+        if instances == 0 {
+            (0, 0)
+        } else {
+            // from_prover_input always supplies this key. Older counter fixtures can omit it;
+            // all builtin instances are a conservative bound on distinct aggregator inputs.
+            let unique = r
+                .unique_aggregator_inputs
+                .get(name)
+                .copied()
+                .unwrap_or(instances);
+            (unique, component_rows(unique))
+        }
+    };
+    let (poseidon_unique, poseidon) = aggregator("poseidon_builtin");
+    // poseidon_aggregator.rs forwards its *padded* size A. The two chain generators forward
+    // active rows, so cubes = 2A + 3*(27A) + 3*(8A), not padded chain heights times three.
+    add("poseidon_aggregator", poseidon_unique);
+    add(
+        "poseidon_3_partial_rounds_chain",
+        poseidon.saturating_mul(27),
+    );
+    add("poseidon_full_round_chain", poseidon.saturating_mul(8));
+    add("cube_252", poseidon.saturating_mul(107));
+    add("range_check_252_width_27", poseidon.saturating_mul(83));
+
+    let (pedersen_unique, pedersen) = aggregator("pedersen_builtin");
+    let wide_pedersen = params.preprocessed_trace == PreProcessedTraceVariant::Canonical;
+    let (pedersen_aggregator, pedersen_partial, windows) = if wide_pedersen {
+        (
+            "pedersen_aggregator_window_bits_18",
+            "partial_ec_mul_window_bits_18",
+            28,
+        )
+    } else {
+        (
+            "pedersen_aggregator_window_bits_9",
+            "partial_ec_mul_window_bits_9",
+            56,
+        )
+    };
+    // Both Pedersen aggregators forward their padded size; EC-op forwards its padded segment.
+    add(pedersen_aggregator, pedersen_unique);
+    add(pedersen_partial, pedersen.saturating_mul(windows));
+    add(
+        "partial_ec_mul_generic",
+        builtin("ec_op_builtin").saturating_mul(252),
+    );
+    auxiliary_components.sort();
+    candidates.extend(auxiliary_components.iter().cloned());
+
+    // Fixed range-check/bitwise tables are always present; their maximum is log20. The wide
+    // Pedersen points table is log23. Many columns/multiplicities do not multiply table height.
+    let fixed_component_log_size = if wide_pedersen && pedersen > 0 {
+        23
+    } else {
+        20
+    };
+
+    let max_sequence_log_size = candidates
+        .iter()
+        .filter(|(name, _)| requires_sequence(name))
+        .map(|(_, rows)| log2_ceil(component_rows(*rows)))
+        .max()
+        .unwrap_or(0)
+        // range_check_20 always requests Seq20; the wide Pedersen points table uses Seq23.
+        .max(fixed_component_log_size);
+    let has_pedersen_tables = pedersen == 0
+        || params.preprocessed_trace != PreProcessedTraceVariant::CanonicalWithoutPedersen;
+    let fits_preprocessed_trace = max_sequence_log_size
+        <= params.preprocessed_trace.max_log_trace_size()
+        && has_pedersen_tables;
+    // Break equal padded-height ties by the raw count so the named maximum also gives the
+    // planner the true continuous utilisation, not a smaller count in the same power-of-two bin.
+    let (max_component, max_count) = candidates
+        .into_iter()
+        .max_by_key(|(_, count)| (component_rows(*count), *count))
+        .unwrap_or_else(|| ("none".to_string(), 0));
+    let max_component_rows = component_rows(max_count);
     let log_max_component_size = log2_ceil(max_component_rows);
+
+    let trace_log = log_max_component_size.max(fixed_component_log_size);
+    let preprocessed_log = params.preprocessed_trace.max_log_trace_size();
+    let blowup = params.fri_config.log_blowup_factor;
+    let (estimated_trace_log_size, valid_lifting) = match params.lifting_size_policy {
+        LiftingSizePolicy::Auto => (trace_log, true),
+        LiftingSizePolicy::AtLeastPreprocessed => (trace_log.max(preprocessed_log), true),
+        LiftingSizePolicy::Fixed(size) => (
+            size.saturating_sub(blowup),
+            size >= trace_log.saturating_add(blowup)
+                && size >= preprocessed_log.saturating_add(blowup),
+        ),
+    };
     ResourceSummary {
         n_steps: opcodes.iter().map(|(_, v)| *v).sum(),
         opcodes,
         builtins,
         unique_aggregator_inputs,
         memory_address_to_id: r.memory_tables_sizes.memory_address_to_id,
-        memory_id_to_big: r.memory_tables_sizes.memory_id_to_big,
+        memory_id_to_big: big_len,
         memory_id_to_small: r.memory_tables_sizes.memory_id_to_small,
         verify_instruction: r.verify_instruction,
+        auxiliary_components,
         max_component_rows,
         max_component,
         log_max_component_size,
-        fits_leaf_registry: log_max_component_size <= 20
+        fixed_component_log_size,
+        max_sequence_log_size,
+        fits_preprocessed_trace,
+        estimated_trace_log_size,
+        fits_leaf_registry: estimated_trace_log_size <= LEAF_REGISTRY_LOG_SIZE
+            && preprocessed_log <= LEAF_REGISTRY_LOG_SIZE
+            && fits_preprocessed_trace
+            && valid_lifting
             && n_id_to_big_components <= params.opt_n_id_to_big_components.unwrap_or(usize::MAX),
         n_memory_id_to_big_components: n_id_to_big_components,
     }
 }
+
+#[cfg(test)]
+#[path = "sizing_tests.rs"]
+mod sizing_tests;
 
 pub fn prover_input_to_bytes(input: &ProverInput) -> Result<Vec<u8>> {
     let _s = tracing::info_span!("serialize prover_input").entered();
@@ -404,13 +591,13 @@ pub struct ProofStats {
     /// reads off the proof to pick its verifier circuit (`registry.leaf_verifiers[trace_log_size]`,
     /// 20 for the `doom` registry).
     pub trace_log_size: u32,
-    /// Largest *base trace* component of the claim, in log2 rows. This is the quantity a segment
-    /// must keep ≤ 20: above it the whole proof lifts to 2^21 and the registry rejects it. It is
-    /// the exact counterpart of [`ResourceSummary::log_max_component_size`].
+    /// Largest base-trace component of the claim, in log2 rows, including fixed lookup tables.
+    /// ResourceSummary reports the variable maximum and fixed floor separately. Above log20
+    /// the proof is outside the current `doom` registry, even when its preprocessing fits.
     pub max_trace_component_log_size: u32,
-    /// Max log size over *every* tree of the claim, the preprocessed one included — with
-    /// `canonical_small` this is 20 for any trace, so it says nothing about the segment size.
-    /// Kept because S2 reported it.
+    /// Max log size over every tree of the claim, including preprocessing. With
+    /// `canonical_small` this is at least 20, and larger when a trace component exceeds log20.
+    /// This includes fixed floors and cannot measure the planner's variable utilisation.
     pub max_log_size: u32,
     /// Log size of every base-trace component, descending.
     pub component_log_sizes: Vec<u32>,
@@ -432,9 +619,8 @@ where
         felts.len()
     };
     let cfg = proof.extended_stark_proof.proof.config;
-    // `TreeVec` = [preprocessed columns used, base trace, interaction trace]. Only the base trace
-    // says how big the segment is; the preprocessed entries are the fixed 2^20 of
-    // `canonical_small`, which is why `max_log_size` alone cannot be used to size a segment.
+    // TreeVec = [preprocessed columns used, base trace, interaction trace]. Base traces also
+    // include fixed lookup tables, so neither maximum alone measures variable utilisation.
     let log_sizes = proof.claim.log_sizes();
     let max_log_size = log_sizes.iter().flatten().copied().max().unwrap_or(0);
     let mut component_log_sizes: Vec<u32> =

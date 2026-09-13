@@ -2,7 +2,10 @@
 
 > Mis à jour le 2026-09-13 : monstres `8471b7e`, contrôles CI `375f092`, joueur `06058b1` intégrés.
 > CI : oracle Python installé explicitement ; reproductibilité WASM ARM64 réparée (`30f8d77`).
-> Rebuild local conforme aux hashes existants et cinq preuves de smoke vérifiées ; validation GitHub en attente.
+> CI générale et WASM GitHub vertes ; chaîne de preuve du jeu réel validée via le registre expérimental log21.
+> AIR complet et admission des reprises intégrés (`d848951`), 193 tests client verts ; nouvelle reconstruction GitHub à vérifier.
+> P1.9 en intégration : workspace 554 tests verts, puis suite game portée à 57 tests verts ; budgets D2/D29 non atteints.
+> Fuzz ponctuel : 10 000 tics réels sans divergence sur la référence `b11fd7f` ; campagne nocturne P1.10 restante.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
@@ -53,7 +56,7 @@ aucun déploiement Sepolia/mainnet n'a été lancé. Logs initiaux : `/tmp/hellp
   pas une cotation actuelle. **C3 : critère PLAN ≤ 10 min, objectif opérationnel D2 ≤ 5 min** après partie.
 - R1/R5 : mesures favorables sur M2 Max 64 GB et programmes de référence ; le vrai jeu, la contention
   jeu/preuve et le matériel 16 GB restent à valider en P3.7. Pas de nouveau changement de gameplay
-  de gameplay avant le profil S8. D30 clarifie seulement les métriques de bytecode.
+  avant les leviers du profil S8. D30 clarifie seulement les métriques de bytecode.
 
 Branches récupérées :
 
@@ -61,9 +64,15 @@ Branches récupérées :
 |---|---|---|
 | `s7-monsters-bytecode` / `agent-a6ac67f3ed7fc7f8f` | **intégrée par `8471b7e`** ; 55 tests et replay 700 tics inchangé validés ; ticker 14 209 mots sous `proving` | format/build/511 tests/graphe verts après merge ; limite de domaine D3 à `tic ≥ 2^29` confiée à P1.9 |
 | `s8-player-bytecode` / `agent-ae639d60352cb6412` | **intégrée par `06058b1`**, HEAD récupéré/finalisé `273cb1a` ; 132 tests et checksum 350 tics inchangés | attribution source 18 830 mots proving ; différence historique harnais 20 354 (+354 sur 20 k), publiée séparément (D30) |
-| `worktree-agent-a3f0a4e676dba3186` | `df1888d` contient C2, les deux styles et garde D3 ; profil en cours, preuve native expirée | frontière/performance sur `codex/state-boundary-perf`, ordre dégâts/armure sur `codex/player-damage-order` ; agent P1.9 conserve profil et preuve |
+| `worktree-agent-a3f0a4e676dba3186` | `b11fd7f` assemble C2, garde D3, frontières optimisées et armure par impact | repris sur `codex/game-integration` (`8e1d041`) : 554 tests / 23 cibles, format/build/graphe et REUSE 1 609 fichiers verts ; taille 116 287 mots, cible 100 k encore manquée |
 
-Vague active : P1.9/profil, frontière état/rendu et correction dégâts/armure en parallèle.
+Vague active : nouvelle passe frontière/bytecode (`codex/game-boundary-sizing`) et admission du
+wrapper (`codex/wrapper-admission` : hash programme, D14, vérifieur natif autonome). Les compteurs
+AIR sont intégrés sur `main` ; le parcours monstres est assemblé dans `codex/game-integration`.
+Les passes frontière et armure sont relues et assemblées sur la branche
+d’intégration ; `main` conserve encore les squelettes. Le complément P1.9 `50e3c2f` ajoute six
+régressions de frontières : **57 tests game verts** après intégration, smoke CI `genesis 0`,
+codec et actionlint verts ; aucun changement de code de production après `b11fd7f`.
 L'orchestrateur tranche les leviers R2 à partir du programme complet. Ensuite : P1.10 et Worker/contrôles/écrans client,
 puis P3.7. Sepolia nécessite toujours une décision explicite du sponsor.
 
@@ -87,7 +96,7 @@ sans isolation repli mono **33,4 s** ; **cinq preuves vérifiées**, 755 280 fel
 arithmétique k14). Chromium utilise 1,83/1,96 GiB. Le smoke construit désormais son exécutable Cairo
 et rapporte le hash du fichier réellement chargé. `actionlint`, syntaxe JS et REUSE verts.
 **CI générale entièrement verte sur `83af5dd`**, run `34749101091` : les six jobs passent,
-y compris les nouvelles suites et E2E. Workflow WASM `34749101097` encore en build ARM64. L'échec de démarrage sans job `34748732776` n'est pas reproduit.
+y compris les nouvelles suites et E2E. **Workflow WASM [34749101097](https://github.com/bal7hazar/doom/actions/runs/34749101097) entièrement vert** : build ARM64 reproductible, smokes Node et Chromium, repli sans isolation. L’échec de démarrage sans job `34748732776` n’est pas reproduit.
 
 Joueur intégré par **`06058b1`** : 132 tests inchangés, checksum **4760390154965462** sur 350 tics,
 couverture agent **93,7 %** (hors adaptateur `player_tic`, dont les tests ordinaires passent),
@@ -121,19 +130,60 @@ vérifiée en 42,225 s / 11,524 GiB linéaires**, mais `trace_log_size = 21` ré
 `resources()`. Le composant fautif est **`blake_g`**, confirmé par décodage de la preuve bincode ;
 **incompatible avec le registre `doom` actuel** malgré validité locale. Le registre expérimental
 `doom_21` construit le circuit correspondant (75,83 s / 17,90 GiB RSS max ; 25,99 GiB empreinte
-mémoire macOS). Validation du repli final en cours, aucun défaut production modifié. Logs Blake :
+mémoire macOS). **Repli final vérifié** : racine 95 325 felts, vérifieur Cairo existant
+5 333 257 steps, recomposition indépendante des huit sorties exacte. D32 réouvre la voie log21,
+sans modifier les défauts produit ni les plafonds. Détails dans [S9](spikes/S9-proof-sizing.md). Logs Blake :
 `/tmp/hellproof-audit-20260913/hash-cost/`.
 
-**Profil exact baseline P1.9** : coûts par itération VM, frontière exclue, sans moyenne de chunks.
-Idle 700 tics : moyenne/p99 **52 414/56 260** ; marche 350 : **87 126/131 418** ; porte 350 :
-**105 347/208 981** ; combat 700 : **102 196/194 236** ; mort 846 : **79 851/145 099**. D2 reste
-hors cible indépendamment de l'optimisation ABI. Les copies de contexte et reconstructions doivent
-être distinguées des traversées de gameplay dans les leviers S8 avant arbitrage UX.
+**P1.9 assemblé, après les corrections** (`b11fd7f`) : `run_segment` **116 287 mots proving**,
+`step_tic` 117 839, genesis 47 563. Frontière sans tic **288 045 steps** contre 528 154 avant
+optimisation (−45,5 %), même ABI/felts et validations conservées. Profil exact de **2 946 tics**,
+frontière exclue : moyenne **83 003**, p99 **168 038**. Par replay (moyenne/p99) : idle
+52 850/56 703, marche 87 569/131 720, porte 105 811/209 329, combat 102 731/194 790,
+mort 80 303/145 561. D2 (12 k/p99 25 k) et D29 (100 k mots) restent hors cible.
+Campagne root complète : seul `doom_game` échoue sur trois budgets hash/sérialisation ;
+les autres crates passent. Aucune rebaseline pour masquer ces dépassements.
 
-**Correction de gameplay en cours dans P1.9** : l'armure était appliquée après agrégation des dégâts
-des monstres. Cela change l'arrondi par impact et peut déclencher une mort avant absorption, puis
-rétablir la santé trop tard. Une ligne dédiée déplace l'absorption à chaque impact, avant les effets
-de douleur/mort, et vérifie les attaques suivantes et le RNG. Schémas d'état conservés.
+**C2 et armure corrigés sur la branche d’intégration** : ordre exact de grille engagé/restauré,
+garde haute horloge D3, absorption avant douleur/mort à chaque impact. Les tests couvrent deux
+attaquants, épuisement, arrondis, attaques suivantes et RNG. Deux pins du replay porte corrigent
+un défaut distinct : un puff de mur attribuait à tort le dernier attaquant au joueur. Comparaison
+indépendante : un seul felt d’état change (attaquant 132 → 64), les quatre autres replays sont stables.
+
+**Chromium réel (S9)** : trois preuves à quatre threads vérifiées **40,167–48,128 s / 11,524 GiB**,
+préimages exacts. Mono : premier essai arrêté à 150 s ; second vérifié **136,425 s / 11,449 GiB**
+avec échéance plus longue. Hôte 64 GiB, aucun jeu concurrent ; les plafonds ne changent pas.
+
+**Correction AIR intégrée par `d848951`** (`4309399`, `5ed01d0`, `962cbb4`, `97a2443`) : 43 hauteurs variables confrontées aux
+claims de preuve, 11 tests Rust dont VM réelle. `blake_g` est correctement annoncé à log21,
+`fits_leaf_registry=false`, prétraitement admissible. Planificateur corrigé pour utiliser les
+compteurs auxiliaires bruts et rester conservateur sur un maximum inconnu. Les anciens compteurs
+sont refusés ; chaque preuve, reprise comprise, réexécute et revalide ses ressources. Un refus
+conserve le segment sans lancer `prove` ni essayer un autre nombre de threads. **193 tests client
+verts sans saut et build vert**, revérifiés par l’orchestrateur sur `main`. Rebuild Docker ARM64
+779,2 s : nouveaux hashes Linux mono `3e94a4c0…479a5`, threads `fdb977ad…4277c`, vérifiés par
+l’orchestrateur ; hashes macOS historiques conservés. Les deux nouveaux modules reproduisent
+les compteurs du programme réel et ses 43 hauteurs. Cinq preuves k14 vérifiées : Node mono/4 threads,
+Chromium mono/4 threads et fallback sans isolation. Reconstruction GitHub indépendante restante.
+
+**Parcours monstres optimisé en intégration** (`a2343cb`, merge `883efbb`) : ticker idle
+46 802 → **34 765 steps** (−25,7 %), combat au tic 493 136 183 → **123 418** (−9,4 %).
+Le programme intégré passe à **115 814 mots** ; `step_tic` 117 366. Les gros contextes passent
+par pointeur, sans changer les règles de jeu. Équivalence exacte sur **247 comparaisons par profil**
+dev/proving, dont cinq replays et 118 frontières sérialisées. Revalidation root : **56 tests monstres
+et 57 tests game verts**, build proving vert. Les copies de chaque Mobj restent un levier distinct.
+
+**Fuzz ponctuel de frontière réussi**, référence immuable `b11fd7f` : **10 000 tics réellement
+avancés**, 157 séquences, dix épisodes, seed `20260913`, Scarb 2.16/proving, 900 s. Exécution entière
+contre découpage aléatoire : état, rendu et statut exactement identiques ; tous les felts état/rendu
+restent < 2^72. Contrôles périodiques de frontière vide et de chaînage D14 verts, aucun ABORT.
+Ce passage porte sur la référence antérieure à l’optimisation du parcours monstres, conserve cinq
+replays et n’installe pas encore le fuzz nocturne P1.10. Traces : `/tmp/hellproof-audit-20260913/fuzz/`.
+
+**Taxe fixe encore bloquante** : sur cet exécutable intégré, le WASM Blake exécute **2 224 712 /
+2 297 659 / 2 505 814 steps pour 0 / 1 / 4 tics**. Même sans tic, il dépasse le plafond threads
+1,5 M ; quatre tics dépassent aussi 2,3 M mono. Les 16 137 compressions Blake imposent log21
+à `blake_g`. Une migration de registre seule ne résout donc ni le découpage ni le temps réel.
 
 ## Terminé (mergé sur `main`)
 

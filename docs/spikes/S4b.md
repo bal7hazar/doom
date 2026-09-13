@@ -1,5 +1,10 @@
 # S4b — Trois mesures ciblées sur la route récursive (F4, D4, R2-A12, R1-A5)
 
+> **Erratum du 2026-09-13 (S9/D32)** : le NO-GO universel de §3.2 est infirmé. Un vrai
+> `doom_run` avec Blake produit une preuve `canonical_small` log21 (`blake_g`), repliée par
+> `doom_21` puis vérifiée par le vérifieur Cairo existant. `seq_21` ne bloque que les composants
+> qui la demandent. Les mesures ci-dessous restent historiques ; voir [S9](S9-proof-sizing.md).
+
 > Suite de [S4](S4.md), vague 3 du [G0](../G0.md) §5. Mesures du **2026-09-12** sur la même
 > machine et le même commit épinglé. Répertoire de travail : [`spikes/s4/`](../../spikes/s4).
 

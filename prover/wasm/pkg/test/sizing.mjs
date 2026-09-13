@@ -3,9 +3,9 @@
 //
 //   node test/sizing.mjs [--n 100000,181371,272280] [--params ../harness/params/leaf.json]
 //
-// A segment is provable by the recursion leaf while `log_max_component_size <= 20`; above that the
-// prover panics with "Preprocessed column Seq(21) is missing from static allocation" (the
-// `canonical_small` preprocessed trace only has sequences up to 2^20).
+// The current registry accepts trace_log_size20. Larger components can exceed this registry
+// without requiring Seq21 (e.g. Blake G); preprocessing availability and registry fit differ.
+// This reports the loaded artifact's estimates; rebuild it to pick up AIR sizing corrections.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +22,7 @@ const paramsFile = opt("params", null);
 const params = paramsFile ? fs.readFileSync(paramsFile, "utf8") : undefined;
 
 const executable = fs.readFileSync(
-  path.join(here, "../../harness/programs/steps_k/main.executable.json"),
+  path.join(here, "../../harness/programs/steps_k/target/dev/main.executable.json"),
   "utf8",
 );
 
