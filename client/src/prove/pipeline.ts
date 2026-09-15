@@ -154,6 +154,7 @@ export class ProofPipeline {
   private stopping = false;
   private hardStopping = false;
   private flushing = false;
+  private pendingFlush: { ticCount: number; promise: Promise<void> } | undefined;
   private loopPromise: Promise<void> | null = null;
   private wake: (() => void) | null = null;
   private chain: ChainResult | null = null;
@@ -281,17 +282,25 @@ export class ProofPipeline {
     this.wake?.();
   }
 
-  /** Persists the journal. Called on a timer, on `finish()` and on `stop()`. */
+  /** Persists the journal. Called on a timer, on `finish()` and on `stop()`.
+   * Idempotent: a journal already persisted in full is not written again, and a
+   * failed write leaves it marked unflushed so the next call retries it.
+   */
   async flushJournal(): Promise<void> {
     if (!this.run) return;
-    this.flushedTics = this.journal.length;
-    await this.store.putInputs({
-      runId: this.run.id,
-      ticCount: this.journal.length,
-      packed: [...this.journal.completeFelts],
-      tail: [...this.journal.tailWords],
-    });
-    this.run = { ...this.run, ticCount: this.journal.length };
+    const ticCount = this.journal.length;
+    if (ticCount === this.flushedTics) return;
+    if (this.pendingFlush?.ticCount === ticCount) return this.pendingFlush.promise;
+    const record = { runId: this.run.id, ticCount, packed: [...this.journal.completeFelts], tail: [...this.journal.tailWords] };
+    const promise = (async () => {
+      try {
+        await this.store.putInputs(record);
+        this.flushedTics = ticCount;
+        if (this.run) this.run = { ...this.run, ticCount };
+      } finally { if (this.pendingFlush?.ticCount === ticCount) this.pendingFlush = undefined; }
+    })();
+    this.pendingFlush = { ticCount, promise };
+    return promise;
   }
 
   /**
@@ -403,6 +412,11 @@ export class ProofPipeline {
     if (!this.flushing && candidate < wanted) return false;
 
     const prover = await this.ensureProver();
+    // Same guard as proveSegment: a hard stop drops the prover, and nothing measured
+    // by a dropped prover may plan a boundary or persist an admission failure.
+    const checkActive = () => {
+      if (this.hardStopping || this.prover !== prover || prover.isDead) throw new Error("planning cancelled by hard stop");
+    };
     const index = this.segments.length;
     const previous = this.segments[index - 1];
     const hIn = previous?.output ? previous.output.hOut : normalizeFelt(run.genesis);
@@ -413,14 +427,19 @@ export class ProofPipeline {
     let probes = 0;
     for (;;) {
       probes++;
+      checkActive();
       const words = this.journal.slice(ticStart, ticStart + candidate);
       const request = { hIn, ticStart, ticCount: candidate, words, index };
       const args = this.program.prepareArgs ? await this.program.prepareArgs(request) : this.program.encodeArgs(request);
+      checkActive();
       this.emitProgress(index, "executing", startedAt);
       const executed = await prover.execute(executable, args);
+      checkActive();
       this.program.validateOutput?.(args, executed.stats.output_preimage);
       await this.yieldToGame();
+      checkActive();
       const summary = await prover.resources(executed.input);
+      checkActive();
       const verdict = this.planner.judge(candidate, summary, this.threads);
 
       if (verdict.verdict === "accept") {

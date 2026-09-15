@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ExecutionStats,
   ProofStats,
@@ -552,6 +552,61 @@ it.each(["reject", "late success"])("hard stop during threaded prove prevents re
   expect(pipeline.segmentRecords[0]?.stage).toBe("failed");
   expect(pipeline.segmentRecords[0]?.retriedSingleThread).toBe(false);
   expect(await store.getProof(run.id, 0)).toBeUndefined(); expect(pipeline.state.proved).toBe(0);
+});
+
+
+it.each(["reject", "late success"])("hard stop during planning execute plans nothing and keeps the journal (%s)", async outcome => {
+  let notify!: () => void, release!: () => void, resources = 0;
+  const started = new Promise<void>(resolve => { notify = resolve; });
+  const { pipeline } = makePipeline({}, { createProver: () => {
+    const p = new FakeProver({ seen: new Set() }), execute = p.execute.bind(p), summary = p.resources.bind(p), terminate = p.terminate.bind(p);
+    p.execute = (executable, args) => {
+      notify();
+      return new Promise((resolve, reject) => {
+        release = () => outcome === "reject" ? reject(new Error("prover worker terminated by hard stop")) : void execute(executable, args).then(resolve, reject);
+      });
+    };
+    p.resources = input => { resources++; return summary(input); };
+    p.terminate = () => { terminate(); release?.(); }; return p;
+  } });
+  const run = await pipeline.attach(); await pipeline.appendTics([7]);
+  const proving = pipeline.proveAll(); await started;
+  const stopping = pipeline.stop(true);
+  await expect(Promise.all([proving, stopping])).resolves.toBeDefined();
+  expect(FakeProver.instances).toBe(1); expect(FakeProver.terminations).toBe(1);
+  expect(FakeProver.executes).toBe(outcome === "reject" ? 0 : 1); expect(resources).toBe(0); expect(FakeProver.proves).toBe(0);
+  expect(pipeline.segmentRecords).toHaveLength(0); expect(await store.listSegments(run.id)).toHaveLength(0);
+  expect(pipeline.state.running).toBe(false); expect(pipeline.state.error).toMatch(/hard stop/);
+  const persisted = (await store.getRun(run.id))!;
+  expect(persisted.ticsPlanned).toBe(0); expect(persisted.segments ?? 0).toBe(0); expect(persisted.admissionFailure).toBeUndefined();
+  expect(await store.getInputs(run.id)).toMatchObject({ ticCount: 1, tail: [7] });
+});
+
+
+it("repeated hard stops never rewrite an unchanged journal, and a failed flush is retried", async () => {
+  const puts = vi.spyOn(store, "putInputs");
+  let game = [11, 12];
+  const { pipeline } = makePipeline({}, { program: { ...fakeProgram, journalWords: () => [...game] } });
+  const run = await pipeline.attach(); await pipeline.appendTics(game);
+  expect(puts).not.toHaveBeenCalled();
+  await pipeline.stop(true); expect(puts).toHaveBeenCalledTimes(1);
+  await pipeline.stop(true); expect(puts).toHaveBeenCalledTimes(1);
+  // The acknowledged tail arrives once; the disposing stop that follows has nothing to write.
+  game = [11, 12, 13];
+  await pipeline.syncGameJournal(); expect(puts).toHaveBeenCalledTimes(2);
+  await Promise.all([pipeline.stop(true), pipeline.flushJournal()]); expect(puts).toHaveBeenCalledTimes(2);
+  expect(puts.mock.calls.map(([record]) => record.ticCount)).toEqual([2, 3]);
+  expect(await store.getInputs(run.id)).toMatchObject({ ticCount: 3, tail: [11, 12, 13] });
+  // Two flushes of the same length in flight share one write.
+  game = [11, 12, 13, 14]; await pipeline.appendTics([14]);
+  await Promise.all([pipeline.flushJournal(), pipeline.stop(true)]); expect(puts).toHaveBeenCalledTimes(3);
+  // A write that fails leaves the journal unflushed: the next stop persists it.
+  await pipeline.appendTics([15]);
+  puts.mockRejectedValueOnce(new Error("IndexedDB unavailable"));
+  await expect(pipeline.flushJournal()).rejects.toThrow("IndexedDB unavailable");
+  expect((await store.getInputs(run.id)).ticCount).toBe(4);
+  await pipeline.stop(true); expect(puts).toHaveBeenCalledTimes(5);
+  expect(await store.getInputs(run.id)).toMatchObject({ ticCount: 5, tail: [11, 12, 13, 14, 15] });
 });
 
 

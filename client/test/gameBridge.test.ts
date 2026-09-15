@@ -57,6 +57,36 @@ describe("real game proof bridge lifecycle", () => {
     expect(s.pipeline.syncGameJournal).toHaveBeenCalled(); expect(s.dispose).toHaveBeenCalled();
     expect(createSession.mock.calls[1]![1]).toBe("persisted"); await bridge.dispose();
   });
+  it("retires a session with one hard stop, then the journal copy, then dispose, in that order", async () => {
+    const order: string[] = [], stopped = deferred<void>(), synced = deferred<void>();
+    const s = session("ordered");
+    vi.mocked(s.pipeline.stop).mockImplementation(async hard => { order.push(`stop(${String(hard)})`); await stopped.promise; });
+    vi.mocked(s.pipeline.syncGameJournal).mockImplementation(async () => { order.push("sync"); await synced.promise; });
+    vi.mocked(s.dispose).mockImplementation(async () => { order.push("dispose"); });
+    const notify = vi.fn();
+    const bridge = new GameProofBridge({ createProgram: async () => program(), createSession: async () => s, notify });
+    bridge.observe(journal("a")); await bridge.open();
+    bridge.suspend(); bridge.suspend(); // retiring twice cannot stop or dispose twice
+    expect(order).toEqual(["stop(true)"]); expect(bridge.session).toBeUndefined();
+    await Promise.resolve(); await Promise.resolve(); expect(order).toEqual(["stop(true)"]);
+    stopped.resolve(); await vi.waitFor(() => expect(order).toEqual(["stop(true)", "sync"]));
+    expect(s.dispose).not.toHaveBeenCalled();
+    synced.resolve(); await bridge.settle();
+    expect(order).toEqual(["stop(true)", "sync", "dispose"]);
+    expect(s.pipeline.stop).toHaveBeenCalledOnce(); expect(s.dispose).toHaveBeenCalledOnce();
+    expect(notify).not.toHaveBeenCalledWith(expect.stringContaining("retained"));
+    await bridge.dispose(); expect(s.dispose).toHaveBeenCalledOnce();
+  });
+  it("still copies the journal and disposes when the hard stop fails to persist", async () => {
+    const order: string[] = [], s = session("failing"), notify = vi.fn();
+    vi.mocked(s.pipeline.stop).mockImplementation(async () => { order.push("stop"); throw new Error("IndexedDB unavailable"); });
+    vi.mocked(s.pipeline.syncGameJournal).mockImplementation(async () => { order.push("sync"); });
+    vi.mocked(s.dispose).mockImplementation(async () => { order.push("dispose"); });
+    const bridge = new GameProofBridge({ createProgram: async () => program(), createSession: async () => s, notify });
+    bridge.observe(journal("a")); await bridge.open(); await bridge.dispose();
+    expect(order).toEqual(["stop", "sync", "dispose"]);
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("IndexedDB unavailable"));
+  });
   it("coalesces overlapping acknowledged journal synchronization", async () => {
     const s = session("id"), done = deferred<void>();
     vi.mocked(s.pipeline.syncGameJournal).mockReturnValueOnce(done.promise);

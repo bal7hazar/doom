@@ -42,7 +42,7 @@ test("real F4 retains acknowledged inputs, refuses AIR without prove, exports an
   const invalidJson = Buffer.from(JSON.stringify(invalidManifest)), invalid = Buffer.alloc(16 + invalidJson.length);
   bytes.copy(invalid, 0, 0, 16); invalid.writeUInt32LE(invalidJson.length, 12); invalidJson.copy(invalid, 16);
   await ui.getByLabel("Resume real proof file").setInputFiles({ name: "incompatible.hellproof", mimeType: "application/octet-stream", buffer: invalid });
-  await expect(ui.getByRole("status").first()).toContainText("identity");
+  await expect(ui.getByRole("status").first()).toContainText("Proof preparation unavailable: Error: incompatible Cairo journal identity. The game journal can still be exported.");
   await expect(ui.getByRole("button", { name: /^Export stored run/ })).toHaveCount(1);
   const preserved = page.waitForEvent("download");
   await ui.getByRole("button", { name: /^Export stored run/ }).click();

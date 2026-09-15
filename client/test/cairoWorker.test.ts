@@ -193,6 +193,30 @@ describe("main-thread Worker client", () => {
     await client.restore(saved); expect(client.viewMobjId).toBe(9);
     expect(client.journal!.ticEnd).toBe(41); client.dispose();
   });
+  it("refuses a foreign journal identity before any init, leaving the live VM and journal untouched", async () => {
+    const backend = new Backend(), initialize = backend.initialize.bind(backend), loads: (Uint8Array | undefined)[] = [];
+    backend.initialize = (initial?: Uint8Array) => { loads.push(initial); return initialize(initial); };
+    const { client } = clientPort(backend); await client.init(); await client.resume();
+    for (let i = 0; i < 3; i++) await client.advance(i);
+    await client.pause();
+    const journal = client.journal!, loaded = structuredClone(client.loadedIdentity), tic = client.latest!.snapshot.tic;
+    const foreign = journal.export();
+    foreign.identity = { ...foreign.identity, hashes: { ...foreign.identity.hashes, wasm: "e".repeat(64) } };
+    await expect(client.restore(foreign)).rejects.toThrow("identity differs");
+    expect(loads).toHaveLength(1); expect(backend.restarts).toBe(0);
+    expect(client.journal).toBe(journal); expect(journal.length).toBe(3);
+    expect(client.loadedIdentity).toEqual(loaded); expect(client.latest!.snapshot.tic).toBe(tic);
+    await client.resume(); await client.advance(3); expect(client.journal!.length).toBe(4);
+    client.dispose();
+    // A client with nothing loaded learns the identity at genesis and never loads the foreign checkpoint.
+    const fresh = new Backend(), freshInit = fresh.initialize.bind(fresh), freshLoads: (Uint8Array | undefined)[] = [];
+    fresh.initialize = (initial?: Uint8Array) => { freshLoads.push(initial); return freshInit(initial); };
+    const other = clientPort(fresh).client;
+    await expect(other.restore(foreign)).rejects.toThrow("identity differs");
+    expect(freshLoads).toEqual([undefined]); expect(fresh.restarts).toBe(0);
+    expect(other.journal!.length).toBe(0); expect(other.journal!.ticEnd).toBe(0);
+    other.dispose();
+  });
   it("a late resume acknowledgement cannot undo a newer pause", async () => {
     const { client } = clientPort(); await client.init();
     const resume = client.resume(), pause = client.pause();

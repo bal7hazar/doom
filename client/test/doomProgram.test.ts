@@ -120,7 +120,7 @@ describe("real program preparation contract", () => {
     // though its gameplay state/D14 format is the same.
     const legacyRun = { ...run, programIdentity: JSON.stringify(legacyDoomIdentity) };
     const before = JSON.stringify(legacyRun);
-    await expect(createDoomProgram({ resume: { run: legacyRun, words }, preparation: port() })).rejects.toThrow(/identity/);
+    await expect(createDoomProgram({ resume: { run: legacyRun, words }, preparation: port() })).rejects.toThrow("incompatible Cairo journal identity");
     expect(JSON.stringify(legacyRun)).toBe(before);
     expect(legacyDoomIdentity.artifacts.wasm).toBe(pins.wasm);
     expect(legacyDoomIdentity.artifacts.glue).toBe(pins.glue);
