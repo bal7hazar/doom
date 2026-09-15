@@ -431,19 +431,48 @@ Trois options, à décider avant toute nouvelle campagne de preuve :
 Sans décision, la prochaine vague utile reste O1 puis O3 (gain à gameplay
 identique, moins de segments quel que soit le choix).
 
-### En cours à la rédaction
+### Vague O1 fusionnée — `945143e`
 
-Vague **O1** (worktree `wt/o1`, branche `wave/o1-actors`, inclut `6e0c0b0`) :
-liste d'acteurs dérivée non sérialisée, itération du ticker sur ces indices,
-reconstruction par tranches ; gain visé ≥ 13 000 steps/tic, équivalence exacte
-exigée, mesure avant/après sur les cinq scénarios. Si elle n'est pas fusionnée
-à la lecture de ce document, vérifier `git worktree list` et `git branch`.
+Liste d'acteurs dérivée (`doom_monsters::actors`, `GameState.actors` non
+sérialisé) : le ticker n'itère plus que sur les indices `MF_COUNTKILL | MF_MISSILE`,
+les tranches passives sont copiées par pointeur (`copy_run`, ~12 steps/slot, sans
+`slice` ni site de panique), `awake_count` et `first_free` portés par l'index,
+rescan conservateur dès qu'un patch change une classe. Inclut `refresh_heights`
+sans `Span::at`. Équivalence exacte : goldens, coupes variables, D14 et schéma 2
+inchangés ; `index == scan` et `first_free` vérifiés à chaque tic sur fight,
+door et death ; hash final identique entre run porté et run qui jette l'index.
+
+| Scénario | Avant moy / p99 | Après moy / p99 |
+|---|---|---|
+| idle (700) | 26 386 / 29 541 | 20 870 / 24 053 |
+| walk (350) | 50 510 / 91 368 | 43 021 / 83 227 |
+| door (350) | 64 940 / 127 094 | 57 624 / 119 121 |
+| fight (700) | 63 231 / 153 494 | 55 525 / 145 470 |
+| death (846) | 47 140 / 91 883 | 39 266 / 83 861 |
+| **agrégat (2 946)** | **48 544 / 122 942** | **41 385 / 115 056** (−14,7 % / −6,4 %) |
+
+Coûts : `run_segment` proving **107 632 mots** (+684 ; `step_tic` 109 113,
+`genesis` 46 647) ; frontière `from_felts` +5–8 k steps par appel (un `scan`).
+Gain net dès deux tics par segment. Le gain est inférieur aux −13 000 estimés
+par le profil : la copie par pointeur des ~180 slots passifs subsiste (~2 200/tic)
+ainsi que la plomberie de boucle. Tests : doom_monsters 67 (+5), doom_game 66
+(+3 e1m1), tout le reste inchangé et vert ; le test interdit (> 15 Go) non rejoué.
+
+**Nouvelle identité à migrer** : SHA256 `run_segment` proving
+`d56e68b6570b95f5d2831bdf2a91d39092bfa693630f02e213da25ac1b6990d4` ;
+`step_tic`/`genesis` changent aussi ; `client/src/prove/doomArtifacts.ts` pointe
+encore `ee5f819`/`18100435…`. Tant que le sponsor n'a pas mesuré le task hash et
+migré les pins (comme `95939fa`), le client refuse ce moteur pour la preuve ;
+le jeu R5 (`prepare-sim.py`) doit être reconstruit avec les nouveaux exécutables.
+
+Prochaine vague moteur candidate : O3 (clip/`nofit` par cellules, −3 500 moyen,
+−10 000 p99 door), puis la frontière `from_felts` (−20–30 %).
 
 ### Reste à faire côté sponsor
 
 1. Ouvrir une PR de suivi `codex/game-integration` (ou cette branche) → `main`
    sans la fusionner, pour obtenir CI et `game-regression` à chaque push.
-2. Mesurer le task hash du nouveau `run_segment` après O1 et migrer
+2. Mesurer le task hash du nouveau `run_segment` (`d56e68b6…`) et migrer
    `doomArtifacts.ts` ; vérifier que le job `cairo` tient en 16 Go (la suite
    `doom_game` seule approche 14 Go ; prévoir `RAYON_NUM_THREADS` réduit ou un
    découpage par filtre).
