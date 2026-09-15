@@ -80,18 +80,37 @@ pub fn refresh_heights(
     }
     let mut f = floor;
     let mut c = ceil;
+    // `get`, not `Span::at`: no panic site on the hot path (S7 section 8.1).
+    // A mover's sector is always in range; the (unreachable) out-of-range
+    // read yields the mover's own height, so no write follows either.
     while let Option::Some(mv) = movers.pop_front() {
-        if moves_ceiling(*mv.kind) {
-            if *c.at(*mv.sector) != *mv.height.enc {
-                c = set_felt(c, *mv.sector, *mv.height.enc);
-            }
+        let sector = *mv.sector;
+        let height = *mv.height.enc;
+        let ceiling = moves_ceiling(*mv.kind);
+        let heights = if ceiling {
+            c
         } else {
-            if *f.at(*mv.sector) != *mv.height.enc {
-                f = set_felt(f, *mv.sector, *mv.height.enc);
+            f
+        };
+        if current(heights, sector, height) != height {
+            let updated = set_felt(heights, sector, height);
+            if ceiling {
+                c = updated;
+            } else {
+                f = updated;
             }
         }
     }
     (f, c)
+}
+
+/// `heights[sector]`, or `fallback` when the index is out of range.
+#[inline(always)]
+fn current(heights: Span<felt252>, sector: u32, fallback: felt252) -> felt252 {
+    match heights.get(sector) {
+        Option::Some(b) => *b.unbox(),
+        Option::None => fallback,
+    }
 }
 
 /// The sectors whose plane is moving: the things standing in them are
