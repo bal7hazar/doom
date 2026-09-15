@@ -65,6 +65,18 @@ fn owner() -> ContractAddress;  fn is_frozen() -> bool;
 fn add_version(version_id: u32, version: Version);         // owner, before the freeze
 fn set_genesis(version_id: u32, level_id: u32, genesis: felt252);
 fn freeze();                                               // one-way
+
+// Open prover (D35) — see cairo/doom_contracts/README.md "Open prover" for the full contract
+fn commit_run(version_id: u32, level_id: u32, packed: Span<felt252>, tics: u32,
+              bounty: u256) -> felt252;                    // player: publish the log, escrow the bounty
+fn reclaim(commitment_id: felt252);                        // player, after expiry, if unproved
+fn get_commitment(commitment_id: felt252) -> Commitment;
+fn commitment_of(version_id: u32, level_id: u32, player: ContractAddress,
+                 inputs_commitment: felt252) -> Commitment;
+fn commitment_count() -> u32;
+fn pending_commitments(cursor: u32, limit: u32) -> (Array<felt252>, u32);
+fn fee_token() -> ContractAddress;  fn expiry_blocks() -> u64;
+// constructor(owner, fee_token, expiry_blocks)
 ```
 
 `LeafOutput` is the ten public felts of D14 in `Serde` order — `version, h_in, h_out,
@@ -75,8 +87,17 @@ returns as `leaves[]`. `ReplayLog` is `{leaf_index, packed}`, the packed input l
 segment (7 tics per felt).
 
 Events: `RunSubmitted`, `AttemptRecorded`, `MemberRejected {member_index, player, reason,
-leaf_start, leaf_len}`, `Replay {run_id, leaf_index, tic_start, tic_end, packed}`,
-`VersionAdded`, `GenesisSet`, `Frozen`.
+leaf_start, leaf_len}`, `Replay {run_id, leaf_index, tic_start, tic_end, packed}` (one event
+per 256 felts of a segment log, each with the tic sub-range it encodes),
+`VersionAdded`, `GenesisSet`, `Frozen`; D35: `RunCommitted`, `RunLog` (the committed log in
+256-felt chunks), `CommitmentProved`, `CommitmentReclaimed`.
+
+**Open prover (D35).** `submit_batch` / `register_member` are callable by anyone, and an
+accepted member whose run is a pending commitment of its player (same version, level,
+player, tics, genesis and run-level `commit_log` of the whole log — the leaf's
+`inputs_commitment` for one segment, the fold of the concatenated replay logs for several,
+which needs the non-final segments 7-tic aligned) settles it: `PROVED`, bound to the run id,
+bounty paid to the caller. Everything else about a member is unchanged.
 
 **The fold order is the leaves array.** The wrapper must place a game's segments contiguously
 and in segment order; a batch whose leaves are in any other order simply recomposes to a
@@ -359,7 +380,13 @@ Two negatives were driven on chain, not only in tests:
 
 ## 11. Tests
 
-`(cd cairo/doom_contracts/crates/doom_runs && snforge test)` — **53 tests**:
+`(cd cairo/doom_contracts/crates/doom_runs && snforge test)` — **81 tests** (53 below +
+28 in `test_commitments.cairo` for D35: commit + events with the log, duplicate and wrong
+length refused, third-party prover paid, multi-segment settlement through replay logs and
+non-settlement without them, mismatched inputs / tic count / player not settled, settled
+once, zero bounty, reclaim before and after expiry, only the player, `freeze` keeps `reclaim`,
+re-commit after reclaim, index walk, the four-chunk publication of a 900-felt log and its two
+cost probes):
 
 - recomposition of the 2 + 1 + 3 synthetic batch and of the single-leaf (self-fold) batch
   against the Python model's `output_hash`, fact and run ids; digest packing round trip;
