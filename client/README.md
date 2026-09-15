@@ -36,11 +36,12 @@ ship the WAD, but it must never enter git history. Point `VITE_WAD_URL` and
 | `npm test` | vitest unit tests |
 | `npm run fixtures` | Regenerates the WAD-derived test fixtures |
 | `npm run prover` | Stages `@hellproof/prover-wasm` into `public/prover/` (see below) |
-| `npm run test:e2e` | Playwright: the renderer smoke test, two proved segments, **and** the leaderboard smoke test |
+| `npm run test:e2e` | Playwright: the renderer smoke test, two proved segments, the leaderboard smoke test, the demo cadence bench, **and** (project `mobile`) the touch-control smoke test on an emulated phone |
 
 Keys: **F1** diagnostics · **Tab** automap · **F2** HUD · **F3** light-only
 view · **F4** proof queue · **Space** pause · **[** / **]** sim rate ·
-**+** / **−** / **R** automap zoom and rotation.
+**+** / **−** / **R** automap zoom and rotation. On a phone or tablet the
+on-screen controls replace them — see [Mobile](#mobile).
 
 `npm run prover` copies the package's built JS and the two 45 MB wasm64
 artifacts into `public/prover/{dist,wasm}/` — gitignored, like the WAD. It does
@@ -460,6 +461,130 @@ proves one of these segments in 23.2 s at 2.00 GiB. Thread scaling is measured i
 `prover/wasm/harness`, not here; this test is a regression gate and deliberately
 takes the path R1-A8 says never fails.
 
+## Mobile
+
+PLAN C1 (revised by **D35**) wants 35 tics/s **on a mid-range smartphone** with
+touch controls, and D35 keeps proving off the phone entirely: the phone plays and
+commits its journal, anybody proves. This section is what the client does for
+that and how to measure it on a device.
+
+### Touch controls
+
+`src/game/touchInput.ts` (model) and `src/ui/touchControls.ts` (DOM) mount an
+overlay when the page runs on a touch screen — a coarse primary pointer, or a
+touch screen without hover (`?touch=1` / `?touch=0` force it either way; a
+touch-screen laptop with a mouse keeps the keyboard layout). Nothing of it exists
+on a desktop.
+
+| Control | Where | Command |
+|---|---|---|
+| Floating joystick | left half (the base appears under the finger) | forward/back and strafe; full deflection is the keyboard's 25 / 24, the Run toggle makes it 50 / 40, in between is scaled like vanilla's analog joystick and truncated |
+| Look zone | right half | turn: 128 BAM per pixel of horizontal drag (≈ 700 px per revolution), consumed once per tic, bounded like the mouse |
+| FIRE, USE | bottom right, held | `BT_ATTACK = 1`, `BT_USE = 2` |
+| RUN | bottom right, toggle | the Shift tier |
+| WPN | bottom right, tap | `BT_CHANGE | code << 3`, cycling pistol → shotgun → chaingun → fist → chainsaw from the weapon held |
+| PAUSE, MAP | top right | pause (the central panel takes over: Resume, Save, Export…), automap |
+
+The contributions land in **the same ticcmd fields as the keyboard and mouse**
+and go through the same `quantize()` in `GameInput.sample()`, so a phone journal
+is a keyboard journal in nature (D12) — nothing in the journal, the proof or the
+chain knows which device played. Every pointer is tracked by id (a moving finger,
+a turning finger and a Fire finger coexist); a cancelled or captured-and-lost
+pointer, a blur, a hidden tab, a rotation or a pause releases everything held.
+Scroll, pinch-zoom, double-tap zoom, text selection and the long-press menu are
+suppressed under the game (`touch-action: none`, a non-passive `touchmove`,
+`gesturestart`), the viewport is `viewport-fit=cover` with the safe-area insets
+applied to the overlay, `#stage` uses the dynamic viewport height, and portrait
+shows a dismissible "turn your phone" notice. The HUD status bar scales down
+under 720 CSS px so its key labels and the level tally do not collide on a
+narrow landscape phone. Pointer lock is never requested on a touch device.
+
+The renderer demo (`?sim=demo`) has no input path, so there the look drag turns
+the tour's camera through the same quantization: the controls can be tried
+without the Cairo artifacts.
+
+### Cadence bench: measuring 35 tics/s on the device
+
+`/?bench=1` runs the ordinary game loop — Worker, renderer, HUD — with a
+scripted input instead of the player's, then shows a panel with a pass/fail
+verdict, a table and the JSON to paste back (**Copy JSON**). Procedure for the
+sponsor, on an Android and on an iPhone:
+
+1. serve a production build to the phone (below) and open `/?bench=1`;
+2. wait: 700 paced tics (20 s) at 35 Hz, then 175 unpaced tics (the Worker's
+   raw throughput), then the memory probes — the status line counts;
+3. tap **Copy JSON** and paste the result into the issue or the report.
+
+Without `public/sim/` the page says so; `/?sim=demo&bench=1` measures the
+renderer's demo stand-in instead and labels the result **"DEMO SIMULATOR — not
+the Cairo VM"** everywhere (its "VM time" is the stub's JavaScript step). Query
+parameters: `tics=` (paced tics, default 700), `burst=` (unpaced tics, Cairo
+only, default 175, `0` disables), `journal=<url>` (replay a saved game's
+**Export** file instead of the built-in script, which cycles ten seconds of
+idle, walk, turn, walk while firing, strafe, use and run while turning with the
+keyboard's own words).
+
+The JSON (`format: hellproof-cadence-bench/1`) carries: `paced` — tics, elapsed,
+**tics/s**, dropped tics, `vmMs` (the Worker's time per tic including the
+checkpoint every 32 inputs; p50/p95/max/mean), `roundTripMs` (request to
+acknowledged frame on the main thread), `overBudget` (round trips over
+28.57 ms), Cairo steps per tic; `burst` — the same for the unpaced phase;
+`render` — fps, renderer CPU ms per frame and frame-to-frame ms (p50/p95/max);
+`memory` — the Worker's peak wasm linear memory, the page's JS heap
+(`performance.memory`, Chromium) and `performance.measureUserAgentSpecificMemory()`
+(Chromium, cross-origin isolated documents only; `null` elsewhere);
+`environment` — user agent, platform, cores, `deviceMemory`, viewport and
+`devicePixelRatio`, GPU string, isolation, touch. `verdict.sustained35` is true
+when every planned tic ran, at ≥ 34 tics/s, with under 5 % of round trips over
+budget and under 1 % dropped. The desktop reference figures are in
+[`src/sim/README.md`](src/sim/README.md).
+
+### Serving the game to a phone
+
+The game needs **no SharedArrayBuffer, no cross-origin isolation and no
+Memory64**: `CairoClient`'s ring is a plain `ArrayBuffer` and frames are
+transferred (`src/sim/README.md`, "with and without isolation"); those are the
+browser prover's requirements, and D35 keeps the prover off phones. The COOP/COEP
+headers `vite preview` and `vite dev` send are still correct on a phone (all
+resources are same-origin) and are what lets `measureUserAgentSpecificMemory()`
+work; without them only the demo's shared ring falls back to copies.
+
+What the Worker *does* need is a **secure context**: it verifies the four Cairo
+artifacts' SHA-256 with WebCrypto, which browsers expose only on `https://` and
+`localhost`. `npm run preview -- --host` on `http://192.168.x.y:4173` is
+therefore not enough — the page says so before creating the Worker
+(`src/sim/simulationSupport.ts`) rather than failing on `crypto.subtle`. Two
+ways that work:
+
+* **Android over USB**: `chrome://inspect` → *Port forwarding* → `4173` to
+  `localhost:4173`; the phone then opens `http://localhost:4173/`, which is a
+  secure context. Chrome's remote DevTools also give the console and the
+  performance panel on the phone.
+* **Any phone**: put the preview behind HTTPS — a tunnel (`cloudflared tunnel
+  --url http://localhost:4173`, `ngrok http 4173`) or the deployment itself.
+  iOS Safari has no port-forwarding equivalent, so it needs this.
+
+Other failures are reported in one sentence too: artifacts not staged
+(`public/sim/` missing, with the `?sim=demo` alternative), an artifact that
+fails its manifest hash, a browser that cannot allocate the ~450 MiB of wasm
+memory, or one without module Workers (Safari < 15, old WebViews).
+
+### Validating without a phone
+
+`npm run test:e2e -- --project mobile` runs `e2e/mobile.spec.ts` in an emulated
+Pixel 7 (landscape, touch emulation, SwiftShader): the controls appear on
+`/?sim=demo`, three simultaneous touch points (stick, look drag, Fire) are
+injected through CDP and read back from the model and the applied turn, the
+overlay's Pause stops the scheduler, a portrait Pixel 7 gets the orientation
+notice, a desktop viewport gets no controls, and without `public/sim/` the real
+route explains what is missing — all with no page error. `e2e/bench.spec.ts`
+runs the demo bench for 70 tics in the production bundle and checks the
+labelled JSON (the Cairo variant runs when `public/sim/` is staged).
+`test/touchInput.test.ts` pins the touch → ticcmd translation (bounds, return to
+zero, multi-touch, the merge with the keyboard) and `test/cadenceBench.test.ts`
+the bench's accounting. What none of this measures is a real phone's Worker
+cadence: that is what the bench is for.
+
 ## What is rendered, and what is not yet
 
 The current default Cairo route uses the numeric `sprite` and `frame` from the
@@ -513,7 +638,7 @@ assets decoded in 19 ms.
 
 ## Tests
 
-`npm test` — 276 vitest tests (10 skip themselves without the staged prover).
+`npm test` — 301 vitest tests (10 skip themselves without the staged prover).
 
 *Renderer and assets* (79): pegging (all four vanilla cases and the row offset),
 wall quad generation (including that it follows moving heights), BSP clipping and
@@ -534,6 +659,10 @@ the stub sim on the real E1M1.
 | `pipeline.test.ts` | the pipeline against a fake prover: planning and shrinking, the step ceiling, a hung threaded prove killed and retried single-threaded, a segment that fails for good, the prover dropped between segments, resume after a simulated reload (exactly one segment re-proved), waiting mid-game vs cutting at the end, and the event stream |
 | `wrapper.test.ts` | the submitter against a fake server: the per-segment probe and its fallback, skipping what the server holds, retries under the same `run_id`, `keepOffline` refused, gaps refused, failures recorded locally, and the status/batch mirror |
 | `onchain.test.ts` (jsdom) | the on-chain leg on the real `B2-1_doom` fixture against a mocked node and wallet: the configuration reader (missing names listed, URL overrides, malformed values, the derived proof id), the cost screen's six rows and totals in STRK and fiat, "wait" and "keep offline" sending nothing, "submit" playing `begin → merkle → answers → fri → fri → register_member` in order and recording the fact, a wallet interruption between two transactions resumed from the saved D28 cut and `localStorage` echoes (the remaining phases re-priced, no trace round trip), a batch refused before paying, `?include=proof`, and `ProveSession.submit()` with no configuration touching no network |
+
+*Mobile* (`touchInput.test.ts`, `cadenceBench.test.ts`, `simulationSupport.test.ts`): the touch → ticcmd
+translation and the overlay's pointer wiring, the cadence bench's script, accounting, verdict and panel,
+and the one-sentence Worker failure messages — see [Mobile](#mobile).
 
 *Leaderboard* (`leaderboard.test.ts`, jsdom): every render function against fixtures (board rows,
 ranking, empty state, pager edges, run detail with/without replay, an attempt vs a finished run,

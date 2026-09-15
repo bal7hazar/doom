@@ -24,6 +24,7 @@ const ARTIFACTS = join(HERE, "artifacts");
 const ASSETS_PRESENT =
   existsSync(resolve(HERE, "..", "public", "freedoom1.wad")) &&
   existsSync(resolve(HERE, "..", "public", "levels", "e1m1.json"));
+const SIM_PRESENT = existsSync(resolve(HERE, "..", "public", "sim", "manifest.json"));
 
 test.skip(!ASSETS_PRESENT, "client/public/freedoom1.wad and levels/e1m1.json are missing - run `npm run assets`");
 test.beforeAll(async () => { await mkdir(ARTIFACTS, { recursive: true }); });
@@ -114,10 +115,16 @@ test("landscape phone: controls appear, a drag turns the view, two fingers coexi
   expect(released.firing).toBe(false);
   expect(released.demoTurn, "no turn after the finger lifts").toBe(turned);
 
-  // The view still renders with the controls on top of it.
-  const histogram = await page.evaluate(() =>
-    (window as never as { hellproof: { captureFrame(): Promise<{ distinct: number }> } }).hellproof.captureFrame());
-  expect(histogram.distinct).toBeGreaterThan(32);
+  // The view still renders with the controls on top of it. Several samples,
+  // keeping the richest, as render.spec.ts does: the tour (and our turn) may
+  // leave the camera facing one near-uniform surface at any given instant.
+  const samples: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    await page.waitForTimeout(400);
+    samples.push((await page.evaluate(() =>
+      (window as never as { hellproof: { captureFrame(): Promise<{ distinct: number }> } }).hellproof.captureFrame())).distinct);
+  }
+  expect(Math.max(...samples), `histograms: ${samples.join(", ")}`).toBeGreaterThan(32);
 
   // Pause from the overlay stops the demo scheduler and hides the controls.
   await t.down([{ ...(await box(page, "pause")), id: 4 }]);
@@ -163,4 +170,16 @@ test.describe("desktop", () => {
     await expect(page.locator("#orientation")).toBeHidden();
     expect(errors).toEqual([]);
   });
+});
+
+test("without the Cairo artifacts the game says what is missing instead of a stack", async ({ page }) => {
+  test.skip(SIM_PRESENT, "public/sim/ is staged: the real game boots instead");
+  const errors: string[] = [];
+  page.on("pageerror", err => errors.push(String(err)));
+  await page.goto("/");
+  const loading = page.locator("#loading");
+  await expect(loading).toHaveClass(/error/, { timeout: 120_000 });
+  await expect(loading).toContainText("public/sim/ is missing");
+  await expect(loading).toContainText("?sim=demo");
+  expect(errors).toEqual([]);
 });

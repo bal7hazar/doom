@@ -24,6 +24,7 @@ import { quantize } from "./prove/ticcmd.js";
 import { BUILTIN_SCRIPT, CadenceBench, CAIRO_LABEL, DEFAULT_BENCH_TICS, DEFAULT_BURST_TICS, DEMO_LABEL, journalScript, probeMemory,
   type BenchEnvironment, type BenchResult, type InputScript } from "./bench/cadence.js";
 import { mountBenchPanel, type BenchPanel } from "./ui/benchPanel.js";
+import { checkSimulationSupport, describeSimulationFailure } from "./sim/simulationSupport.js";
 
 /**
  * Application entry point.
@@ -165,6 +166,16 @@ async function main(): Promise<void> {
   }
 
   // The legacy renderer/prover demonstration is an explicit route.
+  const benchHint = bench ? "\n\nThe bench needs the staged Cairo simulation (scripts/prepare-sim.py). `?sim=demo&bench=1` measures the renderer's demo stand-in instead - clearly not the Cairo VM." : "";
+  if (realCairo) {
+    // One sentence before the Worker exists: the game needs no SharedArrayBuffer,
+    // isolation or Memory64, only Workers, wasm and a secure context (sim/simulationSupport.ts).
+    const support = checkSimulationSupport();
+    if (!support.ok) {
+      fail(loading, loadingStatus, support.reasons.join("\n\n") + "\n\nThe renderer demo (?sim=demo) runs without the Worker." + benchHint);
+      return;
+    }
+  }
   const cairo = realCairo ? new CairoClient() : null;
   if (cairo) {
     document.body.classList.add("real-play");
@@ -173,7 +184,7 @@ async function main(): Promise<void> {
     try { await cairo.init(); }
     catch (error) {
       cairo.dispose();
-      fail(loading, loadingStatus, String(error) + (bench ? "\n\nThe bench needs the staged Cairo simulation (scripts/prepare-sim.py). `?sim=demo&bench=1` measures the renderer's demo stand-in instead - clearly not the Cairo VM." : ""));
+      fail(loading, loadingStatus, describeSimulationFailure(error) + benchHint);
       return;
     }
     profile.snapshotTransport = "copied";
