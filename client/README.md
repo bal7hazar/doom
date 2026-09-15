@@ -197,7 +197,11 @@ every row of the table in `map/walls.ts`.
       +- chain ---- h_in/h_out, tics, status (D14)
       +- persist -- RunStore: segment + 4.2 MB proof, one transaction, then drop the prover
                       |
-   ProofQueuePanel <--+   WrapperSubmitter --> POST /v1/runs   (P4.3 takes it on chain)
+   ProofQueuePanel <--+   WrapperSubmitter --> POST /v1/runs --> batch folded
+                                                                    |
+                          OnChainSubmitter (P4.3) <-- GET /v1/batches/{id}?include=proof
+                              prepareSubmission --> CostScreen --> submit / wait / offline
+                                                       `-- runSequence (Controller signs)
 ```
 
 ### The planner's policy
@@ -314,10 +318,10 @@ Either way the wrapper `run_id` is stored locally and reused on every retry, so 
 retry is a dedupe rather than a double proof, and `uploadedSegments` is
 persisted so a reload knows what is left. `GET /v1/runs/{id}` and
 `GET /v1/batches/{id}` are mirrored into the run record (status, batch id, root
-felt count); the transactions that follow are **P4.3**, and the hook is
-`ProveSession.submit()`.
+felt count); once the batch is `done`, `ProveSession.submit()` continues with
+the on-chain leg below.
 
-## On-chain submission (D28)
+## On-chain submission (P4.3, D28)
 
 `src/chain/prepareSubmission` selects five verifier transactions by default with the optimized
 P4.1 router: FRI cut `[2]`, followed by a separate `DoomRuns` consumer transaction. Explicit
@@ -333,6 +337,66 @@ refuses to guess it from the FRI tag. The CLI recovery command for the former de
 P4.1 needs its newly deployed router classes; an older deployment still has its historical
 costs. Measurements, compatibility and offline regression tests live in
 [`infra/submit/README.md`](../infra/submit/README.md).
+
+### Configuration
+
+`src/prove/onchain.ts` reads the settings from Vite variables, each overridable by a query
+parameter (the parameter wins, as on the leaderboard page). Nothing is hard-coded: with a value
+missing the game still boots, and pressing **Submit…** logs which names to set instead of
+failing an RPC call.
+
+| Setting | Vite variable | URL parameter | Required |
+|---|---|---|---|
+| Starknet JSON-RPC URL | `VITE_RPC_URL` | `rpc` | yes |
+| `StwoCircuitRouter` (P4.1 classes) | `VITE_ROUTER_ADDRESS` | `router` | yes |
+| `DoomRuns` | `VITE_DOOM_RUNS_ADDRESS` | `runs` | yes |
+| `DoomRuns` version id | `VITE_VERSION_ID` | `version` | yes |
+| level id recorded for the run | `VITE_LEVEL_ID` | `level` | no, default `1` |
+| router proof id override | `VITE_PROOF_ID` | `proofId` | no, derived from the batch id |
+| chain id (skips `starknet_chainId`, seeds the Controller) | `VITE_CHAIN_ID` | `chain` | no |
+| season sponsoring (R7-A4) | `VITE_SPONSORED` | `sponsored` | no |
+| publish the packed input logs (R10-A3) | `VITE_REPLAY` | `replay` | no |
+| wrapper base URL | `VITE_WRAPPER_URL` | `wrapper` | for the upload |
+
+The proof id keys the router's checkpoint (`(caller, proof_id)`), so it must be the same on
+every attempt for one batch and different for the next: `proofIdFor(batchId)` derives it from the
+wrapper's batch id (a hex id is read as a number, anything else is hashed under 2^250), which
+is why a reload resumes without a second piece of state. `?proofId=` exists for the "restart
+under a fresh proof id" recovery the resume code sometimes asks for.
+
+### The flow
+
+`ProveSession.submit()` is the whole path, and pressing the button again continues wherever it
+stopped:
+
+1. **upload** — as above, unless the run record already carries a batch id;
+2. **fold** — `GET /v1/batches/{id}`; a batch that is not `done` yet is reported and the
+   button can be pressed again later;
+3. **proof** — `WrapperSubmitter.fetchBatchProof` fetches `?include=proof` (the ~94 k root
+   felts and the packed tree); nothing of it is stored locally beyond the felt count;
+4. **member** — the Controller is connected (session policies = exactly the six submission
+   entrypoints, `controllerConnect.ts`), and the batch is mapped onto the player's own run. The
+   browser knows one address, so the sequence records one member: `submit_batch` when the run
+   is alone in its batch, `register_member` — D20's per-player fallback — when the wrapper
+   folded it with other players' games. `checkBatch` refuses a batch the contract would reject
+   (chain break, `ABORT`, wrong genesis) *before* anything is paid for;
+5. **cost screen** (`ui/costScreen.ts`, C5) — `resumePoint` first, so a sequence that already
+   paid for some phases is priced for what is left; then the ordered simulation from the
+   signing account, the per-transaction STRK and fiat figures with the quote's timestamp, the
+   24 h-median verdict (or "cannot tell" on a fresh device), and the three answers of C6:
+   * **Submit now** — `runSequence` with the connected signer and the R7-A1 bounds; the FRI
+     cut and every checkpoint echo go to `localStorage` before each send, so a closed tab or a
+     wallet that stops half-way resumes from the router's checkpoint with **Resume**, and
+     nothing accepted is paid for twice. The fact and `chainStatus: done` land on the run record;
+   * **Wait** — the overlay closes, nothing is sent, the run keeps its batch id and
+     `chainStatus: waiting`; the next press of **Submit…** skips straight to step 3;
+   * **Keep offline** — sets the run's `keepOffline` flag (the one the wrapper submitter refuses
+     to upload past); the run, its journal and its proofs stay on this device and remain
+     submittable later under the same proof id.
+
+The real-game route (`prove/gameBridge.ts`) keeps its documented offline policy — no wrapper,
+`keepOffline` set — so the on-chain leg is reached from `index.html`'s F4 panel (demo route) with
+the variables above, and from `infra/submit` for a batch on disk.
 
 ## Leaderboard (P4.4)
 
@@ -449,7 +513,7 @@ assets decoded in 19 ms.
 
 ## Tests
 
-`npm test` — 160 vitest tests.
+`npm test` — 276 vitest tests (10 skip themselves without the staged prover).
 
 *Renderer and assets* (79): pegging (all four vanilla cases and the row offset),
 wall quad generation (including that it follows moving heights), BSP clipping and
@@ -469,6 +533,7 @@ the stub sim on the real E1M1.
 | `store.test.ts` | IndexedDB round trips, segment+proof atomicity, reopen, `deleteRun`, and `.hellproof` export/import including the renaming collision, a corrupted payload caught by its checksum, and the quota projections |
 | `pipeline.test.ts` | the pipeline against a fake prover: planning and shrinking, the step ceiling, a hung threaded prove killed and retried single-threaded, a segment that fails for good, the prover dropped between segments, resume after a simulated reload (exactly one segment re-proved), waiting mid-game vs cutting at the end, and the event stream |
 | `wrapper.test.ts` | the submitter against a fake server: the per-segment probe and its fallback, skipping what the server holds, retries under the same `run_id`, `keepOffline` refused, gaps refused, failures recorded locally, and the status/batch mirror |
+| `onchain.test.ts` (jsdom) | the on-chain leg on the real `B2-1_doom` fixture against a mocked node and wallet: the configuration reader (missing names listed, URL overrides, malformed values, the derived proof id), the cost screen's six rows and totals in STRK and fiat, "wait" and "keep offline" sending nothing, "submit" playing `begin → merkle → answers → fri → fri → register_member` in order and recording the fact, a wallet interruption between two transactions resumed from the saved D28 cut and `localStorage` echoes (the remaining phases re-priced, no trace round trip), a batch refused before paying, `?include=proof`, and `ProveSession.submit()` with no configuration touching no network |
 
 *Leaderboard* (`leaderboard.test.ts`, jsdom): every render function against fixtures (board rows,
 ranking, empty state, pager edges, run detail with/without replay, an attempt vs a finished run,
