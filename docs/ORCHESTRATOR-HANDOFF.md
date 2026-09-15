@@ -356,3 +356,95 @@ docs : le manifeste est un artefact de build non commité. Rayon limité au rend
 
 Aucun agent, serveur ni preuve laissé en cours ; worktree jetable supprimé.
 Prochain chemin critique inchangé : D2/D29, admission log21/log20, puis P3.7/C3.
+
+## Reprise de l'exécution — 2026-09-15 (session distante)
+
+Base de travail : branche **`claude/happy-knuth-pr0xjr`** = `codex/game-integration`
+(`310d5d8`) + documents d'audit + vagues ci-dessous, poussée sur `origin`. Le
+sponsor peut l'intégrer dans `codex/game-integration` par fast-forward. Les
+sous-agents commitent en worktree, sans push ; les commits sont re-signés par
+l'orchestrateur à la fusion (le hook de cet environnement exige des commits signés).
+
+### Vagues fusionnées
+
+| Vague | Fusion | Contenu | Validation |
+|---|---|---|---|
+| Correctifs client | `0a8ec84` | `restore` vérifie l'identité avant tout `init` ; `planNext` gardé contre le hard stop ; `retire` séquentiel avec un seul stop dur et `flushJournal` idempotent ; assertion e2e exacte | 258 tests client, `tsc`, build ; e2e Cairo non exécutables ici (pas de `public/sim` ni WASM) |
+| Test psprites | `4379024` | test v2 non tautologique : deux parties en lockstep 45 tics, hash identique, flash observé, ≥ 2 frames d'arme | `-f synthetic` 32 verts |
+| Écran de coût P4.3 | `f3c3f7f` | `client/src/prove/onchain.ts` : batch → felts racine → `prepareSubmission` (D28, `submit_batch` ou `register_member`) → `CostScreen` → séquence signée par Controller, reprise par proof id dérivé du batch id ; configuration `VITE_RPC_URL`/`?rpc=`, `VITE_ROUTER_ADDRESS`/`?router=`, `VITE_DOOM_RUNS_ADDRESS`/`?runs=`, `VITE_VERSION_ID`/`?version=` | **272 tests client** (14 nouveaux sur la fixture réelle `B2-1_doom`), `tsc`, build ; Controller réel, wrapper réel et écart < 20 % (C5) non validés |
+| Profil D2 | `8a3f800` | `docs/design/d2-profile.md`, `bench/attribute_tics.py`, `bench/d2_tables.py` : attribution exacte des 2 946 tics (48 543,68 / p99 122 942 retrouvés au step près) | REUSE 1 789 + 3 |
+
+Retenu hors fusion : `wave/fixes-cairo-held` (`6e0c0b0`, `refresh_heights` sans
+`Span::at`, **106 948 mots**, SHA `8b0a81c5d36fd03279b9b06d16f156a887973150976db53f01c6806f0d8385e0`),
+repris dans la vague O1 pour ne faire qu'une migration d'identité.
+
+**Migration d'identité impossible ici** : le task hash Blake se mesure avec le
+runtime WASM construit (`prover/wrapper/scripts/measure_task_hash.mjs`, Node 24,
+`prover/wasm/pkg/dist/core.js`) ; l'artefact CI `hellproof-prover-wasm` existe mais
+le proxy de cet environnement bloque son téléchargement. Tout changement de
+bytecode moteur fusionné ici laisse donc `client/src/prove/doomArtifacts.ts` à
+migrer par le sponsor : SHA `segment`/`step`/`genesis`, `programHash`, `revision`,
+plus le test `legacyDoomIdentity`, comme `95939fa`.
+
+### Ce que dit le profil D2 (`docs/design/d2-profile.md`)
+
+- Moyennes par scénario (frontière exclue) : idle 26 386, walk 50 504, door 64 931,
+  fight 63 228, death 47 137 ; aucun tic sous 25 000.
+- **≈ 17 000 steps par tic sont des balayages complets des 210 slots** (`awake_count`,
+  `next_actor`, plomberie de `monsters_ticker_in`, `has`) : 64 % d'un tic idle.
+- Frontière `step_tic` hors tic : 266–278 k steps/appel ; pour `run_segment`
+  ≈ **440 000 steps par segment** (parseur, sérialisation, deux hachages Poseidon).
+- Micro-optimisations équivalentes cumulées (O1 liste d'acteurs dérivée −14 000,
+  O3 clip par cellules −3 500, O2/O4 −2 000) : moyenne ≈ 28 500, p99 ≈ 93 000.
+  **D2 (12 000 / 25 000) n'est atteignable ni par micro-optimisations ni par les
+  pistes algorithmiques sans réduire le gameplay** (fenêtre D3, cadence `A_Look`).
+
+### Arbitrage C3 à soumettre au sponsor
+
+Coût fixe par segment prouvé, avec les mesures consignées : hachage Blake du
+programme 2 340 + 14,75 × 107 018 ≈ **1 581 000 steps**, plus la frontière
+≈ 440 000, soit **≈ 2,02 M steps avant le premier tic**. Les plafonds D26 sont
+1,5 M steps avec threads et 2,3 M mono : le mode threads ne peut contenir aucun
+segment, le mode mono laisse ≈ 280 000 steps de jeu, soit **6 tics par segment**
+aujourd'hui, ~8 après O1, ~23 si D2 était atteint. Une partie de 3 min (6 300 tics)
+demande donc ~1 000 segments aujourd'hui, ~275 même à D2 ; à 42–54 s par segment
+(preuve réelle mesurée), cela fait **de 3–4 h (à D2) à 12–15 h (aujourd'hui)**,
+contre 10 min visées. C3 ≤ 10 min exigerait ≤ 12 segments, donc ≥ 525 tics par
+segment : impossible sous 2,3 M steps quel que soit le coût par tic. Le problème
+n'est pas D2 : c'est le coût fixe par segment dans un segment borné par la
+mémoire du navigateur.
+
+Trois options, à décider avant toute nouvelle campagne de preuve :
+
+1. **Réviser C3** : preuve locale en tâche de fond acceptée sur plusieurs heures
+   (le pipeline P3.2 la reprend déjà après rechargement) ; D2 révisé vers une
+   cible mesurable après O1/O3 (~25 000 / 70 000).
+2. **Prouver côté service** (P3.5 devient la voie principale) : segments plus
+   grands sur la machine 64 Go (2^23–2^24 steps) et parallélisme, le navigateur
+   n'exécutant que le jeu ; à mesurer, probablement des dizaines de minutes,
+   pas 10.
+3. **Supprimer le hachage du programme par segment** : preuve de feuille sans
+   bootloader, le programme étant lié dans le circuit feuille du wrapper.
+   Chemin « standalone » cassé en amont pour les exécutables Scarb (S0) ;
+   travail prouveur/wrapper lourd, à chiffrer avant de l'engager.
+
+Sans décision, la prochaine vague utile reste O1 puis O3 (gain à gameplay
+identique, moins de segments quel que soit le choix).
+
+### En cours à la rédaction
+
+Vague **O1** (worktree `wt/o1`, branche `wave/o1-actors`, inclut `6e0c0b0`) :
+liste d'acteurs dérivée non sérialisée, itération du ticker sur ces indices,
+reconstruction par tranches ; gain visé ≥ 13 000 steps/tic, équivalence exacte
+exigée, mesure avant/après sur les cinq scénarios. Si elle n'est pas fusionnée
+à la lecture de ce document, vérifier `git worktree list` et `git branch`.
+
+### Reste à faire côté sponsor
+
+1. Ouvrir une PR de suivi `codex/game-integration` (ou cette branche) → `main`
+   sans la fusionner, pour obtenir CI et `game-regression` à chaque push.
+2. Mesurer le task hash du nouveau `run_segment` après O1 et migrer
+   `doomArtifacts.ts` ; vérifier que le job `cairo` tient en 16 Go (la suite
+   `doom_game` seule approche 14 Go ; prévoir `RAYON_NUM_THREADS` réduit ou un
+   découpage par filtre).
+3. Trancher l'arbitrage C3 ci-dessus.
