@@ -5,14 +5,11 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { hash } from "starknet";
 
-import type { ResourceBounds, RpcClient } from "../../../client/src/chain/rpc.js";
+import type { ResourceBounds } from "../../../client/src/chain/rpc.js";
 import { storedFriSplit, TAG } from "../../../client/src/chain/sequence.js";
 import { normalizeFelt } from "../../../client/src/prove/felt.js";
 import { decodeSegmentOutput } from "../../../client/src/prove/program.js";
-import { WrapperClient } from "../../../prover/wrapper/client-ts/src/index.js";
-import { rootProofFelts } from "../../submit/src/fixture.js";
 import { FileEchoStore } from "../../submit/src/stores.js";
 import { wrapperRunId } from "../src/commitments.js";
 import { checkOwnLeaves, foldRun } from "../src/fold.js";
@@ -22,6 +19,7 @@ import { registerRun } from "../src/register.js";
 import type { PlannedSegment } from "../src/segmenter.js";
 import { newJob, type JobRecord } from "../src/store.js";
 import { fakeCommitment, FIXTURE_DIR, fixtureGenesis, fixtureJournal, fixtureLeaf, fixturePlan } from "./fixtures.js";
+import { bound, fakeWrapper, mockRpc } from "./wrapper.js";
 
 const PROGRAM_HASH = "0x" + BigInt(JSON.parse(readFileSync(join(FIXTURE_DIR, "preimage_0.json"), "utf8"))[0]).toString(16);
 const dirs: string[] = [];
@@ -52,51 +50,6 @@ function fixtureJob(): { job: JobRecord; artifacts: ProofArtifact[] } {
     outputPreimage: [PROGRAM_HASH, ...s.outputFelts], programHash: PROGRAM_HASH, proveMs: 1,
   }));
   return { job, artifacts };
-}
-
-/** An in-memory wrapper: the resumable upload routes and the fixture's batch. */
-function fakeWrapper(runId: string, options: { held?: number[]; pollsUntilDone?: number; swapLeaves?: boolean } = {}) {
-  const held = new Map<number, unknown>((options.held ?? []).map((i) => [i, { index: i }]));
-  let status = "collecting";
-  let polls = 0;
-  const calls: string[] = [];
-  const packedOutput = JSON.parse(readFileSync(join(FIXTURE_DIR, "packed_output.json"), "utf8"));
-  const proof = rootProofFelts(FIXTURE_DIR).map((f) => "0x" + f.toString(16));
-  const leaves = [
-    { position: 0, run_id: runId, segment_index: options.swapLeaves ? 1 : 0, leaf_key: "k0" },
-    { position: 1, run_id: runId, segment_index: options.swapLeaves ? 0 : 1, leaf_key: "k1" },
-    { position: 2, run_id: "someone-else", segment_index: 0, leaf_key: "k2" },
-  ];
-  const json = (body: unknown, code = 200) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
-  const fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    const url = new URL(String(input));
-    const method = init?.method ?? "GET";
-    calls.push(`${method} ${url.pathname}${url.search}`);
-    const m = url.pathname.match(/^\/v1\/runs\/([^/]+)(?:\/(segments)(?:\/(\d+))?|\/(complete))?$/);
-    if (m) {
-      if (m[1] !== runId) return json({ error: "not found" }, 404);
-      if (m[2] === "segments" && m[3] !== undefined && method === "PUT") {
-        const body = JSON.parse(String(init?.body));
-        held.set(Number(m[3]), body);
-        return json({ run_id: runId, index: Number(m[3]), verified: true, verify_ms: 20, sha256: "ab", size_bytes: String(init?.body).length });
-      }
-      if (m[2] === "segments") return json({ run_id: runId, status, held: [...held.keys()], segments: [] });
-      if (m[4] === "complete") {
-        if (held.size !== 2) return json({ error: "missing segments" }, 400);
-        status = "queued";
-        return json({ run_id: runId, status, segments: held.size });
-      }
-      polls++;
-      if (status !== "collecting" && polls >= (options.pollsUntilDone ?? 2)) status = "done";
-      return json({ run_id: runId, status, program: "doom_run", solo: false, batch_id: status === "done" ? "B2-1_doom" : undefined, created_at_ms: 0, updated_at_ms: 0, progress: {}, segments: [], timings: {} });
-    }
-    if (url.pathname === "/v1/batches/B2-1_doom") {
-      const withProof = url.searchParams.get("include")?.includes("proof");
-      return json({ batch_id: "B2-1_doom", status: "done", runs: [runId, "someone-else"], leaves, created_at_ms: 0, packed_output: packedOutput, ...(withProof ? { root_proof_felts: proof } : {}) });
-    }
-    return json({ error: `unexpected ${method} ${url.pathname}` }, 500);
-  };
-  return { client: new WrapperClient({ baseUrl: "http://wrapper.test", fetch: fetch as typeof globalThis.fetch }), calls, held };
 }
 
 describe("the fold through the wrapper", () => {
@@ -138,34 +91,6 @@ describe("the fold through the wrapper", () => {
   });
 });
 
-const bound: ResourceBounds = {
-  l1_gas: { max_amount: "0x186a0", max_price_per_unit: "0x1" },
-  l1_data_gas: { max_amount: "0x200", max_price_per_unit: "0x1" },
-  l2_gas: { max_amount: "0x20000000", max_price_per_unit: "0x1" },
-};
-
-/** A mocked node: a router checkpoint, the DoomRuns views, receipts carrying a fact. */
-function mockRpc(options: { tag: number; registered?: boolean; steps?: number }): RpcClient {
-  return {
-    call: vi.fn(async (c: { entrypoint: string; calldata: string[] }) => {
-      switch (c.entrypoint) {
-        case "checkpoint": return ["0x" + options.tag.toString(16), "0xdead"];
-        case "run_id_of": return ["0x7777"];
-        case "is_run_registered": return [options.registered ? "0x1" : "0x0"];
-        default: throw new Error(`unexpected view ${c.entrypoint}`);
-      }
-    }),
-    request: vi.fn(async () => ({ events: Array.from({ length: options.steps ?? 0 }, (_, i) => ({ transaction_hash: "0x" + (i + 1).toString(16), data: ["0x2", "0xdead"] })) })),
-    trace: vi.fn(async () => ({ execute_invocation: { calls: [{ result: ["0x1", "0xab"] }] } })),
-    waitForReceipt: vi.fn(async () => ({
-      execution_status: "SUCCEEDED",
-      execution_resources: { l2_gas: 1000, l1_data_gas: 10 },
-      actual_fee: { amount: "0x64" },
-      events: [{ keys: [hash.getSelectorFromName("FactRegistered"), "0xfac7"], data: ["0x1", "0x2"] }],
-    })),
-  } as unknown as RpcClient;
-}
-
 async function foldedFixture() {
   const { job, artifacts } = fixtureJob();
   const runId = wrapperRunId(job.commitment.commitmentId);
@@ -175,7 +100,7 @@ async function foldedFixture() {
 }
 
 describe("registration (D28) with a mocked signer", () => {
-  it("plays five verifier transactions, register_member with the replay, then claim_bounty", async () => {
+  it("plays five verifier transactions then register_member with the replay, and sees the bounty settle", async () => {
     const { job, runId, batch } = await foldedFixture();
     const sent: { entrypoint: string; calldata: string[]; bounds: ResourceBounds }[] = [];
     const signer = {
@@ -185,15 +110,15 @@ describe("registration (D28) with a mocked signer", () => {
         return { transactionHash: "0x" + (sent.length * 16).toString(16) };
       }),
     };
-    const rpc = mockRpc({ tag: TAG.FREE });
+    const rpc = mockRpc({ tag: TAG.FREE, settles: { commitmentId: job.commitment.commitmentId, prover: "0x123" } });
     const echoStore = new FileEchoStore(join(scratch(), "echoes.json"));
     const estimate = vi.fn(async (_a: unknown, prepared: { phases: unknown[] }) => ({ prepared: prepared as never, bounds: new Array(prepared.phases.length + 1).fill(bound), totalStrk: 1.5 }));
     const result = await registerRun({
       rpc, signer, batch, job, runId, router: "0x456", doomRuns: "0x789", echoStore, estimate,
-      estimateCall: async () => bound,
+      replay: false, // ignored: two segments need their logs on chain for the bounty
     });
 
-    expect(sent.map((s) => s.entrypoint)).toEqual(["begin", "merkle", "answers", "fri", "fri", "register_member", "claim_bounty"]);
+    expect(sent.map((s) => s.entrypoint)).toEqual(["begin", "merkle", "answers", "fri", "fri", "register_member"]);
     expect(result).toMatchObject({ fact: "0xfac7", onChainRunId: "0x7777", alreadyRegistered: false, resumedAt: 0 });
     expect(result.transactions.map((t) => t.label)).toEqual(["begin", "merkle", "answers", "fri1", "fri2", "submit_batch"]);
     expect(result.member).toMatchObject({ player: job.commitment.player, levelId: 1, leafStart: 0, leafLen: 2, runId });
@@ -208,9 +133,8 @@ describe("registration (D28) with a mocked signer", () => {
     expect(consumer[memberAt + 5]).toBe("0x0"); // replay leaf 0
     expect(consumer[memberAt + 6]).toBe("0x17"); // 23 felts
     expect(consumer.slice(memberAt + 7, memberAt + 7 + 23)).toEqual(fixtureLeaf(0, 0).packed);
-    expect(sent[6]).toMatchObject({ entrypoint: "claim_bounty", calldata: [job.commitment.commitmentId] });
-    expect(result.claimTx).toBe("0x70");
-    expect(job.chain).toMatchObject({ proofId: job.commitment.commitmentId, fact: "0xfac7", claimTx: "0x70" });
+    expect(result.settlement).toMatchObject({ prover: "0x123", runId: "0x7777", bounty: job.commitment.bounty });
+    expect(job.chain).toMatchObject({ proofId: job.commitment.commitmentId, fact: "0xfac7", settled: true });
     expect(job.chain!.transactions).toHaveLength(6);
     expect(storedFriSplit(echoStore, BigInt(job.commitment.commitmentId), "0x456", "0x123")).toEqual([2]);
     expect(estimate).toHaveBeenCalledTimes(1);
@@ -222,7 +146,7 @@ describe("registration (D28) with a mocked signer", () => {
     const sent: string[] = [];
     const signer = { kind: "test", address: "0x123", execute: vi.fn(async (calls: { entrypoint: string }[]) => { sent.push(calls[0]!.entrypoint); return { transactionHash: "0x9" }; }) };
     const echoStore = new FileEchoStore(join(scratch(), "echoes.json"));
-    const common = { signer, batch, job, runId, router: "0x456", doomRuns: "0x789", echoStore, estimateCall: async () => bound };
+    const common = { signer, batch, job, runId, router: "0x456", doomRuns: "0x789", echoStore };
 
     // A first attempt loses the connection right after its first send: the plan is on disk.
     const lost = { kind: "test", address: "0x123", execute: vi.fn(async () => { throw new Error("connection lost after send"); }) };
@@ -238,17 +162,26 @@ describe("registration (D28) with a mocked signer", () => {
       estimate: async (_a, prepared, resume) => ({ prepared, bounds: new Array(prepared.phases.length + 1 - resume.nextPhase).fill(bound) }),
     });
     expect(partial.resumedAt).toBe(4);
-    expect(sent).toEqual(["fri", "register_member", "claim_bounty"]);
+    expect(sent).toEqual(["fri", "register_member"]);
+    expect(partial.settlement).toBeNull(); // this mocked node paid nothing
+    expect(job.chain!.settled).toBe(false);
 
-    // The fact is done and the run recorded: nothing but the claim is sent.
+    // The fact is done and the run recorded: nothing is sent, the settlement is read on chain.
     sent.length = 0;
     const done = await registerRun({
-      ...common, rpc: mockRpc({ tag: TAG.DONE, registered: true }),
+      ...common, rpc: mockRpc({ tag: TAG.DONE, registered: true, commitment: { status: 2, prover: "0x123" } }),
       estimate: async (_a, prepared) => ({ prepared, bounds: [bound] }),
     });
     expect(done.alreadyRegistered).toBe(true);
-    expect(sent).toEqual(["claim_bounty"]);
+    expect(sent).toEqual([]);
     expect(done.transactions).toEqual([]);
+    expect(done.settlement).toEqual({ runId: "0x7777", prover: "0x123" });
+
+    // Somebody else proved it, or the player reclaimed it: nothing is paid for.
+    for (const commitment of [{ status: 2, prover: "0x999" }, { status: 3 }, { status: 0 }, { status: 1, tics: 5 }]) {
+      await expect(registerRun({ ...common, rpc: mockRpc({ tag: TAG.FREE, commitment }), estimate: async () => { throw new Error("must not estimate"); } }))
+        .rejects.toThrow(/already proved by 0x999|reclaimed|does not exist|differs from the one discovered/);
+    }
 
     // A batch the contract would reject is refused before anything is estimated.
     const broken = structuredClone(batch);

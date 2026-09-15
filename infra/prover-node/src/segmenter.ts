@@ -16,12 +16,21 @@
  * only counts steps, the step ceiling alone decides and the record says `rowsChecked: false`.
  * The whole journal is known up front, so unlike the browser there is no "wait for more tics":
  * the last segment is cut short.
+ *
+ * **Seven-tic alignment.** `DoomRuns` pays the bounty of a multi-segment run only if the
+ * concatenation of the published replay logs folds to the committed journal, and a segment's
+ * log is its own slice re-packed from its first tic (D13). The concatenation equals the journal
+ * exactly when every non-final segment covers a multiple of 7 tics, so every proposal — the
+ * planner's and every shrink — is rounded down to a multiple of 7 before it is executed. It is
+ * a rounding *down*, so the D26 ceiling is never exceeded by it; the last segment is whatever is
+ * left. `checkSegmentChain` then verifies the concatenation against the journal itself.
  */
 import { checkState } from "../../../client/src/prove/doomPreparation.js";
 import { verifyChain, type ChainResult } from "../../../client/src/prove/chain.js";
 import { normalizeFelt } from "../../../client/src/prove/felt.js";
 import { rawMaxComponentRows, SegmentPlanner, type PlannerConfig } from "../../../client/src/prove/planner.js";
 import { SegmentStatus, type Felt, type SegmentOutput } from "../../../client/src/prove/types.js";
+import { packLog, TICS_PER_FELT } from "../../../client/src/prove/ticcmd.js";
 import { commitLog } from "./commitment.js";
 import { stepsOnlySummary, type Executor } from "./executor.js";
 import { segmentLog } from "./journal.js";
@@ -69,6 +78,19 @@ export interface CutResult {
   chain: ChainResult;
 }
 
+/**
+ * A candidate length aligned on 7 tics unless it reaches the end of the journal. Throws when
+ * the ceiling leaves no room for even seven tics: such a journal cannot be settled.
+ */
+export function alignCandidate(candidate: number, available: number): number {
+  if (candidate >= available) return available;
+  const aligned = Math.floor(candidate / TICS_PER_FELT) * TICS_PER_FELT;
+  if (aligned <= 0) {
+    throw new Error(`no segment of at least ${TICS_PER_FELT} tics fits the ceiling: the run cannot be cut on 7-tic boundaries`);
+  }
+  return aligned;
+}
+
 /** Cuts and executes the whole journal. Throws on any disagreement with the runtime. */
 export async function cutJournal(
   executor: Executor,
@@ -97,7 +119,7 @@ export async function cutJournal(
   while (ticStart < words.length && !finished) {
     const available = words.length - ticStart;
     const wanted = planner.propose(Number.MAX_SAFE_INTEGER, threads);
-    let candidate = Math.min(wanted, available);
+    let candidate = alignCandidate(Math.min(wanted, available), available);
     const index = segments.length;
     let probes = 0;
 
@@ -117,6 +139,9 @@ export async function cutJournal(
         }
         if (out.status === SegmentStatus.ABORT) {
           throw new Error(`segment ${index}: the journal is invalid at tic ${out.ticEnd - 1} (ABORT, R4-A2)`);
+        }
+        if (out.status === SegmentStatus.RUNNING && out.ticEnd < words.length && (out.ticEnd - ticStart) % TICS_PER_FELT !== 0) {
+          throw new Error(`segment ${index}: a non-final segment of ${out.ticEnd - ticStart} tics breaks the 7-tic alignment`);
         }
         const own = segmentLog(words, ticStart, out.ticEnd);
         if (own.commitment !== BigInt(out.inputsCommitment)) {
@@ -169,6 +194,7 @@ export async function cutJournal(
       if (probes >= planner.config.maxProbes) {
         candidate = Math.max(planner.config.minTics, Math.floor(candidate / 2));
       }
+      candidate = alignCandidate(candidate, available);
     }
   }
 
@@ -207,7 +233,9 @@ async function advance(
 /**
  * The whole run's chain: `verifyChain` (genesis, `h_out → h_in`, tic continuity, counters,
  * terminal status), plus what only this node can check — every `inputs_commitment` folds from
- * the segment's own slice of the words, and the segments cover the journal exactly.
+ * the segment's own slice of the words, the segments cover the journal exactly, every non-final
+ * one is 7-aligned, and the concatenation of their logs is the committed journal felt for felt
+ * (what the contract folds to settle a multi-segment run).
  */
 export function checkSegmentChain(
   segments: readonly PlannedSegment[],
@@ -216,6 +244,11 @@ export function checkSegmentChain(
 ): ChainResult {
   const chain = verifyChain(segments.map((s) => s.output), { genesis, requireFinished: true });
   if (!chain.ok) return chain;
+  for (const s of segments.slice(0, -1)) {
+    if ((s.output.ticEnd - s.output.ticStart) % TICS_PER_FELT !== 0) {
+      return { ok: false, index: s.index, reason: `non-final segment of ${s.output.ticEnd - s.output.ticStart} tics is not a multiple of ${TICS_PER_FELT}` };
+    }
+  }
   for (const s of segments) {
     if (s.output.ticStart !== s.ticStart || s.output.ticEnd !== s.ticEnd) {
       return { ok: false, index: s.index, reason: "the record's tic span differs from its output" };
@@ -231,6 +264,11 @@ export function checkSegmentChain(
   const last = segments[segments.length - 1]!;
   if (last.ticEnd !== words.length) {
     return { ok: false, index: last.index, reason: `segments cover ${last.ticEnd} of ${words.length} tics` };
+  }
+  const concatenated = segments.flatMap((s) => s.packed.map((f) => BigInt(f)));
+  const journal = packLog(words).map((f) => BigInt(f));
+  if (concatenated.length !== journal.length || concatenated.some((f, i) => f !== journal[i])) {
+    return { ok: false, index: last.index, reason: "the concatenated replay logs are not the committed journal: the contract could not settle the run" };
   }
   return chain;
 }

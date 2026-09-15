@@ -1,28 +1,40 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Discovery: the commitments `DoomRuns` has emitted and not settled yet.
+ * Discovery: the commitments `DoomRuns` has emitted, with their journals assembled from the
+ * `RunLog` chunks, minus the ones proved, reclaimed or expired.
  *
- * Reads `RunCommitted` / `CommitmentSettled` through the indexer's {@link EventSource} (the same
- * `starknet_getEvents` pager, `infra/indexer/src/rpcSource.ts` for a real node, a fixed list in
- * tests), with the indexer's reorg rule: the last `reorgDepth` blocks are re-scanned on every
- * poll. Commitments are immutable and keyed by id, so a re-scan is idempotent; a commitment
- * that vanished in a reorg is dropped from the open set and picked up again if it comes back.
+ * Reads through the indexer's {@link EventSource} (the same `starknet_getEvents` pager,
+ * `rpcSource.ts` for a real node, a fixed list in tests) with the indexer's reorg rule: the last
+ * `reorgDepth` blocks are re-scanned on every poll. Everything is keyed by commitment id and
+ * immutable, so a re-scan is idempotent; a commitment that vanished in a reorg is dropped from
+ * the open set and picked up again if it comes back.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import type { EventSource } from "../../indexer/src/types.js";
-import { decodeCommitmentEvent, type CommitmentSettledEvent, type RunCommitment } from "./commitments.js";
+import {
+  assembleJournal,
+  decodeCommitmentEvent,
+  type CommitmentProvedEvent,
+  type CommitmentReclaimedEvent,
+  type RunCommittedEvent,
+  type RunCommitment,
+  type RunLogEvent,
+} from "./commitments.js";
+
+export type Settlement = CommitmentProvedEvent | CommitmentReclaimedEvent;
 
 export interface DiscoveryState {
   /** Head of the last successful poll, the next poll resumes `reorgDepth` blocks below it. */
   lastBlock: number | null;
-  committed: Record<string, RunCommitment>;
-  settled: Record<string, CommitmentSettledEvent>;
+  headers: Record<string, RunCommittedEvent>;
+  chunks: Record<string, RunLogEvent[]>;
+  settled: Record<string, Settlement>;
 }
 
 export function emptyDiscoveryState(): DiscoveryState {
-  return { lastBlock: null, committed: {}, settled: {} };
+  return { lastBlock: null, headers: {}, chunks: {}, settled: {} };
 }
 
 export interface DiscoveryOptions {
@@ -36,27 +48,26 @@ export interface DiscoveryResult {
   fromBlock: number;
   head: number;
   seen: number;
-  /** Open = committed and not settled, oldest block first. */
+  /** Open = committed with a complete journal, not settled, not expired; oldest block first. */
   open: RunCommitment[];
+  /** Commitments whose journal chunks are missing or inconsistent (never provable as seen). */
+  incomplete: { commitmentId: string; reason: string }[];
 }
 
-/**
- * One poll. Rows learned from `[fromBlock, head]` are purged and re-derived, everything below is
- * kept — same shape as `infra/indexer/src/indexer.ts::pollOnce`, over two maps instead of SQLite.
- */
-export async function discoverOnce(
-  source: EventSource,
-  state: DiscoveryState,
-  options: DiscoveryOptions,
-): Promise<DiscoveryResult> {
+/** One poll: purge-and-rescan `[fromBlock, head]`, page, apply, advance the cursor. */
+export async function discoverOnce(source: EventSource, state: DiscoveryState, options: DiscoveryOptions): Promise<DiscoveryResult> {
   const reorgDepth = options.reorgDepth ?? 10;
   const head = await source.blockNumber();
-  const fromBlock =
-    state.lastBlock === null ? options.startBlock : Math.max(options.startBlock, state.lastBlock - reorgDepth + 1);
-  if (fromBlock > head) return { fromBlock, head, seen: 0, open: openCommitments(state) };
+  const fromBlock = state.lastBlock === null ? options.startBlock : Math.max(options.startBlock, state.lastBlock - reorgDepth + 1);
+  if (fromBlock > head) return { fromBlock, head, seen: 0, ...openCommitments(state, head) };
 
-  for (const [id, c] of Object.entries(state.committed)) if (c.blockNumber >= fromBlock) delete state.committed[id];
+  for (const [id, h] of Object.entries(state.headers)) if (h.blockNumber >= fromBlock) delete state.headers[id];
   for (const [id, s] of Object.entries(state.settled)) if (s.blockNumber >= fromBlock) delete state.settled[id];
+  for (const [id, list] of Object.entries(state.chunks)) {
+    const kept = list.filter((c) => c.blockNumber < fromBlock);
+    if (kept.length) state.chunks[id] = kept;
+    else delete state.chunks[id];
+  }
 
   let seen = 0;
   let continuationToken: string | undefined;
@@ -73,28 +84,51 @@ export async function discoverOnce(
       try {
         decoded = decodeCommitmentEvent(raw);
       } catch {
-        continue; // a malformed commitment is not provable; it is skipped, not fatal
+        continue; // a malformed event is not provable; it is skipped, not fatal
       }
       if (!decoded) continue;
       seen++;
-      if (decoded.kind === "RunCommitted") {
-        const { kind: _kind, ...commitment } = decoded;
-        state.committed[commitment.commitmentId] = commitment;
-      } else {
-        state.settled[decoded.commitmentId] = decoded;
+      switch (decoded.kind) {
+        case "RunCommitted":
+          state.headers[decoded.commitmentId] = decoded;
+          break;
+        case "RunLog":
+          (state.chunks[decoded.commitmentId] ??= []).push(decoded);
+          break;
+        default:
+          state.settled[decoded.commitmentId] = decoded;
       }
     }
     continuationToken = page.continuationToken;
   } while (continuationToken);
 
   state.lastBlock = head;
-  return { fromBlock, head, seen, open: openCommitments(state) };
+  return { fromBlock, head, seen, ...openCommitments(state, head) };
 }
 
-export function openCommitments(state: DiscoveryState): RunCommitment[] {
-  return Object.values(state.committed)
-    .filter((c) => !(c.commitmentId in state.settled))
-    .sort((a, b) => a.blockNumber - b.blockNumber || a.commitmentId.localeCompare(b.commitmentId));
+export function openCommitments(state: DiscoveryState, head: number): { open: RunCommitment[]; incomplete: DiscoveryResult["incomplete"] } {
+  const open: RunCommitment[] = [];
+  const incomplete: DiscoveryResult["incomplete"] = [];
+  for (const header of Object.values(state.headers)) {
+    const id = header.commitmentId;
+    if (id in state.settled) continue;
+    if (header.expiresAt > 0 && head >= header.expiresAt) continue;
+    let journal: string[] | null;
+    try {
+      journal = assembleJournal(header, state.chunks[id] ?? []);
+    } catch (e) {
+      incomplete.push({ commitmentId: id, reason: (e as Error).message });
+      continue;
+    }
+    if (!journal) {
+      incomplete.push({ commitmentId: id, reason: `${(state.chunks[id] ?? []).length} of ${header.nChunks} journal chunk(s) seen` });
+      continue;
+    }
+    const { kind: _kind, ...fields } = header;
+    open.push({ ...fields, journal });
+  }
+  open.sort((a, b) => a.blockNumber - b.blockNumber || a.commitmentId.localeCompare(b.commitmentId));
+  return { open, incomplete };
 }
 
 /** JSON file persistence of the discovery state (bigints as decimal strings). */
@@ -105,8 +139,9 @@ export class FileDiscoveryStore {
     if (!existsSync(this.path)) return emptyDiscoveryState();
     try {
       const raw = JSON.parse(readFileSync(this.path, "utf8")) as DiscoveryState;
-      for (const c of Object.values(raw.committed)) c.bounty = BigInt(c.bounty as unknown as string);
-      return raw;
+      for (const h of Object.values(raw.headers)) h.bounty = BigInt(h.bounty as unknown as string);
+      for (const s of Object.values(raw.settled)) s.bounty = BigInt(s.bounty as unknown as string);
+      return { ...emptyDiscoveryState(), ...raw };
     } catch {
       return emptyDiscoveryState();
     }
@@ -114,9 +149,6 @@ export class FileDiscoveryStore {
 
   save(state: DiscoveryState): void {
     mkdirSync(dirname(this.path), { recursive: true });
-    writeFileSync(
-      this.path,
-      JSON.stringify(state, (_k, v: unknown) => (typeof v === "bigint" ? v.toString() : v), 1),
-    );
+    writeFileSync(this.path, JSON.stringify(state, (_k, v: unknown) => (typeof v === "bigint" ? v.toString() : v), 1));
   }
 }

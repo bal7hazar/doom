@@ -40,7 +40,8 @@ export interface JobRecord {
     proofId: string;
     fact?: string;
     transactions: { label: string; hash: string }[];
-    claimTx?: string;
+    /** A `CommitmentProved` event followed the member submission. */
+    settled?: boolean;
   } | null;
   error?: string;
   attempts: number;
@@ -113,6 +114,17 @@ export class FileJobStore {
   getProof(commitmentId: string, index: number): ProofArtifact | null {
     const path = this.proofPath(commitmentId, index);
     return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as ProofArtifact) : null;
+  }
+
+  /** The wrapper's batch response, kept so a relaunch after the fold needs no new upload. */
+  putBatch(commitmentId: string, doc: unknown): void {
+    mkdirSync(this.dirOf(commitmentId), { recursive: true });
+    writeFileSync(join(this.dirOf(commitmentId), "batch.json"), JSON.stringify(doc));
+  }
+
+  getBatch<T>(commitmentId: string): T | null {
+    const path = join(this.dirOf(commitmentId), "batch.json");
+    return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as T) : null;
   }
 
   /** Indices with a proof on disk, ascending. */

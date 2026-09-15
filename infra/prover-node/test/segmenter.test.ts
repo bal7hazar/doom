@@ -3,8 +3,9 @@
 import { describe, expect, it } from "vitest";
 
 import { SegmentPlanner } from "../../../client/src/prove/planner.js";
+import { packLog } from "../../../client/src/prove/ticcmd.js";
 import { stepsOnlySummary, FakeExecutor } from "../src/executor.js";
-import { checkSegmentChain, cutJournal } from "../src/segmenter.js";
+import { alignCandidate, checkSegmentChain, cutJournal } from "../src/segmenter.js";
 import { parseScarbOutput } from "../src/scarbExecutor.js";
 import { fixtureJournal } from "./fixtures.js";
 
@@ -31,7 +32,8 @@ describe("cutJournal", () => {
     let tic = 0;
     let state = (await oracle.genesis(1)).state;
     while (tic < words.length) {
-      let candidate = Math.min(planner.propose(Number.MAX_SAFE_INTEGER, 1), words.length - tic);
+      const available = words.length - tic;
+      let candidate = alignCandidate(Math.min(planner.propose(Number.MAX_SAFE_INTEGER, 1), available), available);
       let probes = 0;
       for (;;) {
         probes++;
@@ -50,6 +52,7 @@ describe("cutJournal", () => {
         if (verdict.verdict === "impossible") throw new Error(verdict.reason);
         candidate = verdict.tics;
         if (probes >= planner.config.maxProbes) candidate = Math.max(1, Math.floor(candidate / 2));
+        candidate = alignCandidate(candidate, available);
       }
     }
     expect(segments.map((s) => ({ ticStart: s.ticStart, ticEnd: s.ticEnd, probes: s.probes }))).toEqual(expected);
@@ -60,6 +63,11 @@ describe("cutJournal", () => {
       expect(s.resources.rowsChecked).toBe(true);
       expect(s.args.length).toBe(1 + 47 + 1 + (s.ticEnd - s.ticStart) + 2);
     }
+    // Every non-final boundary is on a multiple of 7 tics, so the replay logs concatenate to
+    // the committed journal — which is what DoomRuns folds to pay a multi-segment bounty.
+    for (const s of segments.slice(0, -1)) expect((s.ticEnd - s.ticStart) % 7).toBe(0);
+    expect((segments[segments.length - 1]!.ticEnd - segments[segments.length - 1]!.ticStart) % 7).not.toBe(0);
+    expect(segments.flatMap((s) => s.packed)).toEqual(packLog(words));
     // step_tic replays exactly the accepted tics, 32 at a time, never past a boundary.
     const steps = executor.calls.filter((c) => c.op === "step");
     expect(steps.reduce((a, c) => a + c.tics, 0)).toBe(segments[segments.length - 1]!.ticStart);
@@ -124,6 +132,24 @@ describe("cutJournal", () => {
 
     expect(checkSegmentChain(segments.slice(0, -1), words, genesis).reason).toMatch(/still RUNNING/);
     expect(checkSegmentChain(segments, [...words, 1], genesis).reason).toMatch(/cover 297 of 298/);
+
+    // A cut that is continuous but not 7-aligned could never be settled: refused as a chain fault.
+    const misaligned = structuredClone(segments);
+    misaligned[0]!.ticEnd -= 1;
+    misaligned[0]!.output.ticEnd -= 1;
+    misaligned[1]!.ticStart -= 1;
+    misaligned[1]!.output.ticStart -= 1;
+    expect(checkSegmentChain(misaligned, words, genesis).reason).toMatch(/not a multiple of 7/);
+  });
+
+  it("aligns proposals on 7 tics and refuses a ceiling too low for seven", async () => {
+    expect(alignCandidate(64, 297)).toBe(63);
+    expect(alignCandidate(7, 297)).toBe(7);
+    expect(alignCandidate(300, 297)).toBe(297);
+    expect(alignCandidate(20, 20)).toBe(20);
+    expect(() => alignCandidate(6, 297)).toThrow(/at least 7 tics/);
+    const tight = new FakeExecutor({ terminal: { tic: 297, status: 2 }, fixedSteps: 2_100_000 });
+    await expect(cutJournal(tight, words, { genesis: (await tight.genesis(1)).hash, levelId: 1 })).rejects.toThrow(/7-tic boundaries/);
   });
 });
 

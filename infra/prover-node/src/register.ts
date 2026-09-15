@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Registration: the D28 sequence (five verifier transactions, then `register_member` for this
- * run with its replay logs), followed by `claim_bounty(commitment_id)`.
+ * Registration: the D28 sequence — five verifier transactions, then `register_member` for this
+ * run **with its replay logs** — which is also what settles the commitment: `DoomRuns` pays the
+ * bounty to the caller of the member submission when version, level, player, tics and genesis
+ * match and the game-level commitment can be recomputed (one segment: the leaf's
+ * `inputs_commitment`; several: the fold of the concatenated replay logs, see `commitments.ts`).
+ * There is no separate claim; the `CommitmentProved` event in the consumer's receipt is the
+ * proof of payment, and its absence is reported.
  *
  * It is `client/src/chain` end to end — `prepareSubmission`, `resumePoint`, `runSequence` —
  * exactly what `infra/submit` and the browser run, with this node's signer. D20: `Member.player`
- * is the committing player, not the caller; the node is only the address that pays and, on the
- * assumed contract extension, the one that gets the bounty. The router's proof id is the
- * commitment id, so a relaunch resumes the same sequence from the router's checkpoint and the
- * echoes persisted on disk (`FileEchoStore`).
+ * is the committing player, not the caller. The router's proof id is the commitment id, so a
+ * relaunch resumes the same sequence from the router's checkpoint and the echoes persisted on
+ * disk (`FileEchoStore`).
  */
 import { checkBatch, membersFromPlacements, type Member, type WrapperBatch } from "../../../client/src/chain/batch.js";
 import {
@@ -24,7 +28,7 @@ import { resumePoint, runSequence, storedFriSplit, type EchoStore, type ResumePo
 import type { Signer } from "../../../client/src/chain/signer.js";
 import { isRunRegistered, prepareSubmission, runIdOf, type PrepareArgs, type PreparedSubmission } from "../../../client/src/chain/submission.js";
 import { submissionPlans } from "../../submit/src/planning.js";
-import { claimCall } from "./commitments.js";
+import { COMMITMENT_STATUS, getCommitment, settlementIn, type CommitmentProvedEvent } from "./commitments.js";
 import type { JobRecord } from "./store.js";
 
 export interface Estimate {
@@ -46,10 +50,14 @@ export interface RegisterOptions {
   echoStore: EchoStore;
   versionId?: number;
   proofId?: bigint;
-  /** Publish the packed logs (R10-A3). On by default: the commitment already made them public. */
+  /**
+   * Publish the packed logs (R10-A3). On by default — the commitment already made them public —
+   * and **forced on for a multi-segment run**, without which the run is recorded but the bounty
+   * is not paid.
+   */
   replay?: boolean;
-  /** Send `claim_bounty` after the run is recorded. */
-  claim?: boolean;
+  /** Check `get_commitment` before paying (off only for a node whose contract lacks the view). */
+  preflightCommitment?: boolean;
   /** Bounds for the sequence; defaults to the D28 simulate-before-send loop over the RPC. */
   estimate?: (args: PrepareArgs, prepared: PreparedSubmission, resume: ResumePoint, verifierOnly: boolean) => Promise<Estimate>;
   /** Bounds for one standalone call (the claim); defaults to a simulation from the signer. */
@@ -64,7 +72,8 @@ export interface RegisterResult {
   alreadyRegistered: boolean;
   fact?: string;
   transactions: { label: string; hash: string }[];
-  claimTx?: string;
+  /** The bounty payment found in the consumer's receipt (or on chain, when resuming). */
+  settlement: CommitmentProvedEvent | { runId: string; prover: string } | null;
   resumedAt: number;
 }
 
@@ -80,6 +89,21 @@ export async function registerRun(options: RegisterOptions): Promise<RegisterRes
   if (!member) throw new Error(`the batch carries no leaves for run ${runId}`);
   const problems = checkBatch(batch, [member], BigInt(c.genesis));
   if (problems.length) throw new Error(`the batch would be rejected on chain: ${problems.join("; ")}`);
+  const replay = (options.replay ?? true) || member.leafLen > 1;
+  if (!replay) log("single segment: the leaf's inputs_commitment settles the commitment, no replay published");
+  else if (options.replay === false) log(`replay forced on: ${member.leafLen} segments need their logs on chain for the bounty`);
+
+  if (options.preflightCommitment ?? true) {
+    const view = await getCommitment(rpc, doomRuns, c.commitmentId);
+    if (view.status === COMMITMENT_STATUS.PROVED && BigInt(view.prover) !== BigInt(signer.address)) {
+      throw new Error(`commitment ${c.commitmentId} was already proved by ${view.prover} (run ${view.runId})`);
+    }
+    if (view.status === COMMITMENT_STATUS.RECLAIMED) throw new Error(`commitment ${c.commitmentId} was reclaimed by its player`);
+    if (view.status === COMMITMENT_STATUS.NONE) throw new Error(`commitment ${c.commitmentId} does not exist on ${doomRuns}`);
+    if (view.tics !== c.tics || BigInt(view.player) !== BigInt(c.player) || BigInt(view.genesis) !== BigInt(c.genesis)) {
+      throw new Error(`commitment ${c.commitmentId} on chain differs from the one discovered (tics ${view.tics}, player ${view.player})`);
+    }
+  }
 
   const savedSplit = storedFriSplit(options.echoStore, proofId, router, signer.address);
   const args: PrepareArgs = {
@@ -90,7 +114,7 @@ export async function registerRun(options: RegisterOptions): Promise<RegisterRes
     proofId,
     players: { [runId]: c.player },
     levelIds: { [runId]: c.levelId },
-    replay: options.replay ?? true,
+    replay,
     singleMember: member,
     ...(savedSplit ? { plan: { friSplit: savedSplit } } : {}),
   };
@@ -111,6 +135,7 @@ export async function registerRun(options: RegisterOptions): Promise<RegisterRes
 
   job.chain = { ...(job.chain ?? { transactions: [] }), proofId: "0x" + proofId.toString(16) };
   const transactions: { label: string; hash: string }[] = [];
+  let consumerTx: string | undefined;
   const result = await runSequence(rpc, prepared.sequence, {
     signer,
     bounds: [...new Array<ResourceBounds>(resume.nextPhase).fill(estimate.bounds[0]!), ...estimate.bounds],
@@ -120,21 +145,25 @@ export async function registerRun(options: RegisterOptions): Promise<RegisterRes
       if (p.state === "accepted" && p.transactionHash) {
         transactions.push({ label: p.label, hash: p.transactionHash });
         job.chain!.transactions = [...transactions];
+        if (p.phase === "consumer") consumerTx = p.transactionHash;
       }
       options.onProgress?.(p);
     },
   });
   if (result.fact) job.chain.fact = result.fact;
 
-  let claimTx: string | undefined;
-  if (options.claim ?? true) {
-    const call = claimCall(doomRuns, c.commitmentId);
-    const bounds = await (options.estimateCall ?? ((cl) => estimateStandalone(rpc, signer.address, cl)))(call);
-    const sent = await signer.execute([call], { bounds });
-    await rpc.waitForReceipt(sent.transactionHash);
-    claimTx = sent.transactionHash;
-    job.chain.claimTx = claimTx;
-    log(`claim_bounty sent: ${claimTx}`);
+  // Was the bounty paid? The consumer's receipt says so; on a resume, the contract does.
+  let settlement: RegisterResult["settlement"] = null;
+  if (consumerTx) {
+    const receipt = (await rpc.waitForReceipt(consumerTx)) as { events?: { keys?: string[]; data?: string[] }[] };
+    settlement = settlementIn(receipt.events, c.commitmentId);
+    job.chain.settled = settlement !== null;
+    if (settlement) log(`bounty settled: ${"bounty" in settlement ? settlement.bounty : "?"} FRI to ${settlement.prover} for run ${settlement.runId}`);
+    else log("register_member was accepted but no CommitmentProved event followed: the run is recorded, the bounty is not paid");
+  } else if (options.preflightCommitment ?? true) {
+    const view = await getCommitment(rpc, doomRuns, c.commitmentId);
+    if (view.status === COMMITMENT_STATUS.PROVED) settlement = { runId: view.runId, prover: view.prover };
+    job.chain.settled = settlement !== null;
   }
 
   return {
@@ -143,7 +172,7 @@ export async function registerRun(options: RegisterOptions): Promise<RegisterRes
     alreadyRegistered,
     ...(result.fact ? { fact: result.fact } : {}),
     transactions,
-    ...(claimTx ? { claimTx } : {}),
+    settlement,
     resumedAt: result.resumedAt,
   };
 }

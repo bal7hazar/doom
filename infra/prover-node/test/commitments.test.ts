@@ -6,49 +6,96 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  assembleJournal,
   checkCommitment,
-  claimCall,
+  COMMITMENT_SELECTORS,
+  commitmentIdOf,
   decodeCommitmentEvent,
+  decodeCommitmentView,
+  settlementIn,
   wrapperRunId,
+  type RunCommittedEvent,
+  type RunLogEvent,
 } from "../src/commitments.js";
 import { discoverOnce, emptyDiscoveryState, FileDiscoveryStore } from "../src/discovery.js";
 import { reconstructJournal, segmentLog } from "../src/journal.js";
 import { DEFAULT_POLICY, selectCommitments } from "../src/policy.js";
 import {
+  CHUNK,
+  commitmentEvents,
   fakeCommitment,
   FakeEventSource,
   fixtureGenesis,
   fixtureJournal,
   fixtureLeaf,
+  provedEvent,
+  reclaimedEvent,
   runCommittedEvent,
-  settledEvent,
+  runLogEvents,
 } from "./fixtures.js";
 
 const words = fixtureJournal(0);
 
 describe("RunCommitted decoding", () => {
-  it("round-trips a fabricated event and verifies its commitment", () => {
-    const c = fakeCommitment(words);
-    const decoded = decodeCommitmentEvent(runCommittedEvent(c));
-    expect(decoded?.kind).toBe("RunCommitted");
-    if (decoded?.kind !== "RunCommitted") throw new Error("unreachable");
-    const { kind: _k, ...fields } = decoded;
-    expect(fields).toEqual(c);
-    expect(checkCommitment(decoded, { genesis: fixtureGenesis() })).toEqual([]);
-    const journal = reconstructJournal(decoded, { genesis: fixtureGenesis() });
-    expect(journal.words).toEqual(words);
-    expect(journal.inputsCommitment).toBe(BigInt(c.inputsCommitment));
+  it("pins the selectors the contract wave announced", () => {
+    expect(COMMITMENT_SELECTORS["0x1099626e2b9a923474254b7263af666f7c1a048447bb0a1e4dc8b8d0419e33c"]).toBe("RunCommitted");
+    expect(COMMITMENT_SELECTORS["0x2d88b9fb81ec1e6da1d03071766806fc8fa19acced5d8e3c6d2d603a6b9d251"]).toBe("RunLog");
   });
 
-  it("decodes a settlement and ignores the other DoomRuns events", () => {
-    const s = decodeCommitmentEvent(settledEvent({ commitmentId: "0xc1", runId: "0x77", outcome: 0, block: 5 }));
-    expect(s).toMatchObject({ kind: "CommitmentSettled", commitmentId: "0xc1", runId: "0x77", outcome: "proved" });
+  it("decodes a fabricated header and its chunks, assembles the journal and verifies it", () => {
+    const c = fakeCommitment(words);
+    expect(c.nChunks).toBe(Math.ceil(43 / CHUNK));
+    const header = decodeCommitmentEvent(runCommittedEvent(c)) as RunCommittedEvent;
+    expect(header.kind).toBe("RunCommitted");
+    const { kind: _k, ...fields } = header;
+    const { journal: _j, ...expected } = c;
+    expect(fields).toEqual(expected);
+    const chunks = runLogEvents(c).map((e) => decodeCommitmentEvent(e) as RunLogEvent);
+    expect(chunks.map((ch) => [ch.chunk, ch.offset, ch.packed.length])).toEqual([[0, 0, 16], [1, 16, 16], [2, 32, 11]]);
+    // Chunks arrive in any order; the journal is the concatenation in chunk order.
+    const journal = assembleJournal(header, [...chunks].reverse());
+    expect(journal).toEqual(c.journal);
+    const assembled = { ...fields, journal: journal! };
+    expect(checkCommitment(assembled, { genesis: fixtureGenesis(), head: 999 })).toEqual([]);
+    const rec = reconstructJournal(assembled, { genesis: fixtureGenesis() });
+    expect(rec.words).toEqual(words);
+    expect(rec.inputsCommitment).toBe(BigInt(c.inputsCommitment));
+    expect(c.commitmentId).toBe(commitmentIdOf(1, 1, "0x1a7e5", c.inputsCommitment));
+  });
+
+  it("waits for missing chunks and refuses inconsistent ones", () => {
+    const c = fakeCommitment(words);
+    const header = decodeCommitmentEvent(runCommittedEvent(c)) as RunCommittedEvent;
+    const chunks = runLogEvents(c).map((e) => decodeCommitmentEvent(e) as RunLogEvent);
+    expect(assembleJournal(header, chunks.slice(0, 2))).toBeNull();
+    expect(assembleJournal(header, [chunks[0]!, chunks[2]!])).toBeNull();
+    const shifted = { ...chunks[1]!, offset: 15 };
+    expect(() => assembleJournal(header, [chunks[0]!, shifted, chunks[2]!])).toThrow(/chunk 1 starts at 15, expected 16/);
+    const short = { ...chunks[2]!, packed: chunks[2]!.packed.slice(1) };
+    expect(() => assembleJournal(header, [chunks[0]!, chunks[1]!, short])).toThrow(/42 felts over 3 chunk\(s\), packed_len\(297\) = 43/);
+    const twice = { ...chunks[1]!, packed: [...chunks[1]!.packed].reverse() };
+    expect(() => assembleJournal(header, [...chunks, twice])).toThrow(/emitted twice/);
+    // A raw chunk whose declared length is off is rejected at decode time.
+    const raw = runLogEvents(c)[0]!;
+    raw.data[2] = "0x11";
+    expect(() => decodeCommitmentEvent(raw)).toThrow(/packed length/);
+  });
+
+  it("decodes settlements and the Commitment view, and ignores the other DoomRuns events", () => {
+    const proved = decodeCommitmentEvent(provedEvent({ commitmentId: "0xc1", prover: "0x9", runId: "0x77", block: 5 }));
+    expect(proved).toMatchObject({ kind: "CommitmentProved", commitmentId: "0xc1", runId: "0x77", prover: "0x9", player: "0x1a7e5", bounty: 5_000_000_000_000_000_000n });
+    expect(decodeCommitmentEvent(reclaimedEvent({ commitmentId: "0xc1", block: 6 }))).toMatchObject({ kind: "CommitmentReclaimed", player: "0x1a7e5" });
     const other = runCommittedEvent(fakeCommitment(words));
     other.keys[0] = "0x1234";
     expect(decodeCommitmentEvent(other)).toBeUndefined();
+    const view = decodeCommitmentView(["0x1a7e5", "0x1", "0x1", "0x3", "0x4", "0x129", "0x64", "0x0", "0x5", "0x3e8", "0x2", "0x77", "0x9"]);
+    expect(view).toMatchObject({ player: "0x1a7e5", tics: 297, bounty: 100n, expiresAt: 1000, status: 2, runId: "0x77", prover: "0x9" });
+    expect(settlementIn(provedEvent({ commitmentId: "0xc1", prover: "0x9", block: 1 }) && [{ keys: provedEvent({ commitmentId: "0xc1", prover: "0x9", block: 1 }).keys, data: provedEvent({ commitmentId: "0xc1", prover: "0x9", block: 1 }).data }], "0x0c1"))
+      .toMatchObject({ prover: "0x9" });
+    expect(settlementIn([{ keys: ["0x1", "0x2"], data: [] }], "0xc1")).toBeNull();
   });
 
-  it("refuses a tampered journal, a wrong length and a wrong genesis", () => {
+  it("refuses a tampered journal, a wrong length, a wrong id, a wrong genesis and an expiry", () => {
     const c = fakeCommitment(words);
     const tampered = { ...c, journal: [...c.journal] };
     tampered.journal[3] = "0x" + (BigInt(tampered.journal[3]!) ^ 1n).toString(16);
@@ -57,16 +104,14 @@ describe("RunCommitted decoding", () => {
     expect(checkCommitment({ ...c, tics: c.tics + 7 })[0]).toMatch(/packed_len/);
     // 296 tics pack into the same 43 felts as 297: only the lane check can catch it.
     expect(checkCommitment({ ...c, tics: c.tics - 1 })[0]).toMatch(/lane/);
+    expect(checkCommitment({ ...c, commitmentId: "0x1" })[0]).toMatch(/not poseidon\('HP.COMMIT'/);
     expect(checkCommitment(c, { genesis: "0x1" })[0]).toMatch(/not the pinned/);
+    expect(checkCommitment(c, { head: 1000 })[0]).toMatch(/expired at block 1000/);
+    expect(checkCommitment({ ...c, expiresAt: 0 }, { head: 10_000 })).toEqual([]);
     expect(() => reconstructJournal(tampered)).toThrow(/refused/);
-    // The last felt may not carry lanes beyond the tic count.
     const overfull = { ...c, journal: [...c.journal] };
     overfull.journal[overfull.journal.length - 1] = "0x" + ((1n << 224n) - 1n).toString(16);
     expect(checkCommitment(overfull).some((p) => /lane/.test(p))).toBe(true);
-    // A malformed raw event (declared journal length off by one) is rejected at decode time.
-    const raw = runCommittedEvent(c);
-    raw.data[6] = "0x" + (c.journal.length + 1).toString(16);
-    expect(() => decodeCommitmentEvent(raw)).toThrow(/journal length/);
   });
 
   it("re-packs a segment's own slice to the commitment the proof carries", () => {
@@ -75,14 +120,9 @@ describe("RunCommitted decoding", () => {
     expect(() => segmentLog(words, 100, 300)).toThrow(/outside/);
   });
 
-  it("derives a wrapper run id and the claim call", () => {
+  it("derives a wrapper run id", () => {
     const id = wrapperRunId("0x" + "f".repeat(63));
     expect(id).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
-    expect(claimCall("0xd00d", "0x0c1")).toEqual({
-      contractAddress: "0xd00d",
-      entrypoint: "claim_bounty",
-      calldata: ["0xc1"],
-    });
   });
 });
 
@@ -94,21 +134,27 @@ describe("discovery", () => {
     const a = fakeCommitment(words, { blockNumber: 3 });
     const b = fakeCommitment(words.slice(0, 50), { blockNumber: 8 });
     const c = fakeCommitment(words.slice(0, 20), { blockNumber: 23 });
+    const d = fakeCommitment(words.slice(0, 30), { blockNumber: 9, expiresAt: 20 });
+    const partial = fakeCommitment(words.slice(0, 40), { blockNumber: 15 });
     const source = new FakeEventSource(
       [
-        runCommittedEvent(a),
-        runCommittedEvent(b),
-        settledEvent({ commitmentId: b.commitmentId, block: 12 }),
-        runCommittedEvent(c),
+        ...commitmentEvents(a),
+        ...commitmentEvents(b),
+        provedEvent({ commitmentId: b.commitmentId, prover: "0x9", block: 12 }),
+        ...commitmentEvents(d),
+        runCommittedEvent(partial), // its RunLog chunks never show up
+        ...commitmentEvents(c),
       ],
       25,
       2,
     );
     const state = emptyDiscoveryState();
     const first = await discoverOnce(source, state, { address: "0xd00d", startBlock: 0, reorgDepth: 5 });
-    expect(first).toMatchObject({ fromBlock: 0, head: 25, seen: 4 });
+    expect(first).toMatchObject({ fromBlock: 0, head: 25, seen: source.events.length });
     expect(first.open.map((x) => x.commitmentId)).toEqual([a.commitmentId, c.commitmentId]);
-    expect(source.calls).toHaveLength(2);
+    expect(first.open[0]!.journal).toEqual(a.journal);
+    expect(first.incomplete).toEqual([{ commitmentId: partial.commitmentId, reason: "0 of 1 journal chunk(s) seen" }]);
+    expect(source.calls.length).toBeGreaterThan(3);
 
     // Next poll re-scans only the last five blocks; `c` (block 23) vanished in a reorg.
     source.head = 26;
@@ -116,7 +162,10 @@ describe("discovery", () => {
     const second = await discoverOnce(source, state, { address: "0xd00d", startBlock: 0, reorgDepth: 5 });
     expect(second.fromBlock).toBe(21);
     expect(second.open.map((x) => x.commitmentId)).toEqual([a.commitmentId]);
-    expect(state.settled[b.commitmentId]).toBeDefined();
+    expect(state.settled[b.commitmentId]?.kind).toBe("CommitmentProved");
+    // A reclaim closes a commitment too.
+    source.events.push(reclaimedEvent({ commitmentId: a.commitmentId, block: 26 }));
+    expect((await discoverOnce(source, state, { address: "0xd00d", startBlock: 0, reorgDepth: 5 })).open).toEqual([]);
 
     const dir = mkdtempSync(join(tmpdir(), "prover-node-discovery-"));
     dirs.push(dir);
@@ -124,7 +173,8 @@ describe("discovery", () => {
     store.save(state);
     const reloaded = store.load();
     expect(reloaded.lastBlock).toBe(26);
-    expect(reloaded.committed[a.commitmentId]!.bounty).toBe(a.bounty);
+    expect(reloaded.headers[a.commitmentId]!.bounty).toBe(a.bounty);
+    expect(reloaded.settled[b.commitmentId]!.bounty).toBe(5_000_000_000_000_000_000n);
   });
 });
 

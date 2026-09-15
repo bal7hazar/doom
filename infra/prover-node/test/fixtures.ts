@@ -15,7 +15,7 @@ import { hash } from "starknet";
 import { packLog, unpackLog } from "../../../client/src/prove/ticcmd.js";
 import type { EventSource, RawEvent } from "../../indexer/src/types.js";
 import { commitWords } from "../src/commitment.js";
-import type { RunCommitment } from "../src/commitments.js";
+import { commitmentIdOf, type RunCommitment } from "../src/commitments.js";
 
 export const FIXTURE_DIR = join(
   import.meta.dirname,
@@ -67,65 +67,94 @@ export function fixtureGenesis(): string {
 
 let counter = 0;
 
-/** A commitment around a journal, as the contract would emit it (values, not the raw event). */
+/** Chunk size the fixtures emit `RunLog` with; the contract's ceiling is 256. */
+export const CHUNK = 16;
+
+/** A commitment around a journal, as the contract derives it (values, not the raw events). */
 export function fakeCommitment(
   words: readonly number[],
   overrides: Partial<RunCommitment> = {},
 ): RunCommitment {
   counter++;
-  return {
-    commitmentId: "0x" + (0xc0ffee00 + counter).toString(16),
+  const journal = packLog(words);
+  const base = {
     player: "0x1a7e5",
     versionId: 1,
     levelId: 1,
-    genesis: fixtureGenesis(),
     inputsCommitment: "0x" + commitWords(words).toString(16),
+    ...overrides,
+  };
+  return {
+    commitmentId: commitmentIdOf(base.versionId, base.levelId, base.player, base.inputsCommitment),
+    genesis: fixtureGenesis(),
     tics: words.length,
     bounty: 5_000_000_000_000_000_000n,
-    journal: packLog(words),
+    expiresAt: 1000,
+    nChunks: Math.max(1, Math.ceil(journal.length / CHUNK)),
+    journal,
     blockNumber: 10 + counter,
     txHash: "0x7c" + counter.toString(16),
     ...overrides,
+    ...base,
   };
 }
 
 const hex = (v: bigint | number): string => "0x" + BigInt(v).toString(16);
+const block = (n: number) => ({ block_number: n, block_hash: "0xb" + n.toString(16) });
 
-/** The raw `starknet_getEvents` entry of a `RunCommitted`, in the layout `commitments.ts` assumes. */
+/** The raw `RunCommitted` header of a commitment (no journal: that travels in `runLogEvents`). */
 export function runCommittedEvent(c: RunCommitment, from = "0xd00d"): RawEvent {
   return {
     from_address: from,
     keys: [hash.getSelectorFromName("RunCommitted"), c.commitmentId, c.player, hex(c.versionId)],
     data: [
-      hex(c.levelId),
-      c.genesis,
-      c.inputsCommitment,
-      hex(c.tics),
-      hex(c.bounty & ((1n << 128n) - 1n)),
-      hex(c.bounty >> 128n),
-      hex(c.journal.length),
-      ...c.journal,
+      hex(c.levelId), c.genesis, c.inputsCommitment, hex(c.tics),
+      hex(c.bounty & ((1n << 128n) - 1n)), hex(c.bounty >> 128n), hex(c.expiresAt), hex(c.nChunks),
     ],
-    block_number: c.blockNumber,
-    block_hash: "0xb" + c.blockNumber.toString(16),
+    ...block(c.blockNumber),
     transaction_hash: c.txHash,
   };
 }
 
-export function settledEvent(args: {
-  commitmentId: string;
-  prover?: string;
-  runId?: string;
-  outcome?: 0 | 1;
-  block: number;
-}): RawEvent {
+/** The `RunLog` chunks of a commitment's journal, `chunk` felts each, in the same transaction. */
+export function runLogEvents(c: RunCommitment, chunk = CHUNK): RawEvent[] {
+  const events: RawEvent[] = [];
+  for (let i = 0, offset = 0; i < c.nChunks; i++, offset += chunk) {
+    const packed = c.journal.slice(offset, offset + chunk);
+    events.push({
+      from_address: "0xd00d",
+      keys: [hash.getSelectorFromName("RunLog"), c.commitmentId],
+      data: [hex(i), hex(offset), hex(packed.length), ...packed],
+      ...block(c.blockNumber),
+      transaction_hash: c.txHash,
+    });
+  }
+  return events;
+}
+
+/** Header then chunks — the order the transaction emits them. */
+export function commitmentEvents(c: RunCommitment): RawEvent[] {
+  return [runCommittedEvent(c), ...runLogEvents(c)];
+}
+
+export function provedEvent(args: { commitmentId: string; prover: string; runId?: string; player?: string; bounty?: bigint; block: number }): RawEvent {
+  const bounty = args.bounty ?? 5_000_000_000_000_000_000n;
   return {
     from_address: "0xd00d",
-    keys: [hash.getSelectorFromName("CommitmentSettled"), args.commitmentId, args.prover ?? "0x9"],
-    data: [args.runId ?? "0x0", hex(args.outcome ?? 0)],
-    block_number: args.block,
-    block_hash: "0xb" + args.block.toString(16),
+    keys: [hash.getSelectorFromName("CommitmentProved"), args.commitmentId, args.runId ?? "0x7777", args.prover],
+    data: [args.player ?? "0x1a7e5", hex(bounty & ((1n << 128n) - 1n)), hex(bounty >> 128n)],
+    ...block(args.block),
     transaction_hash: "0x5e" + args.block.toString(16),
+  };
+}
+
+export function reclaimedEvent(args: { commitmentId: string; player?: string; block: number }): RawEvent {
+  return {
+    from_address: "0xd00d",
+    keys: [hash.getSelectorFromName("CommitmentReclaimed"), args.commitmentId, args.player ?? "0x1a7e5"],
+    data: [hex(5_000_000_000_000_000_000n), "0x0"],
+    ...block(args.block),
+    transaction_hash: "0x5f" + args.block.toString(16),
   };
 }
 

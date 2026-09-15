@@ -17,7 +17,7 @@ export interface ReconstructedJournal {
 }
 
 /** Unpacks and verifies; throws with every problem `checkCommitment` found. */
-export function reconstructJournal(c: RunCommitment, expected: { genesis?: string } = {}): ReconstructedJournal {
+export function reconstructJournal(c: RunCommitment, expected: { genesis?: string; head?: number } = {}): ReconstructedJournal {
   const problems = checkCommitment(c, expected);
   if (problems.length) throw new Error(`commitment ${c.commitmentId} refused: ${problems.join("; ")}`);
   const words = unpackLog(c.journal, c.tics);
