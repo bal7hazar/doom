@@ -7,6 +7,7 @@
 > Preuve réelle historique quatre tics (`0c8a3a8`) : **41,55 s**, vérification WASM/native verte. Nouveau moteur contrôlé par execute, sans nouvelle preuve ; log21 reste incompatible avec le registre log20. Aucun GO C3/16 GiB.
 > Dernière CI générale vérifiée verte : `34d7b93` (run `34769473077`) ; garde runtime WASM couverte par CI verte `34764805318`.
 > **Reprise par un autre orchestrateur : lire `docs/ORCHESTRATOR-HANDOFF.md` en premier.**
+> Audit distant 2026-09-15 : `origin` ne porte que `main` ; **`codex/game-integration` n'est pas poussée**. Commits Codex de `main` (wrapper, Memory64, D28) revus : OK, 7 doutes non bloquants consignés dans le handoff.
 > Le sponsor confirme l'arrêt de tous les agents Claude pour quota. Leurs commits et modifications
 > non commitées sont conservés ; reprise par des agents Codex dans des worktrees distincts.
 

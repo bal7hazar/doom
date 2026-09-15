@@ -1,6 +1,7 @@
 # Handoff d’orchestration — Hellproof
 
-> État actualisé le **2026-09-13**, après S14 et l’animation des armes Cairo.
+> État actualisé le **2026-09-13**, après S14 et l’animation des armes Cairo ;
+> audit distant du **2026-09-15** ajouté en fin de document (branche du jeu non poussée).
 > Ce document remplace le handoff initial de Claude. Les mesures historiques
 > détaillées restent dans `docs/STATUS.md` ; ne pas les confondre avec le moteur courant.
 
@@ -229,3 +230,67 @@ une minute : animation/flash, pause/restauration, munitions vides, changement
 arme, migration v1/v2, clavier/souris natifs, sauvegarde/import, F4/refus AIR/export.
 Build TypeScript/Vite et REUSE 1 789/1 789 verts. Aucune preuve ni transaction
 lancée ; aucun agent ou serveur de test restant. Logs `/tmp/hellproof-weapon-audit/`.
+
+## Audit de reprise distante — 2026-09-15
+
+Session Claude Code distante (checkout frais de `origin/main`, Linux x86_64,
+sans Scarb ni Docker ; Node 22.22.2, cargo 1.94.1). Aucun changement de code.
+
+**Constat bloquant : le remote `origin` ne contient que `main` (`b8b2f40`).**
+La branche `codex/game-integration` et tous les commits qu'elle porte
+(`6eec3e7`, `5f1da8b`, `49f2a66`, `d17b3be`, `ee5f819`, `0c8a3a8`, `ae2feac`,
+`3cb97c1`, `48b9dc7`) sont **absents du dépôt GitHub**. Le jeu complet, la passe
+S14 et l'animation d'arme n'existent que dans le worktree local du sponsor.
+Conséquences : aucune sauvegarde hors machine, aucune CI sur le moteur réel,
+aucun orchestrateur distant ne peut auditer, tester ou fusionner le jeu.
+Action requise du sponsor, depuis sa machine :
+
+```sh
+cd /Users/bal7hazar/git/doom
+git push -u origin codex/game-integration
+```
+
+Pousser cette branche ne la fusionne pas dans `main` ; la règle « pas de fusion
+avant D2/D29 » reste inchangée. Aucune PR n'est ouverte sur le dépôt ; aucune
+autre branche à fusionner. CI générale verte sur `b8b2f40` (run `34772884084`).
+
+### Commits Codex présents sur `main` audités
+
+Trois revues indépendantes, lecture seule, sur ce qui est réellement poussé :
+
+| Périmètre | Commits | Verdict | Tests rejoués ici |
+|---|---|---|---|
+| Wrapper Rust | `b817625` `bd68472` `dd90ffe` `8958be3` `899ef59` `e715fb3` | OK, aucun défaut de sécurité | 77 verts / 5 ignorés (pipeline réel) ; leaf-verify 2/2 `--locked` ; test `leaves` relancé 6× vert |
+| WASM Memory64 | `1ed168c` (merge `e274bec`), `69d9e39` (merge `163c9e1`) | OK, réécriture sûre, gate CI réel | 2/2 cargo ; fixture .mjs 3 tiers 400 024 checks ; `ci_memory64.py` échoue bien sans artefact |
+| Soumission D28 | `06b4394` (merge `b00c90b`) | OK, pas de double envoi ni saut d'étape | client 172 verts / 23 ignorés ; infra/submit 95 verts / 1 ignoré |
+
+Les paires `1ed168c`/`e274bec` et `69d9e39`/`163c9e1` sont des commits de
+merge, pas des doublons. Sur `main`, le client compte **172 tests** (23 ignorés
+faute d'assets), pas les 262 de la branche du jeu.
+
+Doutes relevés, non bloquants, à traiter dans une prochaine vague :
+
+1. `prover/wasm/tools/memory64-splats/src/main.rs:50-54` : seuls les quatre
+   `v128.loadN_splat` sont réécrits ; `load_extend`, `load_zero` et `load_lane`
+   partagent le chemin Liftoff fusionné et ne sont ni corrigés ni couverts par
+   la fixture `.mjs`. Ajouter ces opcodes à la fixture pour clore la question.
+   Sur x86_64 / V8 12.4 l'artefact original passe tous les tiers : le bug est
+   arm64 et/ou V8 13.x ; l'architecture hôte manque dans `diagnostics/README.md`.
+2. `prover/wrapper/src/scheduler.rs:441-446` avec `:243-256` : un rejet
+   déterministe à la revalidation est retenté trois fois puis classe le run
+   `failed` au lieu de `rejected`, et se propage aux runs partageant le `leaf_key`.
+3. `prover/wrapper/leaf-verify/src/main.rs:207-220` avec `pipeline.rs:183-199` :
+   un bootloader illisible sort en exit 2 et est classé rejet de preuve définitif ;
+   atténué par `check_runnable` au démarrage.
+4. `prover/wrapper/tests/admission.rs:71` : assertion trivialement vraie ; la
+   liaison bootloader réelle n'est testée que par un double shell.
+5. `infra/submit/src/cli.ts:195-208` : un cut sauvegardé avant que `begin` soit
+   accepté est relu comme explicite et désactive le fallback gas sans message.
+6. `client/src/ui/costScreen.ts:136` n'est instancié par aucune page sur `main`.
+7. `infra/submit` exige son propre `npm ci` et le module Python `poseidon_py`
+   pour `batch.test.ts` ; non documenté. `prover/wrapper/README.md:251` cite
+   encore `segment_stub`.
+
+Non vérifiable ici : hashes `SHA256SUMS.linux` (pas de Docker), task hash Blake
+(pas de `prover/wasm/pkg/dist`), suite Cairo (pas de Scarb). Aucun agent, serveur
+ni preuve laissé en cours ; `node_modules` et caches cargo installés hors dépôt.
