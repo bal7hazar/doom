@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    // Type-only: `client/src/prove/planner.ts` imports `ResourceSummary` from the prover
+    // package. Pointing at its sources keeps `npm run typecheck` working in a fresh clone
+    // (same trick as client/tsconfig.json).
+    "paths": {
+      "@hellproof/prover-wasm": ["../../prover/wasm/pkg/src/index.ts"],
+      "@hellproof/wrapper-client": ["../../prover/wrapper/client-ts/src/index.ts"]
+    },
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true
+  },
+  "include": [
+    "src",
+    "test",
+    "vitest.config.ts",
+    "../../client/src/chain",
+    "../../client/src/prove/planner.ts",
+    "../../client/src/prove/program.ts",
+    "../../client/src/prove/ticcmd.ts",
+    "../../client/src/prove/chain.ts",
+    "../../client/src/prove/felt.ts",
+    "../../client/src/prove/types.ts",
+    "../../infra/submit/src/stores.ts",
+    "../../infra/submit/src/planning.ts",
+    "../../infra/submit/src/fixture.ts",
+    "../../infra/indexer/src/types.ts",
+    "../../infra/indexer/src/felt.ts"
+  ]
+}
