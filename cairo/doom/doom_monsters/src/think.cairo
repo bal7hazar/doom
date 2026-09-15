@@ -85,6 +85,29 @@ pub fn awake_count(w: World, mobjs: Span<Box<Mobj>>) -> u32 {
     c
 }
 
+/// [`awake_count`] reading only the actor slots of the derived index (O1):
+/// a monster is `MF_COUNTKILL`, so every awake monster is an actor, and a
+/// removed slot is canonical (`removed_mobj`, enforced by the state reader)
+/// so it never carries the flag. Same three fields, ~30 slots instead of 210.
+pub fn awake_count_in(w: World, mobjs: Span<Box<Mobj>>, mut indices: Span<u32>) -> u32 {
+    let actions = w.states.action_id;
+    let mut c: u32 = opaque_zero(mobjs.len());
+    while let Option::Some(bi) = indices.pop_front() {
+        match mobjs.get(*bi) {
+            Option::Some(b) => {
+                let m = b.unbox().as_snapshot().unbox();
+                if doom_physics::has(*m.flags, MF_COUNTKILL)
+                    && rd32(actions, *m.state) != A_LOOK
+                    && *m.health > 0 {
+                    c = inc(c);
+                }
+            },
+            Option::None => {},
+        }
+    }
+    c
+}
+
 /// D3's round-robin: on tic `t`, the window is the [`WINDOW`] awake
 /// monsters of rank `8t, 8t+1, … (mod n)` in list order.
 ///
@@ -545,8 +568,13 @@ fn tick_actor(
 
 // Copy a passive run with only its cursor and output live.
 // Return the next actor without changing its slot index or record.
+//
+// This is the **definition** of the actor set (`is_ours` on a live slot)
+// that `actors::scan` derives and the tests compare it with.
 #[inline(never)]
-fn next_actor(ref remaining: Span<Box<Mobj>>, ref out: Array<Box<Mobj>>) -> Option<@Box<Mobj>> {
+pub(crate) fn next_actor(
+    ref remaining: Span<Box<Mobj>>, ref out: Array<Box<Mobj>>,
+) -> Option<@Box<Mobj>> {
     loop {
         match remaining.pop_front() {
             Option::Some(boxed) => {
