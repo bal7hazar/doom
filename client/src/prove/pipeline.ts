@@ -154,6 +154,7 @@ export class ProofPipeline {
   private stopping = false;
   private hardStopping = false;
   private flushing = false;
+  private pendingFlush: { ticCount: number; promise: Promise<void> } | undefined;
   private loopPromise: Promise<void> | null = null;
   private wake: (() => void) | null = null;
   private chain: ChainResult | null = null;
@@ -281,17 +282,25 @@ export class ProofPipeline {
     this.wake?.();
   }
 
-  /** Persists the journal. Called on a timer, on `finish()` and on `stop()`. */
+  /** Persists the journal. Called on a timer, on `finish()` and on `stop()`.
+   * Idempotent: a journal already persisted in full is not written again, and a
+   * failed write leaves it marked unflushed so the next call retries it.
+   */
   async flushJournal(): Promise<void> {
     if (!this.run) return;
-    this.flushedTics = this.journal.length;
-    await this.store.putInputs({
-      runId: this.run.id,
-      ticCount: this.journal.length,
-      packed: [...this.journal.completeFelts],
-      tail: [...this.journal.tailWords],
-    });
-    this.run = { ...this.run, ticCount: this.journal.length };
+    const ticCount = this.journal.length;
+    if (ticCount === this.flushedTics) return;
+    if (this.pendingFlush?.ticCount === ticCount) return this.pendingFlush.promise;
+    const record = { runId: this.run.id, ticCount, packed: [...this.journal.completeFelts], tail: [...this.journal.tailWords] };
+    const promise = (async () => {
+      try {
+        await this.store.putInputs(record);
+        this.flushedTics = ticCount;
+        if (this.run) this.run = { ...this.run, ticCount };
+      } finally { if (this.pendingFlush?.ticCount === ticCount) this.pendingFlush = undefined; }
+    })();
+    this.pendingFlush = { ticCount, promise };
+    return promise;
   }
 
   /**

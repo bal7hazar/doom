@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ExecutionStats,
   ProofStats,
@@ -580,6 +580,33 @@ it.each(["reject", "late success"])("hard stop during planning execute plans not
   const persisted = (await store.getRun(run.id))!;
   expect(persisted.ticsPlanned).toBe(0); expect(persisted.segments ?? 0).toBe(0); expect(persisted.admissionFailure).toBeUndefined();
   expect(await store.getInputs(run.id)).toMatchObject({ ticCount: 1, tail: [7] });
+});
+
+
+it("repeated hard stops never rewrite an unchanged journal, and a failed flush is retried", async () => {
+  const puts = vi.spyOn(store, "putInputs");
+  let game = [11, 12];
+  const { pipeline } = makePipeline({}, { program: { ...fakeProgram, journalWords: () => [...game] } });
+  const run = await pipeline.attach(); await pipeline.appendTics(game);
+  expect(puts).not.toHaveBeenCalled();
+  await pipeline.stop(true); expect(puts).toHaveBeenCalledTimes(1);
+  await pipeline.stop(true); expect(puts).toHaveBeenCalledTimes(1);
+  // The acknowledged tail arrives once; the disposing stop that follows has nothing to write.
+  game = [11, 12, 13];
+  await pipeline.syncGameJournal(); expect(puts).toHaveBeenCalledTimes(2);
+  await Promise.all([pipeline.stop(true), pipeline.flushJournal()]); expect(puts).toHaveBeenCalledTimes(2);
+  expect(puts.mock.calls.map(([record]) => record.ticCount)).toEqual([2, 3]);
+  expect(await store.getInputs(run.id)).toMatchObject({ ticCount: 3, tail: [11, 12, 13] });
+  // Two flushes of the same length in flight share one write.
+  game = [11, 12, 13, 14]; await pipeline.appendTics([14]);
+  await Promise.all([pipeline.flushJournal(), pipeline.stop(true)]); expect(puts).toHaveBeenCalledTimes(3);
+  // A write that fails leaves the journal unflushed: the next stop persists it.
+  await pipeline.appendTics([15]);
+  puts.mockRejectedValueOnce(new Error("IndexedDB unavailable"));
+  await expect(pipeline.flushJournal()).rejects.toThrow("IndexedDB unavailable");
+  expect((await store.getInputs(run.id)).ticCount).toBe(4);
+  await pipeline.stop(true); expect(puts).toHaveBeenCalledTimes(5);
+  expect(await store.getInputs(run.id)).toMatchObject({ ticCount: 5, tail: [11, 12, 13, 14, 15] });
 });
 
 

@@ -51,11 +51,17 @@ export class GameProofBridge {
     const session = this.current; this.current = undefined;
     if (session) {
       session.element.remove(); session.cancelVerification();
-      // Stop synchronous Worker activity before waiting for IndexedDB.
-      void session.pipeline.stop(true).catch(error => this.options.notify(String(error)));
+      // One hard stop, issued now so its synchronous prefix drops the prover before any
+      // IndexedDB wait; the rest of the shutdown is strictly sequential: stop, then copy
+      // the acknowledged journal, then dispose (whose own stop finds nothing left to do).
+      const stopped = session.pipeline.stop(true);
+      stopped.catch(() => undefined); // awaited in order below; never an unhandled rejection meanwhile
       this.cleanup = this.cleanup.then(async () => {
-        try { await session.pipeline.syncGameJournal(); }
-        catch (error) { this.options.notify(`Journal retained in game archive: ${String(error)}`); }
+        try {
+          try { await stopped; }
+          catch (error) { this.options.notify(String(error)); }
+          await session.pipeline.syncGameJournal();
+        } catch (error) { this.options.notify(`Journal retained in game archive: ${String(error)}`); }
         finally { await session.dispose(); }
       }).catch(error => this.options.notify(String(error)));
     }
