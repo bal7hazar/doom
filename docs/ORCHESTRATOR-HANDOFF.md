@@ -472,7 +472,7 @@ Prochaine vague moteur candidate : O3 (clip/`nofit` par cellules, −3 500 moyen
 
 1. Ouvrir une PR de suivi `codex/game-integration` (ou cette branche) → `main`
    sans la fusionner, pour obtenir CI et `game-regression` à chaque push.
-2. Mesurer le task hash du nouveau `run_segment` (`d56e68b6…`) et migrer
+2. Mesurer le task hash du nouveau `run_segment` (`84c9bae1…`, O1 + O3) et migrer
    `doomArtifacts.ts` ; vérifier que le job `cairo` tient en 16 Go (la suite
    `doom_game` seule approche 14 Go ; prévoir `RAYON_NUM_THREADS` réduit ou un
    découpage par filtre).
@@ -528,6 +528,22 @@ Reste non validé faute d'environnement : aucune preuve réelle, aucun devnet
    cadence est loin de 35 tics/s, le moteur redevient le chemin critique.
 3. **Migration d'identité** du moteur O1 (voir ci-dessus) avant tout replay
    navigateur du moteur courant.
+
+### Vague O3 fusionnée — `d1d6577`
+
+Clip et `nofit` par cellules du blockmap : table `S_CELLS` par secteur générée par
+`gen_level.py` (vérifiée sur 97 012 points de treillis et toutes les THINGS),
+index `off_grid` (missiles `MF_NOBLOCKMAP`), `things_of_sector`, occupation par
+mover ; les balayages restent des oracles `#[cfg(test)]`. Équivalence : goldens
+inchangés, 2 037 + 1 218 verdicts identiques sur door/walk, porte refermée sur le
+joueur scriptée. Steps/tic (moy / p99) : idle 21 168 / 24 405 (+300), walk
+36 138 / 66 824, door **46 013 / 105 557** (−11 611), fight 52 494 / 135 559,
+death 36 640 / 71 996 ; **agrégat 37 785 / 110 220** (depuis 48 544 / 122 942
+au début de la session : **−22 %**). `run_segment` proving **108 976 mots**
+(+1 344 ; cible 100 000 manquée, plafond 120 000 tenu) ; SHA
+`84c9bae19f94c17d8889f48104830ba178b4e98593885c2b03f25d4a435d74f0` ; `Scarb.lock`
+et `doom_map/bench/manifest.json` régénérés. Une seule migration d'identité à
+faire pour O1 + O3 (SHA ci-dessus).
 
 ### Ordre des vagues suivantes
 
