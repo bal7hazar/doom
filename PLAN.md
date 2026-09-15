@@ -12,12 +12,15 @@ Starknet Sepolia via un fait vérifié cryptographiquement, avec leaderboard.
 
 Critères de succès (« definition of done » du MVP) :
 
-- **C1 Jouabilité** : 35 tics/s stables dans Chrome desktop sur un laptop récent ; niveau finissable
+- **C1 Jouabilité** : 35 tics/s stables dans Chrome desktop sur un laptop récent **et sur un smartphone
+  milieu de gamme (D35, contrôles tactiles)** ; niveau finissable
   du spawn au switch de sortie ; monstres, armes, portes, objets du niveau fonctionnels.
 - **C2 Déterminisme** : rejouer un journal d'inputs reproduit exactement le hash d'état final
   (100 % des replays du corpus de tests, sur navigateur et en natif).
-- **C3 Preuve locale** : une partie de 3 min est prouvée dans le navigateur (segments en tâche de fond)
-  en moins de **10 min après la fin de partie** sur une machine 16 GB ; la vérification locale passe.
+- **C3 Preuve ouverte** (révisé D35) : une partie de 3 min engagée on-chain avec son journal est
+  prouvée, repliée et enregistrée par **n'importe quel prouveur** en moins de **10 min** sur le nœud de
+  référence (64 GB) ; la vérification locale de la racine passe ; le joueur peut prouver lui-même avec le
+  même binaire. Historique : la formulation « navigateur, 16 GB » est inatteignable (coût fixe par segment).
 - **C4 On-chain** : le fait est vérifié on-chain (registry Stwo) et `DoomRuns.submit_run` accepte
   la partie ; toute altération (inputs, sorties, chaînage) est rejetée.
 - **C5 Coût affiché** : avant soumission, l'UI affiche le coût estimé (STRK + fiat) des transactions
