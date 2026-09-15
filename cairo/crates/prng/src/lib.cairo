@@ -17,9 +17,6 @@
 //! belongs to. Both are part of the hashed state, so an RNG divergence is
 //! caught like any other state divergence.
 
-pub mod compat;
-pub use compat::{next, value};
-
 /// Number of entries the table passed to every draw must have.
 ///
 /// Fixed at 256 so that the cursor wrap is a single equality test rather

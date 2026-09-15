@@ -1,6 +1,6 @@
 import { spriteKey, WEAPON_SPRITES, type AssetStore } from "../assets/assetStore.js";
 import type { AtlasRect } from "../assets/atlas.js";
-import type { RenderSnapshot } from "../sim/snapshot.js";
+import type { PspriteSnapshot, RenderSnapshot } from "../sim/snapshot.js";
 
 /**
  * HUD overlay, drawn on a 2D canvas above the WebGL view (roadmap P2.2,
@@ -9,11 +9,20 @@ import type { RenderSnapshot } from "../sim/snapshot.js";
  * Canvas 2D rather than a fifth GL pass on purpose: the HUD is a handful of
  * glyphs and one sprite per frame, it is never fill-rate bound, and keeping it
  * out of the GL state machine means the renderer's four programs stay the whole
- * renderer. The weapon sprite is a *placeholder* in the sense P2.2 allows: it
- * is the real `PISG`-family lump decoded from the WAD and positioned like
- * vanilla, but it does not animate through the firing states - that arrives
- * with P2.4's ticcmd plumbing.
+ * renderer. Live Cairo snapshots carry both psprite slots: frame, offsets and
+ * flash visibility follow the authoritative weapon FSM at 35 tics/s. Legacy
+ * v1/demo snapshots retain the static fallback.
  */
+export type WeaponNumbering = "demo" | "cairo";
+/** Compact Cairo WeaponId differs from vanilla only after chaingun. */
+export function hudWeapon(weapon: number, numbering: WeaponNumbering = "demo"): number {
+  if (numbering === "demo") return weapon;
+  return [0, 1, 2, 3, 7][weapon] ?? -1;
+}
+export function hudWeaponAmmo(weapon: number, numbering: WeaponNumbering = "demo"): number {
+  return WEAPON_AMMO[hudWeapon(weapon, numbering)] ?? -1;
+}
+
 export interface HudState {
   visible: boolean;
 }
@@ -31,9 +40,11 @@ export class Hud {
     this.store = store;
   }
 
-  draw(ctx: CanvasRenderingContext2D, snapshot: RenderSnapshot, width: number, height: number): void {
+  draw(ctx: CanvasRenderingContext2D, snapshot: RenderSnapshot, width: number, height: number, numbering: WeaponNumbering = "demo"): void {
     const p = snapshot.player;
-    this.drawWeapon(ctx, p.weapon, width, height);
+    if (p.psprites) {
+      for (const slot of p.psprites) this.drawPsprite(ctx, slot, width, height);
+    } else this.drawWeapon(ctx, hudWeapon(p.weapon, numbering), width, height);
 
     // Status bar strip along the bottom.
     const barHeight = 56;
@@ -53,7 +64,7 @@ export class Hud {
     this.bigNumber(ctx, `${p.armor}%`, 150, y, p.armorType === 2 ? "ARMOR II" : "ARMOR", "#6ab04c");
 
     // Ammo for the current weapon, then the full tally.
-    const weaponAmmo = WEAPON_AMMO[p.weapon] ?? -1;
+    const weaponAmmo = hudWeaponAmmo(p.weapon, numbering);
     const current = weaponAmmo >= 0 ? `${p.ammo[weaponAmmo]}` : "-";
     this.bigNumber(ctx, current, 280, y, "AMMO", "#d8c020");
 
@@ -113,6 +124,36 @@ export class Hud {
     ctx.font = "9px ui-monospace, Menlo, monospace";
     ctx.fillStyle = "#5c564d";
     ctx.fillText(label, x, y + 20);
+  }
+
+  private readonly pspriteCache = new Map<number, HTMLCanvasElement>();
+
+  private drawPsprite(ctx: CanvasRenderingContext2D, slot: PspriteSnapshot, width: number, height: number): void {
+    if (slot.state === 0) return;
+    const name = this.store.cairoSprites?.names[slot.sprite];
+    if (!name) throw new Error(`Unknown Cairo psprite ${slot.sprite}`);
+    const frame = this.store.spriteDefs.get(name)?.frames[slot.frame & 0x7fff];
+    const lump = frame?.lump[0];
+    if (lump === undefined || lump < 0) throw new Error(`Missing Cairo psprite ${name} frame ${slot.frame}`);
+    const rect = this.store.spriteAtlas.rects.get(spriteKey(lump));
+    if (!rect) throw new Error(`Missing Cairo psprite atlas lump ${lump}`);
+    let canvas = this.pspriteCache.get(lump);
+    if (!canvas) {
+      canvas = atlasRectToCanvas(this.store, rect, this.store.spriteAtlas, 0);
+      this.pspriteCache.set(lump, canvas);
+    }
+    const scale = height / 200;
+    // R_DrawPSprite uses a 320x200 view: sx is relative to its 160px
+    // centre, while sy and signed WAD patch offsets give the top edge.
+    const x = width / 2 + (slot.x / 65536 - 160 - rect.leftOffset) * scale;
+    const y = (slot.y / 65536 - rect.topOffset) * scale;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    if (frame?.flip[0]) {
+      ctx.translate(x + rect.width * scale, y); ctx.scale(-1, 1);
+      ctx.drawImage(canvas, 0, 0, rect.width * scale, rect.height * scale);
+    } else ctx.drawImage(canvas, x, y, rect.width * scale, rect.height * scale);
+    ctx.restore();
   }
 
   private drawWeapon(

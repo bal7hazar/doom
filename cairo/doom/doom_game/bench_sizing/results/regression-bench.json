@@ -1,0 +1,158 @@
+{
+  "operations": [
+    {
+      "name": "idle: step_tic (tics 300..)",
+      "op": 1,
+      "net": 53006.0,
+      "range_checks": 1131.2,
+      "budget": 73782
+    },
+    {
+      "name": "idle: player_think",
+      "op": 2,
+      "net": 1371.0,
+      "range_checks": 102.5,
+      "budget": 2870
+    },
+    {
+      "name": "idle: monsters_ticker (29 dormant)",
+      "op": 3,
+      "net": 48413.0,
+      "range_checks": 967.8,
+      "budget": 66517
+    },
+    {
+      "name": "idle: specials_ticker (9 lights)",
+      "op": 4,
+      "net": 138.0,
+      "range_checks": 2.0,
+      "budget": 140
+    },
+    {
+      "name": "idle: hash (schema 2)",
+      "op": 5,
+      "net": 120814.0,
+      "range_checks": 802.0,
+      "budget": 76686
+    },
+    {
+      "name": "idle: snapshot",
+      "op": 6,
+      "net": 39495.0,
+      "range_checks": 1606.0,
+      "budget": 64069
+    },
+    {
+      "name": "idle: serialize + from_felts",
+      "op": 7,
+      "net": 216909.0,
+      "range_checks": 20271.0,
+      "budget": 172573
+    },
+    {
+      "name": "idle: rebuild_list (one patch)",
+      "op": 8,
+      "net": 13680.0,
+      "range_checks": 12.0,
+      "budget": 93956
+    },
+    {
+      "name": "walk: step_tic (tics 80..)",
+      "op": 11,
+      "net": 119544.8,
+      "range_checks": 5421.2,
+      "budget": 202122
+    },
+    {
+      "name": "walk: player_think (walking)",
+      "op": 12,
+      "net": 1708.0,
+      "range_checks": 134.5,
+      "budget": 3081
+    },
+    {
+      "name": "walk: monsters_ticker (1 awake)",
+      "op": 13,
+      "net": 47442.2,
+      "range_checks": 829.8,
+      "budget": 65532
+    },
+    {
+      "name": "walk: specials_ticker (lift moving)",
+      "op": 14,
+      "net": 4587.0,
+      "range_checks": 13.0,
+      "budget": 4582
+    },
+    {
+      "name": "fight: step_tic (tics 300.., 11 awake, pistol held)",
+      "op": 21,
+      "net": 110489.0,
+      "range_checks": 4252.5,
+      "budget": 201740
+    },
+    {
+      "name": "fight: player_think (pistol held between shots)",
+      "op": 22,
+      "net": 1210.0,
+      "range_checks": 69.5,
+      "budget": 2025
+    },
+    {
+      "name": "fight: monsters_ticker (11 awake)",
+      "op": 23,
+      "net": 91165.5,
+      "range_checks": 4008.8,
+      "budget": 115677
+    },
+    {
+      "name": "fight: specials_ticker",
+      "op": 24,
+      "net": 138.0,
+      "range_checks": 2.0,
+      "budget": 140
+    },
+    {
+      "name": "fight: hash",
+      "op": 25,
+      "net": 122986.0,
+      "range_checks": 918.0,
+      "budget": 76684
+    },
+    {
+      "name": "fight: snapshot",
+      "op": 26,
+      "net": 39401.0,
+      "range_checks": 1602.0,
+      "budget": 63866
+    },
+    {
+      "name": "fight: step_tic on an idle word",
+      "op": 29,
+      "net": 110377.0,
+      "range_checks": 4248.0,
+      "budget": 201550
+    },
+    {
+      "name": "eight: step_tic (8 awake, pistol held)",
+      "op": 31,
+      "net": 103605.8,
+      "range_checks": 3762.8,
+      "budget": 194103
+    },
+    {
+      "name": "eight: monsters_ticker (8 awake)",
+      "op": 33,
+      "net": 84282.5,
+      "range_checks": 3519.0,
+      "budget": 108041
+    },
+    {
+      "name": "eight: step_tic on an idle word",
+      "op": 39,
+      "net": 103493.8,
+      "range_checks": 3758.2,
+      "budget": 193914
+    }
+  ]
+}

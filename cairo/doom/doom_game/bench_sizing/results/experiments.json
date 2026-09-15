@@ -1,0 +1,275 @@
+{
+  "boxed": {
+    "cases": [
+      {
+        "name": "genesis",
+        "steps": 819780,
+        "before": 819780,
+        "delta": 0
+      },
+      {
+        "name": "empty",
+        "steps": 288221,
+        "before": 288048,
+        "delta": 173
+      },
+      {
+        "name": "idle",
+        "steps": 344849,
+        "before": 344676,
+        "delta": 173
+      },
+      {
+        "name": "walk4",
+        "steps": 569221,
+        "before": 569048,
+        "delta": 173
+      },
+      {
+        "name": "segment4",
+        "steps": 693598,
+        "before": 693425,
+        "delta": 173
+      }
+    ],
+    "sizes": {
+      "run_segment": 115733,
+      "step_tic": 117285,
+      "genesis": 47563
+    }
+  },
+  "cursor": {
+    "cases": [
+      {
+        "name": "genesis",
+        "steps": 819780,
+        "before": 819780,
+        "delta": 0
+      },
+      {
+        "name": "empty",
+        "steps": 278755,
+        "before": 288048,
+        "delta": -9293
+      },
+      {
+        "name": "idle",
+        "steps": 335383,
+        "before": 344676,
+        "delta": -9293
+      },
+      {
+        "name": "walk4",
+        "steps": 559755,
+        "before": 569048,
+        "delta": -9293
+      },
+      {
+        "name": "segment4",
+        "steps": 684132,
+        "before": 693425,
+        "delta": -9293
+      }
+    ],
+    "sizes": {
+      "run_segment": 114799,
+      "step_tic": 116351,
+      "genesis": 47563
+    }
+  },
+  "narrow": {
+    "cases": [
+      {
+        "name": "genesis",
+        "steps": 819780,
+        "before": 819780,
+        "delta": 0
+      },
+      {
+        "name": "empty",
+        "steps": 278319,
+        "before": 288048,
+        "delta": -9729
+      },
+      {
+        "name": "idle",
+        "steps": 334947,
+        "before": 344676,
+        "delta": -9729
+      },
+      {
+        "name": "walk4",
+        "steps": 559319,
+        "before": 569048,
+        "delta": -9729
+      },
+      {
+        "name": "segment4",
+        "steps": 683696,
+        "before": 693425,
+        "delta": -9729
+      }
+    ],
+    "sizes": {
+      "run_segment": 113920,
+      "step_tic": 115472,
+      "genesis": 47563
+    }
+  },
+  "ctx": {
+    "cases": [
+      {
+        "name": "genesis",
+        "steps": 819780,
+        "before": 819780,
+        "delta": 0
+      },
+      {
+        "name": "empty",
+        "steps": 278319,
+        "before": 288048,
+        "delta": -9729
+      },
+      {
+        "name": "idle",
+        "steps": 334062,
+        "before": 344676,
+        "delta": -10614
+      },
+      {
+        "name": "walk4",
+        "steps": 554935,
+        "before": 569048,
+        "delta": -14113
+      },
+      {
+        "name": "segment4",
+        "steps": 679312,
+        "before": 693425,
+        "delta": -14113
+      }
+    ],
+    "sizes": {
+      "run_segment": 111741,
+      "step_tic": 113293,
+      "genesis": 47563
+    }
+  },
+  "validbox": {
+    "cases": [
+      {
+        "name": "genesis",
+        "steps": 819780,
+        "before": 819780,
+        "delta": 0
+      },
+      {
+        "name": "empty",
+        "steps": 280839,
+        "before": 288048,
+        "delta": -7209
+      },
+      {
+        "name": "idle",
+        "steps": 336582,
+        "before": 344676,
+        "delta": -8094
+      },
+      {
+        "name": "walk4",
+        "steps": 557455,
+        "before": 569048,
+        "delta": -11593
+      },
+      {
+        "name": "segment4",
+        "steps": 681832,
+        "before": 693425,
+        "delta": -11593
+      }
+    ],
+    "sizes": {
+      "run_segment": 111753,
+      "step_tic": 113305,
+      "genesis": 47563
+    }
+  },
+  "statebox": {
+    "cases": [
+      {
+        "name": "genesis",
+        "steps": 819780,
+        "before": 819780,
+        "delta": 0
+      },
+      {
+        "name": "empty",
+        "steps": 278255,
+        "before": 288048,
+        "delta": -9793
+      },
+      {
+        "name": "idle",
+        "steps": 334134,
+        "before": 344676,
+        "delta": -10542
+      },
+      {
+        "name": "walk4",
+        "steps": 555415,
+        "before": 569048,
+        "delta": -13633
+      },
+      {
+        "name": "segment4",
+        "steps": 679798,
+        "before": 693425,
+        "delta": -13627
+      }
+    ],
+    "sizes": {
+      "run_segment": 111731,
+      "step_tic": 113169,
+      "genesis": 47563
+    }
+  },
+  "patches": {
+    "cases": [
+      {
+        "name": "genesis",
+        "steps": 763492,
+        "before": 819780,
+        "delta": -56288
+      },
+      {
+        "name": "empty",
+        "steps": 275023,
+        "before": 288048,
+        "delta": -13025
+      },
+      {
+        "name": "idle",
+        "steps": 330766,
+        "before": 344676,
+        "delta": -13910
+      },
+      {
+        "name": "walk4",
+        "steps": 551751,
+        "before": 569048,
+        "delta": -17297
+      },
+      {
+        "name": "segment4",
+        "steps": 679424,
+        "before": 693425,
+        "delta": -14001
+      }
+    ],
+    "sizes": {
+      "run_segment": 111321,
+      "step_tic": 112807,
+      "genesis": 47426
+    }
+  }
+}

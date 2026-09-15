@@ -1,5 +1,8 @@
 import { selectPalette } from "@hellproof/wad";
 import { buildAssetStore, type AssetStore } from "./assets/assetStore.js";
+import { loadCairoSpriteNames, type CairoSpriteNames } from "./assets/cairoSprites.js";
+import { cairoAppearance, type CairoAppearance } from "./render/cairoAppearance.js";
+import type { CairoFrame } from "./sim/cairoSnapshot.js";
 import { atlasOccupancy } from "./assets/atlas.js";
 import { chooseProfile, probeCapabilities, probeStorage } from "./caps/capabilities.js";
 import { findDynamicSectors, type LevelJson } from "./map/level.js";
@@ -7,6 +10,11 @@ import { Renderer, type RenderOptions } from "./render/renderer.js";
 import { TicScheduler } from "./sim/scheduler.js";
 import { interpolate, SnapshotRing, type InterpolatedView } from "./sim/snapshot.js";
 import { createStubSim } from "./sim/stubSim.js";
+import { CairoClient } from "./sim/cairoClient.js";
+import { CairoScheduler } from "./sim/cairoScheduler.js";
+import { bindCairoPageLifecycle } from "./sim/cairoPageLifecycle.js";
+import { mountGameProofUI } from "./prove/gameBridge.js";
+import { PlaySession } from "./game/playSession.js";
 import { DEFAULT_AUTOMAP, drawAutomap, type AutomapOptions } from "./ui/automap.js";
 import { renderDiagnostics } from "./ui/diagnostics.js";
 import { Hud } from "./ui/hud.js";
@@ -76,6 +84,7 @@ async function main(): Promise<void> {
     loadingProgress.value = Math.round(fraction * 100);
   };
 
+  const realCairo = new URLSearchParams(location.search).get("sim") !== "demo";
   const caps = await probeStorage(probeCapabilities());
   const profile = chooseProfile(caps);
   renderDiagnostics(diagnosticsEl, caps, profile);
@@ -104,8 +113,11 @@ async function main(): Promise<void> {
   // decode (≈200 ms) blocks the main thread.
   await nextFrame();
   let store: AssetStore;
+  let cairoSprites: CairoSpriteNames | undefined;
   try {
-    store = buildAssetStore(wadBytes, level, (stage, fraction) => say(stage, 0.3 + fraction * 0.5));
+    if (realCairo) cairoSprites = await loadCairoSpriteNames();
+    store = buildAssetStore(wadBytes, level, (stage, fraction) => say(stage, 0.3 + fraction * 0.5), cairoSprites);
+    if (realCairo && store.stats.missing.length) throw new Error(`Missing game assets: ${store.stats.missing.join(", ")}`);
   } catch (err) {
     fail(loading, loadingStatus, `Asset decoding failed: ${(err as Error).message}`);
     return;
@@ -126,22 +138,52 @@ async function main(): Promise<void> {
     return;
   }
 
-  const ring = new SnapshotRing();
-  const sim = createStubSim(level);
+  // The legacy renderer/prover demonstration is an explicit route.
+  const cairo = realCairo ? new CairoClient() : null;
+  if (cairo) {
+    document.body.classList.add("real-play");
+    statsEl.hidden = true;
+    say("loading real Cairo simulation…", 0.95);
+    try { await cairo.init(); }
+    catch (error) { cairo.dispose(); fail(loading, loadingStatus, String(error)); return; }
+    profile.snapshotTransport = "copied";
+    profile.reasons[0] = "Cairo Worker: transferred ArrayBuffers feed a local renderer ring";
+    renderDiagnostics(diagnosticsEl, caps, profile);
+    const attribution = document.createElement("a");
+    attribution.href = cairoSprites!.licenseUrl; attribution.textContent = "Cairo sprite table · GPL-2.0-only";
+    diagnosticsEl.append(attribution);
+
+  }
+  const ring = cairo?.ring ?? new SnapshotRing();
+  const sim = cairo ? null : createStubSim(level);
 
   // Proving (P3.2) is attached lazily, on F4: `public/prover/` is 90 MB of
   // gitignored wasm that a plain clone does not have, and nothing about it may
   // cost a frame before the player asks for the queue.
   let prove: import("./prove/session.js").ProveSession | null = null;
+  const realProof = cairo ? mountGameProofUI(document.getElementById("stage")!) : null;
+  if (cairo?.journal) realProof!.bridge.observe(cairo.journal);
   let provePending = false;
   let neutralWord = 0;
-  const scheduler = new TicScheduler(ring, (tic) => {
+  let play: PlaySession | undefined;
+  const scheduler = cairo ? new CairoScheduler(cairo,
+    () => play!.input.sample(), error => play?.error(error)) : new TicScheduler(ring, (tic) => {
     // Until P2.4 captures real input there is no command to record; the journal
     // takes the neutral one, so the wiring - and only the wiring - is exercised.
     if (prove) prove.recordTic(neutralWord);
-    return sim.stepTic(tic);
+    return sim!.stepTic(tic);
   });
+  if (cairo && scheduler instanceof CairoScheduler) {
+    play = new PlaySession(cairo, scheduler, canvas, document.getElementById("stage")!);
+    document.getElementById("help")!.textContent = "WASD / ↑↓ move · ←→ turn · Shift run · Mouse / Ctrl fire · E / Space use · 1–4, 7 weapons · Esc / P pause · Tab map · F4 proof / export";
+  }
   const toggleProofQueue = async (): Promise<void> => {
+    if (cairo) {
+      play?.pause();
+      if (cairo.journal) realProof!.bridge.observe(cairo.journal);
+      await realProof!.toggle();
+      return;
+    }
     if (prove) {
       prove.element.hidden = !prove.element.hidden;
       return;
@@ -192,6 +234,8 @@ async function main(): Promise<void> {
   resize();
 
   window.addEventListener("keydown", (event) => {
+    if (!event.repeat && event.key === "F4") { event.preventDefault(); void toggleProofQueue(); return; }
+    if (event.repeat || (event.target instanceof Element && event.target.closest("input,textarea,select,button,a"))) return;
     switch (event.key) {
       case "F1":
         event.preventDefault();
@@ -209,20 +253,17 @@ async function main(): Promise<void> {
         event.preventDefault();
         renderOptions.flatShading = !renderOptions.flatShading;
         break;
-      case "F4":
-        event.preventDefault();
-        void toggleProofQueue();
-        break;
       case " ":
+        if (cairo) break;
         event.preventDefault();
         if (scheduler.isRunning) scheduler.stop();
         else scheduler.start();
         break;
       case "[":
-        scheduler.rate = Math.max(0.1, scheduler.rate / 1.5);
+        if (scheduler instanceof TicScheduler) scheduler.rate = Math.max(0.1, scheduler.rate / 1.5);
         break;
       case "]":
-        scheduler.rate = Math.min(8, scheduler.rate * 1.5);
+        if (scheduler instanceof TicScheduler) scheduler.rate = Math.min(8, scheduler.rate * 1.5);
         break;
       case "r":
       case "R":
@@ -238,11 +279,16 @@ async function main(): Promise<void> {
     }
   });
 
-  scheduler.start();
+  if (!cairo) scheduler.start();
+  if (cairo && scheduler instanceof CairoScheduler) bindCairoPageLifecycle(scheduler, cairo);
   loading.hidden = true;
 
+  let appearanceFrame: CairoFrame | undefined;
+  let appearance: CairoAppearance | undefined;
+  let renderError: string | undefined;
   let lastFrameTime = performance.now();
   const loop = (): void => {
+    if (cairo?.journal && !cairo.busy) realProof!.bridge.observe(cairo.journal);
     const now = performance.now();
     frame.frameMs = frame.frameMs === 0 ? now - lastFrameTime : frame.frameMs * 0.9 + (now - lastFrameTime) * 0.1;
     lastFrameTime = now;
@@ -254,8 +300,10 @@ async function main(): Promise<void> {
       frame.windowStart = now;
     }
 
+    play?.refresh();
     resize();
-    const pair = ring.readPair();
+    const latest = ring.readLatest();
+    const pair = ring.readPair() ?? (latest ? { previous: latest, current: latest } : null);
     if (pair) {
       const view: InterpolatedView = interpolate(pair.previous, pair.current, scheduler.alpha(now));
       renderOptions.paletteRow = selectPalette(
@@ -263,7 +311,26 @@ async function main(): Promise<void> {
         view.latest.player.bonusCount,
         false,
       );
-      renderer.render(view, renderOptions);
+      try {
+        if (cairo) {
+          if (cairo.latest !== appearanceFrame) {
+            appearanceFrame = cairo.latest;
+            appearance = cairoAppearance(appearanceFrame!, cairo.viewMobjId);
+          }
+          // Both values are published synchronously on this thread. Never draw
+          // an old/new appearance combination if that contract is violated.
+        }
+        renderer.render(view, renderOptions, appearance);
+        renderError = undefined;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (scheduler.isRunning) scheduler.stop();
+        if (message !== renderError) {
+          renderError = message; play?.error(`Rendering: ${message}`);
+          console.error("Rendering stopped:", message);
+        }
+        requestAnimationFrame(loop); return;
+      }
 
       // The drawing buffer is discarded once the frame is composited (the
       // context is created without `preserveDrawingBuffer`, which would cost a
@@ -283,9 +350,9 @@ async function main(): Promise<void> {
         const cssW = overlay.width / dpr;
         const cssH = overlay.height / dpr;
         if (showAutomap) {
-          drawAutomap(overlayCtx, level, view, cssW, cssH, automapOptions, sim.path, dynamicSectors);
+          drawAutomap(overlayCtx, level, view, cssW, cssH, automapOptions, sim?.path ?? [], dynamicSectors);
         }
-        if (showHud) hud.draw(overlayCtx, view.latest, cssW, cssH);
+        if (showHud) hud.draw(overlayCtx, view.latest, cssW, cssH, cairo ? "cairo" : "demo");
         overlayCtx.restore();
       }
 
@@ -306,6 +373,8 @@ async function main(): Promise<void> {
     store,
     level,
     ring,
+    cairo,
+    play,
     resetFpsWindow(): void {
       frame.frames = 0;
       frame.windowFrames = 0;
@@ -326,7 +395,7 @@ async function main(): Promise<void> {
 
 function formatStats(
   frame: FrameStats,
-  scheduler: TicScheduler,
+  scheduler: Pick<TicScheduler, "tic" | "rate" | "stepMs" | "droppedTics">,
   renderer: Renderer,
   store: AssetStore,
   gpu: string | null,

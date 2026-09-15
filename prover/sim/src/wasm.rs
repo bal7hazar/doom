@@ -170,3 +170,75 @@ fn parse_felt(s: &str) -> Result<cairo_vm::Felt252, JsError> {
     };
     Ok(parsed)
 }
+
+/// Experimental retained VM. This is a simulation transport, not a proof API.
+#[wasm_bindgen(js_name = SimContinuation)]
+pub struct JsSimContinuation {
+    inner: crate::continuation::SimContinuation,
+}
+
+#[wasm_bindgen(js_class = SimContinuation)]
+impl JsSimContinuation {
+    pub fn load(executable_json: &str, initial: &[u8]) -> Result<JsSimContinuation, JsError> {
+        let state = core::decode_felts(initial).map_err(to_js)?;
+        let mut inner =
+            crate::continuation::SimContinuation::load(executable_json, &state).map_err(to_js)?;
+        if inner.resume(2_000_000).map_err(to_js)? != crate::continuation::Progress::NeedInput {
+            return Err(JsError::new(
+                "invalid state or initialization exceeded its step limit",
+            ));
+        }
+        Ok(Self { inner })
+    }
+
+    /// 0 = waiting for input; 1 = interrupted; 2 = ended.
+    pub fn advance(&mut self, word: u32, quantum: usize) -> Result<u32, JsError> {
+        self.inner.submit(0, word.into()).map_err(to_js)?;
+        self.resume(quantum)
+    }
+
+    pub fn resume(&mut self, quantum: usize) -> Result<u32, JsError> {
+        Ok(match self.inner.resume(quantum).map_err(to_js)? {
+            crate::continuation::Progress::NeedInput => 0,
+            crate::continuation::Progress::Interrupted => 1,
+            crate::continuation::Progress::Ended => 2,
+        })
+    }
+
+    pub fn request_checkpoint(&mut self, quantum: usize) -> Result<u32, JsError> {
+        self.inner.submit(1, 0_u32.into()).map_err(to_js)?;
+        self.resume(quantum)
+    }
+
+    pub fn restart(&mut self, initial: &[u8]) -> Result<(), JsError> {
+        let state = core::decode_felts(initial).map_err(to_js)?;
+        self.inner.restart(&state).map_err(to_js)?;
+        if self.inner.resume(2_000_000).map_err(to_js)? != crate::continuation::Progress::NeedInput
+        {
+            return Err(JsError::new(
+                "invalid checkpoint or initialization exceeded its step limit",
+            ));
+        }
+        Ok(())
+    }
+
+    /// The Cairo snapshot, unchanged; no GameState is serialized here.
+    pub fn snapshot(&self) -> Vec<u8> {
+        core::encode_felts(&self.inner.snapshot)
+    }
+    pub fn checkpoint(&self) -> Vec<u8> {
+        core::encode_felts(&self.inner.checkpoint)
+    }
+    pub fn status(&self) -> Result<u32, JsError> {
+        self.inner
+            .status
+            .and_then(|x| u32::try_from(x).ok())
+            .ok_or_else(|| JsError::new("no completed tic status"))
+    }
+    pub fn total_steps(&self) -> f64 {
+        self.inner.total_steps() as f64
+    }
+    pub fn last_steps(&self) -> f64 {
+        self.inner.last_steps() as f64
+    }
+}

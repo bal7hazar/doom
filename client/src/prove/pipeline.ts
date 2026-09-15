@@ -152,6 +152,7 @@ export class ProofPipeline {
   private peakMemoryBytes = 0;
   private running = false;
   private stopping = false;
+  private hardStopping = false;
   private flushing = false;
   private loopPromise: Promise<void> | null = null;
   private wake: (() => void) | null = null;
@@ -190,7 +191,7 @@ export class ProofPipeline {
    */
   async attach(runId?: string): Promise<RunRecord> {
     const existing = runId ? await this.store.getRun(runId) : undefined;
-    const run =
+    let run =
       existing ??
       (await this.store.createRun({
         ...(runId ? { id: runId } : {}),
@@ -198,15 +199,27 @@ export class ProofPipeline {
         programHashFunction: this.program.hashFunction,
         genesis: normalizeFelt(this.program.genesis),
       }));
+    if (existing && (this.program.identity || run.programIdentity) && (run.program !== this.program.id || run.programHashFunction !== this.program.hashFunction
+        || normalizeFelt(run.genesis) !== normalizeFelt(this.program.genesis)
+        || run.programIdentity !== this.program.identity)) throw new Error("incompatible persisted program identity; export the old run before switching engines");
+    if (!existing && this.program.identity) run = await this.store.updateRun(run.id, { programIdentity: this.program.identity });
     this.run = run;
 
     const inputs = await this.store.getInputs(run.id);
     this.journal = TicLog.fromPersisted(inputs.packed, inputs.tail);
     this.flushedTics = this.journal.length;
+    this.program.validateJournal?.(this.journal.toWords());
 
     this.segments = await this.store.listSegments(run.id);
     let requeued = 0;
     for (const segment of this.segments) {
+      if (this.program.prepareArgs) {
+        const args = await this.program.prepareArgs({ hIn: segment.output?.hIn ?? run.genesis,
+          ticStart: segment.ticStart, ticCount: segment.ticEnd - segment.ticStart,
+          words: this.journal.slice(segment.ticStart, segment.ticEnd), index: segment.index });
+        if (JSON.stringify(args) !== JSON.stringify(segment.args)) throw new Error("persisted arguments differ from genesis journal replay");
+        this.program.validateOutput?.(args, segment.outputPreimage);
+      }
       if (segment.stage !== "proved") {
         segment.stage = "planned";
         delete segment.error;
@@ -248,8 +261,19 @@ export class ProofPipeline {
 
   // -- input ---------------------------------------------------------------
 
+  /** Copy the acknowledged game journal, including play before the proof UI was opened. */
+  async syncGameJournal(): Promise<void> {
+    if (!this.program.journalWords) throw new Error("program has no game journal");
+    const words = this.program.journalWords();
+    const prior = this.journal.toWords();
+    if (prior.length > words.length || prior.some((w, i) => words[i] !== w)) throw new Error("game journal changed its persisted prefix");
+    await this.appendTics(words.slice(prior.length));
+    await this.flushJournal();
+  }
+
   /** Feeds the journal. `words` are 32-bit `ticcmd` words, one per tic. */
   async appendTics(words: readonly number[]): Promise<void> {
+    this.program.validateJournal?.([...this.journal.toWords(), ...words]);
     for (const word of words) this.journal.push(word);
     if (this.journal.length - this.flushedTics >= this.options.journalFlushTics) {
       await this.flushJournal();
@@ -292,9 +316,12 @@ export class ProofPipeline {
   start(): void {
     if (this.running) return;
     if (!this.run) throw new Error("call attach() before start()");
+    this.lastError = undefined;
     this.running = true;
-    this.stopping = false;
+    this.stopping = false; this.hardStopping = false;
     this.loopPromise = this.loop().catch((error: unknown) => {
+      this.dropProver();
+      this.program.releasePreparation?.();
       this.lastError = error instanceof Error ? error.message : String(error);
       this.emit({ type: "log", level: "error", message: `pipeline stopped: ${this.lastError}` });
       this.running = false;
@@ -305,7 +332,7 @@ export class ProofPipeline {
   async stop(hard = false): Promise<void> {
     this.stopping = true;
     this.wake?.();
-    if (hard) this.dropProver();
+    if (hard) { this.hardStopping = true; this.dropProver(); this.program.releasePreparation?.(); }
     await this.loopPromise?.catch(() => undefined);
     this.running = false;
     await this.flushJournal();
@@ -334,6 +361,7 @@ export class ProofPipeline {
     this.running = false;
     await this.flushJournal();
     this.dropProver();
+    this.program.releasePreparation?.();
   }
 
   private idle(): Promise<void> {
@@ -386,9 +414,11 @@ export class ProofPipeline {
     for (;;) {
       probes++;
       const words = this.journal.slice(ticStart, ticStart + candidate);
-      const args = this.program.encodeArgs({ hIn, ticStart, ticCount: candidate, words, index });
+      const request = { hIn, ticStart, ticCount: candidate, words, index };
+      const args = this.program.prepareArgs ? await this.program.prepareArgs(request) : this.program.encodeArgs(request);
       this.emitProgress(index, "executing", startedAt);
       const executed = await prover.execute(executable, args);
+      this.program.validateOutput?.(args, executed.stats.output_preimage);
       await this.yieldToGame();
       const summary = await prover.resources(executed.input);
       const verdict = this.planner.judge(candidate, summary, this.threads);
@@ -443,6 +473,13 @@ export class ProofPipeline {
         return true;
       }
 
+      if (this.program.identity) {
+        await this.flushJournal();
+        this.run = await this.store.updateRun(run.id, { admissionFailure: {
+          ticStart, ticCount: candidate, args, outputPreimage: executed.stats.output_preimage,
+          reason: verdict.reason, resources: summary, updatedAt: Date.now(),
+        } });
+      }
       if (verdict.verdict === "impossible") {
         throw new Error(`no segment length fits the leaf registry: ${verdict.reason}`);
       }
@@ -490,12 +527,24 @@ export class ProofPipeline {
     let singleThread = segment.retriedSingleThread;
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const prover = await this.ensureProver(singleThread ? 1 : undefined);
       try {
+        if (this.hardStopping) throw new Error("proof attempt cancelled by hard stop");
+        const prover = await this.ensureProver(singleThread ? 1 : undefined);
+        const checkActive = () => {
+          if (this.prover !== prover || prover.isDead) throw new Error("proof attempt cancelled by hard stop");
+        };
+        checkActive();
         segment.stage = "executing";
         segment.attempts++;
         this.emitProgress(segment.index, "executing", startedAt);
+        if (this.program.prepareArgs) {
+          const args = await this.program.prepareArgs({ hIn: segment.output?.hIn ?? run.genesis,
+            ticStart: segment.ticStart, ticCount: segment.ticEnd - segment.ticStart,
+            words: this.journal.slice(segment.ticStart, segment.ticEnd), index: segment.index });
+          if (JSON.stringify(args) !== JSON.stringify(segment.args)) throw new Error("persisted arguments differ from genesis replay");
+        }
         const executed = await prover.execute(executable, segment.args);
+        this.program.validateOutput?.(segment.args, executed.stats.output_preimage);
         await this.yieldToGame();
 
         // Re-execution after reload/retry must be admitted with this worker's fresh counters.
@@ -508,6 +557,7 @@ export class ProofPipeline {
           throw new ResourceAdmissionError(`fresh execution is not admissible: ${admission.reason}`);
         }
 
+        checkActive();
         segment.stage = "proving";
         this.emitProgress(segment.index, "proving", startedAt);
         const timeout = singleThread
@@ -518,11 +568,13 @@ export class ProofPipeline {
         const proveMs = performance.now() - t0;
         await this.yieldToGame();
 
+        checkActive();
         segment.stage = "verifying";
         this.emitProgress(segment.index, "verifying", startedAt);
         const tVerify = performance.now();
         const valid = await prover.verify(proved.proof);
         const verifyMs = performance.now() - tVerify;
+        checkActive();
         if (!valid) throw new Error("the prover refused its own proof");
 
         // The outputs are re-read from *this* execution: a retry must not inherit
@@ -565,7 +617,7 @@ export class ProofPipeline {
         const timedOut = error instanceof ProverTimeoutError;
         this.dropProver();
         const message = error instanceof Error ? error.message : String(error);
-        if (!(error instanceof ResourceAdmissionError) && attempt === 0 && !singleThread && this.threads > 1) {
+        if (!this.hardStopping && !(error instanceof ResourceAdmissionError) && attempt === 0 && !singleThread && this.threads > 1) {
           // R1-A8: the threaded path is the one that hangs. One retry, single
           // threaded, which has never failed in S2 or P3.1.
           singleThread = true;
@@ -621,6 +673,7 @@ export class ProofPipeline {
   // -- prover lifecycle -----------------------------------------------------
 
   private async ensureProver(forceThreads?: number): Promise<ProverLike> {
+    if (this.hardStopping) throw new Error("prover creation cancelled by hard stop");
     if (this.prover && !this.prover.isDead && (forceThreads === undefined || this.threads === forceThreads)) {
       return this.prover;
     }
@@ -639,22 +692,28 @@ export class ProofPipeline {
       ? this.options.createProver({ onEvent })
       : new ProverClient({ workerUrl: this.options.proverWorkerUrl, onEvent });
     const want = forceThreads ?? (this.options.threads ?? "auto");
-    const info = await prover.init({
-      threads: want === "auto" ? autoThreadCount() : want,
-      ...(this.options.wasmUrl ? { wasmUrl: this.options.wasmUrl } : {}),
-      ...(this.options.threadedWasmUrl ? { threadedWasmUrl: this.options.threadedWasmUrl } : {}),
-    });
-    this.prover = prover;
-    this.proverInfo = info;
-    this.threads = info.threads;
-    this.emit({
-      type: "prover",
-      threads: info.threads,
-      threaded: info.threaded,
-      wasmUrl: info.wasmUrl,
-      instantiateMs: info.instantiateMs,
-    });
-    return prover;
+    this.prover = prover; // Own the Worker before its asynchronous initialization.
+    try {
+      const info = await prover.init({
+        threads: want === "auto" ? autoThreadCount() : want,
+        ...(this.options.wasmUrl ? { wasmUrl: this.options.wasmUrl } : {}),
+        ...(this.options.threadedWasmUrl ? { threadedWasmUrl: this.options.threadedWasmUrl } : {}),
+      });
+      if (this.prover !== prover || prover.isDead || this.hardStopping) throw new Error("prover initialization cancelled");
+      this.proverInfo = info;
+      this.threads = info.threads;
+      this.emit({
+        type: "prover",
+        threads: info.threads,
+        threaded: info.threaded,
+        wasmUrl: info.wasmUrl,
+        instantiateMs: info.instantiateMs,
+      });
+      return prover;
+    } catch (error) {
+      if (this.prover === prover) this.dropProver();
+      throw error;
+    }
   }
 
   private dropProver(): void {

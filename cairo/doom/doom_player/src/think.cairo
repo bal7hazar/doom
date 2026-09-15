@@ -297,7 +297,7 @@ fn calc_height_in(ref p: Box<Player>, mo: Feet, tic: u32) {
     // bob = (momx^2 + momy^2) >> 2, capped at MAXBOB.
     let sq = fixed::add(fixed::mul(mo.momx, mo.momx), fixed::mul(mo.momy, mo.momy));
     let four: NonZero<u128> = 4;
-    let (mag, _) = DivRem::div_rem(fixed::to_u128(sq.enc - BIAS), four);
+    let (mag, _) = DivRem::div_rem(doom_physics::maputl::to_u128(sq.enc - BIAS), four);
     let quarter: felt252 = mag.into();
     let bob = if fixed::felt_ge_narrow(quarter, MAXBOB + 1) {
         Fixed { enc: BIAS + MAXBOB }
@@ -313,7 +313,7 @@ fn calc_height_in(ref p: Box<Player>, mo: Feet, tic: u32) {
 
     let idx = fine_of(409, tic);
     let two: NonZero<u128> = 2;
-    let (half, _) = DivRem::div_rem(fixed::to_u128(bob.enc - BIAS), two);
+    let (half, _) = DivRem::div_rem(doom_physics::maputl::to_u128(bob.enc - BIAS), two);
     let swing = fixed::mul(Fixed { enc: BIAS + half.into() }, bam::finesine(idx));
 
     let (viewheight, deltaviewheight) = if cur.playerstate == PST_LIVE {
@@ -415,7 +415,7 @@ fn death_turn(env: Box<Env>, ref p: Box<Player>, ref mo: Box<Mobj>) {
         Option::None
     };
     let t = match target {
-        Option::Some(b) => b.unbox(),
+        Option::Some(b) => b.unbox().as_snapshot().unbox(),
         Option::None => {
             if cur.damagecount != 0 {
                 p = BoxTrait::new(Player { damagecount: dec(cur.damagecount), ..cur });

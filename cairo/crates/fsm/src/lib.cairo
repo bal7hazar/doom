@@ -32,9 +32,6 @@
 //!   That keeps `advance` free of an unbounded loop, which a proving path
 //!   must not contain.
 
-pub mod compat;
-pub use compat::{StateDef, Timer, start, tick};
-
 /// `tics` value of a state that never advances on its own — Doom's
 /// `tics == -1` (`S_NULL`, idle sprites, corpses).
 ///

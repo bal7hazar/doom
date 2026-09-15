@@ -6,7 +6,7 @@
 //! owns, and the list is an `Array` with no random write. Instead the move
 //! reports what it touched as [`MoveEvent`]s — a special line crossed, an
 //! item touched, a thing a missile hit — and `doom_game` applies them. What
-//! `P_TryMove` reads about *other* things comes from the `Span<Mobj>` of the
+//! `P_TryMove` reads about *other* things comes from the `Span<Box<Mobj>>` of the
 //! tic's starting state.
 //!
 //! # Shape (S7)
@@ -24,14 +24,14 @@
 use blockmap::{CELL_RAW, CellRange, Grid, cells_of_box};
 use doom_map::{ML_BLOCKING, ML_BLOCKMONSTERS, ML_TWOSIDED, NO_SECTOR};
 use doom_things::tables::KIND_PLAYER;
-use fixed::{BIAS, FRACUNIT_RAW, Fixed, felt_ge_narrow, to_u128};
+use fixed::{BIAS, FRACUNIT_RAW, Fixed, felt_ge_narrow};
 use geom2d::{
     Box as BBox, Point, SIDE_BACK, SIDE_CROSS, box_around, box_on_line_side, hoist, point_side,
 };
 use super::grid::{ThingGrid, things_in};
 use super::maputl::{
     UnitBox, dec, inc, line_box_misses, line_box_rejects, line_diagonal, line_hp, line_meta,
-    line_opening, rd, rd32, unit_box,
+    line_opening, rd, rd32, to_u128, unit_box,
 };
 use super::mobj::{
     MF_CORPSE, MF_DROPOFF, MF_FLOAT, MF_INFLOAT, MF_MISSILE, MF_NOCLIP, MF_NOGRAVITY, MF_PICKUP,
@@ -254,7 +254,7 @@ fn widen(g: Grid, b: BBox, r: CellRange) -> CellRange {
 /// `PIT_CheckThing` over every thing in `cell`. Returns the blocking thing,
 /// or `NO_MOBJ`.
 fn check_things_in_cell(
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     cell: u32,
     mo: Mover,
@@ -275,7 +275,7 @@ fn check_things_in_cell(
             continue;
         }
         let other = match mobjs.get(idx) {
-            Option::Some(b) => b.unbox(),
+            Option::Some(b) => b.unbox().as_snapshot().unbox(),
             Option::None => { continue; },
         };
         let oflags = *other.flags;
@@ -305,7 +305,7 @@ fn check_things_in_cell(
             let target = mo.target;
             if target != NO_MOBJ {
                 let target_kind = match mobjs.get(target) {
-                    Option::Some(b) => *b.unbox().kind,
+                    Option::Some(b) => b.unbox().kind,
                     Option::None => NO_MOBJ,
                 };
                 if target_kind == *other.kind {
@@ -346,7 +346,7 @@ fn check_things_in_cell(
 /// `PIT_CheckThing` over every cell of `wide`, row-major: the blocking
 /// thing, or `NO_MOBJ`.
 fn things_in_range(
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     grid: Grid,
     wide: CellRange,
@@ -532,7 +532,7 @@ fn lines_in_range(
 /// when something is touched.
 pub fn check_position(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: @Mobj,
     me: u32,
@@ -548,7 +548,7 @@ pub fn check_position(
 #[inline(always)]
 fn clip_against(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     grid: Grid,
     r: CellRange,
@@ -577,7 +577,7 @@ fn clip_against(
 /// [`check_position`] on the narrow operands.
 pub fn check_position_in(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Mover,
     me: u32,
@@ -691,7 +691,7 @@ fn locate_in(
 /// it) on success and reporting the special lines it crossed.
 pub fn try_move(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref mo: Mobj,
     me: u32,
@@ -736,7 +736,7 @@ fn clip_verdict(c: Check, flags: u32, z: Fixed, height: Fixed) -> Verdict {
 /// return).
 pub fn try_move_in(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Box<Mobj>,
     me: u32,
@@ -943,7 +943,7 @@ fn hit_slide_line(lv: Level, mox: Point, line: u32, tmx: Fixed, tmy: Fixed) -> (
 /// x move alone.
 fn stairstep(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Box<Mobj>,
     me: u32,
@@ -1010,7 +1010,7 @@ fn slide_best(lv: Level, mo: Box<Mobj>) -> (Fixed, u32) {
 #[cfg(feature: "vanilla_slide")]
 fn slide_attempt(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Box<Mobj>,
     me: u32,
@@ -1062,7 +1062,7 @@ fn slide_attempt(
 /// fallback.
 pub fn slide_move(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref mo: Mobj,
     me: u32,
@@ -1076,7 +1076,7 @@ pub fn slide_move(
 #[cfg(feature: "vanilla_slide")]
 pub fn slide_move_in(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Box<Mobj>,
     me: u32,
@@ -1098,7 +1098,7 @@ pub fn slide_move_in(
 #[cfg(not(feature: "vanilla_slide"))]
 pub fn slide_move_in(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Box<Mobj>,
     me: u32,
@@ -1114,7 +1114,7 @@ pub fn slide_move_in(
 /// in vanilla, one along a diagonal wall stops instead of gliding.
 pub fn slide_move_lite(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref mo: Mobj,
     me: u32,
@@ -1168,7 +1168,7 @@ fn below_stopspeed(m: Fixed) -> bool {
 /// which keeps a walking player above `STOPSPEED`.
 pub fn xy_movement(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref mo: Mobj,
     me: u32,
@@ -1197,7 +1197,7 @@ struct Remaining {
 /// stops, anything else blocked loses its momentum.
 fn xy_pass(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Box<Mobj>,
     me: u32,
@@ -1251,7 +1251,7 @@ fn more(rem: Remaining) -> bool {
 /// [`xy_movement`] on a [`Level`].
 pub fn xy_movement_in(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     mo: Box<Mobj>,
     me: u32,

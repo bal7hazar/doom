@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Raw monster-pass output for before/after equivalence checks on game states.
+[package]
+name = "monster_ticker_probe"
+version = "0.1.0"
+edition = "2024_07"
+[dependencies]
+doom_game = { path = "../../../doom_game" }
+doom_monsters = { path = "../.." }
+doom_physics = { path = "../../../doom_physics" }
+cairo_execute = "2.16.0"
+[[target.executable]]
+name = "ticker"
+function = "monster_ticker_probe::main"
+[cairo]
+enable-gas = false
+[profile.proving]
+inherits = "dev"
+[profile.proving.cairo]
+unsafe-panic = true

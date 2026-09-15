@@ -182,19 +182,40 @@ pub fn cosine(a: Angle) -> Fixed {
     finecosine(angle_to_fine_index(a))
 }
 
-/// `(sin(a), cos(a))` with a single index reduction.
+/// `(sin(a), cos(a))` with one fine-index reduction and one quarter-wave fold.
 ///
-/// S1 §7 expected the pair to be worth ~14 steps over two separate calls,
-/// because the `u32` division of [`angle_to_fine_index`] would be paid once.
-/// Measured, the saving is only **6 steps** (109 against 51 + 64): the index
-/// reduction is 8 steps, not 30, because `angle >> 19` on a `u32` needs a
-/// single division and no mask. The pair is kept for the call sites that
-/// want both, but it is not the optimization S1 thought it was.
+/// The two magnitudes are complementary quarter-wave indices `q` and
+/// `2047 - q`. Reuse the same sign and mirror decisions for both instead
+/// of folding a separately shifted cosine index. The half-step sampling
+/// makes that complement exact, including quadrant boundaries.
 ///
-/// **Measured: 109 steps, 12 range checks.**
+/// **Measured: 76 steps, 8 range checks** (was 109 and 12 with separate folds).
 pub fn sin_cos(a: Angle) -> (Fixed, Fixed) {
     let i = angle_to_fine_index(a);
-    (finesine(i), finecosine(i))
+    let (negative, half) = if i >= 4096 {
+        (true, i - 4096)
+    } else {
+        (false, i)
+    };
+    let mirrored = half >= FINE_QUARTER;
+    let q = if mirrored {
+        4095 - half
+    } else {
+        half
+    };
+    let sine_m = *FINESINE_Q.span().at(q);
+    let cosine_m = *FINESINE_Q.span().at(2047 - q);
+    let sine_enc = if negative {
+        BIAS - sine_m
+    } else {
+        BIAS + sine_m
+    };
+    let cosine_enc = if negative != mirrored {
+        BIAS - cosine_m
+    } else {
+        BIAS + cosine_m
+    };
+    (Fixed { enc: sine_enc }, Fixed { enc: cosine_enc })
 }
 
 /// `tantoangle[slope]` for `slope` in `[0, 2048]`: the angle whose tangent

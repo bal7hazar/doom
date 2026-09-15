@@ -1,0 +1,6151 @@
+{
+  "baseline_commit": "4936c233e2ea9cf7a7b34312b522f7b96c8bf9fb",
+  "baseline_programs": {
+    "genesis_blake9": {
+      "sha256": "14cda2147a7f7b6b46a82cbfaadf0b877ebf7df47033b619c0ddc99e33888247",
+      "bytecode_words": 47826
+    },
+    "genesis_poseidon": {
+      "sha256": "bc54bf18d001c3c83e22378ac167f027538d12621465bca7c83d40477b5f275b",
+      "bytecode_words": 47200
+    },
+    "hash_blake9": {
+      "sha256": "ed1fc6f140d342dbc35ad773e33cac24f7812ee99ce02b6e3908435e91242fa3",
+      "bytecode_words": 833
+    },
+    "hash_poseidon": {
+      "sha256": "5d550f71e28efb5921c809fcdf062ab8bae924078c6cad556f8e0c4b5c750f7c",
+      "bytecode_words": 182
+    },
+    "inspect_blake9": {
+      "sha256": "fbfbd4e07eab3e7aa5b385920f5d4cd373eaef2f6981e177624d51b20a9f9b74",
+      "bytecode_words": 113355
+    },
+    "inspect_poseidon": {
+      "sha256": "92f050a78e0a1e0e4bc0ebcba24c9d6dbffc7b577c72c7558506ec2e11db7feb",
+      "bytecode_words": 112638
+    },
+    "production_genesis": {
+      "sha256": "32a27c1162aa87e4429f2840c8a26c2c0c0a2620ec05744f06701daa97983596",
+      "bytecode_words": 47415
+    },
+    "production_run_segment": {
+      "sha256": "24672e9db90cf22502d2a69c50ea5d428fad5d45039acdc034d736b33b7b2b65",
+      "bytecode_words": 110015
+    },
+    "production_step_tic": {
+      "sha256": "2a057738d3423148cdbcbede6129c2d363fffa7e94b075e929f6b09c79718040",
+      "bytecode_words": 111502
+    },
+    "segment_blake9": {
+      "sha256": "6af8f28a60839aa7e87425dc9fc9c3d08207a1506c262343f4758eb08d8ec223",
+      "bytecode_words": 111085
+    },
+    "segment_poseidon": {
+      "sha256": "c790fd1c676974d960f09f0fb5f2e119d6f741ef1c6d66463013684ec9b5e9f4",
+      "bytecode_words": 110368
+    },
+    "vector_blake9": {
+      "sha256": "b43cd1e34b2b98c3600f402afe1dd7a1280579d90555b08110838ef5e91e7c09",
+      "bytecode_words": 863
+    }
+  },
+  "final_source_sha256": "60f7aa7b4a468c57b35038e5dfa02ecb65fc58c82d7359677deb118be6e87471",
+  "experiments": {
+    "v1": {
+      "programs": {
+        "genesis_blake9": {
+          "sha256": "57530035902beb5410757e0a8fad61995142aa0562d9596e86209ca5693b65d2",
+          "bytecode_words": 47781
+        },
+        "inspect_poseidon": {
+          "sha256": "92f050a78e0a1e0e4bc0ebcba24c9d6dbffc7b577c72c7558506ec2e11db7feb",
+          "bytecode_words": 112638
+        },
+        "segment_blake9": {
+          "sha256": "03f6a57a857c9036df4e7c23ea13f55a00a085676404d31abc48e6ae2763bb81",
+          "bytecode_words": 111040
+        },
+        "inspect_blake9": {
+          "sha256": "db602a30b5b0d2f9fa8267350e9e7e4b538e945b12a1b94787bf2bba7c28241f",
+          "bytecode_words": 113310
+        },
+        "hash_blake9": {
+          "sha256": "24cee71dca625a87a2808a2b615865fc7b263da809017dc40183efc69f4176e9",
+          "bytecode_words": 788
+        },
+        "hash_poseidon": {
+          "sha256": "5d550f71e28efb5921c809fcdf062ab8bae924078c6cad556f8e0c4b5c750f7c",
+          "bytecode_words": 182
+        },
+        "genesis_poseidon": {
+          "sha256": "bc54bf18d001c3c83e22378ac167f027538d12621465bca7c83d40477b5f275b",
+          "bytecode_words": 47200
+        },
+        "vector_blake9": {
+          "sha256": "7eebdb4304ee98a744d67d646477e27f0eea91cdd3b90c12a11684cebdf97d56",
+          "bytecode_words": 818
+        },
+        "segment_poseidon": {
+          "sha256": "c790fd1c676974d960f09f0fb5f2e119d6f741ef1c6d66463013684ec9b5e9f4",
+          "bytecode_words": 110368
+        }
+      },
+      "calls": [
+        {
+          "program": "vector_blake9",
+          "name": "vector_empty",
+          "steps": 387,
+          "before_steps": null,
+          "wall_ms": 11.812,
+          "output_felts": 10,
+          "output_sha256_le32": "3427e9cc256fd8855e4f57913e957fbca49383b861d76413a66f0219ad724878"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_zero",
+          "steps": 453,
+          "before_steps": null,
+          "wall_ms": 10.291,
+          "output_felts": 10,
+          "output_sha256_le32": "73c1fdb5a8fdeaf536d216805668e56922baa7f37f43078c23b95426e348d265"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_max72",
+          "steps": 453,
+          "before_steps": null,
+          "wall_ms": 9.807,
+          "output_felts": 10,
+          "output_sha256_le32": "1ba3aa2c1529f53e44e3c0633eb28c46fb28a95e111105f226b8b148bb19dd72"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_endian",
+          "steps": 453,
+          "before_steps": null,
+          "wall_ms": 9.697,
+          "output_felts": 10,
+          "output_sha256_le32": "59df932771d43aac3d79ca8d22d006cf162f1202f6d6a87edd4b06687cf6f1af"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_trailing_zero",
+          "steps": 515,
+          "before_steps": null,
+          "wall_ms": 9.961,
+          "output_felts": 10,
+          "output_sha256_le32": "d717b54ea78d54f098c3671c12abe19f3fbc9a7dae33adbd90d4175218b02ad1"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_3",
+          "steps": 577,
+          "before_steps": null,
+          "wall_ms": 11.294,
+          "output_felts": 10,
+          "output_sha256_le32": "143aaa8a23bc8966b41ebc51bfced67714ac454918f999859df1e3542bd0d17e"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_4",
+          "steps": 659,
+          "before_steps": null,
+          "wall_ms": 11.212,
+          "output_felts": 10,
+          "output_sha256_le32": "e3ede34ee499f4a5a0825a978454f3b1bad9766baa5e2cd63e447f587e9006b3"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_7",
+          "steps": 849,
+          "before_steps": null,
+          "wall_ms": 11.934,
+          "output_felts": 10,
+          "output_sha256_le32": "a9fff1b862709522112508433e85e8bddd3a734da7d5221ae9602d233e2534f3"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_8",
+          "steps": 911,
+          "before_steps": null,
+          "wall_ms": 11.493,
+          "output_felts": 10,
+          "output_sha256_le32": "68cb2558de85c15c676f2794c42996a6b57d287e45edf7a292e7e2c1850114d7"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_31",
+          "steps": 2433,
+          "before_steps": null,
+          "wall_ms": 15.171,
+          "output_felts": 10,
+          "output_sha256_le32": "3c72c925615e27d9bbe0933102c318a988b105fceb4fc45e5665d70385bdeed0"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_32",
+          "steps": 2495,
+          "before_steps": null,
+          "wall_ms": 15.283,
+          "output_felts": 10,
+          "output_sha256_le32": "2cd20cb32200eb6c6d0b66cc7d560f9250adceeabaccd3e4d4a539605ce0a070"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_33",
+          "steps": 2585,
+          "before_steps": null,
+          "wall_ms": 15.204,
+          "output_felts": 10,
+          "output_sha256_le32": "d16afe003a9cb0bd297d04d78c70a62fd5fda04ce2c8d4b6101c7f6e72fd82ad"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_63",
+          "steps": 4569,
+          "before_steps": null,
+          "wall_ms": 21.74,
+          "output_felts": 10,
+          "output_sha256_le32": "99fd0072b8f52badac74ad8ef2f656e4972066e1c94dd51c6c2f29e294242c5a"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_64",
+          "steps": 4631,
+          "before_steps": null,
+          "wall_ms": 21.602,
+          "output_felts": 10,
+          "output_sha256_le32": "dce5a47124d60587c282b39a78dec17324df78deaf611fcc5b184f4564a5f7ca"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_65",
+          "steps": 4697,
+          "before_steps": null,
+          "wall_ms": 20.721,
+          "output_felts": 10,
+          "output_sha256_le32": "813b0a90db842a80c0c7c3ce0b96bce58830dbbb072681ab45f98ee6d42182f6"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_96",
+          "steps": 6743,
+          "before_steps": null,
+          "wall_ms": 25.871,
+          "output_felts": 10,
+          "output_sha256_le32": "bdd0a396b664bf8eb0baa08f02b2daa58b83f14ecec764db66c7c3cbf26c1a99"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "domain_4722366482869645213696",
+          "steps": 148,
+          "before_steps": null,
+          "wall_ms": 9.252,
+          "output_felts": 10,
+          "output_sha256_le32": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "domain_option_4722366482869645213696",
+          "steps": 123,
+          "before_steps": null,
+          "wall_ms": 9.285,
+          "output_felts": 1,
+          "output_sha256_le32": "01d0fabd251fcbbe2b93b4b927b26ad2a1a99077152e45ded1e678afa45dbec5"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "domain_3618502788666131213697322783095070105623107215331596699973092056135872020480",
+          "steps": 152,
+          "before_steps": null,
+          "wall_ms": 8.968,
+          "output_felts": 10,
+          "output_sha256_le32": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "domain_option_3618502788666131213697322783095070105623107215331596699973092056135872020480",
+          "steps": 127,
+          "before_steps": null,
+          "wall_ms": 8.822,
+          "output_felts": 1,
+          "output_sha256_le32": "01d0fabd251fcbbe2b93b4b927b26ad2a1a99077152e45ded1e678afa45dbec5"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "genesis_hash_only",
+          "steps": 422647,
+          "before_steps": 700997,
+          "wall_ms": 1085.504,
+          "output_felts": 2,
+          "output_sha256_le32": "fa6acf471fd37e2aa50687cd23291344ae85262d30bf3ebd55666b2c7eba37e7"
+        },
+        {
+          "program": "segment_blake9",
+          "name": "empty",
+          "steps": 1104919,
+          "before_steps": 1661619,
+          "wall_ms": 3352.799,
+          "output_felts": 10,
+          "output_sha256_le32": "d1ba487e8b4898a7bbd6e86bf88ac7f14dc5e04d04f714ab91fbcb9f783311f8"
+        },
+        {
+          "program": "inspect_blake9",
+          "name": "empty",
+          "steps": 1285438,
+          "before_steps": 1842138,
+          "wall_ms": 3726.908,
+          "output_felts": 8836,
+          "output_sha256_le32": "fcf14dce48c8ad9ff7f4a5d2546fd1736d1c16ea61e227436dc83fa43c4ced2a"
+        },
+        {
+          "program": "segment_blake9",
+          "name": "walk4",
+          "steps": 1251900,
+          "before_steps": 1808600,
+          "wall_ms": 3620.247,
+          "output_felts": 10,
+          "output_sha256_le32": "7bc02d0c354bf677213dc726a96b743d0235bec9443393ff647470dc58379f0c"
+        },
+        {
+          "program": "inspect_blake9",
+          "name": "walk4",
+          "steps": 1432419,
+          "before_steps": 1989119,
+          "wall_ms": 3944.56,
+          "output_felts": 8836,
+          "output_sha256_le32": "f38d469a2c2d9856bd94a84966ff969fdb1457cc83343e4763be90f64b5003bf"
+        }
+      ],
+      "full": false,
+      "baseline": "4936c233e2ea9cf7a7b34312b522f7b96c8bf9fb",
+      "same_complete_outputs": true,
+      "proof_generated": false
+    },
+    "v2": {
+      "programs": {
+        "genesis_blake9": {
+          "sha256": "9ef3c3f644e970f65597d9ac7f17bd951546719e2383fe9ae9c19ec2616189e4",
+          "bytecode_words": 47792
+        },
+        "inspect_poseidon": {
+          "sha256": "92f050a78e0a1e0e4bc0ebcba24c9d6dbffc7b577c72c7558506ec2e11db7feb",
+          "bytecode_words": 112638
+        },
+        "segment_blake9": {
+          "sha256": "0575166c7759c1d6084753ef49e8a9a1fc0eb744c2875d68b27d186a778d7e08",
+          "bytecode_words": 111052
+        },
+        "inspect_blake9": {
+          "sha256": "2408563dfe19431a5dddfeb7ba28cdfdf5ee9502caf6221ee47908f982859273",
+          "bytecode_words": 113322
+        },
+        "hash_blake9": {
+          "sha256": "6ba604873e491fbcc966fd3b6687545403d4a4155ee13861ef181e455a09e951",
+          "bytecode_words": 804
+        },
+        "hash_poseidon": {
+          "sha256": "5d550f71e28efb5921c809fcdf062ab8bae924078c6cad556f8e0c4b5c750f7c",
+          "bytecode_words": 182
+        },
+        "genesis_poseidon": {
+          "sha256": "bc54bf18d001c3c83e22378ac167f027538d12621465bca7c83d40477b5f275b",
+          "bytecode_words": 47200
+        },
+        "vector_blake9": {
+          "sha256": "38fe9d8857c9e274c77eb17941f9d5d268df69625af347651f62dd6c69f4ecf3",
+          "bytecode_words": 833
+        },
+        "segment_poseidon": {
+          "sha256": "c790fd1c676974d960f09f0fb5f2e119d6f741ef1c6d66463013684ec9b5e9f4",
+          "bytecode_words": 110368
+        }
+      },
+      "calls": [
+        {
+          "program": "vector_blake9",
+          "name": "vector_empty",
+          "steps": 395,
+          "before_steps": null,
+          "wall_ms": 10.853,
+          "output_felts": 10,
+          "output_sha256_le32": "3427e9cc256fd8855e4f57913e957fbca49383b861d76413a66f0219ad724878"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_zero",
+          "steps": 453,
+          "before_steps": null,
+          "wall_ms": 10.474,
+          "output_felts": 10,
+          "output_sha256_le32": "73c1fdb5a8fdeaf536d216805668e56922baa7f37f43078c23b95426e348d265"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_max72",
+          "steps": 453,
+          "before_steps": null,
+          "wall_ms": 10.614,
+          "output_felts": 10,
+          "output_sha256_le32": "1ba3aa2c1529f53e44e3c0633eb28c46fb28a95e111105f226b8b148bb19dd72"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_endian",
+          "steps": 453,
+          "before_steps": null,
+          "wall_ms": 10.801,
+          "output_felts": 10,
+          "output_sha256_le32": "59df932771d43aac3d79ca8d22d006cf162f1202f6d6a87edd4b06687cf6f1af"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_trailing_zero",
+          "steps": 507,
+          "before_steps": null,
+          "wall_ms": 11.101,
+          "output_felts": 10,
+          "output_sha256_le32": "d717b54ea78d54f098c3671c12abe19f3fbc9a7dae33adbd90d4175218b02ad1"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_3",
+          "steps": 561,
+          "before_steps": null,
+          "wall_ms": 11.169,
+          "output_felts": 10,
+          "output_sha256_le32": "143aaa8a23bc8966b41ebc51bfced67714ac454918f999859df1e3542bd0d17e"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_4",
+          "steps": 636,
+          "before_steps": null,
+          "wall_ms": 11.748,
+          "output_felts": 10,
+          "output_sha256_le32": "e3ede34ee499f4a5a0825a978454f3b1bad9766baa5e2cd63e447f587e9006b3"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_7",
+          "steps": 802,
+          "before_steps": null,
+          "wall_ms": 11.78,
+          "output_felts": 10,
+          "output_sha256_le32": "a9fff1b862709522112508433e85e8bddd3a734da7d5221ae9602d233e2534f3"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_8",
+          "steps": 857,
+          "before_steps": null,
+          "wall_ms": 12.706,
+          "output_felts": 10,
+          "output_sha256_le32": "68cb2558de85c15c676f2794c42996a6b57d287e45edf7a292e7e2c1850114d7"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_31",
+          "steps": 2200,
+          "before_steps": null,
+          "wall_ms": 17.658,
+          "output_felts": 10,
+          "output_sha256_le32": "3c72c925615e27d9bbe0933102c318a988b105fceb4fc45e5665d70385bdeed0"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_32",
+          "steps": 2255,
+          "before_steps": null,
+          "wall_ms": 17.407,
+          "output_felts": 10,
+          "output_sha256_le32": "2cd20cb32200eb6c6d0b66cc7d560f9250adceeabaccd3e4d4a539605ce0a070"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_33",
+          "steps": 2337,
+          "before_steps": null,
+          "wall_ms": 18.127,
+          "output_felts": 10,
+          "output_sha256_le32": "d16afe003a9cb0bd297d04d78c70a62fd5fda04ce2c8d4b6101c7f6e72fd82ad"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_63",
+          "steps": 4088,
+          "before_steps": null,
+          "wall_ms": 47.027,
+          "output_felts": 10,
+          "output_sha256_le32": "99fd0072b8f52badac74ad8ef2f656e4972066e1c94dd51c6c2f29e294242c5a"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_64",
+          "steps": 4143,
+          "before_steps": null,
+          "wall_ms": 27.471,
+          "output_felts": 10,
+          "output_sha256_le32": "dce5a47124d60587c282b39a78dec17324df78deaf611fcc5b184f4564a5f7ca"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_65",
+          "steps": 4201,
+          "before_steps": null,
+          "wall_ms": 25.017,
+          "output_felts": 10,
+          "output_sha256_le32": "813b0a90db842a80c0c7c3ce0b96bce58830dbbb072681ab45f98ee6d42182f6"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_96",
+          "steps": 6007,
+          "before_steps": null,
+          "wall_ms": 30.935,
+          "output_felts": 10,
+          "output_sha256_le32": "bdd0a396b664bf8eb0baa08f02b2daa58b83f14ecec764db66c7c3cbf26c1a99"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "domain_4722366482869645213696",
+          "steps": 156,
+          "before_steps": null,
+          "wall_ms": 10.621,
+          "output_felts": 10,
+          "output_sha256_le32": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "domain_option_4722366482869645213696",
+          "steps": 131,
+          "before_steps": null,
+          "wall_ms": 9.583,
+          "output_felts": 1,
+          "output_sha256_le32": "01d0fabd251fcbbe2b93b4b927b26ad2a1a99077152e45ded1e678afa45dbec5"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "domain_3618502788666131213697322783095070105623107215331596699973092056135872020480",
+          "steps": 160,
+          "before_steps": null,
+          "wall_ms": 10.646,
+          "output_felts": 10,
+          "output_sha256_le32": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "domain_option_3618502788666131213697322783095070105623107215331596699973092056135872020480",
+          "steps": 135,
+          "before_steps": null,
+          "wall_ms": 9.912,
+          "output_felts": 1,
+          "output_sha256_le32": "01d0fabd251fcbbe2b93b4b927b26ad2a1a99077152e45ded1e678afa45dbec5"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "genesis_hash_only",
+          "steps": 373349,
+          "before_steps": 700997,
+          "wall_ms": 1289.065,
+          "output_felts": 2,
+          "output_sha256_le32": "fa6acf471fd37e2aa50687cd23291344ae85262d30bf3ebd55666b2c7eba37e7"
+        },
+        {
+          "program": "segment_blake9",
+          "name": "empty",
+          "steps": 1006316,
+          "before_steps": 1661619,
+          "wall_ms": 3681.901,
+          "output_felts": 10,
+          "output_sha256_le32": "d1ba487e8b4898a7bbd6e86bf88ac7f14dc5e04d04f714ab91fbcb9f783311f8"
+        },
+        {
+          "program": "inspect_blake9",
+          "name": "empty",
+          "steps": 1186835,
+          "before_steps": 1842138,
+          "wall_ms": 3981.478,
+          "output_felts": 8836,
+          "output_sha256_le32": "fcf14dce48c8ad9ff7f4a5d2546fd1736d1c16ea61e227436dc83fa43c4ced2a"
+        },
+        {
+          "program": "segment_blake9",
+          "name": "walk4",
+          "steps": 1153297,
+          "before_steps": 1808600,
+          "wall_ms": 3957.151,
+          "output_felts": 10,
+          "output_sha256_le32": "7bc02d0c354bf677213dc726a96b743d0235bec9443393ff647470dc58379f0c"
+        },
+        {
+          "program": "inspect_blake9",
+          "name": "walk4",
+          "steps": 1333816,
+          "before_steps": 1989119,
+          "wall_ms": 4241.742,
+          "output_felts": 8836,
+          "output_sha256_le32": "f38d469a2c2d9856bd94a84966ff969fdb1457cc83343e4763be90f64b5003bf"
+        }
+      ],
+      "full": false,
+      "baseline": "4936c233e2ea9cf7a7b34312b522f7b96c8bf9fb",
+      "same_complete_outputs": true,
+      "proof_generated": false
+    },
+    "v3": {
+      "programs": {
+        "genesis_blake9": {
+          "sha256": "be31b9c53cc2a5edd6997c412e0302f6362c138a82382bb59e2ad4a51a8f8727",
+          "bytecode_words": 47912
+        },
+        "inspect_poseidon": {
+          "sha256": "92f050a78e0a1e0e4bc0ebcba24c9d6dbffc7b577c72c7558506ec2e11db7feb",
+          "bytecode_words": 112638
+        },
+        "segment_blake9": {
+          "sha256": "80c247265b833b6a15321cc8d9988b1193fa5dbd6b61c9d2dc95deb060fa9ed1",
+          "bytecode_words": 111172
+        },
+        "inspect_blake9": {
+          "sha256": "4ef4765d72307d9e4fede1c0b884eb15e6f9171337ce6403fd22e26dd5cef33b",
+          "bytecode_words": 113442
+        },
+        "hash_blake9": {
+          "sha256": "de00d3cd6ed32197544bf00c1ed3cd7674d42050d1925bc56116470b18794ee3",
+          "bytecode_words": 924
+        },
+        "hash_poseidon": {
+          "sha256": "5d550f71e28efb5921c809fcdf062ab8bae924078c6cad556f8e0c4b5c750f7c",
+          "bytecode_words": 182
+        },
+        "genesis_poseidon": {
+          "sha256": "bc54bf18d001c3c83e22378ac167f027538d12621465bca7c83d40477b5f275b",
+          "bytecode_words": 47200
+        },
+        "vector_blake9": {
+          "sha256": "eea182f2986eef55a6c642a0d318e1b6bda5cec77a9f8622a70d647b763b41a2",
+          "bytecode_words": 953
+        },
+        "segment_poseidon": {
+          "sha256": "c790fd1c676974d960f09f0fb5f2e119d6f741ef1c6d66463013684ec9b5e9f4",
+          "bytecode_words": 110368
+        }
+      },
+      "calls": [
+        {
+          "program": "vector_blake9",
+          "name": "vector_empty",
+          "steps": 393,
+          "before_steps": null,
+          "wall_ms": 12.05,
+          "output_felts": 10,
+          "output_sha256_le32": "3427e9cc256fd8855e4f57913e957fbca49383b861d76413a66f0219ad724878"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_zero",
+          "steps": 456,
+          "before_steps": null,
+          "wall_ms": 10.744,
+          "output_felts": 10,
+          "output_sha256_le32": "73c1fdb5a8fdeaf536d216805668e56922baa7f37f43078c23b95426e348d265"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_max72",
+          "steps": 456,
+          "before_steps": null,
+          "wall_ms": 10.615,
+          "output_felts": 10,
+          "output_sha256_le32": "1ba3aa2c1529f53e44e3c0633eb28c46fb28a95e111105f226b8b148bb19dd72"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_endian",
+          "steps": 456,
+          "before_steps": null,
+          "wall_ms": 10.592,
+          "output_felts": 10,
+          "output_sha256_le32": "59df932771d43aac3d79ca8d22d006cf162f1202f6d6a87edd4b06687cf6f1af"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_trailing_zero",
+          "steps": 523,
+          "before_steps": null,
+          "wall_ms": 10.622,
+          "output_felts": 10,
+          "output_sha256_le32": "d717b54ea78d54f098c3671c12abe19f3fbc9a7dae33adbd90d4175218b02ad1"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_3",
+          "steps": 590,
+          "before_steps": null,
+          "wall_ms": 10.974,
+          "output_felts": 10,
+          "output_sha256_le32": "143aaa8a23bc8966b41ebc51bfced67714ac454918f999859df1e3542bd0d17e"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_4",
+          "steps": 678,
+          "before_steps": null,
+          "wall_ms": 11.255,
+          "output_felts": 10,
+          "output_sha256_le32": "e3ede34ee499f4a5a0825a978454f3b1bad9766baa5e2cd63e447f587e9006b3"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_7",
+          "steps": 883,
+          "before_steps": null,
+          "wall_ms": 11.94,
+          "output_felts": 10,
+          "output_sha256_le32": "a9fff1b862709522112508433e85e8bddd3a734da7d5221ae9602d233e2534f3"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_8",
+          "steps": 951,
+          "before_steps": null,
+          "wall_ms": 12.314,
+          "output_felts": 10,
+          "output_sha256_le32": "68cb2558de85c15c676f2794c42996a6b57d287e45edf7a292e7e2c1850114d7"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_31",
+          "steps": 2593,
+          "before_steps": null,
+          "wall_ms": 17.455,
+          "output_felts": 10,
+          "output_sha256_le32": "3c72c925615e27d9bbe0933102c318a988b105fceb4fc45e5665d70385bdeed0"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_32",
+          "steps": 2661,
+          "before_steps": null,
+          "wall_ms": 17.197,
+          "output_felts": 10,
+          "output_sha256_le32": "2cd20cb32200eb6c6d0b66cc7d560f9250adceeabaccd3e4d4a539605ce0a070"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_33",
+          "steps": 2756,
+          "before_steps": null,
+          "wall_ms": 17.413,
+          "output_felts": 10,
+          "output_sha256_le32": "d16afe003a9cb0bd297d04d78c70a62fd5fda04ce2c8d4b6101c7f6e72fd82ad"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_63",
+          "steps": 4897,
+          "before_steps": null,
+          "wall_ms": 23.572,
+          "output_felts": 10,
+          "output_sha256_le32": "99fd0072b8f52badac74ad8ef2f656e4972066e1c94dd51c6c2f29e294242c5a"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_64",
+          "steps": 4965,
+          "before_steps": null,
+          "wall_ms": 23.978,
+          "output_felts": 10,
+          "output_sha256_le32": "dce5a47124d60587c282b39a78dec17324df78deaf611fcc5b184f4564a5f7ca"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_65",
+          "steps": 5036,
+          "before_steps": null,
+          "wall_ms": 24.108,
+          "output_felts": 10,
+          "output_sha256_le32": "813b0a90db842a80c0c7c3ce0b96bce58830dbbb072681ab45f98ee6d42182f6"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "vector_length_96",
+          "steps": 7245,
+          "before_steps": null,
+          "wall_ms": 32.39,
+          "output_felts": 10,
+          "output_sha256_le32": "bdd0a396b664bf8eb0baa08f02b2daa58b83f14ecec764db66c7c3cbf26c1a99"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "domain_4722366482869645213696",
+          "steps": 167,
+          "before_steps": null,
+          "wall_ms": 11.833,
+          "output_felts": 10,
+          "output_sha256_le32": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "domain_option_4722366482869645213696",
+          "steps": 142,
+          "before_steps": null,
+          "wall_ms": 35.491,
+          "output_felts": 1,
+          "output_sha256_le32": "01d0fabd251fcbbe2b93b4b927b26ad2a1a99077152e45ded1e678afa45dbec5"
+        },
+        {
+          "program": "vector_blake9",
+          "name": "domain_3618502788666131213697322783095070105623107215331596699973092056135872020480",
+          "steps": 171,
+          "before_steps": null,
+          "wall_ms": 15.061,
+          "output_felts": 10,
+          "output_sha256_le32": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "domain_option_3618502788666131213697322783095070105623107215331596699973092056135872020480",
+          "steps": 146,
+          "before_steps": null,
+          "wall_ms": 11.893,
+          "output_felts": 1,
+          "output_sha256_le32": "01d0fabd251fcbbe2b93b4b927b26ad2a1a99077152e45ded1e678afa45dbec5"
+        },
+        {
+          "program": "hash_blake9",
+          "name": "genesis_hash_only",
+          "steps": 456045,
+          "before_steps": 700997,
+          "wall_ms": 1360.653,
+          "output_felts": 2,
+          "output_sha256_le32": "fa6acf471fd37e2aa50687cd23291344ae85262d30bf3ebd55666b2c7eba37e7"
+        },
+        {
+          "program": "segment_blake9",
+          "name": "empty",
+          "steps": 1171708,
+          "before_steps": 1661619,
+          "wall_ms": 3860.076,
+          "output_felts": 10,
+          "output_sha256_le32": "d1ba487e8b4898a7bbd6e86bf88ac7f14dc5e04d04f714ab91fbcb9f783311f8"
+        },
+        {
+          "program": "inspect_blake9",
+          "name": "empty",
+          "steps": 1352227,
+          "before_steps": 1842138,
+          "wall_ms": 4189.821,
+          "output_felts": 8836,
+          "output_sha256_le32": "fcf14dce48c8ad9ff7f4a5d2546fd1736d1c16ea61e227436dc83fa43c4ced2a"
+        },
+        {
+          "program": "segment_blake9",
+          "name": "walk4",
+          "steps": 1318689,
+          "before_steps": 1808600,
+          "wall_ms": 4130.855,
+          "output_felts": 10,
+          "output_sha256_le32": "7bc02d0c354bf677213dc726a96b743d0235bec9443393ff647470dc58379f0c"
+        },
+        {
+          "program": "inspect_blake9",
+          "name": "walk4",
+          "steps": 1499208,
+          "before_steps": 1989119,
+          "wall_ms": 4470.482,
+          "output_felts": 8836,
+          "output_sha256_le32": "f38d469a2c2d9856bd94a84966ff969fdb1457cc83343e4763be90f64b5003bf"
+        }
+      ],
+      "full": false,
+      "baseline": "4936c233e2ea9cf7a7b34312b522f7b96c8bf9fb",
+      "same_complete_outputs": true,
+      "proof_generated": false
+    }
+  },
+  "final_validation": {
+    "programs": {
+      "genesis_blake9": {
+        "sha256": "9ef3c3f644e970f65597d9ac7f17bd951546719e2383fe9ae9c19ec2616189e4",
+        "bytecode_words": 47792
+      },
+      "inspect_poseidon": {
+        "sha256": "92f050a78e0a1e0e4bc0ebcba24c9d6dbffc7b577c72c7558506ec2e11db7feb",
+        "bytecode_words": 112638
+      },
+      "segment_blake9": {
+        "sha256": "0575166c7759c1d6084753ef49e8a9a1fc0eb744c2875d68b27d186a778d7e08",
+        "bytecode_words": 111052
+      },
+      "inspect_blake9": {
+        "sha256": "2408563dfe19431a5dddfeb7ba28cdfdf5ee9502caf6221ee47908f982859273",
+        "bytecode_words": 113322
+      },
+      "hash_blake9": {
+        "sha256": "6ba604873e491fbcc966fd3b6687545403d4a4155ee13861ef181e455a09e951",
+        "bytecode_words": 804
+      },
+      "hash_poseidon": {
+        "sha256": "5d550f71e28efb5921c809fcdf062ab8bae924078c6cad556f8e0c4b5c750f7c",
+        "bytecode_words": 182
+      },
+      "genesis_poseidon": {
+        "sha256": "bc54bf18d001c3c83e22378ac167f027538d12621465bca7c83d40477b5f275b",
+        "bytecode_words": 47200
+      },
+      "vector_blake9": {
+        "sha256": "38fe9d8857c9e274c77eb17941f9d5d268df69625af347651f62dd6c69f4ecf3",
+        "bytecode_words": 833
+      },
+      "segment_poseidon": {
+        "sha256": "c790fd1c676974d960f09f0fb5f2e119d6f741ef1c6d66463013684ec9b5e9f4",
+        "bytecode_words": 110368
+      }
+    },
+    "calls": [
+      {
+        "program": "vector_blake9",
+        "name": "vector_empty",
+        "steps": 395,
+        "before_steps": null,
+        "wall_ms": 11.852,
+        "output_felts": 10,
+        "output_sha256_le32": "3427e9cc256fd8855e4f57913e957fbca49383b861d76413a66f0219ad724878"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_zero",
+        "steps": 453,
+        "before_steps": null,
+        "wall_ms": 10.434,
+        "output_felts": 10,
+        "output_sha256_le32": "73c1fdb5a8fdeaf536d216805668e56922baa7f37f43078c23b95426e348d265"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_max72",
+        "steps": 453,
+        "before_steps": null,
+        "wall_ms": 10.419,
+        "output_felts": 10,
+        "output_sha256_le32": "1ba3aa2c1529f53e44e3c0633eb28c46fb28a95e111105f226b8b148bb19dd72"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_endian",
+        "steps": 453,
+        "before_steps": null,
+        "wall_ms": 11.419,
+        "output_felts": 10,
+        "output_sha256_le32": "59df932771d43aac3d79ca8d22d006cf162f1202f6d6a87edd4b06687cf6f1af"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_trailing_zero",
+        "steps": 507,
+        "before_steps": null,
+        "wall_ms": 10.671,
+        "output_felts": 10,
+        "output_sha256_le32": "d717b54ea78d54f098c3671c12abe19f3fbc9a7dae33adbd90d4175218b02ad1"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_3",
+        "steps": 561,
+        "before_steps": null,
+        "wall_ms": 10.643,
+        "output_felts": 10,
+        "output_sha256_le32": "143aaa8a23bc8966b41ebc51bfced67714ac454918f999859df1e3542bd0d17e"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_4",
+        "steps": 636,
+        "before_steps": null,
+        "wall_ms": 10.797,
+        "output_felts": 10,
+        "output_sha256_le32": "e3ede34ee499f4a5a0825a978454f3b1bad9766baa5e2cd63e447f587e9006b3"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_7",
+        "steps": 802,
+        "before_steps": null,
+        "wall_ms": 11.28,
+        "output_felts": 10,
+        "output_sha256_le32": "a9fff1b862709522112508433e85e8bddd3a734da7d5221ae9602d233e2534f3"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_8",
+        "steps": 857,
+        "before_steps": null,
+        "wall_ms": 12.905,
+        "output_felts": 10,
+        "output_sha256_le32": "68cb2558de85c15c676f2794c42996a6b57d287e45edf7a292e7e2c1850114d7"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_31",
+        "steps": 2200,
+        "before_steps": null,
+        "wall_ms": 17.554,
+        "output_felts": 10,
+        "output_sha256_le32": "3c72c925615e27d9bbe0933102c318a988b105fceb4fc45e5665d70385bdeed0"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_32",
+        "steps": 2255,
+        "before_steps": null,
+        "wall_ms": 17.274,
+        "output_felts": 10,
+        "output_sha256_le32": "2cd20cb32200eb6c6d0b66cc7d560f9250adceeabaccd3e4d4a539605ce0a070"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_33",
+        "steps": 2337,
+        "before_steps": null,
+        "wall_ms": 17.894,
+        "output_felts": 10,
+        "output_sha256_le32": "d16afe003a9cb0bd297d04d78c70a62fd5fda04ce2c8d4b6101c7f6e72fd82ad"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_63",
+        "steps": 4088,
+        "before_steps": null,
+        "wall_ms": 23.124,
+        "output_felts": 10,
+        "output_sha256_le32": "99fd0072b8f52badac74ad8ef2f656e4972066e1c94dd51c6c2f29e294242c5a"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_64",
+        "steps": 4143,
+        "before_steps": null,
+        "wall_ms": 23.356,
+        "output_felts": 10,
+        "output_sha256_le32": "dce5a47124d60587c282b39a78dec17324df78deaf611fcc5b184f4564a5f7ca"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_65",
+        "steps": 4201,
+        "before_steps": null,
+        "wall_ms": 23.045,
+        "output_felts": 10,
+        "output_sha256_le32": "813b0a90db842a80c0c7c3ce0b96bce58830dbbb072681ab45f98ee6d42182f6"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "vector_length_96",
+        "steps": 6007,
+        "before_steps": null,
+        "wall_ms": 29.943,
+        "output_felts": 10,
+        "output_sha256_le32": "bdd0a396b664bf8eb0baa08f02b2daa58b83f14ecec764db66c7c3cbf26c1a99"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "domain_4722366482869645213696",
+        "steps": 156,
+        "before_steps": null,
+        "wall_ms": 10.779,
+        "output_felts": 10,
+        "output_sha256_le32": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+      },
+      {
+        "program": "hash_blake9",
+        "name": "domain_option_4722366482869645213696",
+        "steps": 131,
+        "before_steps": null,
+        "wall_ms": 9.45,
+        "output_felts": 1,
+        "output_sha256_le32": "01d0fabd251fcbbe2b93b4b927b26ad2a1a99077152e45ded1e678afa45dbec5"
+      },
+      {
+        "program": "vector_blake9",
+        "name": "domain_3618502788666131213697322783095070105623107215331596699973092056135872020480",
+        "steps": 160,
+        "before_steps": null,
+        "wall_ms": 9.846,
+        "output_felts": 10,
+        "output_sha256_le32": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+      },
+      {
+        "program": "hash_blake9",
+        "name": "domain_option_3618502788666131213697322783095070105623107215331596699973092056135872020480",
+        "steps": 135,
+        "before_steps": null,
+        "wall_ms": 10.926,
+        "output_felts": 1,
+        "output_sha256_le32": "01d0fabd251fcbbe2b93b4b927b26ad2a1a99077152e45ded1e678afa45dbec5"
+      },
+      {
+        "program": "hash_blake9",
+        "name": "genesis_hash_only",
+        "steps": 373349,
+        "before_steps": 700997,
+        "wall_ms": 1280.979,
+        "output_felts": 2,
+        "output_sha256_le32": "fa6acf471fd37e2aa50687cd23291344ae85262d30bf3ebd55666b2c7eba37e7"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "empty",
+        "steps": 1006316,
+        "before_steps": 1661619,
+        "wall_ms": 3694.046,
+        "output_felts": 10,
+        "output_sha256_le32": "d1ba487e8b4898a7bbd6e86bf88ac7f14dc5e04d04f714ab91fbcb9f783311f8"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "empty",
+        "steps": 1186835,
+        "before_steps": 1842138,
+        "wall_ms": 4037.37,
+        "output_felts": 8836,
+        "output_sha256_le32": "fcf14dce48c8ad9ff7f4a5d2546fd1736d1c16ea61e227436dc83fa43c4ced2a"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "walk1",
+        "steps": 1045584,
+        "before_steps": 1700887,
+        "wall_ms": 3783.972,
+        "output_felts": 10,
+        "output_sha256_le32": "f72124908113e6bfea8e21e7fcba90890a119c52c72a5742434f8e35f304550b"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "walk1",
+        "steps": 1226103,
+        "before_steps": 1881406,
+        "wall_ms": 4101.387,
+        "output_felts": 8836,
+        "output_sha256_le32": "80c57fb24fef211fbde226968ba8e167ea14e147ca765e80e560f47812237215"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "walk4",
+        "steps": 1153297,
+        "before_steps": 1808600,
+        "wall_ms": 4003.034,
+        "output_felts": 10,
+        "output_sha256_le32": "7bc02d0c354bf677213dc726a96b743d0235bec9443393ff647470dc58379f0c"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "walk4",
+        "steps": 1333816,
+        "before_steps": 1989119,
+        "wall_ms": 4287.847,
+        "output_felts": 8836,
+        "output_sha256_le32": "f38d469a2c2d9856bd94a84966ff969fdb1457cc83343e4763be90f64b5003bf"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "idle300_1",
+        "steps": 1036176,
+        "before_steps": 1691479,
+        "wall_ms": 3855.207,
+        "output_felts": 10,
+        "output_sha256_le32": "abf97c13d5abde396b832f3cbd0ce4d7a4bf638ec5c2296bc18f2d50a3f64e5f"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "idle300_1",
+        "steps": 1216695,
+        "before_steps": 1871998,
+        "wall_ms": 4202.926,
+        "output_felts": 8836,
+        "output_sha256_le32": "5dae11a56731ad045963ffb9b1e5aab404d37993c7ba8c6616efc329068db1e6"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "fight493_1",
+        "steps": 1178401,
+        "before_steps": 1835880,
+        "wall_ms": 4211.675,
+        "output_felts": 10,
+        "output_sha256_le32": "d2ce0df949700a36a128c954df6ceb66a8a685c26975a5e432fe07c2be9352b6"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "fight493_1",
+        "steps": 1359022,
+        "before_steps": 2016501,
+        "wall_ms": 4445.39,
+        "output_felts": 8857,
+        "output_sha256_le32": "5c7072d759a61dcb3cfb3ed73c5a2177a469e6d3da7426101e6d7aa76680903b"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "fight493_4",
+        "steps": 1331476,
+        "before_steps": 1988955,
+        "wall_ms": 4417.805,
+        "output_felts": 10,
+        "output_sha256_le32": "77a8bed15c0462c16c7b72013fced531a40463f77980bc11e8d8b220cdb41f6b"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "fight493_4",
+        "steps": 1512169,
+        "before_steps": 2169648,
+        "wall_ms": 4712.141,
+        "output_felts": 8857,
+        "output_sha256_le32": "3a1cd00675eef1e87ca61cc0f92fce1dc162f2528b64dd6f8de62b36aa85b653"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "terminal846_1",
+        "steps": 1008168,
+        "before_steps": 1665531,
+        "wall_ms": 3822.89,
+        "output_felts": 10,
+        "output_sha256_le32": "22d7a5ff7a34c16ffc8ac1543763da9801607dc7a233c2975413d0a5c51ce130"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "terminal846_1",
+        "steps": 1188443,
+        "before_steps": 1845806,
+        "wall_ms": 4126.165,
+        "output_felts": 8845,
+        "output_sha256_le32": "b320e14acc2501c2ddbfb80c8c702601f8a862d31e8b1b785451a981dad85ab4"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "invalid_tag",
+        "steps": 67227,
+        "before_steps": 67227,
+        "wall_ms": 1263.454,
+        "output_felts": 10,
+        "output_sha256_le32": "00da867cd08f4eab794d388918323808fcde2081f134361d54d3f3fca40fdf6e"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "invalid_tag",
+        "steps": 67291,
+        "before_steps": 67291,
+        "wall_ms": 1276.525,
+        "output_felts": 12,
+        "output_sha256_le32": "b609c936706f7d79c603d4cc943fc1a83717dab3276d6428afe409c4e632703c"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "invalid_tic_start",
+        "steps": 221482,
+        "before_steps": 221482,
+        "wall_ms": 1628.712,
+        "output_felts": 10,
+        "output_sha256_le32": "395cba19f8c395095873a0d0ee1e6d5e0e2ea3e395b7f9fd8c6c479fe8203cc5"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "invalid_tic_start",
+        "steps": 221546,
+        "before_steps": 221546,
+        "wall_ms": 1620.265,
+        "output_felts": 12,
+        "output_sha256_le32": "02d6b1ad293a3dcda698a84c7821a0682611652c6d3208d5db28890d1a08c64e"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "invalid_domain_state",
+        "steps": 67400,
+        "before_steps": 67400,
+        "wall_ms": 1265.821,
+        "output_felts": 10,
+        "output_sha256_le32": "dfc5d25e5c94d996bf7d75d731e5d9fc016537d2b76b1dbbeaf821d3927d43cb"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "invalid_domain_state",
+        "steps": 67464,
+        "before_steps": 67464,
+        "wall_ms": 1280.516,
+        "output_felts": 12,
+        "output_sha256_le32": "0061baef632e4e898864380ade51e37610653a83a666f9f526ce85afc4600ef5"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "invalid_truncated",
+        "steps": 67245,
+        "before_steps": 67245,
+        "wall_ms": 1271.987,
+        "output_felts": 10,
+        "output_sha256_le32": "af9bd37f48d552f9c4fccc0b9da54cbd30aad8ec691a1ea2b189c3b65e9227c4"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "invalid_truncated",
+        "steps": 67309,
+        "before_steps": 67309,
+        "wall_ms": 1318.794,
+        "output_felts": 12,
+        "output_sha256_le32": "d21a223eed3db3665a958f2f104e4c22b61839e6e6c1e29127225b8645d94f1d"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "walk_1_3_0",
+        "steps": 1045584,
+        "before_steps": 1700887,
+        "wall_ms": 3894.566,
+        "output_felts": 10,
+        "output_sha256_le32": "f72124908113e6bfea8e21e7fcba90890a119c52c72a5742434f8e35f304550b"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "walk_1_3_0",
+        "steps": 1226103,
+        "before_steps": 1881406,
+        "wall_ms": 4211.924,
+        "output_felts": 8836,
+        "output_sha256_le32": "80c57fb24fef211fbde226968ba8e167ea14e147ca765e80e560f47812237215"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "walk_1_3_1",
+        "steps": 1114031,
+        "before_steps": 1769334,
+        "wall_ms": 4020.857,
+        "output_felts": 10,
+        "output_sha256_le32": "8a1b0bc7030ee799b92ec34e2623946ca653fe27c708d63bfed05b453550e7ae"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "walk_1_3_1",
+        "steps": 1294550,
+        "before_steps": 1949853,
+        "wall_ms": 4324.595,
+        "output_felts": 8836,
+        "output_sha256_le32": "124f52affd586eddf00dc2bb2ea7957216e033d4522db2c14d6111a6a2f2157e"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "walk_1_1_1_1_0",
+        "steps": 1045584,
+        "before_steps": 1700887,
+        "wall_ms": 3929.441,
+        "output_felts": 10,
+        "output_sha256_le32": "f72124908113e6bfea8e21e7fcba90890a119c52c72a5742434f8e35f304550b"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "walk_1_1_1_1_0",
+        "steps": 1226103,
+        "before_steps": 1881406,
+        "wall_ms": 4190.617,
+        "output_felts": 8836,
+        "output_sha256_le32": "80c57fb24fef211fbde226968ba8e167ea14e147ca765e80e560f47812237215"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "walk_1_1_1_1_1",
+        "steps": 1042213,
+        "before_steps": 1697516,
+        "wall_ms": 3893.083,
+        "output_felts": 10,
+        "output_sha256_le32": "1a88c05d026c3acf2df951edb6987fb6371d308d5df4e9d9b66f202a09131bd7"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "walk_1_1_1_1_1",
+        "steps": 1222732,
+        "before_steps": 1878035,
+        "wall_ms": 4169.694,
+        "output_felts": 8836,
+        "output_sha256_le32": "184a08d16f371c937a5202b29dcf07192de50e22733e414df082c0b82d4a1f5f"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "walk_1_1_1_1_2",
+        "steps": 1040855,
+        "before_steps": 1696158,
+        "wall_ms": 3894.771,
+        "output_felts": 10,
+        "output_sha256_le32": "fe1a5f4d5ea1828b68ab89dbd45051639d30207ccbdef25642dd06f6a107931c"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "walk_1_1_1_1_2",
+        "steps": 1221374,
+        "before_steps": 1876677,
+        "wall_ms": 4218.249,
+        "output_felts": 8836,
+        "output_sha256_le32": "233bbc6353c16b22cc1d58dc8b9d256ae257fc025ba5e2502646e628837c1bd6"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "walk_1_1_1_1_3",
+        "steps": 1043599,
+        "before_steps": 1698902,
+        "wall_ms": 3906.304,
+        "output_felts": 10,
+        "output_sha256_le32": "8ea4949d83c8637dcb6c1de252da969789ce80576316fc4a913a3704dfddcb1d"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "walk_1_1_1_1_3",
+        "steps": 1224118,
+        "before_steps": 1879421,
+        "wall_ms": 4157.249,
+        "output_felts": 8836,
+        "output_sha256_le32": "f278eb78da5f42ca07e7a73a2545652189883561ae3a2ccbe7474f8649997d6e"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "fight_2_2_0",
+        "steps": 1230050,
+        "before_steps": 1887529,
+        "wall_ms": 4293.485,
+        "output_felts": 10,
+        "output_sha256_le32": "08415d9000868ccda7550cd8513e6675fa04c78d58b771145c236de7e62d4e01"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "fight_2_2_0",
+        "steps": 1410743,
+        "before_steps": 2068222,
+        "wall_ms": 4608.141,
+        "output_felts": 8857,
+        "output_sha256_le32": "e19a00a627b47948032b318e5cc54fa6eb932ae1f16ec1ece4fdb5d0b0e6c06e"
+      },
+      {
+        "program": "segment_blake9",
+        "name": "fight_2_2_1",
+        "steps": 1109938,
+        "before_steps": 1767417,
+        "wall_ms": 4027.691,
+        "output_felts": 10,
+        "output_sha256_le32": "b75ad6ffbc7cdaee2edb1ff71a133017799d49787e09b6770fc8dc74487c63a6"
+      },
+      {
+        "program": "inspect_blake9",
+        "name": "fight_2_2_1",
+        "steps": 1290487,
+        "before_steps": 1947966,
+        "wall_ms": 4358.403,
+        "output_felts": 8857,
+        "output_sha256_le32": "23cb202e821acb9940adce4cdd6739229ea7e09276cbca322241bb0e5c057d81"
+      },
+      {
+        "program": "genesis_blake9",
+        "name": "genesis",
+        "steps": 1119158,
+        "before_steps": 1446810,
+        "wall_ms": 2917.141,
+        "output_felts": 6364,
+        "output_sha256_le32": "94a91d8952e565ad59415ee0149e694821ce30c4168ba4aa7720cdaf18f40c5e"
+      }
+    ],
+    "full": true,
+    "baseline": "4936c233e2ea9cf7a7b34312b522f7b96c8bf9fb",
+    "same_complete_outputs": true,
+    "proof_generated": false
+  },
+  "resources": [
+    {
+      "name": "genesis_hash_only",
+      "program": "hash_blake9",
+      "executable_sha256": "ed1fc6f140d342dbc35ad773e33cac24f7812ee99ce02b6e3908435e91242fa3",
+      "bytecode_words": 833,
+      "wasm": {
+        "sha256": "3e94a4c0cd8a2e24af374bab733f77e2988b4b93731adea6a0a1b937009479a5",
+        "threads": 1
+      },
+      "params": {
+        "channel_hash": "blake2s_m31",
+        "channel_salt": 0,
+        "preprocessed_trace": "canonical_small",
+        "fri_config": {
+          "pow_bits": 26,
+          "log_blowup_factor": 1,
+          "log_last_layer_degree_bound": 0,
+          "n_queries": 70,
+          "fold_step": 1
+        },
+        "store_polynomials_coefficients": false,
+        "include_all_preprocessed_columns": true,
+        "opt_n_id_to_big_components": 16,
+        "lifting_size_policy": "at_least_preprocessed"
+      },
+      "execution": {
+        "n_steps": 716571,
+        "builtins": [
+          [
+            "add_mod_builtin",
+            1
+          ],
+          [
+            "bitwise_builtin",
+            1
+          ],
+          [
+            "ec_op_builtin",
+            1
+          ],
+          [
+            "mul_mod_builtin",
+            1
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            1
+          ],
+          [
+            "range_check96_builtin",
+            12
+          ],
+          [
+            "range_check_builtin",
+            188055
+          ]
+        ],
+        "output": [
+          "0x9cf886f7c9c9a045a48c429fc02676ac",
+          "0xd7c3a541f88e0cd66d4800ada6e8b688"
+        ],
+        "output_preimage": [
+          "0x770fe15409a172384ab6f0160d895fe7728465eea3aeab378e1ba9b21462759",
+          "0x0",
+          "0x4c4ab2430b4db9a1fdcacd2a6ce8b61b2b07cca33ba3cb8e7b9156a137db427"
+        ],
+        "prover_input_bytes": 13010904
+      },
+      "execution_ms": 452.924208,
+      "resources": {
+        "n_steps": 716570,
+        "opcodes": [
+          [
+            "add_ap_opcode",
+            13687
+          ],
+          [
+            "add_opcode",
+            111639
+          ],
+          [
+            "add_opcode_small",
+            106392
+          ],
+          [
+            "assert_eq_opcode",
+            58044
+          ],
+          [
+            "assert_eq_opcode_double_deref",
+            211850
+          ],
+          [
+            "assert_eq_opcode_imm",
+            29751
+          ],
+          [
+            "blake_compress_opcode",
+            1022
+          ],
+          [
+            "call_opcode_abs",
+            1
+          ],
+          [
+            "call_opcode_rel_imm",
+            7463
+          ],
+          [
+            "generic_opcode",
+            1
+          ],
+          [
+            "jnz_opcode_non_taken",
+            20082
+          ],
+          [
+            "jnz_opcode_taken",
+            53815
+          ],
+          [
+            "jump_opcode_abs",
+            1
+          ],
+          [
+            "jump_opcode_double_deref",
+            1
+          ],
+          [
+            "jump_opcode_rel",
+            1
+          ],
+          [
+            "jump_opcode_rel_imm",
+            14545
+          ],
+          [
+            "mul_opcode",
+            51026
+          ],
+          [
+            "mul_opcode_small",
+            29784
+          ],
+          [
+            "qm_31_add_mul_opcode",
+            1
+          ],
+          [
+            "ret_opcode",
+            7464
+          ]
+        ],
+        "builtins": [
+          [
+            "add_mod_builtin",
+            16
+          ],
+          [
+            "bitwise_builtin",
+            16
+          ],
+          [
+            "ec_op_builtin",
+            16
+          ],
+          [
+            "mul_mod_builtin",
+            16
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            16
+          ],
+          [
+            "poseidon_builtin",
+            16
+          ],
+          [
+            "range_check96_builtin",
+            16
+          ],
+          [
+            "range_check_builtin",
+            262144
+          ]
+        ],
+        "unique_aggregator_inputs": [
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            1
+          ]
+        ],
+        "memory_address_to_id": 829666,
+        "memory_id_to_big": 6693,
+        "memory_id_to_small": 54192,
+        "verify_instruction": 1079,
+        "auxiliary_components": [
+          [
+            "blake_g",
+            81760
+          ],
+          [
+            "blake_round",
+            10220
+          ],
+          [
+            "cube_252",
+            1712
+          ],
+          [
+            "partial_ec_mul_generic",
+            4032
+          ],
+          [
+            "partial_ec_mul_window_bits_9",
+            896
+          ],
+          [
+            "pedersen_aggregator_window_bits_9",
+            1
+          ],
+          [
+            "poseidon_3_partial_rounds_chain",
+            432
+          ],
+          [
+            "poseidon_aggregator",
+            1
+          ],
+          [
+            "poseidon_full_round_chain",
+            128
+          ],
+          [
+            "range_check_252_width_27",
+            1328
+          ],
+          [
+            "triple_xor_32",
+            8176
+          ]
+        ],
+        "max_component_rows": 262144,
+        "max_component": "range_check_builtin",
+        "log_max_component_size": 18,
+        "fixed_component_log_size": 20,
+        "max_sequence_log_size": 20,
+        "fits_preprocessed_trace": true,
+        "estimated_trace_log_size": 20,
+        "fits_leaf_registry": true,
+        "n_memory_id_to_big_components": 1
+      },
+      "variable_components": [
+        {
+          "name": "add_ap_opcode",
+          "raw_rows": 13687,
+          "padded_rows": 16384,
+          "log_rows": 14
+        },
+        {
+          "name": "add_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "add_opcode",
+          "raw_rows": 111639,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "add_opcode_small",
+          "raw_rows": 106392,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "assert_eq_opcode",
+          "raw_rows": 58044,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "assert_eq_opcode_double_deref",
+          "raw_rows": 211850,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "assert_eq_opcode_imm",
+          "raw_rows": 29751,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "bitwise_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "blake_compress_opcode",
+          "raw_rows": 1022,
+          "padded_rows": 1024,
+          "log_rows": 10
+        },
+        {
+          "name": "blake_g",
+          "raw_rows": 81760,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "blake_round",
+          "raw_rows": 10220,
+          "padded_rows": 16384,
+          "log_rows": 14
+        },
+        {
+          "name": "call_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "call_opcode_rel_imm",
+          "raw_rows": 7463,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "cube_252",
+          "raw_rows": 1712,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "ec_op_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "generic_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jnz_opcode_non_taken",
+          "raw_rows": 20082,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "jnz_opcode_taken",
+          "raw_rows": 53815,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "jump_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_double_deref",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel_imm",
+          "raw_rows": 14545,
+          "padded_rows": 16384,
+          "log_rows": 14
+        },
+        {
+          "name": "memory_address_to_id",
+          "raw_rows": 51855,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "memory_id_to_big",
+          "raw_rows": 6693,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "memory_id_to_small",
+          "raw_rows": 54192,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "mul_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "mul_opcode",
+          "raw_rows": 51026,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "mul_opcode_small",
+          "raw_rows": 29784,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "partial_ec_mul_generic",
+          "raw_rows": 4032,
+          "padded_rows": 4096,
+          "log_rows": 12
+        },
+        {
+          "name": "partial_ec_mul_window_bits_9",
+          "raw_rows": 896,
+          "padded_rows": 1024,
+          "log_rows": 10
+        },
+        {
+          "name": "pedersen_aggregator_window_bits_9",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "pedersen_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_3_partial_rounds_chain",
+          "raw_rows": 432,
+          "padded_rows": 512,
+          "log_rows": 9
+        },
+        {
+          "name": "poseidon_aggregator",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_full_round_chain",
+          "raw_rows": 128,
+          "padded_rows": 128,
+          "log_rows": 7
+        },
+        {
+          "name": "qm_31_add_mul_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "range_check_252_width_27",
+          "raw_rows": 1328,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "range_check_builtin",
+          "raw_rows": 262144,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "range_check96_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "ret_opcode",
+          "raw_rows": 7464,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "triple_xor_32",
+          "raw_rows": 8176,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "verify_instruction",
+          "raw_rows": 1079,
+          "padded_rows": 2048,
+          "log_rows": 11
+        }
+      ],
+      "variable_component_types": 43,
+      "fixed_component_log_size": 20,
+      "forced_big_memory_components": 16,
+      "native_task_output_equal": true,
+      "proof_generated": false,
+      "variant": "before"
+    },
+    {
+      "name": "empty",
+      "program": "segment_blake9",
+      "executable_sha256": "6af8f28a60839aa7e87425dc9fc9c3d08207a1506c262343f4758eb08d8ec223",
+      "bytecode_words": 111085,
+      "wasm": {
+        "sha256": "3e94a4c0cd8a2e24af374bab733f77e2988b4b93731adea6a0a1b937009479a5",
+        "threads": 1
+      },
+      "params": {
+        "channel_hash": "blake2s_m31",
+        "channel_salt": 0,
+        "preprocessed_trace": "canonical_small",
+        "fri_config": {
+          "pow_bits": 26,
+          "log_blowup_factor": 1,
+          "log_last_layer_degree_bound": 0,
+          "n_queries": 70,
+          "fold_step": 1
+        },
+        "store_polynomials_coefficients": false,
+        "include_all_preprocessed_columns": true,
+        "opt_n_id_to_big_components": 16,
+        "lifting_size_policy": "at_least_preprocessed"
+      },
+      "execution": {
+        "n_steps": 3398305,
+        "builtins": [
+          [
+            "add_mod_builtin",
+            1
+          ],
+          [
+            "bitwise_builtin",
+            1261
+          ],
+          [
+            "ec_op_builtin",
+            1
+          ],
+          [
+            "mul_mod_builtin",
+            1
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            3
+          ],
+          [
+            "range_check96_builtin",
+            12
+          ],
+          [
+            "range_check_builtin",
+            506498
+          ]
+        ],
+        "output": [
+          "0xede69b7993c41f2121a8cd4bb0c9c25c",
+          "0x3ca266086c1fcf830c0ff16a4ddc2fa"
+        ],
+        "output_preimage": [
+          "0x270f3899f237370511832404bace37e6e906170929508902a39acdf91012bb7",
+          "0x1",
+          "0x4c4ab2430b4db9a1fdcacd2a6ce8b61b2b07cca33ba3cb8e7b9156a137db427",
+          "0x4c4ab2430b4db9a1fdcacd2a6ce8b61b2b07cca33ba3cb8e7b9156a137db427",
+          "0x0",
+          "0x0",
+          "0x0",
+          "0x2d5e13ed7c628cddeebe8a20c5aec4389f3c922e8276979479be592bd4f963e",
+          "0x0",
+          "0x0",
+          "0x0"
+        ],
+        "prover_input_bytes": 65878464
+      },
+      "execution_ms": 1812.189084,
+      "resources": {
+        "n_steps": 3398304,
+        "opcodes": [
+          [
+            "add_ap_opcode",
+            138956
+          ],
+          [
+            "add_opcode",
+            434092
+          ],
+          [
+            "add_opcode_small",
+            693927
+          ],
+          [
+            "assert_eq_opcode",
+            165026
+          ],
+          [
+            "assert_eq_opcode_double_deref",
+            972224
+          ],
+          [
+            "assert_eq_opcode_imm",
+            175817
+          ],
+          [
+            "blake_compress_opcode",
+            17296
+          ],
+          [
+            "call_opcode_abs",
+            1
+          ],
+          [
+            "call_opcode_rel_imm",
+            21831
+          ],
+          [
+            "generic_opcode",
+            1
+          ],
+          [
+            "jnz_opcode_non_taken",
+            54429
+          ],
+          [
+            "jnz_opcode_taken",
+            252924
+          ],
+          [
+            "jump_opcode_abs",
+            1
+          ],
+          [
+            "jump_opcode_double_deref",
+            1
+          ],
+          [
+            "jump_opcode_rel",
+            4
+          ],
+          [
+            "jump_opcode_rel_imm",
+            152237
+          ],
+          [
+            "mul_opcode",
+            108777
+          ],
+          [
+            "mul_opcode_small",
+            188927
+          ],
+          [
+            "qm_31_add_mul_opcode",
+            1
+          ],
+          [
+            "ret_opcode",
+            21832
+          ]
+        ],
+        "builtins": [
+          [
+            "add_mod_builtin",
+            16
+          ],
+          [
+            "bitwise_builtin",
+            2048
+          ],
+          [
+            "ec_op_builtin",
+            16
+          ],
+          [
+            "mul_mod_builtin",
+            16
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            16
+          ],
+          [
+            "poseidon_builtin",
+            16
+          ],
+          [
+            "range_check96_builtin",
+            16
+          ],
+          [
+            "range_check_builtin",
+            524288
+          ]
+        ],
+        "unique_aggregator_inputs": [
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            3
+          ]
+        ],
+        "memory_address_to_id": 3582998,
+        "memory_id_to_big": 27340,
+        "memory_id_to_small": 617487,
+        "verify_instruction": 5513,
+        "auxiliary_components": [
+          [
+            "blake_g",
+            1383680
+          ],
+          [
+            "blake_round",
+            172960
+          ],
+          [
+            "cube_252",
+            1712
+          ],
+          [
+            "partial_ec_mul_generic",
+            4032
+          ],
+          [
+            "partial_ec_mul_window_bits_9",
+            896
+          ],
+          [
+            "pedersen_aggregator_window_bits_9",
+            1
+          ],
+          [
+            "poseidon_3_partial_rounds_chain",
+            432
+          ],
+          [
+            "poseidon_aggregator",
+            3
+          ],
+          [
+            "poseidon_full_round_chain",
+            128
+          ],
+          [
+            "range_check_252_width_27",
+            1328
+          ],
+          [
+            "triple_xor_32",
+            138368
+          ]
+        ],
+        "max_component_rows": 2097152,
+        "max_component": "blake_g",
+        "log_max_component_size": 21,
+        "fixed_component_log_size": 20,
+        "max_sequence_log_size": 20,
+        "fits_preprocessed_trace": true,
+        "estimated_trace_log_size": 21,
+        "fits_leaf_registry": false,
+        "n_memory_id_to_big_components": 1
+      },
+      "variable_components": [
+        {
+          "name": "add_ap_opcode",
+          "raw_rows": 138956,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "add_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "add_opcode",
+          "raw_rows": 434092,
+          "padded_rows": 524288,
+          "log_rows": 19
+        },
+        {
+          "name": "add_opcode_small",
+          "raw_rows": 693927,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "assert_eq_opcode",
+          "raw_rows": 165026,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "assert_eq_opcode_double_deref",
+          "raw_rows": 972224,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "assert_eq_opcode_imm",
+          "raw_rows": 175817,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "bitwise_builtin",
+          "raw_rows": 2048,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "blake_compress_opcode",
+          "raw_rows": 17296,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "blake_g",
+          "raw_rows": 1383680,
+          "padded_rows": 2097152,
+          "log_rows": 21
+        },
+        {
+          "name": "blake_round",
+          "raw_rows": 172960,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "call_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "call_opcode_rel_imm",
+          "raw_rows": 21831,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "cube_252",
+          "raw_rows": 1712,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "ec_op_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "generic_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jnz_opcode_non_taken",
+          "raw_rows": 54429,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "jnz_opcode_taken",
+          "raw_rows": 252924,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "jump_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_double_deref",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel",
+          "raw_rows": 4,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel_imm",
+          "raw_rows": 152237,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "memory_address_to_id",
+          "raw_rows": 223938,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "memory_id_to_big",
+          "raw_rows": 27340,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "memory_id_to_small",
+          "raw_rows": 617487,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "mul_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "mul_opcode",
+          "raw_rows": 108777,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "mul_opcode_small",
+          "raw_rows": 188927,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "partial_ec_mul_generic",
+          "raw_rows": 4032,
+          "padded_rows": 4096,
+          "log_rows": 12
+        },
+        {
+          "name": "partial_ec_mul_window_bits_9",
+          "raw_rows": 896,
+          "padded_rows": 1024,
+          "log_rows": 10
+        },
+        {
+          "name": "pedersen_aggregator_window_bits_9",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "pedersen_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_3_partial_rounds_chain",
+          "raw_rows": 432,
+          "padded_rows": 512,
+          "log_rows": 9
+        },
+        {
+          "name": "poseidon_aggregator",
+          "raw_rows": 3,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_full_round_chain",
+          "raw_rows": 128,
+          "padded_rows": 128,
+          "log_rows": 7
+        },
+        {
+          "name": "qm_31_add_mul_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "range_check_252_width_27",
+          "raw_rows": 1328,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "range_check_builtin",
+          "raw_rows": 524288,
+          "padded_rows": 524288,
+          "log_rows": 19
+        },
+        {
+          "name": "range_check96_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "ret_opcode",
+          "raw_rows": 21832,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "triple_xor_32",
+          "raw_rows": 138368,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "verify_instruction",
+          "raw_rows": 5513,
+          "padded_rows": 8192,
+          "log_rows": 13
+        }
+      ],
+      "variable_component_types": 43,
+      "fixed_component_log_size": 20,
+      "forced_big_memory_components": 16,
+      "native_task_output_equal": true,
+      "proof_generated": false,
+      "variant": "before"
+    },
+    {
+      "name": "walk4",
+      "program": "segment_blake9",
+      "executable_sha256": "6af8f28a60839aa7e87425dc9fc9c3d08207a1506c262343f4758eb08d8ec223",
+      "bytecode_words": 111085,
+      "wasm": {
+        "sha256": "3e94a4c0cd8a2e24af374bab733f77e2988b4b93731adea6a0a1b937009479a5",
+        "threads": 1
+      },
+      "params": {
+        "channel_hash": "blake2s_m31",
+        "channel_salt": 0,
+        "preprocessed_trace": "canonical_small",
+        "fri_config": {
+          "pow_bits": 26,
+          "log_blowup_factor": 1,
+          "log_last_layer_degree_bound": 0,
+          "n_queries": 70,
+          "fold_step": 1
+        },
+        "store_polynomials_coefficients": false,
+        "include_all_preprocessed_columns": true,
+        "opt_n_id_to_big_components": 16,
+        "lifting_size_policy": "at_least_preprocessed"
+      },
+      "execution": {
+        "n_steps": 3545286,
+        "builtins": [
+          [
+            "add_mod_builtin",
+            1
+          ],
+          [
+            "bitwise_builtin",
+            3116
+          ],
+          [
+            "ec_op_builtin",
+            1
+          ],
+          [
+            "mul_mod_builtin",
+            1
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            4
+          ],
+          [
+            "range_check96_builtin",
+            12
+          ],
+          [
+            "range_check_builtin",
+            510059
+          ]
+        ],
+        "output": [
+          "0xb0ecd8864c25b3a45a924def13081ff9",
+          "0x4d5390aade6197651547e28f933942f2"
+        ],
+        "output_preimage": [
+          "0x270f3899f237370511832404bace37e6e906170929508902a39acdf91012bb7",
+          "0x1",
+          "0x4c4ab2430b4db9a1fdcacd2a6ce8b61b2b07cca33ba3cb8e7b9156a137db427",
+          "0x14184c42254ade0f1e7e539bb403d1f1c313750026349b724f65b9f7ba8bdf6",
+          "0x0",
+          "0x4",
+          "0x0",
+          "0xf693ddf19ba7d4b0e590c6a444e0ebf8bd83fd65c49644cb14d5db5436b7ab",
+          "0x0",
+          "0x0",
+          "0x0"
+        ],
+        "prover_input_bytes": 68582844
+      },
+      "execution_ms": 1887.234625,
+      "resources": {
+        "n_steps": 3545285,
+        "opcodes": [
+          [
+            "add_ap_opcode",
+            141649
+          ],
+          [
+            "add_opcode",
+            438489
+          ],
+          [
+            "add_opcode_small",
+            712695
+          ],
+          [
+            "assert_eq_opcode",
+            217560
+          ],
+          [
+            "assert_eq_opcode_double_deref",
+            1007763
+          ],
+          [
+            "assert_eq_opcode_imm",
+            182613
+          ],
+          [
+            "blake_compress_opcode",
+            17296
+          ],
+          [
+            "call_opcode_abs",
+            1
+          ],
+          [
+            "call_opcode_rel_imm",
+            25100
+          ],
+          [
+            "generic_opcode",
+            1
+          ],
+          [
+            "jnz_opcode_non_taken",
+            58342
+          ],
+          [
+            "jnz_opcode_taken",
+            261251
+          ],
+          [
+            "jump_opcode_abs",
+            1
+          ],
+          [
+            "jump_opcode_double_deref",
+            1
+          ],
+          [
+            "jump_opcode_rel",
+            20
+          ],
+          [
+            "jump_opcode_rel_imm",
+            158835
+          ],
+          [
+            "mul_opcode",
+            109054
+          ],
+          [
+            "mul_opcode_small",
+            189512
+          ],
+          [
+            "qm_31_add_mul_opcode",
+            1
+          ],
+          [
+            "ret_opcode",
+            25101
+          ]
+        ],
+        "builtins": [
+          [
+            "add_mod_builtin",
+            16
+          ],
+          [
+            "bitwise_builtin",
+            4096
+          ],
+          [
+            "ec_op_builtin",
+            16
+          ],
+          [
+            "mul_mod_builtin",
+            16
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            16
+          ],
+          [
+            "poseidon_builtin",
+            16
+          ],
+          [
+            "range_check96_builtin",
+            16
+          ],
+          [
+            "range_check_builtin",
+            524288
+          ]
+        ],
+        "unique_aggregator_inputs": [
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            4
+          ]
+        ],
+        "memory_address_to_id": 3750582,
+        "memory_id_to_big": 27835,
+        "memory_id_to_small": 633389,
+        "verify_instruction": 15520,
+        "auxiliary_components": [
+          [
+            "blake_g",
+            1383680
+          ],
+          [
+            "blake_round",
+            172960
+          ],
+          [
+            "cube_252",
+            1712
+          ],
+          [
+            "partial_ec_mul_generic",
+            4032
+          ],
+          [
+            "partial_ec_mul_window_bits_9",
+            896
+          ],
+          [
+            "pedersen_aggregator_window_bits_9",
+            1
+          ],
+          [
+            "poseidon_3_partial_rounds_chain",
+            432
+          ],
+          [
+            "poseidon_aggregator",
+            4
+          ],
+          [
+            "poseidon_full_round_chain",
+            128
+          ],
+          [
+            "range_check_252_width_27",
+            1328
+          ],
+          [
+            "triple_xor_32",
+            138368
+          ]
+        ],
+        "max_component_rows": 2097152,
+        "max_component": "blake_g",
+        "log_max_component_size": 21,
+        "fixed_component_log_size": 20,
+        "max_sequence_log_size": 20,
+        "fits_preprocessed_trace": true,
+        "estimated_trace_log_size": 21,
+        "fits_leaf_registry": false,
+        "n_memory_id_to_big_components": 1
+      },
+      "variable_components": [
+        {
+          "name": "add_ap_opcode",
+          "raw_rows": 141649,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "add_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "add_opcode",
+          "raw_rows": 438489,
+          "padded_rows": 524288,
+          "log_rows": 19
+        },
+        {
+          "name": "add_opcode_small",
+          "raw_rows": 712695,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "assert_eq_opcode",
+          "raw_rows": 217560,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "assert_eq_opcode_double_deref",
+          "raw_rows": 1007763,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "assert_eq_opcode_imm",
+          "raw_rows": 182613,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "bitwise_builtin",
+          "raw_rows": 4096,
+          "padded_rows": 4096,
+          "log_rows": 12
+        },
+        {
+          "name": "blake_compress_opcode",
+          "raw_rows": 17296,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "blake_g",
+          "raw_rows": 1383680,
+          "padded_rows": 2097152,
+          "log_rows": 21
+        },
+        {
+          "name": "blake_round",
+          "raw_rows": 172960,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "call_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "call_opcode_rel_imm",
+          "raw_rows": 25100,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "cube_252",
+          "raw_rows": 1712,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "ec_op_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "generic_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jnz_opcode_non_taken",
+          "raw_rows": 58342,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "jnz_opcode_taken",
+          "raw_rows": 261251,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "jump_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_double_deref",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel",
+          "raw_rows": 20,
+          "padded_rows": 32,
+          "log_rows": 5
+        },
+        {
+          "name": "jump_opcode_rel_imm",
+          "raw_rows": 158835,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "memory_address_to_id",
+          "raw_rows": 234412,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "memory_id_to_big",
+          "raw_rows": 27835,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "memory_id_to_small",
+          "raw_rows": 633389,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "mul_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "mul_opcode",
+          "raw_rows": 109054,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "mul_opcode_small",
+          "raw_rows": 189512,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "partial_ec_mul_generic",
+          "raw_rows": 4032,
+          "padded_rows": 4096,
+          "log_rows": 12
+        },
+        {
+          "name": "partial_ec_mul_window_bits_9",
+          "raw_rows": 896,
+          "padded_rows": 1024,
+          "log_rows": 10
+        },
+        {
+          "name": "pedersen_aggregator_window_bits_9",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "pedersen_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_3_partial_rounds_chain",
+          "raw_rows": 432,
+          "padded_rows": 512,
+          "log_rows": 9
+        },
+        {
+          "name": "poseidon_aggregator",
+          "raw_rows": 4,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_full_round_chain",
+          "raw_rows": 128,
+          "padded_rows": 128,
+          "log_rows": 7
+        },
+        {
+          "name": "qm_31_add_mul_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "range_check_252_width_27",
+          "raw_rows": 1328,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "range_check_builtin",
+          "raw_rows": 524288,
+          "padded_rows": 524288,
+          "log_rows": 19
+        },
+        {
+          "name": "range_check96_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "ret_opcode",
+          "raw_rows": 25101,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "triple_xor_32",
+          "raw_rows": 138368,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "verify_instruction",
+          "raw_rows": 15520,
+          "padded_rows": 16384,
+          "log_rows": 14
+        }
+      ],
+      "variable_component_types": 43,
+      "fixed_component_log_size": 20,
+      "forced_big_memory_components": 16,
+      "native_task_output_equal": true,
+      "proof_generated": false,
+      "variant": "before"
+    },
+    {
+      "name": "genesis_hash_only",
+      "program": "hash_blake9",
+      "executable_sha256": "6ba604873e491fbcc966fd3b6687545403d4a4155ee13861ef181e455a09e951",
+      "bytecode_words": 804,
+      "wasm": {
+        "sha256": "3e94a4c0cd8a2e24af374bab733f77e2988b4b93731adea6a0a1b937009479a5",
+        "threads": 1
+      },
+      "params": {
+        "channel_hash": "blake2s_m31",
+        "channel_salt": 0,
+        "preprocessed_trace": "canonical_small",
+        "fri_config": {
+          "pow_bits": 26,
+          "log_blowup_factor": 1,
+          "log_last_layer_degree_bound": 0,
+          "n_queries": 70,
+          "fold_step": 1
+        },
+        "store_polynomials_coefficients": false,
+        "include_all_preprocessed_columns": true,
+        "opt_n_id_to_big_components": 16,
+        "lifting_size_policy": "at_least_preprocessed"
+      },
+      "execution": {
+        "n_steps": 388389,
+        "builtins": [
+          [
+            "add_mod_builtin",
+            1
+          ],
+          [
+            "bitwise_builtin",
+            12725
+          ],
+          [
+            "ec_op_builtin",
+            1
+          ],
+          [
+            "mul_mod_builtin",
+            1
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            1
+          ],
+          [
+            "range_check96_builtin",
+            12
+          ],
+          [
+            "range_check_builtin",
+            44878
+          ]
+        ],
+        "output": [
+          "0xa06f4dc51464311059615b811571130b",
+          "0x67561e27ef9764d8e96ecf02976e2b1e"
+        ],
+        "output_preimage": [
+          "0x1c4ce60ce8ecce7858bf64fbebd7909f9acc6dda3197efb32a9a0cbbf09242c",
+          "0x0",
+          "0x4c4ab2430b4db9a1fdcacd2a6ce8b61b2b07cca33ba3cb8e7b9156a137db427"
+        ],
+        "prover_input_bytes": 7672876
+      },
+      "execution_ms": 270.491583,
+      "resources": {
+        "n_steps": 388388,
+        "opcodes": [
+          [
+            "add_ap_opcode",
+            5707
+          ],
+          [
+            "add_opcode",
+            39777
+          ],
+          [
+            "add_opcode_small",
+            57171
+          ],
+          [
+            "assert_eq_opcode",
+            53280
+          ],
+          [
+            "assert_eq_opcode_double_deref",
+            106727
+          ],
+          [
+            "assert_eq_opcode_imm",
+            24956
+          ],
+          [
+            "blake_compress_opcode",
+            1017
+          ],
+          [
+            "call_opcode_abs",
+            1
+          ],
+          [
+            "call_opcode_rel_imm",
+            7463
+          ],
+          [
+            "generic_opcode",
+            1
+          ],
+          [
+            "jnz_opcode_non_taken",
+            8941
+          ],
+          [
+            "jnz_opcode_taken",
+            41060
+          ],
+          [
+            "jump_opcode_abs",
+            1
+          ],
+          [
+            "jump_opcode_double_deref",
+            1
+          ],
+          [
+            "jump_opcode_rel",
+            1
+          ],
+          [
+            "jump_opcode_rel_imm",
+            9737
+          ],
+          [
+            "mul_opcode",
+            6494
+          ],
+          [
+            "mul_opcode_small",
+            18588
+          ],
+          [
+            "qm_31_add_mul_opcode",
+            1
+          ],
+          [
+            "ret_opcode",
+            7464
+          ]
+        ],
+        "builtins": [
+          [
+            "add_mod_builtin",
+            16
+          ],
+          [
+            "bitwise_builtin",
+            16384
+          ],
+          [
+            "ec_op_builtin",
+            16
+          ],
+          [
+            "mul_mod_builtin",
+            16
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            16
+          ],
+          [
+            "poseidon_builtin",
+            16
+          ],
+          [
+            "range_check96_builtin",
+            16
+          ],
+          [
+            "range_check_builtin",
+            65536
+          ]
+        ],
+        "unique_aggregator_inputs": [
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            1
+          ]
+        ],
+        "memory_address_to_id": 466233,
+        "memory_id_to_big": 5704,
+        "memory_id_to_small": 59538,
+        "verify_instruction": 1029,
+        "auxiliary_components": [
+          [
+            "blake_g",
+            81360
+          ],
+          [
+            "blake_round",
+            10170
+          ],
+          [
+            "cube_252",
+            1712
+          ],
+          [
+            "partial_ec_mul_generic",
+            4032
+          ],
+          [
+            "partial_ec_mul_window_bits_9",
+            896
+          ],
+          [
+            "pedersen_aggregator_window_bits_9",
+            1
+          ],
+          [
+            "poseidon_3_partial_rounds_chain",
+            432
+          ],
+          [
+            "poseidon_aggregator",
+            1
+          ],
+          [
+            "poseidon_full_round_chain",
+            128
+          ],
+          [
+            "range_check_252_width_27",
+            1328
+          ],
+          [
+            "triple_xor_32",
+            8136
+          ]
+        ],
+        "max_component_rows": 131072,
+        "max_component": "assert_eq_opcode_double_deref",
+        "log_max_component_size": 17,
+        "fixed_component_log_size": 20,
+        "max_sequence_log_size": 20,
+        "fits_preprocessed_trace": true,
+        "estimated_trace_log_size": 20,
+        "fits_leaf_registry": true,
+        "n_memory_id_to_big_components": 1
+      },
+      "variable_components": [
+        {
+          "name": "add_ap_opcode",
+          "raw_rows": 5707,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "add_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "add_opcode",
+          "raw_rows": 39777,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "add_opcode_small",
+          "raw_rows": 57171,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "assert_eq_opcode",
+          "raw_rows": 53280,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "assert_eq_opcode_double_deref",
+          "raw_rows": 106727,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "assert_eq_opcode_imm",
+          "raw_rows": 24956,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "bitwise_builtin",
+          "raw_rows": 16384,
+          "padded_rows": 16384,
+          "log_rows": 14
+        },
+        {
+          "name": "blake_compress_opcode",
+          "raw_rows": 1017,
+          "padded_rows": 1024,
+          "log_rows": 10
+        },
+        {
+          "name": "blake_g",
+          "raw_rows": 81360,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "blake_round",
+          "raw_rows": 10170,
+          "padded_rows": 16384,
+          "log_rows": 14
+        },
+        {
+          "name": "call_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "call_opcode_rel_imm",
+          "raw_rows": 7463,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "cube_252",
+          "raw_rows": 1712,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "ec_op_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "generic_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jnz_opcode_non_taken",
+          "raw_rows": 8941,
+          "padded_rows": 16384,
+          "log_rows": 14
+        },
+        {
+          "name": "jnz_opcode_taken",
+          "raw_rows": 41060,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "jump_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_double_deref",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel_imm",
+          "raw_rows": 9737,
+          "padded_rows": 16384,
+          "log_rows": 14
+        },
+        {
+          "name": "memory_address_to_id",
+          "raw_rows": 29140,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "memory_id_to_big",
+          "raw_rows": 5704,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "memory_id_to_small",
+          "raw_rows": 59538,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "mul_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "mul_opcode",
+          "raw_rows": 6494,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "mul_opcode_small",
+          "raw_rows": 18588,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "partial_ec_mul_generic",
+          "raw_rows": 4032,
+          "padded_rows": 4096,
+          "log_rows": 12
+        },
+        {
+          "name": "partial_ec_mul_window_bits_9",
+          "raw_rows": 896,
+          "padded_rows": 1024,
+          "log_rows": 10
+        },
+        {
+          "name": "pedersen_aggregator_window_bits_9",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "pedersen_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_3_partial_rounds_chain",
+          "raw_rows": 432,
+          "padded_rows": 512,
+          "log_rows": 9
+        },
+        {
+          "name": "poseidon_aggregator",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_full_round_chain",
+          "raw_rows": 128,
+          "padded_rows": 128,
+          "log_rows": 7
+        },
+        {
+          "name": "qm_31_add_mul_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "range_check_252_width_27",
+          "raw_rows": 1328,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "range_check_builtin",
+          "raw_rows": 65536,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "range_check96_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "ret_opcode",
+          "raw_rows": 7464,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "triple_xor_32",
+          "raw_rows": 8136,
+          "padded_rows": 8192,
+          "log_rows": 13
+        },
+        {
+          "name": "verify_instruction",
+          "raw_rows": 1029,
+          "padded_rows": 2048,
+          "log_rows": 11
+        }
+      ],
+      "variable_component_types": 43,
+      "fixed_component_log_size": 20,
+      "forced_big_memory_components": 16,
+      "native_task_output_equal": true,
+      "proof_generated": false,
+      "variant": "after"
+    },
+    {
+      "name": "empty",
+      "program": "segment_blake9",
+      "executable_sha256": "0575166c7759c1d6084753ef49e8a9a1fc0eb744c2875d68b27d186a778d7e08",
+      "bytecode_words": 111052,
+      "wasm": {
+        "sha256": "3e94a4c0cd8a2e24af374bab733f77e2988b4b93731adea6a0a1b937009479a5",
+        "threads": 1
+      },
+      "params": {
+        "channel_hash": "blake2s_m31",
+        "channel_salt": 0,
+        "preprocessed_trace": "canonical_small",
+        "fri_config": {
+          "pow_bits": 26,
+          "log_blowup_factor": 1,
+          "log_last_layer_degree_bound": 0,
+          "n_queries": 70,
+          "fold_step": 1
+        },
+        "store_polynomials_coefficients": false,
+        "include_all_preprocessed_columns": true,
+        "opt_n_id_to_big_components": 16,
+        "lifting_size_policy": "at_least_preprocessed"
+      },
+      "execution": {
+        "n_steps": 2742404,
+        "builtins": [
+          [
+            "add_mod_builtin",
+            1
+          ],
+          [
+            "bitwise_builtin",
+            26709
+          ],
+          [
+            "ec_op_builtin",
+            1
+          ],
+          [
+            "mul_mod_builtin",
+            1
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            3
+          ],
+          [
+            "range_check96_builtin",
+            12
+          ],
+          [
+            "range_check_builtin",
+            220167
+          ]
+        ],
+        "output": [
+          "0x1722c77e2d261ac0c574a4858ed579ac",
+          "0xd5abea2ed8e3d34cccd87314f89fec15"
+        ],
+        "output_preimage": [
+          "0x19e57c6c4efc727a2b5c3968b19f222371075f3e5fa38d33ab75068305157e8",
+          "0x1",
+          "0x4c4ab2430b4db9a1fdcacd2a6ce8b61b2b07cca33ba3cb8e7b9156a137db427",
+          "0x4c4ab2430b4db9a1fdcacd2a6ce8b61b2b07cca33ba3cb8e7b9156a137db427",
+          "0x0",
+          "0x0",
+          "0x0",
+          "0x2d5e13ed7c628cddeebe8a20c5aec4389f3c922e8276979479be592bd4f963e",
+          "0x0",
+          "0x0",
+          "0x0"
+        ],
+        "prover_input_bytes": 55751060
+      },
+      "execution_ms": 1465.373333,
+      "resources": {
+        "n_steps": 2742403,
+        "opcodes": [
+          [
+            "add_ap_opcode",
+            123019
+          ],
+          [
+            "add_opcode",
+            290414
+          ],
+          [
+            "add_opcode_small",
+            595617
+          ],
+          [
+            "assert_eq_opcode",
+            155491
+          ],
+          [
+            "assert_eq_opcode_double_deref",
+            762108
+          ],
+          [
+            "assert_eq_opcode_imm",
+            166245
+          ],
+          [
+            "blake_compress_opcode",
+            17290
+          ],
+          [
+            "call_opcode_abs",
+            1
+          ],
+          [
+            "call_opcode_rel_imm",
+            21831
+          ],
+          [
+            "generic_opcode",
+            1
+          ],
+          [
+            "jnz_opcode_non_taken",
+            32156
+          ],
+          [
+            "jnz_opcode_taken",
+            227437
+          ],
+          [
+            "jump_opcode_abs",
+            1
+          ],
+          [
+            "jump_opcode_double_deref",
+            1
+          ],
+          [
+            "jump_opcode_rel",
+            4
+          ],
+          [
+            "jump_opcode_rel_imm",
+            142653
+          ],
+          [
+            "mul_opcode",
+            19709
+          ],
+          [
+            "mul_opcode_small",
+            166592
+          ],
+          [
+            "qm_31_add_mul_opcode",
+            1
+          ],
+          [
+            "ret_opcode",
+            21832
+          ]
+        ],
+        "builtins": [
+          [
+            "add_mod_builtin",
+            16
+          ],
+          [
+            "bitwise_builtin",
+            32768
+          ],
+          [
+            "ec_op_builtin",
+            16
+          ],
+          [
+            "mul_mod_builtin",
+            16
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            16
+          ],
+          [
+            "poseidon_builtin",
+            16
+          ],
+          [
+            "range_check96_builtin",
+            16
+          ],
+          [
+            "range_check_builtin",
+            262144
+          ]
+        ],
+        "unique_aggregator_inputs": [
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            3
+          ]
+        ],
+        "memory_address_to_id": 2977606,
+        "memory_id_to_big": 26618,
+        "memory_id_to_small": 629242,
+        "verify_instruction": 5460,
+        "auxiliary_components": [
+          [
+            "blake_g",
+            1383200
+          ],
+          [
+            "blake_round",
+            172900
+          ],
+          [
+            "cube_252",
+            1712
+          ],
+          [
+            "partial_ec_mul_generic",
+            4032
+          ],
+          [
+            "partial_ec_mul_window_bits_9",
+            896
+          ],
+          [
+            "pedersen_aggregator_window_bits_9",
+            1
+          ],
+          [
+            "poseidon_3_partial_rounds_chain",
+            432
+          ],
+          [
+            "poseidon_aggregator",
+            3
+          ],
+          [
+            "poseidon_full_round_chain",
+            128
+          ],
+          [
+            "range_check_252_width_27",
+            1328
+          ],
+          [
+            "triple_xor_32",
+            138320
+          ]
+        ],
+        "max_component_rows": 2097152,
+        "max_component": "blake_g",
+        "log_max_component_size": 21,
+        "fixed_component_log_size": 20,
+        "max_sequence_log_size": 20,
+        "fits_preprocessed_trace": true,
+        "estimated_trace_log_size": 21,
+        "fits_leaf_registry": false,
+        "n_memory_id_to_big_components": 1
+      },
+      "variable_components": [
+        {
+          "name": "add_ap_opcode",
+          "raw_rows": 123019,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "add_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "add_opcode",
+          "raw_rows": 290414,
+          "padded_rows": 524288,
+          "log_rows": 19
+        },
+        {
+          "name": "add_opcode_small",
+          "raw_rows": 595617,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "assert_eq_opcode",
+          "raw_rows": 155491,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "assert_eq_opcode_double_deref",
+          "raw_rows": 762108,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "assert_eq_opcode_imm",
+          "raw_rows": 166245,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "bitwise_builtin",
+          "raw_rows": 32768,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "blake_compress_opcode",
+          "raw_rows": 17290,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "blake_g",
+          "raw_rows": 1383200,
+          "padded_rows": 2097152,
+          "log_rows": 21
+        },
+        {
+          "name": "blake_round",
+          "raw_rows": 172900,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "call_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "call_opcode_rel_imm",
+          "raw_rows": 21831,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "cube_252",
+          "raw_rows": 1712,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "ec_op_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "generic_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jnz_opcode_non_taken",
+          "raw_rows": 32156,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "jnz_opcode_taken",
+          "raw_rows": 227437,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "jump_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_double_deref",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel",
+          "raw_rows": 4,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel_imm",
+          "raw_rows": 142653,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "memory_address_to_id",
+          "raw_rows": 186101,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "memory_id_to_big",
+          "raw_rows": 26618,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "memory_id_to_small",
+          "raw_rows": 629242,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "mul_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "mul_opcode",
+          "raw_rows": 19709,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "mul_opcode_small",
+          "raw_rows": 166592,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "partial_ec_mul_generic",
+          "raw_rows": 4032,
+          "padded_rows": 4096,
+          "log_rows": 12
+        },
+        {
+          "name": "partial_ec_mul_window_bits_9",
+          "raw_rows": 896,
+          "padded_rows": 1024,
+          "log_rows": 10
+        },
+        {
+          "name": "pedersen_aggregator_window_bits_9",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "pedersen_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_3_partial_rounds_chain",
+          "raw_rows": 432,
+          "padded_rows": 512,
+          "log_rows": 9
+        },
+        {
+          "name": "poseidon_aggregator",
+          "raw_rows": 3,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_full_round_chain",
+          "raw_rows": 128,
+          "padded_rows": 128,
+          "log_rows": 7
+        },
+        {
+          "name": "qm_31_add_mul_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "range_check_252_width_27",
+          "raw_rows": 1328,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "range_check_builtin",
+          "raw_rows": 262144,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "range_check96_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "ret_opcode",
+          "raw_rows": 21832,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "triple_xor_32",
+          "raw_rows": 138320,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "verify_instruction",
+          "raw_rows": 5460,
+          "padded_rows": 8192,
+          "log_rows": 13
+        }
+      ],
+      "variable_component_types": 43,
+      "fixed_component_log_size": 20,
+      "forced_big_memory_components": 16,
+      "native_task_output_equal": true,
+      "proof_generated": false,
+      "variant": "after"
+    },
+    {
+      "name": "walk4",
+      "program": "segment_blake9",
+      "executable_sha256": "0575166c7759c1d6084753ef49e8a9a1fc0eb744c2875d68b27d186a778d7e08",
+      "bytecode_words": 111052,
+      "wasm": {
+        "sha256": "3e94a4c0cd8a2e24af374bab733f77e2988b4b93731adea6a0a1b937009479a5",
+        "threads": 1
+      },
+      "params": {
+        "channel_hash": "blake2s_m31",
+        "channel_salt": 0,
+        "preprocessed_trace": "canonical_small",
+        "fri_config": {
+          "pow_bits": 26,
+          "log_blowup_factor": 1,
+          "log_last_layer_degree_bound": 0,
+          "n_queries": 70,
+          "fold_step": 1
+        },
+        "store_polynomials_coefficients": false,
+        "include_all_preprocessed_columns": true,
+        "opt_n_id_to_big_components": 16,
+        "lifting_size_policy": "at_least_preprocessed"
+      },
+      "execution": {
+        "n_steps": 2889385,
+        "builtins": [
+          [
+            "add_mod_builtin",
+            1
+          ],
+          [
+            "bitwise_builtin",
+            28564
+          ],
+          [
+            "ec_op_builtin",
+            1
+          ],
+          [
+            "mul_mod_builtin",
+            1
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            4
+          ],
+          [
+            "range_check96_builtin",
+            12
+          ],
+          [
+            "range_check_builtin",
+            223728
+          ]
+        ],
+        "output": [
+          "0xd410e597bc2475a2597b9ffdec0564d5",
+          "0x658d8d29b35309428dcaa3af1b53af84"
+        ],
+        "output_preimage": [
+          "0x19e57c6c4efc727a2b5c3968b19f222371075f3e5fa38d33ab75068305157e8",
+          "0x1",
+          "0x4c4ab2430b4db9a1fdcacd2a6ce8b61b2b07cca33ba3cb8e7b9156a137db427",
+          "0x14184c42254ade0f1e7e539bb403d1f1c313750026349b724f65b9f7ba8bdf6",
+          "0x0",
+          "0x4",
+          "0x0",
+          "0xf693ddf19ba7d4b0e590c6a444e0ebf8bd83fd65c49644cb14d5db5436b7ab",
+          "0x0",
+          "0x0",
+          "0x0"
+        ],
+        "prover_input_bytes": 58414304
+      },
+      "execution_ms": 1543.153125,
+      "resources": {
+        "n_steps": 2889384,
+        "opcodes": [
+          [
+            "add_ap_opcode",
+            125712
+          ],
+          [
+            "add_opcode",
+            294784
+          ],
+          [
+            "add_opcode_small",
+            614412
+          ],
+          [
+            "assert_eq_opcode",
+            208025
+          ],
+          [
+            "assert_eq_opcode_double_deref",
+            797647
+          ],
+          [
+            "assert_eq_opcode_imm",
+            173041
+          ],
+          [
+            "blake_compress_opcode",
+            17290
+          ],
+          [
+            "call_opcode_abs",
+            1
+          ],
+          [
+            "call_opcode_rel_imm",
+            25100
+          ],
+          [
+            "generic_opcode",
+            1
+          ],
+          [
+            "jnz_opcode_non_taken",
+            36069
+          ],
+          [
+            "jnz_opcode_taken",
+            235764
+          ],
+          [
+            "jump_opcode_abs",
+            1
+          ],
+          [
+            "jump_opcode_double_deref",
+            1
+          ],
+          [
+            "jump_opcode_rel",
+            20
+          ],
+          [
+            "jump_opcode_rel_imm",
+            149251
+          ],
+          [
+            "mul_opcode",
+            19986
+          ],
+          [
+            "mul_opcode_small",
+            167177
+          ],
+          [
+            "qm_31_add_mul_opcode",
+            1
+          ],
+          [
+            "ret_opcode",
+            25101
+          ]
+        ],
+        "builtins": [
+          [
+            "add_mod_builtin",
+            16
+          ],
+          [
+            "bitwise_builtin",
+            32768
+          ],
+          [
+            "ec_op_builtin",
+            16
+          ],
+          [
+            "mul_mod_builtin",
+            16
+          ],
+          [
+            "output_builtin",
+            2
+          ],
+          [
+            "pedersen_builtin",
+            16
+          ],
+          [
+            "poseidon_builtin",
+            16
+          ],
+          [
+            "range_check96_builtin",
+            16
+          ],
+          [
+            "range_check_builtin",
+            262144
+          ]
+        ],
+        "unique_aggregator_inputs": [
+          [
+            "pedersen_builtin",
+            1
+          ],
+          [
+            "poseidon_builtin",
+            4
+          ]
+        ],
+        "memory_address_to_id": 3134950,
+        "memory_id_to_big": 27116,
+        "memory_id_to_small": 645127,
+        "verify_instruction": 15467,
+        "auxiliary_components": [
+          [
+            "blake_g",
+            1383200
+          ],
+          [
+            "blake_round",
+            172900
+          ],
+          [
+            "cube_252",
+            1712
+          ],
+          [
+            "partial_ec_mul_generic",
+            4032
+          ],
+          [
+            "partial_ec_mul_window_bits_9",
+            896
+          ],
+          [
+            "pedersen_aggregator_window_bits_9",
+            1
+          ],
+          [
+            "poseidon_3_partial_rounds_chain",
+            432
+          ],
+          [
+            "poseidon_aggregator",
+            4
+          ],
+          [
+            "poseidon_full_round_chain",
+            128
+          ],
+          [
+            "range_check_252_width_27",
+            1328
+          ],
+          [
+            "triple_xor_32",
+            138320
+          ]
+        ],
+        "max_component_rows": 2097152,
+        "max_component": "blake_g",
+        "log_max_component_size": 21,
+        "fixed_component_log_size": 20,
+        "max_sequence_log_size": 20,
+        "fits_preprocessed_trace": true,
+        "estimated_trace_log_size": 21,
+        "fits_leaf_registry": false,
+        "n_memory_id_to_big_components": 1
+      },
+      "variable_components": [
+        {
+          "name": "add_ap_opcode",
+          "raw_rows": 125712,
+          "padded_rows": 131072,
+          "log_rows": 17
+        },
+        {
+          "name": "add_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "add_opcode",
+          "raw_rows": 294784,
+          "padded_rows": 524288,
+          "log_rows": 19
+        },
+        {
+          "name": "add_opcode_small",
+          "raw_rows": 614412,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "assert_eq_opcode",
+          "raw_rows": 208025,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "assert_eq_opcode_double_deref",
+          "raw_rows": 797647,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "assert_eq_opcode_imm",
+          "raw_rows": 173041,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "bitwise_builtin",
+          "raw_rows": 32768,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "blake_compress_opcode",
+          "raw_rows": 17290,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "blake_g",
+          "raw_rows": 1383200,
+          "padded_rows": 2097152,
+          "log_rows": 21
+        },
+        {
+          "name": "blake_round",
+          "raw_rows": 172900,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "call_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "call_opcode_rel_imm",
+          "raw_rows": 25100,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "cube_252",
+          "raw_rows": 1712,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "ec_op_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "generic_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jnz_opcode_non_taken",
+          "raw_rows": 36069,
+          "padded_rows": 65536,
+          "log_rows": 16
+        },
+        {
+          "name": "jnz_opcode_taken",
+          "raw_rows": 235764,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "jump_opcode_abs",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_double_deref",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "jump_opcode_rel",
+          "raw_rows": 20,
+          "padded_rows": 32,
+          "log_rows": 5
+        },
+        {
+          "name": "jump_opcode_rel_imm",
+          "raw_rows": 149251,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "memory_address_to_id",
+          "raw_rows": 195935,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "memory_id_to_big",
+          "raw_rows": 27116,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "memory_id_to_small",
+          "raw_rows": 645127,
+          "padded_rows": 1048576,
+          "log_rows": 20
+        },
+        {
+          "name": "mul_mod_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "mul_opcode",
+          "raw_rows": 19986,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "mul_opcode_small",
+          "raw_rows": 167177,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "partial_ec_mul_generic",
+          "raw_rows": 4032,
+          "padded_rows": 4096,
+          "log_rows": 12
+        },
+        {
+          "name": "partial_ec_mul_window_bits_9",
+          "raw_rows": 896,
+          "padded_rows": 1024,
+          "log_rows": 10
+        },
+        {
+          "name": "pedersen_aggregator_window_bits_9",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "pedersen_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_3_partial_rounds_chain",
+          "raw_rows": 432,
+          "padded_rows": 512,
+          "log_rows": 9
+        },
+        {
+          "name": "poseidon_aggregator",
+          "raw_rows": 4,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "poseidon_full_round_chain",
+          "raw_rows": 128,
+          "padded_rows": 128,
+          "log_rows": 7
+        },
+        {
+          "name": "qm_31_add_mul_opcode",
+          "raw_rows": 1,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "range_check_252_width_27",
+          "raw_rows": 1328,
+          "padded_rows": 2048,
+          "log_rows": 11
+        },
+        {
+          "name": "range_check_builtin",
+          "raw_rows": 262144,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "range_check96_builtin",
+          "raw_rows": 16,
+          "padded_rows": 16,
+          "log_rows": 4
+        },
+        {
+          "name": "ret_opcode",
+          "raw_rows": 25101,
+          "padded_rows": 32768,
+          "log_rows": 15
+        },
+        {
+          "name": "triple_xor_32",
+          "raw_rows": 138320,
+          "padded_rows": 262144,
+          "log_rows": 18
+        },
+        {
+          "name": "verify_instruction",
+          "raw_rows": 15467,
+          "padded_rows": 16384,
+          "log_rows": 14
+        }
+      ],
+      "variable_component_types": 43,
+      "fixed_component_log_size": 20,
+      "forced_big_memory_components": 16,
+      "native_task_output_equal": true,
+      "proof_generated": false,
+      "variant": "after"
+    }
+  ],
+  "baseline_profile": {
+    "steps": 701000,
+    "libfunc_steps": [
+      [
+        "u128_mul_guarantee_verify",
+        256082
+      ],
+      [
+        "u128_safe_divmod",
+        127240
+      ],
+      [
+        "store_temp",
+        113907
+      ],
+      [
+        "downcast",
+        42948
+      ],
+      [
+        "u128_overflowing_sub",
+        31810
+      ],
+      [
+        "u128_overflowing_add",
+        19086
+      ],
+      [
+        "array_append",
+        14341
+      ],
+      [
+        "u128_eq",
+        14316
+      ],
+      [
+        "array_snapshot_pop_front",
+        12741
+      ],
+      [
+        "u128s_from_felt252",
+        12724
+      ],
+      [
+        "u128_guarantee_mul",
+        11134
+      ],
+      [
+        "felt252_is_zero",
+        11134
+      ],
+      [
+        "return",
+        7279
+      ],
+      [
+        "function_call",
+        7278
+      ],
+      [
+        "jump",
+        4775
+      ],
+      [
+        "u32_overflowing_sub",
+        4484
+      ],
+      [
+        "u32_overflowing_add",
+        3580
+      ],
+      [
+        "array_snapshot_multi_pop_front",
+        3580
+      ],
+      [
+        "branch_align",
+        1591
+      ],
+      [
+        "blake2s_compress",
+        895
+      ],
+      [
+        "int_range_pop_front",
+        28
+      ],
+      [
+        "executable_scaffolding",
+        12
+      ],
+      [
+        "array_slice",
+        10
+      ],
+      [
+        "store_local",
+        6
+      ],
+      [
+        "u32_try_from_felt252",
+        4
+      ],
+      [
+        "enum_match",
+        3
+      ],
+      [
+        "int_range_try_new",
+        3
+      ],
+      [
+        "tuple_from_span",
+        3
+      ],
+      [
+        "array_new",
+        2
+      ],
+      [
+        "const_as_box",
+        2
+      ],
+      [
+        "finalize_locals",
+        1
+      ],
+      [
+        "blake2s_finalize",
+        1
+      ]
+    ],
+    "source_steps": [
+      [
+        "s11_state_hash::hash9::digest",
+        679221
+      ],
+      [
+        "s11_state_hash::hash9::digest_words",
+        21655
+      ],
+      [
+        "s11_state_hash::__executable_wrapper__hash_blake9",
+        40
+      ],
+      [
+        "core::array::ArrayImpl::append_span",
+        36
+      ],
+      [
+        "s11_state_hash::hash9::array_inline_macro",
+        17
+      ],
+      [
+        "s11_state_hash::hash9::reduce",
+        13
+      ],
+      [
+        "executable_scaffolding",
+        12
+      ],
+      [
+        "s11_state_hash::hash9::hash",
+        5
+      ],
+      [
+        "unannotated",
+        1
+      ]
+    ],
+    "source_libfunc_steps": [
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128_mul_guarantee_verify",
+        "steps": 256082
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128_safe_divmod",
+        "steps": 127240
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "store_temp",
+        "steps": 106604
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "downcast",
+        "steps": 42948
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128_overflowing_sub",
+        "steps": 31810
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128_overflowing_add",
+        "steps": 19086
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128_eq",
+        "steps": 14316
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "array_append",
+        "steps": 14315
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 12727
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128s_from_felt252",
+        "steps": 12724
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128_guarantee_mul",
+        "steps": 11134
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "felt252_is_zero",
+        "steps": 11134
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "store_temp",
+        "steps": 7250
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "return",
+        "steps": 6364
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "function_call",
+        "steps": 6363
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "jump",
+        "steps": 4773
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 4478
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "array_snapshot_multi_pop_front",
+        "steps": 3580
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "u32_overflowing_add",
+        "steps": 3576
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "branch_align",
+        "steps": 1590
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "function_call",
+        "steps": 911
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "return",
+        "steps": 910
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "blake2s_compress",
+        "steps": 895
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "int_range_pop_front",
+        "steps": 28
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "store_temp",
+        "steps": 17
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "store_temp",
+        "steps": 13
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "array_append",
+        "steps": 13
+      },
+      {
+        "source": "s11_state_hash::hash9::reduce",
+        "libfunc": "store_temp",
+        "steps": 13
+      },
+      {
+        "source": "executable_scaffolding",
+        "libfunc": "executable_scaffolding",
+        "steps": 12
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_slice",
+        "steps": 10
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 9
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "array_append",
+        "steps": 8
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "store_temp",
+        "steps": 7
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 5
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "store_local",
+        "steps": 5
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "u32_try_from_felt252",
+        "steps": 4
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u32_overflowing_add",
+        "steps": 4
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "return",
+        "steps": 4
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "store_temp",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 3
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "array_append",
+        "steps": 3
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "function_call",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "int_range_try_new",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "tuple_from_span",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "array_new",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "const_as_box",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_append",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "function_call",
+        "steps": 1
+      },
+      {
+        "source": "unannotated",
+        "libfunc": "finalize_locals",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "store_local",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "enum_match",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "branch_align",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "jump",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "blake2s_finalize",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "enum_match",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "jump",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "enum_match",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "return",
+        "steps": 1
+      }
+    ],
+    "note": "Flat count of executed PCs mapped to Sierra CASM ranges; no recursive-stack depth cap. VM scaffolding is separate."
+  },
+  "final_profile": {
+    "steps": 373352,
+    "libfunc_steps": [
+      [
+        "store_temp",
+        160037
+      ],
+      [
+        "u32_try_from_felt252",
+        31816
+      ],
+      [
+        "u128_overflowing_sub",
+        31810
+      ],
+      [
+        "u128s_from_felt252",
+        25448
+      ],
+      [
+        "bitwise",
+        25448
+      ],
+      [
+        "downcast",
+        19089
+      ],
+      [
+        "array_append",
+        14341
+      ],
+      [
+        "array_snapshot_pop_front",
+        12741
+      ],
+      [
+        "felt252_div",
+        12724
+      ],
+      [
+        "return",
+        7279
+      ],
+      [
+        "function_call",
+        7278
+      ],
+      [
+        "felt252_is_zero",
+        6363
+      ],
+      [
+        "branch_align",
+        4773
+      ],
+      [
+        "u32_overflowing_sub",
+        4484
+      ],
+      [
+        "u32_overflowing_add",
+        3580
+      ],
+      [
+        "array_snapshot_multi_pop_front",
+        3580
+      ],
+      [
+        "jump",
+        1592
+      ],
+      [
+        "blake2s_compress",
+        895
+      ],
+      [
+        "int_range_pop_front",
+        28
+      ],
+      [
+        "executable_scaffolding",
+        14
+      ],
+      [
+        "array_slice",
+        10
+      ],
+      [
+        "store_local",
+        7
+      ],
+      [
+        "enum_match",
+        3
+      ],
+      [
+        "int_range_try_new",
+        3
+      ],
+      [
+        "tuple_from_span",
+        3
+      ],
+      [
+        "array_new",
+        2
+      ],
+      [
+        "const_as_box",
+        2
+      ],
+      [
+        "finalize_locals",
+        1
+      ],
+      [
+        "blake2s_finalize",
+        1
+      ]
+    ],
+    "source_steps": [
+      [
+        "s11_state_hash::hash9::digest",
+        351569
+      ],
+      [
+        "s11_state_hash::hash9::digest_words",
+        21655
+      ],
+      [
+        "s11_state_hash::__executable_wrapper__hash_blake9",
+        41
+      ],
+      [
+        "core::array::ArrayImpl::append_span",
+        36
+      ],
+      [
+        "s11_state_hash::hash9::array_inline_macro",
+        17
+      ],
+      [
+        "executable_scaffolding",
+        14
+      ],
+      [
+        "s11_state_hash::hash9::reduce",
+        13
+      ],
+      [
+        "s11_state_hash::hash9::hash",
+        6
+      ],
+      [
+        "unannotated",
+        1
+      ]
+    ],
+    "source_libfunc_steps": [
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "store_temp",
+        "steps": 152732
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u32_try_from_felt252",
+        "steps": 31812
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128_overflowing_sub",
+        "steps": 31810
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u128s_from_felt252",
+        "steps": 25448
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "bitwise",
+        "steps": 25448
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "downcast",
+        "steps": 19089
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "array_append",
+        "steps": 14315
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 12727
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "felt252_div",
+        "steps": 12724
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "store_temp",
+        "steps": 7250
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "return",
+        "steps": 6364
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "function_call",
+        "steps": 6363
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "felt252_is_zero",
+        "steps": 6363
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "branch_align",
+        "steps": 4772
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 4478
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "array_snapshot_multi_pop_front",
+        "steps": 3580
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "u32_overflowing_add",
+        "steps": 3576
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "jump",
+        "steps": 1590
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "function_call",
+        "steps": 911
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "return",
+        "steps": 910
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "blake2s_compress",
+        "steps": 895
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "int_range_pop_front",
+        "steps": 28
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "store_temp",
+        "steps": 17
+      },
+      {
+        "source": "executable_scaffolding",
+        "libfunc": "executable_scaffolding",
+        "steps": 14
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "store_temp",
+        "steps": 14
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "array_append",
+        "steps": 13
+      },
+      {
+        "source": "s11_state_hash::hash9::reduce",
+        "libfunc": "store_temp",
+        "steps": 13
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_slice",
+        "steps": 10
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 9
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "array_append",
+        "steps": 8
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "store_temp",
+        "steps": 7
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 5
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "store_local",
+        "steps": 5
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "u32_try_from_felt252",
+        "steps": 4
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "store_temp",
+        "steps": 4
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u32_overflowing_add",
+        "steps": 4
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "return",
+        "steps": 4
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 3
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "array_append",
+        "steps": 3
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "function_call",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "int_range_try_new",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "tuple_from_span",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "store_local",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "array_new",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "const_as_box",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_append",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "function_call",
+        "steps": 1
+      },
+      {
+        "source": "unannotated",
+        "libfunc": "finalize_locals",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "enum_match",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "branch_align",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "jump",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "blake2s_finalize",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "enum_match",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "jump",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "enum_match",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "return",
+        "steps": 1
+      }
+    ],
+    "note": "Flat count of executed PCs mapped to Sierra CASM ranges; no recursive-stack depth cap. VM scaffolding is separate."
+  },
+  "rejected_profile": {
+    "steps": 456048,
+    "libfunc_steps": [
+      [
+        "store_temp",
+        223649
+      ],
+      [
+        "u32_try_from_felt252",
+        31816
+      ],
+      [
+        "u128_overflowing_sub",
+        31810
+      ],
+      [
+        "u128s_from_felt252",
+        25448
+      ],
+      [
+        "bitwise",
+        25448
+      ],
+      [
+        "downcast",
+        19089
+      ],
+      [
+        "array_append",
+        14341
+      ],
+      [
+        "return",
+        13641
+      ],
+      [
+        "function_call",
+        13640
+      ],
+      [
+        "array_snapshot_pop_front",
+        12741
+      ],
+      [
+        "felt252_div",
+        12724
+      ],
+      [
+        "enum_match",
+        6365
+      ],
+      [
+        "felt252_is_zero",
+        6362
+      ],
+      [
+        "branch_align",
+        4772
+      ],
+      [
+        "u32_overflowing_sub",
+        4484
+      ],
+      [
+        "u32_overflowing_add",
+        3580
+      ],
+      [
+        "array_snapshot_multi_pop_front",
+        3580
+      ],
+      [
+        "jump",
+        1592
+      ],
+      [
+        "blake2s_compress",
+        895
+      ],
+      [
+        "int_range_pop_front",
+        28
+      ],
+      [
+        "executable_scaffolding",
+        14
+      ],
+      [
+        "array_slice",
+        10
+      ],
+      [
+        "store_local",
+        7
+      ],
+      [
+        "int_range_try_new",
+        3
+      ],
+      [
+        "tuple_from_span",
+        3
+      ],
+      [
+        "array_new",
+        2
+      ],
+      [
+        "const_as_box",
+        2
+      ],
+      [
+        "finalize_locals",
+        1
+      ],
+      [
+        "blake2s_finalize",
+        1
+      ]
+    ],
+    "source_steps": [
+      [
+        "s11_state_hash::hash9::packed_words",
+        241756
+      ],
+      [
+        "s11_state_hash::hash9::digest",
+        192509
+      ],
+      [
+        "s11_state_hash::hash9::digest_words",
+        21655
+      ],
+      [
+        "s11_state_hash::__executable_wrapper__hash_blake9",
+        41
+      ],
+      [
+        "core::array::ArrayImpl::append_span",
+        36
+      ],
+      [
+        "s11_state_hash::hash9::array_inline_macro",
+        17
+      ],
+      [
+        "executable_scaffolding",
+        14
+      ],
+      [
+        "s11_state_hash::hash9::reduce",
+        13
+      ],
+      [
+        "s11_state_hash::hash9::hash",
+        6
+      ],
+      [
+        "unannotated",
+        1
+      ]
+    ],
+    "source_libfunc_steps": [
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "store_temp",
+        "steps": 120914
+      },
+      {
+        "source": "s11_state_hash::hash9::packed_words",
+        "libfunc": "store_temp",
+        "steps": 95430
+      },
+      {
+        "source": "s11_state_hash::hash9::packed_words",
+        "libfunc": "u128_overflowing_sub",
+        "steps": 31810
+      },
+      {
+        "source": "s11_state_hash::hash9::packed_words",
+        "libfunc": "u128s_from_felt252",
+        "steps": 25448
+      },
+      {
+        "source": "s11_state_hash::hash9::packed_words",
+        "libfunc": "bitwise",
+        "steps": 25448
+      },
+      {
+        "source": "s11_state_hash::hash9::packed_words",
+        "libfunc": "u32_try_from_felt252",
+        "steps": 25448
+      },
+      {
+        "source": "s11_state_hash::hash9::packed_words",
+        "libfunc": "downcast",
+        "steps": 19086
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "array_append",
+        "steps": 14315
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 12727
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "function_call",
+        "steps": 12725
+      },
+      {
+        "source": "s11_state_hash::hash9::packed_words",
+        "libfunc": "felt252_div",
+        "steps": 12724
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "store_temp",
+        "steps": 7250
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u32_try_from_felt252",
+        "steps": 6364
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "return",
+        "steps": 6364
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "enum_match",
+        "steps": 6363
+      },
+      {
+        "source": "s11_state_hash::hash9::packed_words",
+        "libfunc": "return",
+        "steps": 6362
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "felt252_is_zero",
+        "steps": 6362
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "branch_align",
+        "steps": 4771
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 4478
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "array_snapshot_multi_pop_front",
+        "steps": 3580
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "u32_overflowing_add",
+        "steps": 3576
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "jump",
+        "steps": 1590
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "function_call",
+        "steps": 911
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "return",
+        "steps": 910
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "blake2s_compress",
+        "steps": 895
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "int_range_pop_front",
+        "steps": 28
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "store_temp",
+        "steps": 17
+      },
+      {
+        "source": "executable_scaffolding",
+        "libfunc": "executable_scaffolding",
+        "steps": 14
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "store_temp",
+        "steps": 14
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "array_append",
+        "steps": 13
+      },
+      {
+        "source": "s11_state_hash::hash9::reduce",
+        "libfunc": "store_temp",
+        "steps": 13
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_slice",
+        "steps": 10
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 9
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "array_append",
+        "steps": 8
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "store_temp",
+        "steps": 7
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_snapshot_pop_front",
+        "steps": 5
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "store_local",
+        "steps": 5
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "u32_try_from_felt252",
+        "steps": 4
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "store_temp",
+        "steps": 4
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u32_overflowing_add",
+        "steps": 4
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "return",
+        "steps": 4
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "u32_overflowing_sub",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "downcast",
+        "steps": 3
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "array_append",
+        "steps": 3
+      },
+      {
+        "source": "core::array::ArrayImpl::append_span",
+        "libfunc": "function_call",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "int_range_try_new",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "tuple_from_span",
+        "steps": 3
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "store_local",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::hash9::array_inline_macro",
+        "libfunc": "array_new",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::hash9::digest",
+        "libfunc": "const_as_box",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "array_append",
+        "steps": 2
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "function_call",
+        "steps": 1
+      },
+      {
+        "source": "unannotated",
+        "libfunc": "finalize_locals",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "branch_align",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "jump",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::digest_words",
+        "libfunc": "blake2s_finalize",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::hash9::hash",
+        "libfunc": "enum_match",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "jump",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "enum_match",
+        "steps": 1
+      },
+      {
+        "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+        "libfunc": "return",
+        "steps": 1
+      }
+    ],
+    "note": "Flat count of executed PCs mapped to Sierra CASM ranges; no recursive-stack depth cap. VM scaffolding is separate."
+  },
+  "nine_executables_reproduced": [
+    {
+      "name": "genesis_blake9.executable.json",
+      "json_equal": true,
+      "sha256": "9ef3c3f644e970f65597d9ac7f17bd951546719e2383fe9ae9c19ec2616189e4"
+    },
+    {
+      "name": "inspect_poseidon.executable.json",
+      "json_equal": true,
+      "sha256": "92f050a78e0a1e0e4bc0ebcba24c9d6dbffc7b577c72c7558506ec2e11db7feb"
+    },
+    {
+      "name": "segment_blake9.executable.json",
+      "json_equal": true,
+      "sha256": "0575166c7759c1d6084753ef49e8a9a1fc0eb744c2875d68b27d186a778d7e08"
+    },
+    {
+      "name": "inspect_blake9.executable.json",
+      "json_equal": true,
+      "sha256": "2408563dfe19431a5dddfeb7ba28cdfdf5ee9502caf6221ee47908f982859273"
+    },
+    {
+      "name": "hash_blake9.executable.json",
+      "json_equal": true,
+      "sha256": "6ba604873e491fbcc966fd3b6687545403d4a4155ee13861ef181e455a09e951"
+    },
+    {
+      "name": "hash_poseidon.executable.json",
+      "json_equal": true,
+      "sha256": "5d550f71e28efb5921c809fcdf062ab8bae924078c6cad556f8e0c4b5c750f7c"
+    },
+    {
+      "name": "genesis_poseidon.executable.json",
+      "json_equal": true,
+      "sha256": "bc54bf18d001c3c83e22378ac167f027538d12621465bca7c83d40477b5f275b"
+    },
+    {
+      "name": "vector_blake9.executable.json",
+      "json_equal": true,
+      "sha256": "38fe9d8857c9e274c77eb17941f9d5d268df69625af347651f62dd6c69f4ecf3"
+    },
+    {
+      "name": "segment_poseidon.executable.json",
+      "json_equal": true,
+      "sha256": "c790fd1c676974d960f09f0fb5f2e119d6f741ef1c6d66463013684ec9b5e9f4"
+    }
+  ],
+  "cairo_tests": 17,
+  "independent_vectors_per_variant": 16,
+  "standalone_domain_refusals_per_variant": 4,
+  "poseidon_executables_unchanged": true,
+  "proof_generated": false,
+  "notes": [
+    "The compile-time attempt to use the private core Split trait was rejected before a usable variant existed.",
+    "A shell command then ran stale v1 binaries: unusable-private-split-stale-run is explicitly invalidated and excluded.",
+    "The later bitwise variant v2 was compiled successfully and its nine final executables reproduced byte for byte.",
+    "Only three successful source variants were measured: v1, v2, v3. v3 is rejected for higher VM cost.",
+    "No changes to production, profiles, wire schema, D14, digest, input values, budgets or registry."
+  ]
+}

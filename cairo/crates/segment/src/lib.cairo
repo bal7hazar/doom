@@ -230,7 +230,7 @@ pub trait SegmentEngine<S, C> {
 /// to a felt. It therefore does not chain from one segment to the next the
 /// way `h_out`/`h_in` do; a verifier recomputes each segment's commitment
 /// from the slice of the published log that `tic_start`/`tic_end` names.
-pub fn run_segment<S, C, impl Engine: SegmentEngine<S, C>, +Drop<S>, +Drop<C>, +Copy<C>, +Copy<S>>(
+pub fn run_segment<S, C, impl Engine: SegmentEngine<S, C>, +Destruct<S>, +Drop<C>, +Copy<C>>(
     state: S, cmds: Span<C>, tic_start: u32, max_tics: u32,
 ) -> (S, SegmentOutput) {
     let h_in = Engine::hash(@state);

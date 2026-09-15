@@ -40,3 +40,16 @@ cairo_test = "2.16.0"
 # cairo/doom_contracts/Scarb.toml and cairo/doom_contracts/README.md).
 [cairo]
 enable-gas = false
+
+# The profile the browser proves and the bootloader hashes (D29): the same
+# code with the compiler's panic machinery removed. `scarb --profile proving
+# build` must stay green for every member; `doom_run`'s bytecode budget
+# (bench/size.py) is measured on it. `unstable-add-statements-functions-
+# debug-info` annotates the Sierra and is what bench/attribute.py attributes
+# words with; bench/size.py checks the executable budget.
+[profile.proving]
+inherits = "release"
+
+[profile.proving.cairo]
+unsafe-panic = true
+unstable-add-statements-functions-debug-info = true

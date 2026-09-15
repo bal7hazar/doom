@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Standalone package (NOT a member of the cairo/ workspace, like the other
+# benches): it owns an executable target so that
+# `scarb execute --print-resource-usage` can measure the step cost of a
+# whole tic and of each subsystem on the real E1M1 scenarios. See
+# ../README.md and docs/spikes/S8-tic-profile.md.
+[package]
+name = "doom_game_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_game = { path = ".." }
+doom_physics = { path = "../../doom_physics" }
+doom_player = { path = "../../doom_player" }
+doom_monsters = { path = "../../doom_monsters" }
+doom_specials = { path = "../../doom_specials" }
+doom_map = { path = "../../doom_map" }
+doom_things = { path = "../../doom_things" }
+fixed = { path = "../../../crates/fixed" }
+prng = { path = "../../../crates/prng" }
+ticcmd = { path = "../../../crates/ticcmd" }
+segment = { path = "../../../crates/segment" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+name = "doom_game_bench"
+function = "doom_game_bench::main"
+
+[cairo]
+enable-gas = false
+
+[profile.proving]
+inherits = "release"
+
+[profile.proving.cairo]
+unsafe-panic = true

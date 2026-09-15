@@ -24,3 +24,4 @@ test/fixtures/generated/
 playwright-report/
 test-results/
 e2e/artifacts/
+public/sim/

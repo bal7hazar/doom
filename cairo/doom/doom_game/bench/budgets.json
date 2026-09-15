@@ -1,0 +1,117 @@
+{
+  "crate": "doom_game",
+  "note": "Historical pre-C2 step regression limits recovered from the initial P1.9 work. These values are not D2 success targets and were not rebased after schema 2 or the integrated optimizations. measure.py reports every +10% regression (PLAN 3.1 rule 4); S8 explains actual costs. The n/2n differential for mutable operations samples the last n iterations, not every replay tic.",
+  "iterations": 4,
+  "operations": [
+    {
+      "name": "idle: step_tic (tics 300..)",
+      "op": 1,
+      "budget": 73782
+    },
+    {
+      "name": "idle: player_think",
+      "op": 2,
+      "budget": 2870
+    },
+    {
+      "name": "idle: monsters_ticker (29 dormant)",
+      "op": 3,
+      "budget": 66517
+    },
+    {
+      "name": "idle: specials_ticker (9 lights)",
+      "op": 4,
+      "budget": 140
+    },
+    {
+      "name": "idle: hash (schema 2)",
+      "op": 5,
+      "budget": 76686
+    },
+    {
+      "name": "idle: snapshot",
+      "op": 6,
+      "budget": 64069
+    },
+    {
+      "name": "idle: serialize + from_felts",
+      "op": 7,
+      "budget": 172573
+    },
+    {
+      "name": "idle: rebuild_list (one patch)",
+      "op": 8,
+      "budget": 93956
+    },
+    {
+      "name": "walk: step_tic (tics 80..)",
+      "op": 11,
+      "budget": 202122
+    },
+    {
+      "name": "walk: player_think (walking)",
+      "op": 12,
+      "budget": 3081
+    },
+    {
+      "name": "walk: monsters_ticker (1 awake)",
+      "op": 13,
+      "budget": 65532
+    },
+    {
+      "name": "walk: specials_ticker (lift moving)",
+      "op": 14,
+      "budget": 4582
+    },
+    {
+      "name": "fight: step_tic (tics 300.., 11 awake, pistol held)",
+      "op": 21,
+      "budget": 201740
+    },
+    {
+      "name": "fight: player_think (pistol held between shots)",
+      "op": 22,
+      "budget": 2025
+    },
+    {
+      "name": "fight: monsters_ticker (11 awake)",
+      "op": 23,
+      "budget": 115677
+    },
+    {
+      "name": "fight: specials_ticker",
+      "op": 24,
+      "budget": 140
+    },
+    {
+      "name": "fight: hash",
+      "op": 25,
+      "budget": 76684
+    },
+    {
+      "name": "fight: snapshot",
+      "op": 26,
+      "budget": 63866
+    },
+    {
+      "name": "fight: step_tic on an idle word",
+      "op": 29,
+      "budget": 201550
+    },
+    {
+      "name": "eight: step_tic (8 awake, pistol held)",
+      "op": 31,
+      "budget": 194103
+    },
+    {
+      "name": "eight: monsters_ticker (8 awake)",
+      "op": 33,
+      "budget": 108041
+    },
+    {
+      "name": "eight: step_tic on an idle word",
+      "op": 39,
+      "budget": 193914
+    }
+  ]
+}

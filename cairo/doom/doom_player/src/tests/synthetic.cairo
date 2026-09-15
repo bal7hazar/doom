@@ -30,7 +30,6 @@ use doom_things::tables::{
 };
 use fixed::{BIAS, Fixed};
 use prng::{Prng, from_index};
-use super::super::compat::{apply_damage, spawn as skeleton_spawn, think as skeleton_think};
 use super::super::env::{Env, PlayerEvent, env_of};
 use super::super::inter::{
     absorb, count_kill, damage_player, give_ammo, give_armor, give_body, give_card, give_strength,
@@ -93,12 +92,12 @@ fn item(kind: u32, flags: u32) -> Mobj {
 /// so that no test body keeps a ~56-felt bundle live beside a `Player` and a
 /// `Mobj` (see the module note on `Offset overflow`).
 fn env_at(mo: Mobj, tic: u32, buttons: u32) -> Env {
-    env_of(world(), array![mo].span(), 0, tic, buttons)
+    env_of(world(), array![BoxTrait::new(mo)].span(), 0, tic, buttons)
 }
 
 /// The same with a second mobj at index 1.
 fn env_two(a: Mobj, b: Mobj, tic: u32, buttons: u32) -> Env {
-    env_of(world(), array![a, b].span(), 0, tic, buttons)
+    env_of(world(), array![BoxTrait::new(a), BoxTrait::new(b)].span(), 0, tic, buttons)
 }
 
 fn word_of(forward: i64, side: i64, turn: i64, buttons: u32) -> felt252 {
@@ -844,7 +843,7 @@ fn test_bullet_slope_finds_nothing_to_aim_at() {
     let (_, mut mo) = spawn(world(), 0, g0.start, g0.angle);
     let mut g: ThingGrid = new_grid();
     set_thing_position(@world().map, ref g, ref mo, 0);
-    let slope = bullet_slope(world(), array![mo].span(), ref g, @mo, 0);
+    let slope = bullet_slope(world(), array![BoxTrait::new(mo)].span(), ref g, @mo, 0);
     assert(slope == fixed::ZERO, 'no target, no slope');
 }
 
@@ -1202,7 +1201,7 @@ fn test_something_that_cannot_be_shot_is_not_hurt() {
 }
 
 // ---------------------------------------------------------------------------
-// tic.cairo, and the compat shim
+// tic.cairo
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -1260,13 +1259,3 @@ fn test_player_tic_skips_the_sector_when_dead() {
     assert(after.secrets == 0, 'no secret while dead');
 }
 
-#[test]
-fn test_the_phase_zero_skeleton_still_answers() {
-    let g0 = genesis(LevelId::E1M1);
-    let s = skeleton_spawn(g0.start);
-    assert(s.health == 100, 'the skeleton spawns with 100');
-    let cmd = ticcmd::TicCmd { forward: 10, side: 0, angle_turn: 0, buttons: 0 };
-    let moved = skeleton_think(s, cmd);
-    assert(moved.position.y != s.position.y, 'and moves');
-    assert(apply_damage(moved, 1000).health == 0, 'and saturates at zero');
-}

@@ -2,9 +2,10 @@
 //! `P_DamageMobj` and `P_KillMobj` (`p_inter.c`), on the target as a value.
 //!
 //! The target is the mobj the caller owns; the inflictor and the source are
-//! read from the tic's `Span<Mobj>`. Player-specific bookkeeping (armor,
-//! god mode, `damagecount`, dropping the weapon, `PST_DEAD`) is
-//! `doom_player`'s: it reduces the damage first and reads the outcome.
+//! read from the tic's `Span<Box<Mobj>>`. `damage_mobj_with_defense` applies
+//! player armor after raw thrust and before health/pain/death. Player owns
+//! the persistent defense fields, weapon drop and `PST_DEAD`; the ticker
+//! carries a temporary `PlayerDefense` so later impacts see net health.
 //!
 //! The public functions return a 27-felt `Mobj` and a `DamageOutcome` with
 //! an `Option<Mobj>` inside: every return point and every panic site in
@@ -16,15 +17,76 @@
 use bam::point_to_angle2;
 use doom_things::ThingInfo;
 use doom_things::tables::{KIND_CLIP, KIND_PLAYER, KIND_POSSESSED, KIND_SHOTGUN, KIND_SHOTGUY};
-use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
+use fixed::{BIAS, Fixed, felt_ge_narrow};
 use fsm::StateTables;
 use prng::Prng;
+use super::maputl::to_u128;
 use super::mobj::{
     MF_CORPSE, MF_COUNTKILL, MF_DROPOFF, MF_DROPPED, MF_FLOAT, MF_JUSTHIT, MF_NOCLIP, MF_NOGRAVITY,
     MF_SHOOTABLE, MF_SKULLFLY, MF_SOLID, Mobj, NO_MOBJ, has, without,
 };
 use super::spawn::{SpawnZ, info_of, roll, shorten_tics, spawn_in, state_entry};
 use super::world::{Level, World, level_of};
+
+/// The single player's damage bookkeeping for one monster/missile pass.
+/// This belongs below `doom_player` to avoid a dependency cycle. It is not
+/// serialized: the game seeds it from Player and writes it back after the pass.
+#[derive(Copy, Drop, PartialEq, Debug)]
+pub struct PlayerDefense {
+    pub mo: u32,
+    pub armor_points: u32,
+    pub armor_type: u32,
+    pub damagecount: u32,
+    pub attacker: u32,
+}
+
+/// Historical physics/monster callers have no player defense to apply.
+pub fn no_player_defense() -> PlayerDefense {
+    PlayerDefense { mo: NO_MOBJ, armor_points: 0, armor_type: 0, damagecount: 0, attacker: NO_MOBJ }
+}
+
+/// P_DamageMobj's player arm, once per live impact and after raw-damage
+/// thrust. The box keeps five fields out of the monster dispatch's frames.
+fn absorb_impact(ref defense: Box<PlayerDefense>, target: u32, source: u32, damage: u32) -> u32 {
+    let cur = defense.unbox();
+    if target != cur.mo {
+        return damage;
+    }
+    let mut saved: u32 = 0;
+    let mut kind = cur.armor_type;
+    if kind != 0 {
+        let third: NonZero<u32> = 3;
+        let half: NonZero<u32> = 2;
+        let (full, _) = DivRem::div_rem(damage, if kind == 1 {
+            third
+        } else {
+            half
+        });
+        saved = if cur.armor_points <= full {
+            kind = 0;
+            cur.armor_points
+        } else {
+            full
+        };
+    }
+    let net = super::maputl::sub32(damage, saved);
+    let count: felt252 = cur.damagecount.into() + net.into();
+    defense =
+        BoxTrait::new(
+            PlayerDefense {
+                armor_points: super::maputl::sub32(cur.armor_points, saved),
+                armor_type: kind,
+                damagecount: if felt_ge_narrow(count, 100) {
+                    100
+                } else {
+                    super::maputl::low32(to_u128(count))
+                },
+                attacker: source,
+                ..cur,
+            },
+        );
+    net
+}
 
 /// `BASETHRESHOLD`: tics a target is kept after retaliating.
 pub const BASETHRESHOLD: u32 = 100;
@@ -151,7 +213,7 @@ pub fn kill_mobj(w: World, ref rng: Prng, ref target: Mobj) -> (u32, Option<Mobj
 fn thrust_of(
     rnd: Span<u8>,
     ref rng: Prng,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     inflictor: u32,
     x: Fixed,
     y: Fixed,
@@ -162,7 +224,7 @@ fn thrust_of(
 ) -> (Fixed, Fixed) {
     let (ix, iy, iz) = match mobjs.get(inflictor) {
         Option::Some(b) => {
-            let inf = b.unbox();
+            let inf = b.unbox().as_snapshot().unbox();
             (*inf.x, *inf.y, *inf.z)
         },
         Option::None => (x, y, z),
@@ -269,9 +331,12 @@ fn react(
 /// of `source` (the shooter, `NO_MOBJ`). `thrust` is Doom's
 /// `!source->player || readyweapon != wp_chainsaw` test, decided by the
 /// caller. Player damage must already be net of armor.
+// Inline only this adapter: a second World/Mobj frame costs ~160 steps.
+// The damage implementation below remains shared by both entry points.
+#[inline(always)]
 pub fn damage_mobj(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref target: Mobj,
     target_idx: u32,
@@ -279,6 +344,26 @@ pub fn damage_mobj(
     source: u32,
     damage: u32,
     thrust: bool,
+) -> DamageOutcome {
+    let mut defense = BoxTrait::new(no_player_defense());
+    damage_mobj_with_defense(
+        w, mobjs, ref rng, ref target, target_idx, inflictor, source, damage, thrust, ref defense,
+    )
+}
+
+/// Damage with the player's defense: raw thrust first, armor per impact,
+/// then health, pain or death. A corpse never spends armor or draws again.
+pub fn damage_mobj_with_defense(
+    w: World,
+    mobjs: Span<Box<Mobj>>,
+    ref rng: Prng,
+    ref target: Mobj,
+    target_idx: u32,
+    inflictor: u32,
+    source: u32,
+    damage: u32,
+    thrust: bool,
+    ref defense: Box<PlayerDefense>,
 ) -> DamageOutcome {
     let alive = has(target.flags, MF_SHOOTABLE) && target.health > 0;
     let mut died = false;
@@ -323,8 +408,9 @@ pub fn damage_mobj(
             momx = fixed::add(momx, dx);
             momy = fixed::add(momy, dy);
         }
-        // Do the damage.
-        health = hurt(health, damage);
+        // Armor must precede the lethal/pain decision, but not raw thrust.
+        let net = absorb_impact(ref defense, target_idx, source, damage);
+        health = hurt(health, net);
         if health <= 0 {
             died = true;
             counts_kill = has(flags, MF_COUNTKILL);

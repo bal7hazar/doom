@@ -103,7 +103,7 @@ fn main(op: u32, n: u32) -> felt252 {
         while i != n {
             let q = base_p;
             let mo = base_mo;
-            let e = env_of(w, array![mo].span(), 0, i, 0);
+            let e = env_of(w, array![BoxTrait::new(mo)].span(), 0, i, 0);
             acc += q.health.into() + mo.x.enc + e.tic.into();
             i += 1;
         }
@@ -112,7 +112,7 @@ fn main(op: u32, n: u32) -> felt252 {
         while i != n {
             let mut q = base_p;
             let mut mo = base_mo;
-            let e = env_of(w, array![mo].span(), 0, i, 0);
+            let e = env_of(w, array![BoxTrait::new(mo)].span(), 0, i, 0);
             let mut events: Array<PlayerEvent> = array![];
             player_think(e, ref g, ref rng, ref q, ref mo, idle, 0, false, ref events);
             acc += q.viewz.enc;
@@ -123,7 +123,7 @@ fn main(op: u32, n: u32) -> felt252 {
         while i != n {
             let mut q = base_p;
             let mut mo = base_mo;
-            let e = env_of(w, array![mo].span(), 0, i, 0);
+            let e = env_of(w, array![BoxTrait::new(mo)].span(), 0, i, 0);
             let mut events: Array<PlayerEvent> = array![];
             player_think(e, ref g, ref rng, ref q, ref mo, walk, 0, false, ref events);
             acc += mo.momx.enc;
@@ -134,7 +134,7 @@ fn main(op: u32, n: u32) -> felt252 {
         while i != n {
             let mut q = base_p;
             let mut mo = base_mo;
-            let e = env_of(w, array![mo].span(), 0, i, 0);
+            let e = env_of(w, array![BoxTrait::new(mo)].span(), 0, i, 0);
             let mut events: Array<PlayerEvent> = array![];
             move_psprites(e, ref g, ref rng, ref q, ref mo, ref events);
             acc += q.psp_sy.enc;
@@ -177,7 +177,7 @@ fn main(op: u32, n: u32) -> felt252 {
         while i != n {
             let mut mo = base_mo;
             mo.angle = mo.angle + i % 2;
-            let e = env_of(w, array![mo].span(), 0, i, 2);
+            let e = env_of(w, array![BoxTrait::new(mo)].span(), 0, i, 2);
             let mut events: Array<PlayerEvent> = array![];
             use_lines(e, ref g, @mo, ref events);
             acc += events.len().into();
@@ -191,7 +191,7 @@ fn main(op: u32, n: u32) -> felt252 {
             q.psp_state = doom_player::chain(doom_player::WP_PISTOL).attack;
             q.psp_tics = 1;
             let mut mo = base_mo;
-            let e = env_of(w, array![mo].span(), 0, i, 1);
+            let e = env_of(w, array![BoxTrait::new(mo)].span(), 0, i, 1);
             let mut events: Array<PlayerEvent> = array![];
             player_think(e, ref g, ref rng, ref q, ref mo, fire, 0, false, ref events);
             acc += events.len().into();
@@ -204,7 +204,7 @@ fn main(op: u32, n: u32) -> felt252 {
             q.armor_type = 1;
             q.armor_points = 100;
             let mut mo = base_mo;
-            let e = env_of(w, array![mo].span(), 0, i, 0);
+            let e = env_of(w, array![BoxTrait::new(mo)].span(), 0, i, 0);
             let mut events: Array<PlayerEvent> = array![];
             damage_player(
                 e, ref g, ref rng, ref q, ref mo, ref events, NO_MOBJ, NO_MOBJ, 5 + i % 3, false,
@@ -233,7 +233,7 @@ fn main(op: u32, n: u32) -> felt252 {
             q.psp_state = doom_player::chain(doom_player::WP_PISTOL).attack;
             q.psp_tics = 1;
             let mut mo = base_mo;
-            let e = env_of(w, array![mo, tgt].span(), 0, i, 1);
+            let e = env_of(w, array![BoxTrait::new(mo), BoxTrait::new(tgt)].span(), 0, i, 1);
             let mut events: Array<PlayerEvent> = array![];
             player_think(e, ref g, ref rng, ref q, ref mo, fire, 0, false, ref events);
             // 1000 per pellet that found the thing, so the caller can check
@@ -260,7 +260,7 @@ fn main(op: u32, n: u32) -> felt252 {
         while i != n {
             let mut q = base_p;
             let mut mo = base_mo;
-            let e = env_of(w, array![mo].span(), 0, i, 2);
+            let e = env_of(w, array![BoxTrait::new(mo)].span(), 0, i, 2);
             let mut events: Array<PlayerEvent> = array![];
             player_think(e, ref g, ref rng, ref q, ref mo, use_it, 0, false, ref events);
             acc += events.len().into();

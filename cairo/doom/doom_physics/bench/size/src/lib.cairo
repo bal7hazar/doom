@@ -48,7 +48,7 @@ fn main(op: u32) -> felt252 {
         SpawnZ::OnFloor,
     );
     set_thing_position(@w.map, ref grid, ref imp, one);
-    let mut list = array![player, imp];
+    let mut list = array![BoxTrait::new(player), BoxTrait::new(imp)];
     let mobjs = list.span();
 
     let x = fixed::add(player.x, Fixed { enc: 0x100000000 + 4 * 65536 + zf });
@@ -57,7 +57,7 @@ fn main(op: u32) -> felt252 {
     }
     player.momx = fixed::from_units(3 + zf);
     xy_movement(w, mobjs, ref grid, ref player, zero, yes, yes, ref events);
-    z_movement(ref player, Option::Some(mobjs.at(one)));
+    z_movement(ref player, Option::Some(mobjs.at(one).as_snapshot().unbox()));
     slide_move(w, mobjs, ref grid, ref player, zero, ref events);
     slide_move_lite(w, mobjs, ref grid, ref player, zero, ref events);
     if check_sight(w, @player, @imp) {
@@ -90,7 +90,7 @@ fn main(op: u32) -> felt252 {
         Option::Some(mo) => { acc += mo.z.enc; },
         Option::None => {},
     }
-    replace(ref list, one, imp);
+    replace(ref list, one, BoxTrait::new(imp));
     let mut felts: Array<felt252> = array![];
     push_felts(ref felts, @player);
     let mut g2 = rebuild(list.span());

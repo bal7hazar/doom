@@ -3,3 +3,5 @@
 /pkg
 /bench/node_modules
 /bench/step_tic/target
+/bench/continuation/cairo/target
+/bench/continuation/__pycache__

@@ -80,7 +80,7 @@ fn test_a_look_arms() {
     set_state(w, ref mo, *MI_SPAWNSTATE.span().at(KIND_POSSESSED));
     mo.target = NO_MOBJ;
     mo.threshold = 40;
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
 
@@ -113,7 +113,7 @@ fn test_a_look_hears_a_noise() {
     let (p, mut mo) = pair(w, ref g, KIND_POSSESSED, 48);
     set_state(w, ref mo, *MI_SPAWNSTATE.span().at(KIND_POSSESSED));
     mo.target = NO_MOBJ;
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     // The shot rang out in the listener's own sector, which no REJECT row
     // ever rules out: a monster that is not `MF_AMBUSH` wakes on the sound
     // alone, without a sight test.
@@ -140,7 +140,7 @@ fn test_a_look_ambush_needs_sight() {
     mo.sight_sector = p.sector;
     mo.sight_expires = 8;
     p.health = 10000;
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let noise = Noise { source: 0, sector: mo.sector };
     let ctx = Ctx { w, players: array![0].span(), noise, tic: 0 };
     let mut rng: Prng = from_index(1);
@@ -163,7 +163,7 @@ fn test_a_look_ignores_a_dead_noise_maker() {
     mo.sight_expires = 8;
     p.flags = doom_physics::without(p.flags, MF_SHOOTABLE);
     p.health = 0;
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let noise = Noise { source: 0, sector: mo.sector };
     let ctx = Ctx { w, players: array![0].span(), noise, tic: 0 };
     let mut rng: Prng = from_index(1);
@@ -188,7 +188,7 @@ fn test_a_chase_without_a_target_goes_back_to_sleep() {
     mo.target = NO_MOBJ;
     // The player is not shootable either, so `P_LookForPlayers` fails too.
     p.health = 0;
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let patches: Array<Patch> = array![];
@@ -205,7 +205,7 @@ fn test_a_chase_after_an_attack_only_turns() {
     mo.flags = mo.flags | MF_JUSTATTACKED;
     mo.move_count = 5;
     can_see(ref mo, @p, 0);
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let patches: Array<Patch> = array![];
@@ -220,7 +220,7 @@ fn test_a_chase_turns_toward_every_direction() {
     let mut g = new_grid();
     let (p, mut mo) = pair(w, ref g, KIND_POSSESSED, 48);
     can_see(ref mo, @p, 0);
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let patches: Array<Patch> = array![];
     let mut dir: u32 = 0;
     while dir != DI_NODIR + 1 {
@@ -248,7 +248,7 @@ fn test_a_chase_fires_when_the_missile_check_passes() {
     can_see(ref mo, @p, 0);
     mo.move_count = 0; // the missile branch is gated on it
     mo.flags = mo.flags | MF_JUSTHIT; // and `MF_JUSTHIT` forces a yes
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let patches: Array<Patch> = array![];
@@ -299,7 +299,7 @@ fn test_p_move_refuses_without_a_direction() {
     let mut g = new_grid();
     let (_p, mut mo) = pair(w, ref g, KIND_POSSESSED, 48);
     mo.move_dir = DI_NODIR;
-    let mobjs = array![_p, mo].span();
+    let mobjs = array![BoxTrait::new(_p), BoxTrait::new(mo)].span();
     let mut ev: Array<MonsterEvent> = array![];
     assert(!p_move(ctx_of(w, 0), mobjs, ref g, ref mo, 1, ref ev), 'DI_NODIR does not move');
 }
@@ -309,7 +309,7 @@ fn test_new_chase_dir_always_leaves_a_valid_direction() {
     let w = world();
     let mut g = new_grid();
     let (p, mo0) = pair(w, ref g, KIND_POSSESSED, 48);
-    let mobjs = array![p, mo0].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo0)].span();
     let mut seed: u32 = 0;
     while seed != 8 {
         let mut mo = mo0;
@@ -332,7 +332,7 @@ fn test_pos_attack_draws_three_and_sounds() {
     let w = world();
     let mut g = new_grid();
     let (p, mut mo) = pair(w, ref g, KIND_POSSESSED, 100);
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let mut patches: Array<Patch> = array![];
@@ -349,7 +349,7 @@ fn test_spos_attack_fires_three_pellets() {
     let w = world();
     let mut g = new_grid();
     let (p, mut mo) = pair(w, ref g, KIND_SHOTGUY, 100);
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let mut patches: Array<Patch> = array![];
@@ -365,7 +365,7 @@ fn test_troop_attack_claws_in_range_and_throws_out_of_it() {
     // Point blank: the claw, which damages the target through a patch.
     let (p, mut mo) = pair(w, ref g, KIND_TROOP, 8);
     can_see(ref mo, @p, 0);
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let mut patches: Array<Patch> = array![];
@@ -375,7 +375,7 @@ fn test_troop_attack_claws_in_range_and_throws_out_of_it() {
     );
     assert(patches.len() == 1, 'the target was hurt');
     assert(*patches.span().at(0).idx == 0, 'the player took it');
-    assert(*patches.span().at(0).mo.health < p.health, 'and lost health');
+    assert(patches.span().at(0).mo.health < p.health, 'and lost health');
     assert(spawn_at == 2, 'no missile was spawned');
 
     // Far away and blind to the melee test: the fireball.
@@ -384,7 +384,7 @@ fn test_troop_attack_claws_in_range_and_throws_out_of_it() {
     far.sight_ok = false;
     far.sight_sector = p2.sector;
     far.sight_expires = 8;
-    let mobjs2 = array![p2, far].span();
+    let mobjs2 = array![BoxTrait::new(p2), BoxTrait::new(far)].span();
     let mut rng2: Prng = from_index(1);
     let mut ev2: Array<MonsterEvent> = array![];
     let mut patches2: Array<Patch> = array![];
@@ -394,7 +394,7 @@ fn test_troop_attack_claws_in_range_and_throws_out_of_it() {
     );
     assert(spawn_at2 == 3, 'a slot was claimed');
     assert(patches2.len() == 1, 'the fireball is a patch');
-    assert(*patches2.span().at(0).mo.kind == KIND_TROOPSHOT, 'and it is a fireball');
+    assert(patches2.span().at(0).mo.kind == KIND_TROOPSHOT, 'and it is a fireball');
 }
 
 #[test]
@@ -403,7 +403,7 @@ fn test_sarg_attack_only_bites_in_range() {
     let mut g = new_grid();
     let (p, mut mo) = pair(w, ref g, KIND_SERGEANT, 400);
     can_see(ref mo, @p, 0);
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let mut patches: Array<Patch> = array![];
@@ -413,7 +413,7 @@ fn test_sarg_attack_only_bites_in_range() {
     let mut g2 = new_grid();
     let (p2, mut near) = pair(w, ref g2, KIND_SERGEANT, 8);
     can_see(ref near, @p2, 0);
-    let mobjs2 = array![p2, near].span();
+    let mobjs2 = array![BoxTrait::new(p2), BoxTrait::new(near)].span();
     let mut rng2: Prng = from_index(1);
     let mut ev2: Array<MonsterEvent> = array![];
     let mut patches2: Array<Patch> = array![];
@@ -490,7 +490,7 @@ fn test_hurt_kills_counts_and_drops() {
     let w = world();
     let mut g = new_grid();
     let (p, mo) = pair(w, ref g, KIND_POSSESSED, 48);
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let mut patches: Array<Patch> = array![];
@@ -517,7 +517,7 @@ fn test_hurt_kills_counts_and_drops() {
     // A gib death takes the extreme death state.
     let mut g2 = new_grid();
     let (p2, mo2) = pair(w, ref g2, KIND_POSSESSED, 48);
-    let mobjs2 = array![p2, mo2].span();
+    let mobjs2 = array![BoxTrait::new(p2), BoxTrait::new(mo2)].span();
     let mut rng2: Prng = from_index(1);
     let mut ev2: Array<MonsterEvent> = array![];
     let mut patches2: Array<Patch> = array![];
@@ -542,12 +542,12 @@ fn test_ticker_leaves_things_that_are_not_ours_alone() {
     let s = genesis(LevelId::E1M1).start;
     let barrel = spawn_mobj(w, KIND_BARREL, s.x, s.y, SpawnZ::OnFloor);
     let gone = removed_mobj();
-    let mobjs = array![barrel, gone];
+    let mobjs = array![BoxTrait::new(barrel), BoxTrait::new(gone)];
     let (out, rng, ev) = monsters_ticker(
         w, mobjs.span(), ref g, array![].span(), silence(), 0, from_index(1),
     );
     assert(out.len() == 2, 'the list is unchanged');
-    assert(*out.span().at(0) == barrel, 'the barrel is untouched');
+    assert(out.span().at(0).unbox() == barrel, 'the barrel is untouched');
     assert(rng.index == 1 && ev.len() == 0, 'and nothing happened');
     assert(!is_awake(w, @barrel), 'a barrel is not a monster');
 }
@@ -561,7 +561,7 @@ fn test_ticker_runs_a_missile_and_removes_it() {
     assert(has(ball.flags, MF_MISSILE), 'it is a missile');
     ball.momx = units(10);
     set_thing_position(@w.map, ref g, ref ball, 0);
-    let mut mobjs = array![ball];
+    let mut mobjs = array![BoxTrait::new(ball)];
     let mut rng: Prng = from_index(1);
     let mut tic: u32 = 0;
     // A fireball fired into a wall explodes and then removes itself; one way
@@ -585,7 +585,7 @@ fn test_ticker_schedules_more_than_eight() {
     let mut p = spawn_mobj(w, KIND_PLAYER, s.x, s.y, SpawnZ::OnFloor);
     p.health = 10000;
     set_thing_position(@w.map, ref g, ref p, 0);
-    let mut mobjs: Array<Mobj> = array![p];
+    let mut mobjs: Array<core::box::Box<Mobj>> = array![BoxTrait::new(p)];
     let mut k: u32 = 0;
     while k != 12 {
         let dx: felt252 = (64 + k * 40).into();
@@ -600,7 +600,7 @@ fn test_ticker_schedules_more_than_eight() {
         mo.sight_expires = 1000;
         let idx = mobjs.len();
         set_thing_position(@w.map, ref g, ref mo, idx);
-        mobjs.append(mo);
+        mobjs.append(BoxTrait::new(mo));
         k += 1;
     }
     assert(awake_count(w, mobjs.span()) == 12, 'twelve awake');
@@ -626,7 +626,7 @@ fn test_mobj_thinker_reports_a_removal() {
     // Park it on `S_NULL`, which is Doom's "remove me".
     ball.state = 0;
     ball.tics = 1;
-    let mobjs = array![ball].span();
+    let mobjs = array![BoxTrait::new(ball)].span();
     let mut rng: Prng = from_index(1);
     let mut ev: Array<MonsterEvent> = array![];
     let mut patches: Array<Patch> = array![];
@@ -708,7 +708,7 @@ fn test_new_chase_dir_takes_the_diagonal_when_it_can() {
         };
         let mut g = new_grid();
         let (p, mut mo) = open_pair(w, ref g, KIND_POSSESSED, sx, sy);
-        let mobjs = array![p, mo].span();
+        let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
         let mut rng: Prng = from_index(q * 17 + 1);
         let mut ev: Array<MonsterEvent> = array![];
         new_chase_dir(ctx_of(w, 0), mobjs, ref g, ref rng, ref mo, 1, @p, ref ev);
@@ -728,7 +728,7 @@ fn test_a_monster_walks_toward_its_target() {
     chaser.sight_ok = false;
     chaser.sight_sector = p.sector;
     chaser.sight_expires = 100000;
-    let mut mobjs = array![p, chaser];
+    let mut mobjs = array![BoxTrait::new(p), BoxTrait::new(chaser)];
     let players = array![0].span();
     let mut rng: Prng = from_index(1);
     let mut tic: u32 = 0;
@@ -738,7 +738,7 @@ fn test_a_monster_walks_toward_its_target() {
         rng = r;
         tic += 1;
     }
-    let after = *mobjs.span().at(1);
+    let after = mobjs.span().at(1).unbox();
     assert(after.move_dir <= DI_NODIR, 'a direction or DI_NODIR');
     assert(after.move_count < 16, 'movecount in range');
     assert(after.health > 0, 'still alive');
@@ -781,7 +781,7 @@ fn test_look_for_players_has_a_blind_arc() {
     can_see(ref mo, @p, 0);
     mo.angle = 0;
     mo.target = NO_MOBJ;
-    let mobjs = array![p, mo].span();
+    let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
     assert(!look_for_players(ctx_of(w, 0), mobjs, ref mo, false), 'behind its back');
     assert(look_for_players(ctx_of(w, 0), mobjs, ref mo, true), 'unless it looks all around');
     assert(mo.target == 0, 'and then it has a target');
@@ -827,7 +827,7 @@ fn test_the_dispatcher_runs_every_action_this_crate_owns() {
         can_see(ref mo, @p, 0);
         mo.state = state_before(w, action);
         mo.tics = 1;
-        let mobjs = array![p, mo].span();
+        let mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)].span();
         let mut rng: Prng = from_index(k * 13 + 1);
         let mut ev: Array<MonsterEvent> = array![];
         let mut patches: Array<Patch> = array![];
@@ -858,7 +858,7 @@ fn test_the_ticker_runs_dormant_monsters_on_the_fast_path() {
     let mut p = spawn_mobj(w, KIND_PLAYER, s.x, s.y, SpawnZ::OnFloor);
     p.health = 10000;
     set_thing_position(@w.map, ref g, ref p, 0);
-    let mut mobjs: Array<Mobj> = array![p];
+    let mut mobjs: Array<core::box::Box<Mobj>> = array![BoxTrait::new(p)];
     let mut k: u32 = 0;
     while k != 6 {
         let dx: felt252 = (200 + k * 64).into();
@@ -872,7 +872,7 @@ fn test_the_ticker_runs_dormant_monsters_on_the_fast_path() {
         mo.sight_expires = 100000;
         let idx = mobjs.len();
         set_thing_position(@w.map, ref g, ref mo, idx);
-        mobjs.append(mo);
+        mobjs.append(BoxTrait::new(mo));
         k += 1;
     }
     assert(awake_count(w, mobjs.span()) == 0, 'all asleep');
@@ -890,7 +890,7 @@ fn test_the_ticker_runs_dormant_monsters_on_the_fast_path() {
     assert(rng.index == 1, 'a quiet tic draws nothing');
     // The idle frames did count down: `A_Look` is suppressed, the state
     // machine is not.
-    assert(is_dormant(w, mobjs.span().at(1)), 'still in the idle loop');
+    assert(is_dormant(w, (mobjs.span().at(1)).as_snapshot().unbox()), 'still in the idle loop');
 }
 
 #[test]
@@ -905,7 +905,7 @@ fn test_the_ticker_applies_a_patch() {
     mo.sight_expires = 100000;
     mo.state = state_before(w, doom_things::tables::A_TROOPATTACK);
     mo.tics = 1;
-    let mut mobjs = array![p, mo];
+    let mut mobjs = array![BoxTrait::new(p), BoxTrait::new(mo)];
     let players = array![0].span();
     let (after, rng, _ev) = monsters_ticker(
         w, mobjs.span(), ref g, players, silence(), 0, from_index(1),
@@ -915,4 +915,68 @@ fn test_the_ticker_applies_a_patch() {
     mobjs = after;
     let (after2, _r2, _e2) = monsters_ticker(w, mobjs.span(), ref g, players, silence(), 1, rng);
     assert(after2.len() >= 2, 'still there');
+}
+
+#[test]
+fn test_boxed_roster_preserves_countdowns_forever_and_static_slots() {
+    let w = world();
+    let countdowns = array![1, 2, 10, fsm::FOREVER].span();
+    let mut phase: u32 = 0;
+    while phase != 4 {
+        let mut k: u32 = 0;
+        while k != countdowns.len() {
+            let mut g = new_grid();
+            let (p, mut mo) = pair(w, ref g, KIND_POSSESSED, 200);
+            set_state(w, ref mo, *MI_SPAWNSTATE.span().at(KIND_POSSESSED));
+            mo.target = NO_MOBJ;
+            mo.tics = *countdowns.at(k);
+            mo.sight_ok = false;
+            mo.sight_sector = p.sector;
+            mo.sight_expires = 100000;
+            let removed = doom_physics::removed_mobj();
+            let roster = array![BoxTrait::new(p), BoxTrait::new(mo), BoxTrait::new(removed)].span();
+            let before_grid = doom_physics::grid::canonical_order(@g, roster);
+            let expected = if mo.tics == fsm::FOREVER {
+                mo
+            } else {
+                let (state, tics, _) = fsm::advance(w.states, mo.state, mo.tics);
+                Mobj { state, tics, ..mo }
+            };
+            let (after, rng, events) = monsters_ticker(
+                w, roster, ref g, array![0].span(), silence(), phase, from_index(1),
+            );
+            assert(after.len() == 3, 'stable slot count');
+            assert(after.at(0).unbox() == p, 'all static player fields');
+            assert(after.at(1).unbox() == expected, 'all countdown fields');
+            assert(after.at(2).unbox() == removed, 'all removed fields');
+            assert(rng.index == 1 && events.is_empty(), 'no new RNG or event');
+            assert(
+                doom_physics::grid::canonical_order(@g, after.span()) == before_grid, 'grid order',
+            );
+            k += 1;
+        }
+        phase += 1;
+    }
+}
+
+#[test]
+fn test_boxed_patches_keep_last_write_and_free_slot_order() {
+    let w = world();
+    let s = genesis(LevelId::E1M1).start;
+    let a = spawn_mobj(w, KIND_POSSESSED, s.x, s.y, SpawnZ::OnFloor);
+    let b = Mobj { health: 3, ..a };
+    let c = Mobj { health: 7, ..a };
+    let roster = array![
+        BoxTrait::new(a), BoxTrait::new(doom_physics::removed_mobj()), BoxTrait::new(a),
+    ]
+        .span();
+    let patches = array![
+        Patch { idx: 0, mo: BoxTrait::new(b) }, Patch { idx: 2, mo: BoxTrait::new(c) },
+        Patch { idx: 0, mo: BoxTrait::new(c) },
+    ]
+        .span();
+    assert(crate::read_mobj(roster, patches, 0).unbox() == c, 'last write wins in full');
+    assert(crate::read_mobj(roster, patches, 2).unbox() == c, 'other slot independent');
+    assert(doom_physics::first_free(roster) == 1, 'earliest free slot');
+    assert(crate::mobj_at(roster, 99).unbox() == doom_physics::removed_mobj(), 'missing slot');
 }

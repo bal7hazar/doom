@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+--- a/spikes/s11/src/hash9.cairo
++++ b/spikes/s11/src/hash9.cairo
+@@ -43,2 +43,2 @@
+-    let mut carry: u128 = 0;
+-    let mut factor: u128 = 1;
++    let mut carry: felt252 = 0;
++    let mut factor: felt252 = 1;
+@@ -51 +51,5 @@
+-        let packed = x * factor + carry;
++        // x < 2^72; factor cycles through 1, 2^8, 2^16, 2^24.
++        // Carry is the preceding high part. Thus packed < 2^96 < p:
++        // field arithmetic is ordinary integer arithmetic here. The checked
++        // conversion retains an explicit u128 bound before division.
++        let packed: u128 = (x.into() * factor + carry).try_into()?;
+@@ -61 +65 @@
+-            carry = upper;
++            carry = upper.into();

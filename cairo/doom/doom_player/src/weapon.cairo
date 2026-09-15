@@ -479,6 +479,7 @@ fn run_action_in(
 
 /// `A_Light0`/`1`/`2`, out of line so the three arms of the dispatch share
 /// one `into_box` (S7 §8 rule 6).
+#[inline(never)]
 fn set_extralight(ref p: Box<Player>, level: u32) {
     p = BoxTrait::new(Player { extralight: level, ..p.unbox() });
 }
@@ -560,23 +561,25 @@ fn a_lower(
     let cur = p.unbox();
     let sy = Fixed { enc: cur.psp_sy.enc + RAISESPEED };
     let bottom = Fixed { enc: BIAS + WEAPONBOTTOM };
-    if fixed::lt(sy, bottom) {
-        p = BoxTrait::new(Player { psp_sy: sy, ..cur });
-        return;
-    }
-    if cur.playerstate == PST_DEAD {
-        p = BoxTrait::new(Player { psp_sy: bottom, ..cur });
-        return;
-    }
-    if cur.health == 0 {
+    // Choose the continuation before rebuilding the same 36 fields once:
+    // 0 keeps the current state, 1 hides the psprite, 2 raises the next weapon.
+    let (sy, weapon, next) = if fixed::lt(sy, bottom) {
+        (sy, cur.ready_weapon, 0)
+    } else if cur.playerstate == PST_DEAD {
+        (bottom, cur.ready_weapon, 0)
+    } else if cur.health == 0 {
         // The player is dead but has not entered PST_DEAD yet: take the
         // weapon off the screen for good.
-        p = BoxTrait::new(Player { psp_sy: sy, ..cur });
+        (sy, cur.ready_weapon, 1)
+    } else {
+        (sy, cur.pending_weapon, 2)
+    };
+    p = BoxTrait::new(Player { psp_sy: sy, ready_weapon: weapon, ..cur });
+    if next == 1 {
         set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, 0, depth);
-        return;
+    } else if next == 2 {
+        bring_up_weapon_in(env, ref g, ref rng, ref p, ref mo, ref events, depth);
     }
-    p = BoxTrait::new(Player { psp_sy: sy, ready_weapon: cur.pending_weapon, ..cur });
-    bring_up_weapon_in(env, ref g, ref rng, ref p, ref mo, ref events, depth);
 }
 
 /// `A_Raise`.
@@ -592,13 +595,17 @@ fn a_raise(
     let cur = p.unbox();
     let raised = Fixed { enc: cur.psp_sy.enc - RAISESPEED };
     let top = Fixed { enc: BIAS + WEAPONTOP };
-    if fixed::gt(raised, top) {
-        p = BoxTrait::new(Player { psp_sy: raised, ..cur });
-        return;
+    let moving = fixed::gt(raised, top);
+    let sy = if moving {
+        raised
+    } else {
+        top
+    };
+    p = BoxTrait::new(Player { psp_sy: sy, ..cur });
+    if !moving {
+        let ready = chain(cur.ready_weapon).ready;
+        set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, ready, depth);
     }
-    p = BoxTrait::new(Player { psp_sy: top, ..cur });
-    let ready = chain(cur.ready_weapon).ready;
-    set_psprite_in(env, ref g, ref rng, ref p, ref mo, ref events, PS_WEAPON, ready, depth);
 }
 
 // ---------------------------------------------------------------------------
@@ -709,7 +716,9 @@ fn sub_roll(ref rng: Prng, table: Span<u8>) -> felt252 {
 
 /// `P_BulletSlope`: aim straight ahead, then a degree either side.
 #[inline(always)]
-pub fn bullet_slope(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, mo: @Mobj, me: u32) -> Fixed {
+pub fn bullet_slope(
+    w: World, mobjs: Span<Box<Mobj>>, ref g: ThingGrid, mo: @Mobj, me: u32,
+) -> Fixed {
     bullet_slope_at(w, mobjs, ref g, *mo.angle, me)
 }
 
@@ -721,7 +730,9 @@ pub fn bullet_slope(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, mo: @Mobj, me
 /// is `P_BulletSlope`'s own short-circuit: `if (!linetarget)`. A shot with a
 /// target in front of the player costs one `P_AimLineAttack`; a shot into
 /// empty space costs three (README, "Measured step costs").
-fn bullet_slope_at(w: World, mobjs: Span<Mobj>, ref g: ThingGrid, an: Angle, me: u32) -> Fixed {
+fn bullet_slope_at(
+    w: World, mobjs: Span<Box<Mobj>>, ref g: ThingGrid, an: Angle, me: u32,
+) -> Fixed {
     let aim = aim_line_attack(w, mobjs, ref g, me, an, AIMRANGE);
     if aim.target != NO_MOBJ {
         return aim.slope;
@@ -778,7 +789,7 @@ fn a_melee(
         return;
     }
     let t = match mobjs.get(aim.target) {
-        Option::Some(b) => b.unbox(),
+        Option::Some(b) => b.unbox().as_snapshot().unbox(),
         Option::None => { return; },
     };
     let facing = point_to_angle2(cur.x, cur.y, *t.x, *t.y);

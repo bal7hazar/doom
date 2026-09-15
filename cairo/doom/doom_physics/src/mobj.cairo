@@ -110,8 +110,8 @@ pub const MOBJ_FELTS: u32 = 27;
 ///
 /// Every field is a value below 2^33 (`Fixed`), a `u32`, a `bool` or the
 /// signed `i32` `health`; the record is 27 felts once serialized
-/// ([`push_felts`]). Keeping it small matters: the tic loop copies every mobj
-/// once per tic, at roughly one step per felt.
+/// ([`push_felts`]). The roster stores `Box<Mobj>` pointers and shares an
+/// unchanged record across tics; changing it writes a new 27-felt record.
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub struct Mobj {
     /// `doom_things::tables::KIND_*`, or [`KIND_NONE`] for a removed slot.
@@ -220,18 +220,12 @@ pub fn in_blockmap(m: @Mobj) -> bool {
 
 /// Replace slot `i` of `mobjs` with `m`, rebuilding the array.
 ///
-/// An `Array` has no random write, so this is O(n): **measured ~31 steps per
-/// slot**, i.e. ~6 500 steps on a 210-mobj list. It is the fallback for a
-/// write to a mobj the tic loop has already passed (a missile spawned later
-/// in the list hitting the player at index 0); `doom_game` should batch such
-/// patches and apply them in one rebuild at the end of the tic, and write
-/// forward patches in place as its pass reaches the index. S1 §7 measured
-/// the alternatives (a `Felt252Dict` costs 51 steps per insert/get pair
-/// *plus* its squash, on every access, every tic) and this is the cheaper
-/// shape for a list that is rebuilt once per tic anyway.
-pub fn replace(ref mobjs: Array<Mobj>, i: u32, m: Mobj) {
+/// An `Array` has no random write, so this rebuild copies one box pointer
+/// per slot. It preserves every other actor allocation and the slot order.
+/// Batch several writes through patches to avoid repeating this O(n) pass.
+pub fn replace(ref mobjs: Array<Box<Mobj>>, i: u32, m: Box<Mobj>) {
     let mut old = mobjs.span();
-    let mut out: Array<Mobj> = array![];
+    let mut out: Array<Box<Mobj>> = array![];
     let mut k: u32 = super::maputl::opaque_zero(i);
     while let Option::Some(o) = old.pop_front() {
         if k == i {
@@ -247,7 +241,7 @@ pub fn replace(ref mobjs: Array<Mobj>, i: u32, m: Mobj) {
 /// Append `m` as a new slot, or return [`NO_MOBJ`] when the list is full
 /// (D3's fixed maximum). The caller then links it into the thing grid with
 /// the returned index (`position::link_thing`).
-pub fn push(ref mobjs: Array<Mobj>, m: Mobj) -> u32 {
+pub fn push(ref mobjs: Array<Box<Mobj>>, m: Box<Mobj>) -> u32 {
     let n = mobjs.len();
     if n >= MAX_MOBJS {
         return NO_MOBJ;
@@ -258,12 +252,12 @@ pub fn push(ref mobjs: Array<Mobj>, m: Mobj) -> u32 {
 
 /// The index of the first removed slot, or [`NO_MOBJ`]. `doom_game` reuses
 /// it for a spawn once the list is full (O(n), cold path).
-pub fn first_free(mut mobjs: Span<Mobj>) -> u32 {
+pub fn first_free(mut mobjs: Span<Box<Mobj>>) -> u32 {
     let mut k: u32 = super::maputl::opaque_zero(mobjs.len());
     loop {
         match mobjs.pop_front() {
             Option::Some(m) => {
-                if is_removed(m) {
+                if is_removed(m.as_snapshot().unbox()) {
                     break k;
                 }
                 k = super::maputl::inc(k);

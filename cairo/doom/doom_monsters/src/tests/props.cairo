@@ -53,7 +53,7 @@ fn test_a_monster_never_steps_into_a_wall() {
         );
         set_thing_position(@w.map, ref g, ref tgt, 1);
         mo.move_dir = u32_of(*v.at(b + 4));
-        let mobjs = array![mo, tgt].span();
+        let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
         let mut rng: Prng = from_index(u32_of(*v.at(b + 5)));
         let mut ev: Array<MonsterEvent> = array![];
         let ctx = Ctx { w, players, noise: silence(), tic: 0 };
@@ -97,7 +97,7 @@ fn test_threshold_decrements_and_clears() {
     let mut patches: Array<crate::Patch> = array![];
     let mut k: u32 = 0;
     while k != 10 {
-        let mobjs = array![mo, tgt].span();
+        let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
         let ctx = Ctx { w, players, noise: silence(), tic: k };
         let before = mo.threshold;
         a_chase(ctx, mobjs, ref g, ref rng, ref mo, 0, patches.span(), ref ev);
@@ -107,10 +107,10 @@ fn test_threshold_decrements_and_clears() {
     // A dead target clears it outright.
     let mut rng2: Prng = from_index(1);
     let dead_idx = 1;
-    let mobjs = array![mo, tgt].span();
+    let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
     damage_mobj(w, mobjs, ref rng2, ref tgt, dead_idx, NO_MOBJ, NO_MOBJ, 1000, false);
     assert(tgt.health <= 0, 'target is dead');
-    let mobjs = array![mo, tgt].span();
+    let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
     let ctx = Ctx { w, players, noise: silence(), tic: 11 };
     a_chase(ctx, mobjs, ref g, ref rng, ref mo, 0, patches.span(), ref ev);
     assert(mo.threshold == 0, 'dead target clears threshold');
@@ -200,7 +200,7 @@ fn test_rng_consumption_is_deterministic() {
         set_thing_position(@w.map, ref g, ref tgt, 1);
         set_state(w, ref mo, *MI_SEESTATE.span().at(KIND_POSSESSED));
         mo.target = 1;
-        let mobjs = array![mo, tgt].span();
+        let mobjs = array![BoxTrait::new(mo), BoxTrait::new(tgt)].span();
         let mut rng: Prng = from_index(1);
         let mut ev: Array<MonsterEvent> = array![];
         let patches: Array<crate::Patch> = array![];
@@ -214,4 +214,22 @@ fn test_rng_consumption_is_deterministic() {
         pass += 1;
     }
     assert(a == b, 'same draws both times');
+}
+
+#[test]
+fn test_window_uses_full_product_near_clock_limit() {
+    // Independent integer reference: multiplying before modulo must retain
+    // bits above u32 at t >= 2^29. D14 still permits these tics.
+    let times = array![0x1fffffff_u64, 0x20000000, 0x20000001, 0x3fffffff, 0x40000000];
+    let mut ts = times.span();
+    while let Option::Some(t) = ts.pop_front() {
+        let mut rank: u32 = 0;
+        while rank < 9 {
+            let wide_rank: u64 = rank.into();
+            let start = (8 * *t) % 9;
+            let expected = (wide_rank + 9 - start) % 9 < 8;
+            assert(in_window(rank, (*t).try_into().unwrap(), 9) == expected, 'full clock product');
+            rank += 1;
+        }
+    }
 }

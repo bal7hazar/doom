@@ -1,0 +1,1201 @@
+{
+  "base_commit": "bb9efb34e1879f1c246838716920fcdd7297ff84",
+  "scarb": "2.16.0",
+  "method": "Existing runtime-selected E1M1 benchmark; raw resource slopes (run(40)-run(20))/20. Net costs and four CASM differentials are the unchanged measure.py outputs.",
+  "production_changes": [
+    "Unsigned remainder modulo 4 for look phases becomes & 3.",
+    "Unsigned remainder modulo 8 for two chase octant reductions becomes & 7."
+  ],
+  "public_abi_unchanged": true,
+  "budgets_unchanged": true,
+  "goldens_unchanged": true,
+  "tests": "62 monster tests passed, including two new integer-reference boundary tests.",
+  "baseline": {
+    "benchmark": {
+      "loop_overhead": 8.0,
+      "bytecode_words": 73638,
+      "step_bench_words": 78521,
+      "baseline_words": 53625,
+      "code_words": 20013,
+      "code_words_game": 15024,
+      "code_words_proving": 16672,
+      "code_words_game_proving": 12954,
+      "operations": [
+        {
+          "name": "monsters_ticker, player only (overhead)",
+          "op": 2,
+          "base": 0,
+          "steps": 443.0,
+          "net": 435.0,
+          "range_checks": 5.0,
+          "budget": 530,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 1 dormant monster",
+          "op": 3,
+          "base": 2,
+          "steps": 868.85,
+          "net": 425.85,
+          "range_checks": 10.0,
+          "budget": 439,
+          "task_budget": 60
+        },
+        {
+          "name": "monsters_ticker, 29 dormant monsters",
+          "op": 4,
+          "base": 2,
+          "steps": 13249.95,
+          "net": 12806.95,
+          "range_checks": 360.9,
+          "budget": 13185,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 5 awake monsters",
+          "op": 5,
+          "base": 0,
+          "steps": 12782.45,
+          "net": 12774.45,
+          "range_checks": 703.85,
+          "budget": 13359,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 8 awake monsters (D3's cap)",
+          "op": 16,
+          "base": 0,
+          "steps": 30077.1,
+          "net": 30069.1,
+          "range_checks": 1916.6,
+          "budget": 30711,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 20 awake monsters",
+          "op": 6,
+          "base": 0,
+          "steps": 59588.05,
+          "net": 59580.05,
+          "range_checks": 3758.15,
+          "budget": 61425,
+          "task_budget": null
+        },
+        {
+          "name": "A_Chase, walking step, cached sight",
+          "op": 7,
+          "base": 1,
+          "steps": 8233.0,
+          "net": 3874.0,
+          "range_checks": 154.0,
+          "budget": 3872,
+          "task_budget": 1800
+        },
+        {
+          "name": "P_Move alone (the physics in a chase step)",
+          "op": 17,
+          "base": 1,
+          "steps": 7798.0,
+          "net": 3439.0,
+          "range_checks": 131.0,
+          "budget": 3352,
+          "task_budget": null
+        },
+        {
+          "name": "A_Look, one sight traversal",
+          "op": 8,
+          "base": 1,
+          "steps": 8935.0,
+          "net": 4576.0,
+          "range_checks": 550.0,
+          "budget": 4521,
+          "task_budget": null
+        },
+        {
+          "name": "P_NewChaseDir",
+          "op": 9,
+          "base": 1,
+          "steps": 8263.0,
+          "net": 3904.0,
+          "range_checks": 158.4,
+          "budget": 3805,
+          "task_budget": null
+        },
+        {
+          "name": "P_CheckMissileRange, cached sight",
+          "op": 10,
+          "base": 1,
+          "steps": 5126.5,
+          "net": 767.5,
+          "range_checks": 31.0,
+          "budget": 754,
+          "task_budget": null
+        },
+        {
+          "name": "awake_count over 30 mobjs (the schedule pass)",
+          "op": 11,
+          "base": 0,
+          "steps": 1280.0,
+          "net": 1272.0,
+          "range_checks": 30.0,
+          "budget": 1729,
+          "task_budget": null
+        },
+        {
+          "name": "A_Look woken by a noise (no traversal)",
+          "op": 12,
+          "base": 1,
+          "steps": 5152.0,
+          "net": 793.0,
+          "range_checks": 34.0,
+          "budget": 784,
+          "task_budget": null
+        },
+        {
+          "name": "29 dormant monsters, nobody to look for",
+          "op": 13,
+          "base": 2,
+          "steps": 10240.7,
+          "net": 9797.7,
+          "range_checks": 200.1,
+          "budget": 10183,
+          "task_budget": null
+        },
+        {
+          "name": "rebuilding a 30-mobj list (the floor)",
+          "op": 15,
+          "base": 0,
+          "steps": 2703.0,
+          "net": 2695.0,
+          "range_checks": 150.0,
+          "budget": 2697,
+          "task_budget": null
+        }
+      ]
+    },
+    "raw_resources": {
+      "0": {
+        "20": {
+          "steps": 630,
+          "max memory address": 79099,
+          "memory holes": 36,
+          "range_check_builtin": 6,
+          "output_builtin": 1,
+          "execution": 558,
+          "range_check": 6,
+          "output": 1
+        },
+        "40": {
+          "steps": 790,
+          "max memory address": 79219,
+          "memory holes": 36,
+          "range_check_builtin": 6,
+          "output_builtin": 1,
+          "execution": 678,
+          "range_check": 6,
+          "output": 1
+        }
+      },
+      "2": {
+        "20": {
+          "steps": 11940,
+          "max memory address": 89267,
+          "memory holes": 664,
+          "range_check_builtin": 308,
+          "bitwise_builtin": 42,
+          "output_builtin": 1,
+          "execution": 9910,
+          "range_check": 308,
+          "bitwise": 210,
+          "output": 1
+        },
+        "40": {
+          "steps": 20800,
+          "max memory address": 96867,
+          "memory holes": 1224,
+          "range_check_builtin": 408,
+          "bitwise_builtin": 82,
+          "output_builtin": 1,
+          "execution": 17190,
+          "bitwise": 410,
+          "range_check": 408,
+          "output": 1
+        }
+      },
+      "3": {
+        "20": {
+          "steps": 461492,
+          "max memory address": 550538,
+          "memory holes": 12549,
+          "range_check_builtin": 39565,
+          "bitwise_builtin": 1262,
+          "output_builtin": 1,
+          "execution": 396237,
+          "range_check": 39565,
+          "bitwise": 6310,
+          "output": 1
+        },
+        "40": {
+          "steps": 478869,
+          "max memory address": 566253,
+          "memory holes": 15293,
+          "range_check_builtin": 39865,
+          "bitwise_builtin": 1362,
+          "output_builtin": 1,
+          "execution": 411952,
+          "range_check": 39865,
+          "bitwise": 6810,
+          "output": 1
+        }
+      },
+      "4": {
+        "20": {
+          "steps": 720556,
+          "max memory address": 823210,
+          "memory holes": 83760,
+          "range_check_builtin": 47909,
+          "bitwise_builtin": 2978,
+          "output_builtin": 1,
+          "execution": 658669,
+          "range_check": 47909,
+          "bitwise": 14890,
+          "output": 1
+        },
+        "40": {
+          "steps": 985555,
+          "max memory address": 1109017,
+          "memory holes": 154224,
+          "range_check_builtin": 55227,
+          "bitwise_builtin": 4762,
+          "output_builtin": 1,
+          "execution": 923996,
+          "range_check": 55227,
+          "bitwise": 23810,
+          "output": 1
+        }
+      },
+      "5": {
+        "20": {
+          "steps": 249114,
+          "max memory address": 493678,
+          "memory holes": 182057,
+          "range_check_builtin": 18717,
+          "bitwise_builtin": 870,
+          "output_builtin": 1,
+          "execution": 377265,
+          "range_check": 18717,
+          "bitwise": 4350,
+          "output": 1
+        },
+        "40": {
+          "steps": 504763,
+          "max memory address": 902245,
+          "memory holes": 350117,
+          "range_check_builtin": 32794,
+          "bitwise_builtin": 1984,
+          "output_builtin": 1,
+          "execution": 747944,
+          "range_check": 32794,
+          "bitwise": 9920,
+          "output": 1
+        }
+      },
+      "6": {
+        "20": {
+          "steps": 871707,
+          "max memory address": 1471195,
+          "memory holes": 621264,
+          "range_check_builtin": 60524,
+          "bitwise_builtin": 3382,
+          "output_builtin": 1,
+          "execution": 1306654,
+          "range_check": 60524,
+          "bitwise": 16910,
+          "output": 1
+        },
+        "40": {
+          "steps": 2063468,
+          "max memory address": 3406283,
+          "memory holes": 1351910,
+          "range_check_builtin": 135687,
+          "bitwise_builtin": 9022,
+          "output_builtin": 1,
+          "execution": 2983694,
+          "range_check": 135687,
+          "bitwise": 45110,
+          "output": 1
+        }
+      },
+      "7": {
+        "20": {
+          "steps": 145349,
+          "max memory address": 236530,
+          "memory holes": 22107,
+          "range_check_builtin": 8796,
+          "bitwise_builtin": 300,
+          "output_builtin": 1,
+          "execution": 139061,
+          "range_check": 8796,
+          "bitwise": 1500,
+          "output": 1
+        },
+        "40": {
+          "steps": 310009,
+          "max memory address": 441524,
+          "memory holes": 74977,
+          "range_check_builtin": 17576,
+          "bitwise_builtin": 600,
+          "output_builtin": 1,
+          "execution": 325111,
+          "range_check": 17576,
+          "bitwise": 3000,
+          "output": 1
+        }
+      },
+      "9": {
+        "20": {
+          "steps": 145834,
+          "max memory address": 237212,
+          "memory holes": 22197,
+          "range_check_builtin": 8860,
+          "bitwise_builtin": 260,
+          "output_builtin": 1,
+          "execution": 139743,
+          "range_check": 8860,
+          "bitwise": 1300,
+          "output": 1
+        },
+        "40": {
+          "steps": 311094,
+          "max memory address": 442886,
+          "memory holes": 75067,
+          "range_check_builtin": 17728,
+          "bitwise_builtin": 520,
+          "output_builtin": 1,
+          "execution": 326473,
+          "range_check": 17728,
+          "bitwise": 2600,
+          "output": 1
+        }
+      },
+      "16": {
+        "20": {
+          "steps": 404151,
+          "max memory address": 753680,
+          "memory holes": 314030,
+          "range_check_builtin": 28783,
+          "bitwise_builtin": 1436,
+          "output_builtin": 1,
+          "execution": 632147,
+          "range_check": 28783,
+          "bitwise": 7180,
+          "output": 1
+        },
+        "40": {
+          "steps": 1005693,
+          "max memory address": 1714455,
+          "memory holes": 688111,
+          "range_check_builtin": 67115,
+          "bitwise_builtin": 3957,
+          "output_builtin": 1,
+          "execution": 1484378,
+          "range_check": 67115,
+          "bitwise": 19785,
+          "output": 1
+        }
+      }
+    }
+  },
+  "cadence_only": {
+    "benchmark": {
+      "loop_overhead": 8.0,
+      "bytecode_words": 73625,
+      "step_bench_words": 78508,
+      "baseline_words": 53625,
+      "code_words": 20000,
+      "code_words_game": 15011,
+      "code_words_proving": 16659,
+      "code_words_game_proving": 12941,
+      "operations": [
+        {
+          "name": "monsters_ticker, player only (overhead)",
+          "op": 2,
+          "base": 0,
+          "steps": 438.0,
+          "net": 430.0,
+          "range_checks": 2.0,
+          "budget": 530,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 1 dormant monster",
+          "op": 3,
+          "base": 2,
+          "steps": 859.85,
+          "net": 421.85,
+          "range_checks": 7.0,
+          "budget": 439,
+          "task_budget": 60
+        },
+        {
+          "name": "monsters_ticker, 29 dormant monsters",
+          "op": 4,
+          "base": 2,
+          "steps": 13128.95,
+          "net": 12690.95,
+          "range_checks": 273.9,
+          "budget": 13185,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 5 awake monsters",
+          "op": 5,
+          "base": 0,
+          "steps": 12752.45,
+          "net": 12744.45,
+          "range_checks": 685.85,
+          "budget": 13359,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 8 awake monsters (D3's cap)",
+          "op": 16,
+          "base": 0,
+          "steps": 30032.1,
+          "net": 30024.1,
+          "range_checks": 1889.6,
+          "budget": 30711,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 20 awake monsters",
+          "op": 6,
+          "base": 0,
+          "steps": 59483.05,
+          "net": 59475.05,
+          "range_checks": 3695.15,
+          "budget": 61425,
+          "task_budget": null
+        },
+        {
+          "name": "A_Chase, walking step, cached sight",
+          "op": 7,
+          "base": 1,
+          "steps": 8233.0,
+          "net": 3874.0,
+          "range_checks": 154.0,
+          "budget": 3872,
+          "task_budget": 1800
+        },
+        {
+          "name": "P_Move alone (the physics in a chase step)",
+          "op": 17,
+          "base": 1,
+          "steps": 7798.0,
+          "net": 3439.0,
+          "range_checks": 131.0,
+          "budget": 3352,
+          "task_budget": null
+        },
+        {
+          "name": "A_Look, one sight traversal",
+          "op": 8,
+          "base": 1,
+          "steps": 8935.0,
+          "net": 4576.0,
+          "range_checks": 550.0,
+          "budget": 4521,
+          "task_budget": null
+        },
+        {
+          "name": "P_NewChaseDir",
+          "op": 9,
+          "base": 1,
+          "steps": 8263.0,
+          "net": 3904.0,
+          "range_checks": 158.4,
+          "budget": 3805,
+          "task_budget": null
+        },
+        {
+          "name": "P_CheckMissileRange, cached sight",
+          "op": 10,
+          "base": 1,
+          "steps": 5126.5,
+          "net": 767.5,
+          "range_checks": 31.0,
+          "budget": 754,
+          "task_budget": null
+        },
+        {
+          "name": "awake_count over 30 mobjs (the schedule pass)",
+          "op": 11,
+          "base": 0,
+          "steps": 1280.0,
+          "net": 1272.0,
+          "range_checks": 30.0,
+          "budget": 1729,
+          "task_budget": null
+        },
+        {
+          "name": "A_Look woken by a noise (no traversal)",
+          "op": 12,
+          "base": 1,
+          "steps": 5152.0,
+          "net": 793.0,
+          "range_checks": 34.0,
+          "budget": 784,
+          "task_budget": null
+        },
+        {
+          "name": "29 dormant monsters, nobody to look for",
+          "op": 13,
+          "base": 2,
+          "steps": 10119.7,
+          "net": 9681.7,
+          "range_checks": 113.1,
+          "budget": 10183,
+          "task_budget": null
+        },
+        {
+          "name": "rebuilding a 30-mobj list (the floor)",
+          "op": 15,
+          "base": 0,
+          "steps": 2703.0,
+          "net": 2695.0,
+          "range_checks": 150.0,
+          "budget": 2697,
+          "task_budget": null
+        }
+      ]
+    },
+    "raw_resources": {
+      "0": {
+        "20": {
+          "steps": 630,
+          "max memory address": 79086,
+          "memory holes": 36,
+          "range_check_builtin": 6,
+          "output_builtin": 1,
+          "execution": 558,
+          "range_check": 6,
+          "output": 1
+        },
+        "40": {
+          "steps": 790,
+          "max memory address": 79206,
+          "memory holes": 36,
+          "range_check_builtin": 6,
+          "output_builtin": 1,
+          "execution": 678,
+          "range_check": 6,
+          "output": 1
+        }
+      },
+      "2": {
+        "20": {
+          "steps": 11840,
+          "max memory address": 88898,
+          "memory holes": 664,
+          "range_check_builtin": 248,
+          "bitwise_builtin": 62,
+          "output_builtin": 1,
+          "execution": 9810,
+          "bitwise": 310,
+          "range_check": 248,
+          "output": 1
+        },
+        "40": {
+          "steps": 20600,
+          "max memory address": 96654,
+          "memory holes": 1224,
+          "range_check_builtin": 288,
+          "bitwise_builtin": 122,
+          "output_builtin": 1,
+          "execution": 16990,
+          "bitwise": 610,
+          "range_check": 288,
+          "output": 1
+        }
+      },
+      "3": {
+        "20": {
+          "steps": 461312,
+          "max memory address": 550345,
+          "memory holes": 12549,
+          "range_check_builtin": 39445,
+          "bitwise_builtin": 1302,
+          "output_builtin": 1,
+          "execution": 396057,
+          "range_check": 39445,
+          "bitwise": 6510,
+          "output": 1
+        },
+        "40": {
+          "steps": 478509,
+          "max memory address": 565880,
+          "memory holes": 15293,
+          "range_check_builtin": 39625,
+          "bitwise_builtin": 1442,
+          "output_builtin": 1,
+          "execution": 411592,
+          "range_check": 39625,
+          "bitwise": 7210,
+          "output": 1
+        }
+      },
+      "4": {
+        "20": {
+          "steps": 718136,
+          "max memory address": 820777,
+          "memory holes": 83760,
+          "range_check_builtin": 46109,
+          "bitwise_builtin": 3578,
+          "output_builtin": 1,
+          "execution": 656249,
+          "range_check": 46109,
+          "bitwise": 17890,
+          "output": 1
+        },
+        "40": {
+          "steps": 980715,
+          "max memory address": 1104164,
+          "memory holes": 154224,
+          "range_check_builtin": 51627,
+          "bitwise_builtin": 5962,
+          "output_builtin": 1,
+          "execution": 919156,
+          "range_check": 51627,
+          "bitwise": 29810,
+          "output": 1
+        }
+      },
+      "5": {
+        "20": {
+          "steps": 248514,
+          "max memory address": 493165,
+          "memory holes": 182157,
+          "range_check_builtin": 18357,
+          "bitwise_builtin": 990,
+          "output_builtin": 1,
+          "execution": 376765,
+          "range_check": 18357,
+          "bitwise": 4950,
+          "output": 1
+        },
+        "40": {
+          "steps": 503563,
+          "max memory address": 878704,
+          "memory holes": 350317,
+          "range_check_builtin": 32074,
+          "bitwise_builtin": 2224,
+          "output_builtin": 1,
+          "execution": 746944,
+          "range_check": 32074,
+          "bitwise": 11120,
+          "output": 1
+        }
+      },
+      "6": {
+        "20": {
+          "steps": 869607,
+          "max memory address": 1469482,
+          "memory holes": 621664,
+          "range_check_builtin": 59264,
+          "bitwise_builtin": 3802,
+          "output_builtin": 1,
+          "execution": 1304954,
+          "range_check": 59264,
+          "bitwise": 19010,
+          "output": 1
+        },
+        "40": {
+          "steps": 2059268,
+          "max memory address": 3402870,
+          "memory holes": 1352710,
+          "range_check_builtin": 133167,
+          "bitwise_builtin": 9862,
+          "output_builtin": 1,
+          "execution": 2980294,
+          "range_check": 133167,
+          "bitwise": 49310,
+          "output": 1
+        }
+      },
+      "7": {
+        "20": {
+          "steps": 145349,
+          "max memory address": 236517,
+          "memory holes": 22107,
+          "range_check_builtin": 8796,
+          "bitwise_builtin": 300,
+          "output_builtin": 1,
+          "execution": 139061,
+          "range_check": 8796,
+          "bitwise": 1500,
+          "output": 1
+        },
+        "40": {
+          "steps": 310009,
+          "max memory address": 441511,
+          "memory holes": 74977,
+          "range_check_builtin": 17576,
+          "bitwise_builtin": 600,
+          "output_builtin": 1,
+          "execution": 325111,
+          "range_check": 17576,
+          "bitwise": 3000,
+          "output": 1
+        }
+      },
+      "9": {
+        "20": {
+          "steps": 145834,
+          "max memory address": 237199,
+          "memory holes": 22197,
+          "range_check_builtin": 8860,
+          "bitwise_builtin": 260,
+          "output_builtin": 1,
+          "execution": 139743,
+          "range_check": 8860,
+          "bitwise": 1300,
+          "output": 1
+        },
+        "40": {
+          "steps": 311094,
+          "max memory address": 442873,
+          "memory holes": 75067,
+          "range_check_builtin": 17728,
+          "bitwise_builtin": 520,
+          "output_builtin": 1,
+          "execution": 326473,
+          "range_check": 17728,
+          "bitwise": 2600,
+          "output": 1
+        }
+      },
+      "16": {
+        "20": {
+          "steps": 403251,
+          "max memory address": 752927,
+          "memory holes": 314190,
+          "range_check_builtin": 28243,
+          "bitwise_builtin": 1616,
+          "output_builtin": 1,
+          "execution": 631407,
+          "range_check": 28243,
+          "bitwise": 8080,
+          "output": 1
+        },
+        "40": {
+          "steps": 1003893,
+          "max memory address": 1733442,
+          "memory holes": 688431,
+          "range_check_builtin": 66035,
+          "bitwise_builtin": 4317,
+          "output_builtin": 1,
+          "execution": 1482898,
+          "range_check": 66035,
+          "bitwise": 21585,
+          "output": 1
+        }
+      }
+    }
+  },
+  "final": {
+    "benchmark": {
+      "loop_overhead": 8.0,
+      "bytecode_words": 73619,
+      "step_bench_words": 78502,
+      "baseline_words": 53625,
+      "code_words": 19994,
+      "code_words_game": 15005,
+      "code_words_proving": 16653,
+      "code_words_game_proving": 12935,
+      "operations": [
+        {
+          "name": "monsters_ticker, player only (overhead)",
+          "op": 2,
+          "base": 0,
+          "steps": 438.0,
+          "net": 430.0,
+          "range_checks": 2.0,
+          "budget": 530,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 1 dormant monster",
+          "op": 3,
+          "base": 2,
+          "steps": 859.85,
+          "net": 421.85,
+          "range_checks": 7.0,
+          "budget": 439,
+          "task_budget": 60
+        },
+        {
+          "name": "monsters_ticker, 29 dormant monsters",
+          "op": 4,
+          "base": 2,
+          "steps": 13128.95,
+          "net": 12690.95,
+          "range_checks": 273.9,
+          "budget": 13185,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 5 awake monsters",
+          "op": 5,
+          "base": 0,
+          "steps": 12747.7,
+          "net": 12739.7,
+          "range_checks": 680.15,
+          "budget": 13359,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 8 awake monsters (D3's cap)",
+          "op": 16,
+          "base": 0,
+          "steps": 30025.6,
+          "net": 30017.6,
+          "range_checks": 1881.8,
+          "budget": 30711,
+          "task_budget": null
+        },
+        {
+          "name": "monsters_ticker, 20 awake monsters",
+          "op": 6,
+          "base": 0,
+          "steps": 59475.3,
+          "net": 59467.3,
+          "range_checks": 3685.85,
+          "budget": 61425,
+          "task_budget": null
+        },
+        {
+          "name": "A_Chase, walking step, cached sight",
+          "op": 7,
+          "base": 1,
+          "steps": 8228.0,
+          "net": 3869.0,
+          "range_checks": 148.0,
+          "budget": 3872,
+          "task_budget": 1800
+        },
+        {
+          "name": "P_Move alone (the physics in a chase step)",
+          "op": 17,
+          "base": 1,
+          "steps": 7798.0,
+          "net": 3439.0,
+          "range_checks": 131.0,
+          "budget": 3352,
+          "task_budget": null
+        },
+        {
+          "name": "A_Look, one sight traversal",
+          "op": 8,
+          "base": 1,
+          "steps": 8935.0,
+          "net": 4576.0,
+          "range_checks": 550.0,
+          "budget": 4521,
+          "task_budget": null
+        },
+        {
+          "name": "P_NewChaseDir",
+          "op": 9,
+          "base": 1,
+          "steps": 8263.0,
+          "net": 3904.0,
+          "range_checks": 158.4,
+          "budget": 3805,
+          "task_budget": null
+        },
+        {
+          "name": "P_CheckMissileRange, cached sight",
+          "op": 10,
+          "base": 1,
+          "steps": 5126.5,
+          "net": 767.5,
+          "range_checks": 31.0,
+          "budget": 754,
+          "task_budget": null
+        },
+        {
+          "name": "awake_count over 30 mobjs (the schedule pass)",
+          "op": 11,
+          "base": 0,
+          "steps": 1280.0,
+          "net": 1272.0,
+          "range_checks": 30.0,
+          "budget": 1729,
+          "task_budget": null
+        },
+        {
+          "name": "A_Look woken by a noise (no traversal)",
+          "op": 12,
+          "base": 1,
+          "steps": 5152.0,
+          "net": 793.0,
+          "range_checks": 34.0,
+          "budget": 784,
+          "task_budget": null
+        },
+        {
+          "name": "29 dormant monsters, nobody to look for",
+          "op": 13,
+          "base": 2,
+          "steps": 10119.7,
+          "net": 9681.7,
+          "range_checks": 113.1,
+          "budget": 10183,
+          "task_budget": null
+        },
+        {
+          "name": "rebuilding a 30-mobj list (the floor)",
+          "op": 15,
+          "base": 0,
+          "steps": 2703.0,
+          "net": 2695.0,
+          "range_checks": 150.0,
+          "budget": 2697,
+          "task_budget": null
+        }
+      ]
+    },
+    "raw_resources": {
+      "0": {
+        "20": {
+          "steps": 630,
+          "max memory address": 79080,
+          "memory holes": 36,
+          "range_check_builtin": 6,
+          "output_builtin": 1,
+          "execution": 558,
+          "range_check": 6,
+          "output": 1
+        },
+        "40": {
+          "steps": 790,
+          "max memory address": 79200,
+          "memory holes": 36,
+          "range_check_builtin": 6,
+          "output_builtin": 1,
+          "execution": 678,
+          "range_check": 6,
+          "output": 1
+        }
+      },
+      "2": {
+        "20": {
+          "steps": 11840,
+          "max memory address": 88892,
+          "memory holes": 664,
+          "range_check_builtin": 248,
+          "bitwise_builtin": 62,
+          "output_builtin": 1,
+          "execution": 9810,
+          "bitwise": 310,
+          "range_check": 248,
+          "output": 1
+        },
+        "40": {
+          "steps": 20600,
+          "max memory address": 96648,
+          "memory holes": 1224,
+          "range_check_builtin": 288,
+          "bitwise_builtin": 122,
+          "output_builtin": 1,
+          "execution": 16990,
+          "bitwise": 610,
+          "range_check": 288,
+          "output": 1
+        }
+      },
+      "3": {
+        "20": {
+          "steps": 461312,
+          "max memory address": 550339,
+          "memory holes": 12549,
+          "range_check_builtin": 39445,
+          "bitwise_builtin": 1302,
+          "output_builtin": 1,
+          "execution": 396057,
+          "range_check": 39445,
+          "bitwise": 6510,
+          "output": 1
+        },
+        "40": {
+          "steps": 478509,
+          "max memory address": 565874,
+          "memory holes": 15293,
+          "range_check_builtin": 39625,
+          "bitwise_builtin": 1442,
+          "output_builtin": 1,
+          "execution": 411592,
+          "range_check": 39625,
+          "bitwise": 7210,
+          "output": 1
+        }
+      },
+      "4": {
+        "20": {
+          "steps": 718136,
+          "max memory address": 820771,
+          "memory holes": 83760,
+          "range_check_builtin": 46109,
+          "bitwise_builtin": 3578,
+          "output_builtin": 1,
+          "execution": 656249,
+          "range_check": 46109,
+          "bitwise": 17890,
+          "output": 1
+        },
+        "40": {
+          "steps": 980715,
+          "max memory address": 1104158,
+          "memory holes": 154224,
+          "range_check_builtin": 51627,
+          "bitwise_builtin": 5962,
+          "output_builtin": 1,
+          "execution": 919156,
+          "range_check": 51627,
+          "bitwise": 29810,
+          "output": 1
+        }
+      },
+      "5": {
+        "20": {
+          "steps": 248479,
+          "max memory address": 493124,
+          "memory holes": 182157,
+          "range_check_builtin": 18315,
+          "bitwise_builtin": 1004,
+          "output_builtin": 1,
+          "execution": 376730,
+          "range_check": 18315,
+          "bitwise": 5020,
+          "output": 1
+        },
+        "40": {
+          "steps": 503433,
+          "max memory address": 878568,
+          "memory holes": 350317,
+          "range_check_builtin": 31918,
+          "bitwise_builtin": 2276,
+          "output_builtin": 1,
+          "execution": 746814,
+          "range_check": 31918,
+          "bitwise": 11380,
+          "output": 1
+        }
+      },
+      "6": {
+        "20": {
+          "steps": 869462,
+          "max memory address": 1469331,
+          "memory holes": 621664,
+          "range_check_builtin": 59090,
+          "bitwise_builtin": 3860,
+          "output_builtin": 1,
+          "execution": 1304809,
+          "range_check": 59090,
+          "bitwise": 19300,
+          "output": 1
+        },
+        "40": {
+          "steps": 2058968,
+          "max memory address": 3402564,
+          "memory holes": 1352710,
+          "range_check_builtin": 132807,
+          "bitwise_builtin": 9982,
+          "output_builtin": 1,
+          "execution": 2979994,
+          "range_check": 132807,
+          "bitwise": 49910,
+          "output": 1
+        }
+      },
+      "7": {
+        "20": {
+          "steps": 145249,
+          "max memory address": 236411,
+          "memory holes": 22107,
+          "range_check_builtin": 8676,
+          "bitwise_builtin": 340,
+          "output_builtin": 1,
+          "execution": 138961,
+          "range_check": 8676,
+          "bitwise": 1700,
+          "output": 1
+        },
+        "40": {
+          "steps": 309809,
+          "max memory address": 441305,
+          "memory holes": 74977,
+          "range_check_builtin": 17336,
+          "bitwise_builtin": 680,
+          "output_builtin": 1,
+          "execution": 324911,
+          "range_check": 17336,
+          "bitwise": 3400,
+          "output": 1
+        }
+      },
+      "9": {
+        "20": {
+          "steps": 145834,
+          "max memory address": 237193,
+          "memory holes": 22197,
+          "range_check_builtin": 8860,
+          "bitwise_builtin": 260,
+          "output_builtin": 1,
+          "execution": 139743,
+          "range_check": 8860,
+          "bitwise": 1300,
+          "output": 1
+        },
+        "40": {
+          "steps": 311094,
+          "max memory address": 442867,
+          "memory holes": 75067,
+          "range_check_builtin": 17728,
+          "bitwise_builtin": 520,
+          "output_builtin": 1,
+          "execution": 326473,
+          "range_check": 17728,
+          "bitwise": 2600,
+          "output": 1
+        }
+      },
+      "16": {
+        "20": {
+          "steps": 403196,
+          "max memory address": 752866,
+          "memory holes": 314190,
+          "range_check_builtin": 28177,
+          "bitwise_builtin": 1638,
+          "output_builtin": 1,
+          "execution": 631352,
+          "range_check": 28177,
+          "bitwise": 8190,
+          "output": 1
+        },
+        "40": {
+          "steps": 1003708,
+          "max memory address": 1733251,
+          "memory holes": 688431,
+          "range_check_builtin": 65813,
+          "bitwise_builtin": 4391,
+          "output_builtin": 1,
+          "execution": 1482713,
+          "range_check": 65813,
+          "bitwise": 21955,
+          "output": 1
+        }
+      }
+    }
+  }
+}
