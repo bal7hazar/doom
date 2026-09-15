@@ -4,8 +4,8 @@
  * `ProofPipeline` knows about segments and proofs; this knows about a player: it
  * opens the database, attaches a run, records one `ticcmd` word per tic, owns the
  * proof-queue panel and wires the end-of-game buttons (prove, verify locally,
- * keep offline, export/import, reset, and the hook P4.3 will hang the on-chain
- * screen off).
+ * keep offline, export/import, reset, and submit — the wrapper upload followed
+ * by the cost screen and the signed on-chain sequence of P4.3, `onchain.ts`).
  *
  * It is created **lazily**, on the first press of the proof-queue key: a clone
  * without `public/prover/` (the artifacts are 45 MB each and gitignored) must
@@ -14,11 +14,17 @@
  * journal created at tic zero; create/start/finish synchronize it without losing
  * inputs recorded before the panel was opened.
  */
+import type { WrapperBatch } from "../chain/batch.js";
+import type { PriceSource } from "../chain/prices.js";
+import type { RpcClient } from "../chain/rpc.js";
+import type { Signer } from "../chain/signer.js";
 import { exportFileName, exportRunBlob, importRun } from "../store/hellproofFile.js";
 import { readStorageStatus, requestPersistence } from "../store/quota.js";
 import { RunStore } from "../store/runStore.js";
+import { connectController } from "../ui/controllerConnect.js";
 import { ProofQueuePanel } from "../ui/proofQueue.js";
 import { WrapperSubmitter } from "../wrapper/submitter.js";
+import { OnChainSubmitter, type OnChainConfig, type OnChainConfigResult } from "./onchain.js";
 import { ProofPipeline } from "./pipeline.js";
 import { ProverClient } from "./proverClient.js";
 import { createStubProgram, type SegmentProgram } from "./program.js";
@@ -44,8 +50,24 @@ export interface ProveSessionOptions {
   /** Base URL of a wrapper service; without one the submit button explains itself. */
   wrapperUrl?: string | null;
   apiKey?: string;
+  /**
+   * The on-chain leg (P4.3). Without it a folded batch stops at its id; with a configuration
+   * that is not complete the submit button says which variable is missing.
+   */
+  onchain?: OnChainSetup | null;
   signal?: AbortSignal;
   onImport?: (file: File) => Promise<void>;
+}
+
+/** What the game page supplies for the on-chain leg; the injectable parts are for tests. */
+export interface OnChainSetup {
+  config: OnChainConfigResult;
+  /** Defaults to the Cartridge Controller with the submission session policies. */
+  connectSigner?: (config: OnChainConfig) => Promise<Signer>;
+  /** Defaults to `GET /v1/batches/{id}?include=proof` on the configured wrapper. */
+  fetchBatch?: (batchId: string) => Promise<WrapperBatch>;
+  rpc?: RpcClient;
+  priceSource?: PriceSource;
 }
 
 /**
@@ -261,36 +283,101 @@ export class ProveSession {
   }
 
   /**
-   * Uploads to the wrapper. The transactions that follow — the cost screen and
-   * `DoomRuns.submit_run` — are **P4.3**; this stops at the batch id.
+   * The whole submission: upload to the wrapper, wait for the fold, then the on-chain leg
+   * (P4.3) — the cost screen and the signed sequence. Pressing the button again after a
+   * "wait" (C6) skips the upload: the batch id is on the run record.
    */
   async submit(): Promise<void> {
-    if (!this.options.wrapperUrl) {
-      this.panel.log("no wrapper configured (VITE_WRAPPER_URL): keeping the run local");
+    this.run = (await this.store.getRun(this.run.id)) ?? this.run;
+    if (this.run.keepOffline) {
+      this.panel.log("run kept offline (C6): untick \"Keep offline\" to submit it");
       return;
     }
-    const submitter = new WrapperSubmitter({
-      baseUrl: this.options.wrapperUrl,
-      store: this.store,
-      ...(this.options.apiKey ? { apiKey: this.options.apiKey } : {}),
-      onProgress: (p) => this.panel.log(`upload ${p.stage}: ${p.uploaded}/${p.total} (${p.mode})`),
-    });
+    const submitter = this.options.wrapperUrl
+      ? new WrapperSubmitter({
+          baseUrl: this.options.wrapperUrl,
+          store: this.store,
+          ...(this.options.apiKey ? { apiKey: this.options.apiKey } : {}),
+          onProgress: (p) => this.panel.log(`upload ${p.stage}: ${p.uploaded}/${p.total} (${p.mode})`),
+        })
+      : null;
+    let batchId = this.run.submission.batchId;
     try {
-      const response = await submitter.submit(this.run.id, { waitVerifyMs: 5000 });
-      this.panel.log(`wrapper accepted run ${response.run_id} (${response.status})`);
-      const status = await submitter.waitForRun(this.run.id, {
-        onStatus: (r) => this.panel.log(`wrapper: ${r.status} — ${r.progress.leaves_done}/${r.progress.segments} leaves`),
-      });
-      if (status.batch_id) {
-        const batch = await submitter.fetchBatchSummary(this.run.id, status.batch_id);
-        this.panel.log(
-          `batch ${status.batch_id} ${batch.status}, root proof ${batch.rootProofFeltCount ?? "?"} felts — the on-chain step is P4.3`,
-        );
+      if (!batchId) {
+        if (!submitter) {
+          this.panel.log("no wrapper configured (VITE_WRAPPER_URL): keeping the run local");
+          return;
+        }
+        const response = await submitter.submit(this.run.id, { waitVerifyMs: 5000 });
+        this.panel.log(`wrapper accepted run ${response.run_id} (${response.status})`);
+        const status = await submitter.waitForRun(this.run.id, {
+          onStatus: (r) => this.panel.log(`wrapper: ${r.status} — ${r.progress.leaves_done}/${r.progress.segments} leaves`),
+        });
+        if (!status.batch_id) {
+          this.panel.log(`wrapper: run ${status.run_id} is ${status.status} with no batch${status.error ? ` — ${status.error}` : ""}`);
+          return;
+        }
+        batchId = status.batch_id;
       }
+      if (submitter) {
+        const batch = await submitter.fetchBatchSummary(this.run.id, batchId);
+        if (batch.status !== "done") {
+          this.panel.log(`batch ${batchId} is ${batch.status}: the root proof is not ready yet — press Submit again later`);
+          return;
+        }
+        this.panel.log(`batch ${batchId} done, root proof ${batch.rootProofFeltCount ?? "?"} felts`);
+      }
+      await this.submitOnChain(batchId, submitter);
     } catch (error) {
       this.panel.log(`submission failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+
+  /** The cost screen and, on "submit", the signed sequence (P4.3, C5/C6). */
+  private async submitOnChain(batchId: string, submitter: WrapperSubmitter | null): Promise<void> {
+    const setup = this.options.onchain;
+    if (!setup) {
+      this.panel.log(`batch ${batchId} is ready but this page has no on-chain submission: export the run or use infra/submit`);
+      return;
+    }
+    if (!setup.config.ok) {
+      this.panel.log(setup.config.message);
+      return;
+    }
+    const config = setup.config.config;
+    const fetchBatch = setup.fetchBatch ?? (submitter ? (id: string) => submitter.fetchBatchProof(this.run.id, id) : null);
+    if (!fetchBatch) {
+      this.panel.log("no wrapper configured (VITE_WRAPPER_URL): the root proof cannot be fetched");
+      return;
+    }
+    const onchain = new OnChainSubmitter({
+      config,
+      store: this.store,
+      host: this.options.host,
+      log: (message) => this.panel.log(message),
+      fetchBatch,
+      connectSigner: setup.connectSigner ?? connectSignerWithController,
+      onKeepOffline: () => this.setKeepOffline(true),
+      ...(setup.rpc ? { rpc: setup.rpc } : {}),
+      ...(setup.priceSource ? { priceSource: setup.priceSource } : {}),
+    });
+    const outcome = await onchain.open(this.run, batchId);
+    this.run = (await this.store.getRun(this.run.id)) ?? this.run;
+    if (outcome.error) return;
+    if (outcome.choice === "submit") this.panel.log(`run ${this.run.id} is on chain${outcome.fact ? ` (fact ${outcome.fact.slice(0, 14)}…)` : ""}`);
+  }
+}
+
+/** The browser's signer: a Cartridge Controller session over exactly the submission policies. */
+async function connectSignerWithController(config: OnChainConfig): Promise<Signer> {
+  const { signer } = await connectController({
+    router: config.router,
+    doomRuns: config.doomRuns,
+    chains: [{ rpcUrl: config.rpcUrl }],
+    ...(config.chainId ? { defaultChainId: config.chainId } : {}),
+    sponsored: config.sponsored,
+  });
+  return signer;
 }
 
 function format(bytes: number | null | undefined): string {

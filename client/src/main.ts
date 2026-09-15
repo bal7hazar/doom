@@ -192,10 +192,14 @@ async function main(): Promise<void> {
     provePending = true;
     try {
       const { ProveSession, NEUTRAL_TICCMD_WORD } = await import("./prove/session.js");
+      const { readOnChainConfig } = await import("./prove/onchain.js");
       neutralWord = NEUTRAL_TICCMD_WORD;
+      const params = new URLSearchParams(location.search);
       prove = await ProveSession.create({
         host: document.getElementById("stage") as HTMLElement,
-        wrapperUrl: import.meta.env?.VITE_WRAPPER_URL ?? null,
+        wrapperUrl: params.get("wrapper") ?? import.meta.env?.VITE_WRAPPER_URL ?? null,
+        // P4.3: the cost screen and the signed sequence. Read now, complained about on "Submit".
+        onchain: { config: readOnChainConfig(import.meta.env, location.search) },
       });
       prove.element.classList.add("proof-queue-overlay");
     } catch (error) {

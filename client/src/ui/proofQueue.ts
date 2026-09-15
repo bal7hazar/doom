@@ -7,8 +7,9 @@
  * - **the queue** — which segment is where, how long it took, how much memory it
  *   peaked at, and whether it had to be retried single-threaded (R1-A8);
  * - **the choice** — prove now, verify locally, keep the run offline, or submit
- *   it. The on-chain submission screen itself is **P4.3**; this leaves the hook
- *   ({@link EndGameActions.onSubmit}) and says what it will cost in words.
+ *   it. The on-chain cost screen (P4.3) is `costScreen.ts`, mounted by
+ *   `prove/onchain.ts` once the wrapper has folded the batch; this only offers
+ *   the hook ({@link EndGameActions.onSubmit}) and says what it will cost in words.
  *
  * Plain DOM, like the rest of `src/ui/`: no framework, and the panel is a
  * `<section>` the caller places wherever it wants.
@@ -24,7 +25,7 @@ export interface EndGameActions {
   onVerify?: () => void;
   /** C6: keep the run on this machine; no upload until the flag is cleared. */
   onKeepOffline?: (keepOffline: boolean) => void;
-  /** Upload to the wrapper. The on-chain step that follows is P4.3. */
+  /** Upload to the wrapper, then the cost screen and the on-chain sequence (P4.3). */
   onSubmit?: () => void;
   /** Write the run out as a `.hellproof` file. */
   onExport?: () => void;
@@ -94,7 +95,7 @@ export class ProofQueuePanel {
       <div class="proof-queue-actions">
         <button data-act="prove">Prove</button>
         <button data-act="verify">Verify locally</button>
-        <button data-act="submit">Submit to wrapper…</button>
+        <button data-act="submit">Submit…</button>
         <button data-act="export">Export .hellproof</button>
         <button data-act="import">Import…</button>
         <button data-act="reset" class="danger">Reset run</button>
