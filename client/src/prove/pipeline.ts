@@ -403,6 +403,11 @@ export class ProofPipeline {
     if (!this.flushing && candidate < wanted) return false;
 
     const prover = await this.ensureProver();
+    // Same guard as proveSegment: a hard stop drops the prover, and nothing measured
+    // by a dropped prover may plan a boundary or persist an admission failure.
+    const checkActive = () => {
+      if (this.hardStopping || this.prover !== prover || prover.isDead) throw new Error("planning cancelled by hard stop");
+    };
     const index = this.segments.length;
     const previous = this.segments[index - 1];
     const hIn = previous?.output ? previous.output.hOut : normalizeFelt(run.genesis);
@@ -413,14 +418,19 @@ export class ProofPipeline {
     let probes = 0;
     for (;;) {
       probes++;
+      checkActive();
       const words = this.journal.slice(ticStart, ticStart + candidate);
       const request = { hIn, ticStart, ticCount: candidate, words, index };
       const args = this.program.prepareArgs ? await this.program.prepareArgs(request) : this.program.encodeArgs(request);
+      checkActive();
       this.emitProgress(index, "executing", startedAt);
       const executed = await prover.execute(executable, args);
+      checkActive();
       this.program.validateOutput?.(args, executed.stats.output_preimage);
       await this.yieldToGame();
+      checkActive();
       const summary = await prover.resources(executed.input);
+      checkActive();
       const verdict = this.planner.judge(candidate, summary, this.threads);
 
       if (verdict.verdict === "accept") {

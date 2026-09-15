@@ -555,6 +555,34 @@ it.each(["reject", "late success"])("hard stop during threaded prove prevents re
 });
 
 
+it.each(["reject", "late success"])("hard stop during planning execute plans nothing and keeps the journal (%s)", async outcome => {
+  let notify!: () => void, release!: () => void, resources = 0;
+  const started = new Promise<void>(resolve => { notify = resolve; });
+  const { pipeline } = makePipeline({}, { createProver: () => {
+    const p = new FakeProver({ seen: new Set() }), execute = p.execute.bind(p), summary = p.resources.bind(p), terminate = p.terminate.bind(p);
+    p.execute = (executable, args) => {
+      notify();
+      return new Promise((resolve, reject) => {
+        release = () => outcome === "reject" ? reject(new Error("prover worker terminated by hard stop")) : void execute(executable, args).then(resolve, reject);
+      });
+    };
+    p.resources = input => { resources++; return summary(input); };
+    p.terminate = () => { terminate(); release?.(); }; return p;
+  } });
+  const run = await pipeline.attach(); await pipeline.appendTics([7]);
+  const proving = pipeline.proveAll(); await started;
+  const stopping = pipeline.stop(true);
+  await expect(Promise.all([proving, stopping])).resolves.toBeDefined();
+  expect(FakeProver.instances).toBe(1); expect(FakeProver.terminations).toBe(1);
+  expect(FakeProver.executes).toBe(outcome === "reject" ? 0 : 1); expect(resources).toBe(0); expect(FakeProver.proves).toBe(0);
+  expect(pipeline.segmentRecords).toHaveLength(0); expect(await store.listSegments(run.id)).toHaveLength(0);
+  expect(pipeline.state.running).toBe(false); expect(pipeline.state.error).toMatch(/hard stop/);
+  const persisted = (await store.getRun(run.id))!;
+  expect(persisted.ticsPlanned).toBe(0); expect(persisted.segments ?? 0).toBe(0); expect(persisted.admissionFailure).toBeUndefined();
+  expect(await store.getInputs(run.id)).toMatchObject({ ticCount: 1, tail: [7] });
+});
+
+
 it("soft stop finishes and persists the segment already in flight", async () => {
   let notify!: () => void, release!: () => void;
   const started = new Promise<void>(resolve => { notify = resolve; });
