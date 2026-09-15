@@ -5,6 +5,7 @@
  * working with nothing but an RPC URL (no indexer deployed). `app.ts` picks one from the page's
  * query string; `render.ts` never knows which.
  */
+import { COMMIT_STATUS, decodeCommitment, readBlockNumber, type Commitment } from "../chain/commit.js";
 import { RpcClient } from "../chain/rpc.js";
 import { decodeBoardRows, decodeFeltArray, decodeRun, decodeU32, leaderboardCalldata, toHex } from "./rpcCodec.js";
 import type {
@@ -12,10 +13,24 @@ import type {
   BoardPage,
   ChainStats,
   LeaderboardSource,
+  PlayerCommitment,
   PlayerRunSummary,
   PlayerStats,
   RunDetail,
 } from "./types.js";
+
+/** A pending commitment as the page shows it; `head` decides `PENDING` vs `EXPIRED`. */
+function pendingCommitment(c: { commitmentId: string; versionId: number; levelId: number; tics: number; bounty: string; expiresAt: number }, head: number | null): PlayerCommitment {
+  return {
+    commitmentId: c.commitmentId,
+    versionId: c.versionId,
+    levelId: c.levelId,
+    tics: c.tics,
+    bounty: c.bounty,
+    expiresAt: c.expiresAt,
+    status: head !== null && head >= c.expiresAt ? "EXPIRED" : "PENDING",
+  };
+}
 
 // --- indexer -----------------------------------------------------------------
 
@@ -102,7 +117,22 @@ export class IndexerSource implements LeaderboardSource {
         status: string;
         block_number: number;
       }[];
+      pending_commitments?: {
+        commitment_id: string;
+        version_id: number;
+        level_id: number;
+        tics: number;
+        bounty: string;
+        expires_at: number;
+        n_chunks: number;
+        log_chunks: number;
+        block_number: number;
+        tx_hash: string;
+      }[];
     }>(`/players/${address}?offset=${offset}&limit=${limit}`);
+    // The indexer reports `expires_at`; whether it is past is judged against the last block it
+    // indexed (`/stats`), the closest thing to a chain head this source has.
+    const head = body.pending_commitments?.length ? ((await this.stats())?.indexedBlock ?? null) : null;
     return {
       player: body.player,
       runCount: body.run_count,
@@ -120,6 +150,13 @@ export class IndexerSource implements LeaderboardSource {
           blockNumber: r.block_number,
         }),
       ),
+      pendingCommitments: (body.pending_commitments ?? []).map((c) => ({
+        ...pendingCommitment({ commitmentId: c.commitment_id, versionId: c.version_id, levelId: c.level_id, tics: c.tics, bounty: c.bounty, expiresAt: c.expires_at }, head),
+        logChunks: c.log_chunks,
+        nChunks: c.n_chunks,
+        blockNumber: c.block_number,
+        txHash: c.tx_hash,
+      })),
     };
   }
 
@@ -153,6 +190,9 @@ export class IndexerSource implements LeaderboardSource {
 
 const ZERO = "0x0";
 
+/** How far down the append-only commitment index the RPC fallback walks for one player page. */
+const PENDING_SCAN_LIMIT = 500;
+
 export class RpcSource implements LeaderboardSource {
   readonly kind = "rpc" as const;
   private readonly rpc: RpcClient;
@@ -160,8 +200,9 @@ export class RpcSource implements LeaderboardSource {
   constructor(
     rpcUrl: string,
     private readonly doomRuns: string,
+    rpc?: RpcClient,
   ) {
-    this.rpc = new RpcClient(rpcUrl);
+    this.rpc = rpc ?? new RpcClient(rpcUrl);
   }
 
   async leaderboard(versionId: number, kind: BoardKind, offset: number, limit: number): Promise<BoardPage> {
@@ -253,6 +294,7 @@ export class RpcSource implements LeaderboardSource {
     const bestScore = runs.length ? Math.max(...runs.map((r) => r.score)) : null;
     const bestTics = runs.length ? Math.min(...runs.map((r) => r.tics)) : null;
     const page = runs.slice(offset, offset + limit);
+    const pendingCommitments = await this.pendingCommitmentsOf(address).catch(() => undefined);
     return {
       player: address,
       runCount: count,
@@ -268,7 +310,42 @@ export class RpcSource implements LeaderboardSource {
           status: r.status,
         }),
       ),
+      ...(pendingCommitments ? { pendingCommitments } : {}),
     };
+  }
+
+  /**
+   * The contract indexes commitments by position, not by player: `pending_commitments` walks
+   * the append-only index (the first `PENDING_SCAN_LIMIT` positions here) and `get_commitment`
+   * says whose each one is. Fine for a devnet or an early season; the indexer is the answer at
+   * scale. Errors (an older `DoomRuns` without the D35 views) leave the section out.
+   */
+  private async pendingCommitmentsOf(address: string): Promise<PlayerCommitment[]> {
+    const countOut = await this.rpc.call({ contractAddress: this.doomRuns, entrypoint: "commitment_count", calldata: [] });
+    const count = Math.min(decodeU32(countOut), PENDING_SCAN_LIMIT);
+    if (count === 0) return [];
+    const idsOut = await this.rpc.call({
+      contractAddress: this.doomRuns,
+      entrypoint: "pending_commitments",
+      calldata: [toHex(0), toHex(count)],
+    });
+    const ids = decodeFeltArray(idsOut);
+    const head = await readBlockNumber(this.rpc);
+    const all = await Promise.all(
+      ids.map(async (id): Promise<[string, Commitment]> => [
+        id,
+        decodeCommitment(await this.rpc.call({ contractAddress: this.doomRuns, entrypoint: "get_commitment", calldata: [id] })),
+      ]),
+    );
+    return all
+      .filter(([, c]) => c.status === COMMIT_STATUS.PENDING && BigInt(c.player) === BigInt(address))
+      .map(([id, c]) =>
+        pendingCommitment(
+          { commitmentId: toHex(BigInt(id)), versionId: c.versionId, levelId: c.levelId, tics: c.tics, bounty: c.bounty.toString(), expiresAt: c.expiresAt },
+          head,
+        ),
+      )
+      .reverse(); // newest first, as the indexer lists them
   }
 
   /** No on-chain view enumerates every version or totals runs across players; the RPC fallback

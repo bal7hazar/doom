@@ -4,8 +4,9 @@
  * function here is pure with respect to the page: given data and a mount point, it replaces the
  * mount's children. `test/leaderboard.test.ts` renders these straight from fixtures with jsdom.
  */
+import { formatTokenAmount } from "../chain/commit.js";
 import { contractLink, txLink } from "./links.js";
-import type { BoardKind, BoardPage, ChainStats, NetworkKind, PlayerStats, RunDetail } from "./types.js";
+import type { BoardKind, BoardPage, ChainStats, NetworkKind, PlayerCommitment, PlayerStats, RunDetail } from "./types.js";
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -141,6 +142,61 @@ export function renderPlayer(mount: HTMLElement, stats: PlayerStats, links: Boar
   }
   table.append(tbody);
   mount.append(header, table);
+  if (stats.pendingCommitments?.length) mount.append(renderPendingCommitments(stats.pendingCommitments));
+}
+
+/**
+ * The player's games committed to the open prover and not proved yet (D35, P4.7): listed under
+ * the recorded runs, because they are not results — anyone may still prove them, and after the
+ * expiry block the player may take the bounty back instead.
+ */
+export function renderPendingCommitments(commitments: PlayerCommitment[]): HTMLElement {
+  const section = el("div", { className: "pending-commitments" });
+  section.append(
+    el("h3", { text: `waiting for a prover (${commitments.length})` }),
+    el("p", {
+      className: "hint",
+      text: "Committed on chain with the whole input log; any prover may prove and record them and collect the bounty. Not ranked until then.",
+    }),
+  );
+  const table = el("table", { className: "board" });
+  table.append(
+    el("thead", {}, [
+      el("tr", {}, [
+        el("th", { text: "commitment" }),
+        el("th", { text: "version" }),
+        el("th", { text: "level" }),
+        el("th", { text: "tics" }),
+        el("th", { text: "bounty (STRK)" }),
+        el("th", { text: "status" }),
+        el("th", { text: "log" }),
+      ]),
+    ]),
+  );
+  const tbody = el("tbody");
+  for (const c of commitments) {
+    const expired = c.status === "EXPIRED";
+    tbody.append(
+      el("tr", {}, [
+        el("td", {}, [el("code", { text: short(c.commitmentId) })]),
+        el("td", { text: String(c.versionId) }),
+        el("td", { text: String(c.levelId) }),
+        el("td", { text: c.tics.toLocaleString("en-US") }),
+        el("td", { text: formatTokenAmount(BigInt(c.bounty)) }),
+        el("td", {
+          text: expired ? `expired at block ${c.expiresAt} — reclaimable` : `pending until block ${c.expiresAt}`,
+          className: expired ? "dead" : "pending",
+        }),
+        el("td", {
+          text: c.nChunks === undefined ? "—" : `${c.logChunks ?? "?"} / ${c.nChunks} chunk(s)`,
+          className: "hint",
+        }),
+      ]),
+    );
+  }
+  table.append(tbody);
+  section.append(table);
+  return section;
 }
 
 // --- run detail ----------------------------------------------------------------
