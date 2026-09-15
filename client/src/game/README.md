@@ -17,6 +17,7 @@ capture if the browser refuses the first request; keyboard control remains usabl
 | 7 | Chainsaw request (vanilla button code **7**, not compact WeaponId 4) |
 | Esc / P | Pause and release the mouse |
 | Tab | Automap |
+| Touch screen | Joystick, look zone, FIRE / USE / RUN / WPN / PAUSE / MAP buttons — the same fields, see `client/README.md` "Mobile" |
 
 Weapon requests use `BT_CHANGE = 4` and `code << 3`, matching the current Cairo
 `WEAPON_OF_BUTTON` table. Ownership, attack state, movement, use and weapon

@@ -28,6 +28,8 @@ export interface HudState {
 }
 
 const AMMO_LABELS = ["BULL", "SHEL", "CELL", "RCKT"] as const;
+/** Width the status bar is laid out for; narrower views scale it down uniformly. */
+export const HUD_LAYOUT_WIDTH = 720;
 const KEY_COLORS = ["#3b6ede", "#d8c020", "#c0392b", "#3b6ede", "#d8c020", "#c0392b"] as const;
 const KEY_LABELS = ["blue card", "yellow card", "red card", "blue skull", "yellow skull", "red skull"];
 
@@ -46,9 +48,15 @@ export class Hud {
       for (const slot of p.psprites) this.drawPsprite(ctx, slot, width, height);
     } else this.drawWeapon(ctx, hudWeapon(p.weapon, numbering), width, height);
 
-    // Status bar strip along the bottom.
-    const barHeight = 56;
+    // Status bar strip along the bottom. Its layout is 720 px wide; a narrower
+    // view (a phone in landscape is ~650-900 CSS px) scales the whole strip
+    // down instead of letting the key labels run into the level tally.
+    const scale = Math.min(1, width / HUD_LAYOUT_WIDTH);
     ctx.save();
+    ctx.scale(scale, scale);
+    width /= scale;
+    height /= scale;
+    const barHeight = 56;
     ctx.fillStyle = "rgba(10, 9, 8, 0.72)";
     ctx.fillRect(0, height - barHeight, width, barHeight);
     ctx.strokeStyle = "rgba(90, 80, 70, 0.8)";

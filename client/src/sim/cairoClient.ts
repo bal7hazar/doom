@@ -38,6 +38,8 @@ export class CairoClient {
   busy = false;
   stepMs = 0;
   memoryBytes = 0;
+  /** Per-tic timing observer (the cadence bench); never on the hot path otherwise. */
+  onAdvance?: (info: { elapsedMs: number; roundTripMs: number; steps: number; memoryBytes: number }) => void;
   private nextId = 0;
   private pauseEpoch = 0;
   private sequence = 0;
@@ -141,6 +143,7 @@ export class CairoClient {
     word32(word);
     if (!this.journal || this.paused || this.terminal || this.busy) throw new Error("simulation is not ready for an input");
     this.busy = true;
+    const started = performance.now();
     try {
       const message = await this.request({ type: "advance", word, seq: this.sequence }, "frame");
       if (message.seq !== this.sequence || message.word !== word) throw new Error("input acknowledgement mismatch");
@@ -155,6 +158,7 @@ export class CairoClient {
       this.status = message.status; this.terminal = message.status !== 0;
       if (this.terminal) this.paused = true;
       this.stepMs = message.elapsedMs; this.memoryBytes = message.memoryBytes;
+      this.onAdvance?.({ elapsedMs: message.elapsedMs, roundTripMs: performance.now() - started, steps: message.steps, memoryBytes: message.memoryBytes });
       return message;
     } catch (error) { this.paused = true; throw error; }
     finally { this.busy = false; }

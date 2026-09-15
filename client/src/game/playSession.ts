@@ -2,6 +2,7 @@ import { compatibleSimulation } from "../sim/simulationCompatibility.js";
 import type { CairoClient } from "../sim/cairoClient.js";
 import type { CairoScheduler } from "../sim/cairoScheduler.js";
 import { GameInput } from "./gameInput.js";
+import type { TouchInput } from "./touchInput.js";
 import { InputJournal, type JournalExport } from "./inputJournal.js";
 import { SavedGameStore, SAVE_BYTES, parseSavedGame, serializeSavedGame } from "./savedGame.js";
 
@@ -26,9 +27,13 @@ export class PlaySession {
   private savedRejected = false;
   private readonly storage = new SavedGameStore();
 
+  /** A touch screen never asks for pointer lock; the on-screen controls feed `input` instead. */
+  private readonly touch: boolean;
+
   constructor(readonly client: CairoClient, readonly scheduler: CairoScheduler, readonly canvas: HTMLCanvasElement,
-    host: HTMLElement) {
-    this.input = new GameInput(canvas, () => scheduler.isRunning && !client.terminal && !this.operation, () => this.pause());
+    host: HTMLElement, options: { touch?: TouchInput } = {}) {
+    this.touch = options.touch !== undefined;
+    this.input = new GameInput(canvas, () => scheduler.isRunning && !client.terminal && !this.operation, () => this.pause(), options.touch);
     this.element.className = "play-session panel";
     this.element.setAttribute("aria-label", "Game controls");
     this.title.textContent = "Hellproof";
@@ -86,7 +91,7 @@ export class PlaySession {
     this.saveStatus.className = "play-note";
     this.element.append(this.title, this.stats, actions, file, this.message, this.saveStatus, note, demo);
     host.append(this.element);
-    canvas.addEventListener("click", () => { if (scheduler.isRunning) this.lockPointer(); });
+    canvas.addEventListener("click", () => { if (scheduler.isRunning && !this.touch) this.lockPointer(); });
     document.addEventListener("pointerlockchange", () => {
       if (document.pointerLockElement !== canvas) return;
       if (!scheduler.isRunning || this.operation || client.terminal) document.exitPointerLock();
@@ -106,8 +111,10 @@ export class PlaySession {
   }
   start(): void {
     if (this.operation || this.client.terminal) return;
-    this.input.clear(); this.message.textContent = "Esc or P pauses. Click the view to capture the mouse.";
-    this.lockPointer(); this.scheduler.start(); this.refresh();
+    this.input.clear();
+    this.message.textContent = this.touch ? "Left: move · right: turn · PAUSE returns here." : "Esc or P pauses. Click the view to capture the mouse.";
+    if (!this.touch) this.lockPointer();
+    this.scheduler.start(); this.refresh();
   }
   pause(): void {
     this.input.clear();

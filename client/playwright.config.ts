@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const PORT = Number(process.env.PORT ?? 4174);
+const SWIFTSHADER_ARGS = ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
 
 /**
  * Playwright runs against `vite preview`, not `vite dev`, so the smoke test
@@ -30,6 +31,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: /mobile\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         // Deliberately small and at scale 1: SwiftShader is a CPU rasterizer,
@@ -39,13 +41,20 @@ export default defineConfig({
         // machine with no GPU. `render.spec.ts` records the size it used.
         viewport: { width: 640, height: 400 },
         deviceScaleFactor: 1,
-        launchOptions: {
-          args: [
-            "--use-gl=angle",
-            "--use-angle=swiftshader",
-            "--enable-unsafe-swiftshader",
-          ],
-        },
+        launchOptions: { args: SWIFTSHADER_ARGS },
+      },
+    },
+    {
+      // A phone in landscape (touch emulation, mobile viewport, coarse pointer)
+      // for the touch-control smoke test; still SwiftShader, and at scale 1 for
+      // the same fill-rate reason as above. `mobile.spec.ts` overrides the
+      // device per test where it needs portrait or a desktop control case.
+      name: "mobile",
+      testMatch: /mobile\.spec\.ts/,
+      use: {
+        ...devices["Pixel 7 landscape"],
+        deviceScaleFactor: 1,
+        launchOptions: { args: SWIFTSHADER_ARGS },
       },
     },
   ],

@@ -37,7 +37,11 @@ async function verified(base: URL, file: string, sha: string): Promise<Uint8Arra
 export async function loadCairoBackend(assets = "/sim/"): Promise<CairoBackend> {
   const base = new URL(assets, globalThis.location.href);
   if (base.origin !== globalThis.location.origin || !base.pathname.endsWith("/")) throw new Error("simulation assets must be a same-origin directory");
-  const identity = JSON.parse(new TextDecoder().decode(await fetchBytes(new URL("manifest.json", base)))) as SimIdentity;
+  const manifestText = new TextDecoder().decode(await fetchBytes(new URL("manifest.json", base)));
+  let identity: SimIdentity;
+  // A server with an SPA fallback answers a missing manifest with index.html (200).
+  try { identity = JSON.parse(manifestText) as SimIdentity; }
+  catch { throw new Error("manifest.json is not JSON (an HTML page came back): public/sim/ is not staged; run scripts/prepare-sim.py first"); }
   if (identity.version !== 1 || identity.stateSchema !== 2 || (identity.snapshotSchema !== 1 && identity.snapshotSchema !== 2)) throw new Error("unsupported simulation manifest");
   const [wasm, session, genesis, step] = await Promise.all([
     verified(base, "hellproof_sim_bg.wasm", identity.hashes.wasm),
