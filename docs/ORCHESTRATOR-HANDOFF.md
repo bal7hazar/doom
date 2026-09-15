@@ -477,3 +477,43 @@ Prochaine vague moteur candidate : O3 (clip/`nofit` par cellules, −3 500 moyen
    `doom_game` seule approche 14 Go ; prévoir `RAYON_NUM_THREADS` réduit ou un
    découpage par filtre).
 3. Trancher l'arbitrage C3 ci-dessus.
+
+## Décision D35 et plan d'exécution — 2026-09-15
+
+Le sponsor a délégué la décision C3 avec deux contraintes : jouable sur smartphone,
+aucune centralisation. Décision **D35, prouveur ouvert** (`docs/DECISIONS.md`) :
+le client joue et engage la partie on-chain avec son journal packé et une prime ;
+n'importe quelle adresse prouve, replie et enregistre le fait, et perçoit la
+prime ; le sponsor opère un nœud de référence sans privilège ; la preuve
+navigateur devient optionnelle. C1 et C3 sont réécrits dans PLAN.md ; ROADMAP
+ajoute P2.9, P3.8, P3.9, P4.6, P4.7.
+
+Vagues lancées dans cette session (worktrees `wt/contract`, `wt/node`, `wt/mobile`) :
+
+| Vague | Livrable | Validation attendue |
+|---|---|---|
+| Contrat P4.6 | `commit_run` (journal en calldata, ~900 felts pour 3 min, prime ERC20), liaison fait ↔ engagement dans `submit_batch`/`register_member` par tout tiers, `reclaim` après expiration, événement `RunCommitted` | snforge : 53 tests existants + nouveaux ; gas d'un `commit_run` de 900 felts |
+| Nœud P3.8 | `infra/prover-node` : découverte, reconstruction et vérification du commitment, découpe identique au client, `Executor`/`Prover` pluggables (réel = sous-processus natif sous verrou), reprise, wrapper, enregistrement D28 | vitest avec mocks ; aucune preuve ici |
+| Mobile P2.9 | Contrôles tactiles produisant les mêmes ticcmd, mise en page mobile, banc de cadence embarqué exportant un JSON | vitest, smokes Playwright avec émulation mobile |
+
+Si ces vagues ne sont pas fusionnées à la lecture : `git worktree list`, `git branch`.
+
+### Mesures à faire par le sponsor (bloquantes pour le dimensionnement)
+
+1. **Calibration native** sur le M2 Max, sous verrou de preuve et avec timeout,
+   une preuve à la fois : `cairo/doom/doom_run/bench/prove_segment.sh <out> fight <n>`
+   pour n = 32, 64, 128, 256 tics (≈ 3, 4, 7, 12 M steps avec le moteur O1),
+   relever temps mur et RSS max. Le seul point mesuré est 2,68 M steps en 53,5 s
+   et 11,7 Go. C3 révisé (10 min pour 3 min de jeu) se décide sur ce tableau.
+2. **Cadence mobile** : ouvrir le banc embarqué livré par la vague mobile sur un
+   Android milieu de gamme et un iPhone, coller les JSON dans STATUS. Si la
+   cadence est loin de 35 tics/s, le moteur redevient le chemin critique.
+3. **Migration d'identité** du moteur O1 (voir ci-dessus) avant tout replay
+   navigateur du moteur courant.
+
+### Ordre des vagues suivantes
+
+P4.7 client (engagement de fin de partie, suivi « en attente ») dès l'ABI du
+contrat fusionnée ; puis O3 moteur ; puis P3.9 dimensionnement et P4.5 Sepolia
+une fois la calibration connue. Les caps D26, le vérifieur, D14 et les
+paramètres cryptographiques ne changent pas.
