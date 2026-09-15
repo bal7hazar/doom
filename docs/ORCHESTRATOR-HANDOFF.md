@@ -294,3 +294,65 @@ Doutes relevés, non bloquants, à traiter dans une prochaine vague :
 Non vérifiable ici : hashes `SHA256SUMS.linux` (pas de Docker), task hash Blake
 (pas de `prover/wasm/pkg/dist`), suite Cairo (pas de Scarb). Aucun agent, serveur
 ni preuve laissé en cours ; `node_modules` et caches cargo installés hors dépôt.
+
+### Branche du jeu poussée et auditée — 2026-09-15
+
+Le sponsor a poussé `codex/game-integration` (HEAD `310d5d8`, 99 commits au-dessus
+de `main`, `main` entièrement contenu). Tous les SHA cités plus haut existent
+désormais sur `origin`. La CI générale et le workflow `game-regression` ne se
+déclenchent que sur `main` et sur les PR ; le `schedule` nightly présent dans
+cette branche est inerte tant que le fichier n'est pas sur la branche par défaut.
+**Aucune CI n'a donc tourné sur le moteur réel.** Ouvrir une PR de suivi
+(sans la fusionner) suffirait à déclencher CI et régression sur chaque push.
+
+Validation distante indépendante, Linux x86_64, 4 cœurs, 15 Go, Scarb 2.16.0
+téléchargé dans le scratchpad, worktree jetable de `310d5d8` :
+
+| Contrôle | Résultat |
+|---|---|
+| `scarb fmt --check` | vert |
+| Tests Cairo | **553 verts / 554 dénombrés** sur 17 packages ; `doom_game` exécuté par module puis test par test |
+| Test non exécutable | `e1m1::test_fight_is_associative_across_serialized_boundaries` dépasse **15 Go** seul (tué, code 137) ; `scarb test -p doom_game` entier dépasse aussi 15 Go à 4 threads comme en mono-thread |
+| `size.py --report` proving | `run_segment` **107 018**, `step_tic` 108 505, `genesis` 46 496 ; dev 125 657 / 125 784 / 50 877 |
+| SHA256 `run_segment` proving | `18100435ee3882f0ae98d2b3fd89ee89c8dc365333a8cb3c0f74bed23f94b3bb`, identique au pin, **re-mesuré sur HEAD après les commits de formatage** |
+| Client | `npm ci` vert ; **262 tests : 252 verts, 10 ignorés** (artefacts prouveur absents) ; `tsc` vert. Sans `npm run assets`, `cairoAppearance.test.ts` échoue sur `freedoom1.wad` absent |
+| REUSE 6.2.0 | **1 789/1 789**, conforme |
+
+Point d'attention CI : la suite `doom_game` seule atteint ~14 Go de RSS sur ce
+conteneur ; les runners GitHub standard ont 16 Go. Le job `cairo` de `ci.yml`
+n'a jamais tourné sur cette branche ; prévoir `RAYON_NUM_THREADS` réduit ou un
+découpage par filtre si le job tombe en OOM.
+
+Deux revues de code en lecture seule sur les deux dernières vagues Codex :
+
+| Périmètre | Commits | Verdict |
+|---|---|---|
+| Passe S14 | `11d925c` `2b9c362` `2dda0e0` `c4696b2` `ae2feac` `95939fa` | OK : équivalence de `sin_cos` démontrée sur les quatre quadrants et testée sur 16 384 angles ; masques exacts sur u32 ; `refresh_heights` ne peut sauter aucune mise à jour ; formatage strictement pur ; identités de preuve refusées explicitement |
+| Animation d'arme et Workers | `5f1da8b` (`6eec3e7`), `3cb97c1` = `d049d4b` + `e454740` + `e5cac03` | OK : `snapshot_with_psprites` est une projection pure, inatteignable depuis `doom_run` ; sessions inconnues refusées ; `terminate()` règle toutes les promesses, pas de retry après hard stop |
+
+Doutes non bloquants à traiter dans une prochaine vague :
+
+1. `cairo/doom/doom_game/src/level.cairo:85,89` : deux `Span::at` ajoutés sur le
+   chemin chaud de `refresh_heights`, contraire à S7 §8.1 (`get` + `match`).
+   Pas de changement de comportement, mais un site de panique de plus.
+2. `client/src/sim/cairoClient.ts:114-117` : `restore` charge le checkpoint
+   étranger avant le contrôle d'identité ; sûr uniquement grâce à la
+   pré-vérification de `playSession.ts:147-156`. Inverser l'ordre.
+3. `client/src/prove/pipeline.ts:405-424` : `planNext` sans garde explicite
+   de hard stop entre ses `await`, ni test dédié.
+4. `client/src/prove/gameBridge.ts:55-59` : double `stop(true)` et flush/sync
+   concurrents ; idempotent mais fragile.
+5. `cairo/doom/doom_game/src/tests/synthetic.cairo:812-841` : l'assertion
+   « aucune mutation d'état » est tautologique (argument `@GameState`) ; rien
+   n'atteste qu'un flash survient dans les 45 tics ; « zéro tic consommé »
+   n'est prouvé que par l'e2e.
+6. `client/e2e/gameProof.spec.ts:46` : assertion du message de refus affaiblie
+   (`"identity"` au lieu de `"identity differs"`).
+7. `client/src/ui/hud.ts:147-149` : offset de la barre d'état ignoré, arme
+   environ 16 px trop basse en vue 168 lignes ; cosmétique.
+
+La paire de sessions R5 `dcb7…` → `2f2b…` n'est attestée que par le code et les
+docs : le manifeste est un artefact de build non commité. Rayon limité au rendu.
+
+Aucun agent, serveur ni preuve laissé en cours ; worktree jetable supprimé.
+Prochain chemin critique inchangé : D2/D29, admission log21/log20, puis P3.7/C3.
