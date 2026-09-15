@@ -33,6 +33,7 @@
     "../../client/src/prove/program.ts",
     "../../client/src/prove/ticcmd.ts",
     "../../client/src/prove/chain.ts",
+    "../../client/src/prove/doomPreparation.ts",
     "../../client/src/prove/felt.ts",
     "../../client/src/prove/types.ts",
     "../../infra/submit/src/stores.ts",
