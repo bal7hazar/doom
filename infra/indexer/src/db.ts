@@ -10,11 +10,15 @@ import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 
 import type {
   AttemptRecordedEvent,
+  CommitmentProvedEvent,
+  CommitmentReclaimedEvent,
   DoomRunsEvent,
   FrozenEvent,
   GenesisSetEvent,
   MemberRejectedEvent,
   ReplayEvent,
+  RunCommittedEvent,
+  RunLogEvent,
   RunSubmittedEvent,
   VersionAddedEvent,
 } from "./types.js";
@@ -105,6 +109,49 @@ CREATE TABLE IF NOT EXISTS frozen_events (
   by TEXT NOT NULL,
   block_number INTEGER NOT NULL
 );
+
+-- D35: one row per RunCommitted. A RECLAIMED id may be committed again (new escrow, new
+-- expiry): the row is then replaced, and its settlement row purged with it (see insertCommitment).
+CREATE TABLE IF NOT EXISTS commitments (
+  commitment_id TEXT PRIMARY KEY,
+  player TEXT NOT NULL,
+  version_id INTEGER NOT NULL,
+  level_id INTEGER NOT NULL,
+  genesis TEXT NOT NULL,
+  inputs_commitment TEXT NOT NULL,
+  tics INTEGER NOT NULL,
+  bounty TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  n_chunks INTEGER NOT NULL,
+  block_number INTEGER NOT NULL,
+  tx_hash TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_commitments_player ON commitments(player);
+CREATE INDEX IF NOT EXISTS idx_commitments_block ON commitments(block_number);
+
+-- The settlement of a commitment lives apart from its creation so that purging the blocks of
+-- a reorg window reverts a PROVED / RECLAIMED row to PENDING instead of deleting it.
+CREATE TABLE IF NOT EXISTS commitment_settlements (
+  commitment_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL CHECK (status IN ('PROVED', 'RECLAIMED')),
+  run_id TEXT,
+  prover TEXT,
+  bounty TEXT NOT NULL,
+  block_number INTEGER NOT NULL,
+  tx_hash TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_settlements_block ON commitment_settlements(block_number);
+
+-- RunLog chunks are counted, never stored (the felts are the prover node's business).
+CREATE TABLE IF NOT EXISTS commitment_logs (
+  commitment_id TEXT NOT NULL,
+  chunk INTEGER NOT NULL,
+  offset INTEGER NOT NULL,
+  packed_len INTEGER NOT NULL,
+  block_number INTEGER NOT NULL,
+  PRIMARY KEY (commitment_id, chunk)
+);
+CREATE INDEX IF NOT EXISTS idx_commitment_logs_block ON commitment_logs(block_number);
 `;
 
 // `node:sqlite` is experimental and not (yet) in Node's `builtinModules` list, which trips up
@@ -148,7 +195,10 @@ export class IndexerDb {
   // --- reorg: forget everything learned from block >= fromBlock ------------
 
   purgeFromBlock(fromBlock: number): void {
-    for (const table of ["runs", "attempts", "replays", "member_rejections", "versions", "genesis", "frozen_events"]) {
+    for (const table of [
+      "runs", "attempts", "replays", "member_rejections", "versions", "genesis", "frozen_events",
+      "commitments", "commitment_settlements", "commitment_logs",
+    ]) {
       this.raw.prepare(`DELETE FROM ${table} WHERE block_number >= ?`).run(fromBlock);
     }
   }
@@ -242,6 +292,56 @@ export class IndexerDb {
     this.raw.prepare(`INSERT INTO frozen_events (by, block_number) VALUES (?, ?)`).run(e.by, e.blockNumber);
   }
 
+  // --- D35: commitments ------------------------------------------------------
+
+  insertCommitment(e: RunCommittedEvent): void {
+    // A re-commit of a RECLAIMED id starts a new life: the old settlement and log chunks go.
+    this.raw.prepare(`DELETE FROM commitment_settlements WHERE commitment_id = ? AND block_number < ?`).run(e.commitmentId, e.blockNumber);
+    this.raw.prepare(`DELETE FROM commitment_logs WHERE commitment_id = ? AND block_number < ?`).run(e.commitmentId, e.blockNumber);
+    this.raw
+      .prepare(
+        `INSERT INTO commitments (commitment_id, player, version_id, level_id, genesis, inputs_commitment, tics, bounty, expires_at, n_chunks, block_number, tx_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(commitment_id) DO UPDATE SET
+           player=excluded.player, version_id=excluded.version_id, level_id=excluded.level_id,
+           genesis=excluded.genesis, inputs_commitment=excluded.inputs_commitment, tics=excluded.tics,
+           bounty=excluded.bounty, expires_at=excluded.expires_at, n_chunks=excluded.n_chunks,
+           block_number=excluded.block_number, tx_hash=excluded.tx_hash`,
+      )
+      .run(e.commitmentId, e.player, e.versionId, e.levelId, e.genesis, e.inputsCommitment, e.tics, e.bounty, e.expiresAt, e.nChunks, e.blockNumber, e.txHash);
+  }
+
+  insertCommitmentLog(e: RunLogEvent): void {
+    this.raw
+      .prepare(
+        `INSERT INTO commitment_logs (commitment_id, chunk, offset, packed_len, block_number) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(commitment_id, chunk) DO UPDATE SET offset=excluded.offset, packed_len=excluded.packed_len, block_number=excluded.block_number`,
+      )
+      .run(e.commitmentId, e.chunk, e.offset, e.packedLen, e.blockNumber);
+  }
+
+  insertCommitmentProved(e: CommitmentProvedEvent): void {
+    this.raw
+      .prepare(
+        `INSERT INTO commitment_settlements (commitment_id, status, run_id, prover, bounty, block_number, tx_hash)
+         VALUES (?, 'PROVED', ?, ?, ?, ?, ?)
+         ON CONFLICT(commitment_id) DO UPDATE SET status='PROVED', run_id=excluded.run_id, prover=excluded.prover,
+           bounty=excluded.bounty, block_number=excluded.block_number, tx_hash=excluded.tx_hash`,
+      )
+      .run(e.commitmentId, e.runId, e.prover, e.bounty, e.blockNumber, e.txHash);
+  }
+
+  insertCommitmentReclaimed(e: CommitmentReclaimedEvent): void {
+    this.raw
+      .prepare(
+        `INSERT INTO commitment_settlements (commitment_id, status, run_id, prover, bounty, block_number, tx_hash)
+         VALUES (?, 'RECLAIMED', NULL, NULL, ?, ?, ?)
+         ON CONFLICT(commitment_id) DO UPDATE SET status='RECLAIMED', run_id=NULL, prover=NULL,
+           bounty=excluded.bounty, block_number=excluded.block_number, tx_hash=excluded.tx_hash`,
+      )
+      .run(e.commitmentId, e.bounty, e.blockNumber, e.txHash);
+  }
+
   /** Dispatches one decoded event to its table. */
   apply(e: DoomRunsEvent): void {
     switch (e.kind) {
@@ -259,6 +359,14 @@ export class IndexerDb {
         return this.upsertGenesis(e);
       case "Frozen":
         return this.insertFrozen(e);
+      case "RunCommitted":
+        return this.insertCommitment(e);
+      case "RunLog":
+        return this.insertCommitmentLog(e);
+      case "CommitmentProved":
+        return this.insertCommitmentProved(e);
+      case "CommitmentReclaimed":
+        return this.insertCommitmentReclaimed(e);
     }
   }
 
@@ -334,11 +442,65 @@ export class IndexerDb {
     };
   }
 
+  // --- D35: commitment readers ------------------------------------------------
+
+  /**
+   * A commitment row with its derived status: `PENDING` (no settlement yet), `PROVED` or
+   * `RECLAIMED`; `expires_at` is reported and the *caller* decides whether a pending one is past
+   * it (the indexer knows the last block it scanned, `stats().indexed_block`, not the chain's
+   * head at read time). `log_chunks` counts the `RunLog` events seen against `n_chunks`.
+   */
+  private static readonly COMMITMENT_SELECT = `
+    SELECT c.commitment_id, c.player, c.version_id, c.level_id, c.genesis, c.inputs_commitment, c.tics,
+           c.bounty, c.expires_at, c.n_chunks, c.block_number, c.tx_hash,
+           COALESCE(s.status, 'PENDING') AS status, s.run_id, s.prover,
+           s.block_number AS settled_block, s.tx_hash AS settled_tx,
+           (SELECT COUNT(*) FROM commitment_logs l WHERE l.commitment_id = c.commitment_id AND l.block_number >= c.block_number) AS log_chunks
+    FROM commitments c
+    LEFT JOIN commitment_settlements s ON s.commitment_id = c.commitment_id AND s.block_number >= c.block_number`;
+
+  commitment(commitmentId: string): Record<string, unknown> | undefined {
+    return this.raw
+      .prepare(`${IndexerDb.COMMITMENT_SELECT} WHERE c.commitment_id = ?`)
+      .get(commitmentId) as Record<string, unknown> | undefined;
+  }
+
+  /** A player's commitments, newest first; `pendingOnly` keeps the unsettled ones. */
+  playerCommitments(player: string, offset: number, limit: number, pendingOnly = false): unknown[] {
+    const filter = pendingOnly ? "AND s.commitment_id IS NULL" : "";
+    return this.raw
+      .prepare(`${IndexerDb.COMMITMENT_SELECT} WHERE c.player = ? ${filter} ORDER BY c.block_number DESC, c.commitment_id ASC LIMIT ? OFFSET ?`)
+      .all(player, limit, offset);
+  }
+
+  /** Every unsettled commitment, oldest first — what a prover node would walk. */
+  pendingCommitments(offset: number, limit: number): unknown[] {
+    return this.raw
+      .prepare(`${IndexerDb.COMMITMENT_SELECT} WHERE s.commitment_id IS NULL ORDER BY c.block_number ASC, c.commitment_id ASC LIMIT ? OFFSET ?`)
+      .all(limit, offset);
+  }
+
+  commitmentCounts(player?: string): { total: number; pending: number } {
+    const where = player === undefined ? "" : "WHERE c.player = ?";
+    const args = player === undefined ? [] : [player];
+    const total = this.raw.prepare(`SELECT COUNT(*) AS n FROM commitments c ${where}`).get(...args) as { n: number };
+    const pending = this.raw
+      .prepare(
+        `SELECT COUNT(*) AS n FROM commitments c
+         LEFT JOIN commitment_settlements s ON s.commitment_id = c.commitment_id AND s.block_number >= c.block_number
+         ${where ? where + " AND" : "WHERE"} s.commitment_id IS NULL`,
+      )
+      .get(...args) as { n: number };
+    return { total: total.n, pending: pending.n };
+  }
+
   stats(): {
     indexed_block: number | null;
     total_runs: number;
     total_attempts: number;
     total_players: number;
+    total_commitments: number;
+    pending_commitments: number;
     versions: { version_id: number; run_count: number; attempt_count: number }[];
   } {
     const cursor = this.getCursor();
@@ -355,11 +517,14 @@ export class IndexerDb {
          FROM versions v ORDER BY v.version_id ASC`,
       )
       .all() as { version_id: number; run_count: number; attempt_count: number }[];
+    const commitments = this.commitmentCounts();
     return {
       indexed_block: cursor?.lastBlock ?? null,
       total_runs: totalRuns.n,
       total_attempts: totalAttempts.n,
       total_players: totalPlayers.n,
+      total_commitments: commitments.total,
+      pending_commitments: commitments.pending,
       versions,
     };
   }

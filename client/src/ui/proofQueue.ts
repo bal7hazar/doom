@@ -16,7 +16,7 @@
  */
 import { statusName } from "../prove/chain.js";
 import type { PipelineState } from "../prove/pipeline.js";
-import type { PipelineEvent, SegmentRecord } from "../prove/types.js";
+import type { PipelineEvent, RunSubmissionState, SegmentRecord } from "../prove/types.js";
 
 export interface EndGameActions {
   /** Start (or resume) proving the run. */
@@ -27,6 +27,12 @@ export interface EndGameActions {
   onKeepOffline?: (keepOffline: boolean) => void;
   /** Upload to the wrapper, then the cost screen and the on-chain sequence (P4.3). */
   onSubmit?: () => void;
+  /** D35 / P4.7: commit the journal to the open prover (the commit screen, `prove/commit.ts`). */
+  onCommit?: () => void;
+  /** Read the commitment back from the chain (pending / proved by whom / expired). */
+  onRefreshCommit?: () => void;
+  /** `reclaim` the bounty of an expired commitment. */
+  onReclaim?: () => void;
   /** Write the run out as a `.hellproof` file. */
   onExport?: () => void;
   /** Read one back in. */
@@ -96,12 +102,16 @@ export class ProofQueuePanel {
         <button data-act="prove">Prove</button>
         <button data-act="verify">Verify locally</button>
         <button data-act="submit">Submit…</button>
+        <button data-act="commit">Commit…</button>
+        <button data-act="commit-refresh" hidden>Commitment status</button>
+        <button data-act="reclaim" hidden>Reclaim bounty</button>
         <button data-act="export">Export .hellproof</button>
         <button data-act="import">Import…</button>
         <button data-act="reset" class="danger">Reset run</button>
         <label><input type="checkbox" data-act="offline" /> Keep offline</label>
         <input type="file" accept=".hellproof" hidden />
       </div>
+      <p class="proof-queue-commit" role="status" hidden></p>
       <pre class="proof-queue-log" aria-live="polite"></pre>
     `;
     this.element = root;
@@ -114,6 +124,9 @@ export class ProofQueuePanel {
     root.querySelector('[data-act="prove"]')?.addEventListener("click", () => this.actions.onProve?.());
     root.querySelector('[data-act="verify"]')?.addEventListener("click", () => this.actions.onVerify?.());
     root.querySelector('[data-act="submit"]')?.addEventListener("click", () => this.actions.onSubmit?.());
+    root.querySelector('[data-act="commit"]')?.addEventListener("click", () => this.actions.onCommit?.());
+    root.querySelector('[data-act="commit-refresh"]')?.addEventListener("click", () => this.actions.onRefreshCommit?.());
+    root.querySelector('[data-act="reclaim"]')?.addEventListener("click", () => this.actions.onReclaim?.());
     root.querySelector('[data-act="export"]')?.addEventListener("click", () => this.actions.onExport?.());
     root.querySelector('[data-act="import"]')?.addEventListener("click", () => fileInput.click());
     root.querySelector('[data-act="reset"]')?.addEventListener("click", () => this.actions.onReset?.());
@@ -240,6 +253,41 @@ export class ProofQueuePanel {
 
   setKeepOffline(value: boolean): void {
     this.keepOffline.checked = value;
+  }
+
+  /**
+   * The open-prover commitment line (P4.7): what the run record says about it, and the two
+   * follow-up buttons — status refresh whenever there is an id, reclaim once expired.
+   */
+  setCommitment(submission: RunSubmissionState): void {
+    const line = this.element.querySelector(".proof-queue-commit") as HTMLElement;
+    const refresh = this.element.querySelector('[data-act="commit-refresh"]') as HTMLButtonElement;
+    const reclaim = this.element.querySelector('[data-act="reclaim"]') as HTMLButtonElement;
+    const commit = this.element.querySelector('[data-act="commit"]') as HTMLButtonElement;
+    const id = submission.commitmentId;
+    const status = submission.commitStatus;
+    refresh.hidden = !id || !status;
+    reclaim.hidden = status !== "expired";
+    commit.disabled = status === "committing" || status === "pending" || status === "proved";
+    if (!id || !status) {
+      line.hidden = true;
+      line.textContent = "";
+      return;
+    }
+    const short = (v: string, n: number): string => (v.length > n ? `${v.slice(0, n)}…` : v);
+    const shortId = short(id, 14);
+    const tx = submission.commitTx ? ` · tx ${short(submission.commitTx, 12)}` : "";
+    const bounty = submission.commitBounty && submission.commitBounty !== "0" ? ` · bounty ${submission.commitBounty}` : "";
+    const text: Record<NonNullable<RunSubmissionState["commitStatus"]>, string> = {
+      committing: `committing ${shortId}${tx}`,
+      pending: `committed ${shortId}: waiting for a prover${submission.commitExpiresAt !== undefined ? ` (reclaimable from block ${submission.commitExpiresAt})` : ""}${bounty}${tx}`,
+      proved: `committed ${shortId}: proved by ${submission.commitProver ? short(submission.commitProver, 10) : "?"}${submission.commitRunId ? ` as run ${short(submission.commitRunId, 12)}` : ""}${tx}`,
+      expired: `committed ${shortId}: expired unproved — the bounty can be reclaimed${bounty}${tx}`,
+      reclaimed: `committed ${shortId}: reclaimed (bounty refunded)${tx}`,
+      failed: `commit failed: ${submission.error ?? "unknown error"}`,
+    };
+    line.hidden = false;
+    line.textContent = text[status];
   }
 }
 

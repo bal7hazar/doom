@@ -114,7 +114,8 @@ const CSS = `
 .cost-screen a { color: var(--fg, #d8d2c4); }
 `;
 
-function injectStyle(doc: Document): void {
+/** Shared with the commit screen (P4.7), which renders the same table and buttons. */
+export function injectCostScreenStyle(doc: Document): void {
   if (doc.getElementById(STYLE_ID)) return;
   const style = doc.createElement("style");
   style.id = STYLE_ID;
@@ -122,10 +123,10 @@ function injectStyle(doc: Document): void {
   doc.head.append(style);
 }
 
-const esc = (s: string): string =>
+export const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-const strk = (n: number): string => n.toFixed(n < 1 ? 4 : 2);
-const gas = (n: bigint): string => n.toLocaleString("en-US");
+export const strk = (n: number): string => n.toFixed(n < 1 ? 4 : 2);
+export const gas = (n: bigint): string => n.toLocaleString("en-US");
 
 /** Human labels for the entrypoints — nobody outside this repo knows what `fri2` is. */
 const LABELS: Record<string, string> = {
@@ -151,7 +152,7 @@ export class CostScreen {
     this.options = options;
     this.median = new GasPriceMedian(new LocalSampleStore());
     this.el.classList.add("cost-screen");
-    injectStyle(el.ownerDocument);
+    injectCostScreenStyle(el.ownerDocument);
   }
 
   /**

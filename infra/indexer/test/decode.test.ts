@@ -14,6 +14,7 @@ const CONTRACT_CLASS = fileURLToPath(
 );
 
 const sel = (name: string): string => hash.getSelectorFromName(name);
+const normalize = (felt: string): string => "0x" + BigInt(felt).toString(16);
 
 function evt(keys: string[], data: string[]): RawEvent {
   return {
@@ -119,6 +120,67 @@ describe("decodeEvent", () => {
   it("decodes Frozen", () => {
     const e = decodeEvent(evt([sel("Frozen")], ["0xdeaf1"]));
     expect(e).toEqual({ kind: "Frozen", by: "0xdeaf1", blockNumber: 42, txHash: "0xt1" });
+  });
+
+  // -- D35 (open prover): the selectors are exactly the event names of the README's ABI ------
+
+  it("decodes RunCommitted (keys: commitment_id, player, version_id; u256 bounty as a decimal string)", () => {
+    const bountyLow = "0x5";
+    const bountyHigh = "0x1"; // 2^128 + 5
+    const e = decodeEvent(
+      evt(
+        [sel("RunCommitted"), "0xc0de", "0xf1a1", "0x1"],
+        ["0x2", "0xdead", "0x1c0", "0x384", bountyLow, bountyHigh, "0x96", "0x4"],
+      ),
+    );
+    expect(e).toEqual({
+      kind: "RunCommitted",
+      commitmentId: "0xc0de",
+      player: "0xf1a1",
+      versionId: 1,
+      levelId: 2,
+      genesis: "0xdead",
+      inputsCommitment: "0x1c0",
+      tics: 900,
+      bounty: ((1n << 128n) + 5n).toString(),
+      expiresAt: 150,
+      nChunks: 4,
+      blockNumber: 42,
+      txHash: "0xt1",
+    });
+  });
+
+  it("decodes RunLog by counting its felts, never keeping them", () => {
+    const e = decodeEvent(evt([sel("RunLog"), "0xc0de"], ["0x1", "0x100", "0x3", "0xaaaa", "0xbbbb", "0xcccc"]));
+    expect(e).toEqual({ kind: "RunLog", commitmentId: "0xc0de", chunk: 1, offset: 256, packedLen: 3, blockNumber: 42, txHash: "0xt1" });
+    expect(JSON.stringify(e)).not.toContain("0xaaaa");
+  });
+
+  it("decodes CommitmentProved (keys: commitment_id, run_id, prover) and CommitmentReclaimed (keys: commitment_id, player)", () => {
+    expect(decodeEvent(evt([sel("CommitmentProved"), "0xc0de", "0x51", "0xb0b"], ["0xf1a1", "0x64", "0x0"]))).toEqual({
+      kind: "CommitmentProved",
+      commitmentId: "0xc0de",
+      runId: "0x51",
+      prover: "0xb0b",
+      player: "0xf1a1",
+      bounty: "100",
+      blockNumber: 42,
+      txHash: "0xt1",
+    });
+    expect(decodeEvent(evt([sel("CommitmentReclaimed"), "0xc0de", "0xf1a1"], ["0x64", "0x0"]))).toEqual({
+      kind: "CommitmentReclaimed",
+      commitmentId: "0xc0de",
+      player: "0xf1a1",
+      bounty: "100",
+      blockNumber: 42,
+      txHash: "0xt1",
+    });
+  });
+
+  it("uses the same selector function as the entrypoints, for every D35 event name", () => {
+    for (const name of ["RunCommitted", "RunLog", "CommitmentProved", "CommitmentReclaimed"]) {
+      expect(EVENT_SELECTORS[normalize(sel(name))]).toBe(name);
+    }
   });
 
   it("returns undefined for an event from a different contract (unknown selector)", () => {

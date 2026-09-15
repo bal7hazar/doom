@@ -24,6 +24,7 @@ import { RunStore } from "../store/runStore.js";
 import { connectController } from "../ui/controllerConnect.js";
 import { ProofQueuePanel } from "../ui/proofQueue.js";
 import { WrapperSubmitter } from "../wrapper/submitter.js";
+import { RunCommitter } from "./commit.js";
 import { OnChainSubmitter, type OnChainConfig, type OnChainConfigResult } from "./onchain.js";
 import { ProofPipeline } from "./pipeline.js";
 import { ProverClient } from "./proverClient.js";
@@ -62,8 +63,11 @@ export interface ProveSessionOptions {
 /** What the game page supplies for the on-chain leg; the injectable parts are for tests. */
 export interface OnChainSetup {
   config: OnChainConfigResult;
-  /** Defaults to the Cartridge Controller with the submission session policies. */
-  connectSigner?: (config: OnChainConfig) => Promise<Signer>;
+  /**
+   * Defaults to the Cartridge Controller with the submission session policies — plus, when a
+   * fee token is given (the commit flow, P4.7), the commitment ones.
+   */
+  connectSigner?: (config: OnChainConfig, feeToken?: string) => Promise<Signer>;
   /** Defaults to `GET /v1/batches/{id}?include=proof` on the configured wrapper. */
   fetchBatch?: (batchId: string) => Promise<WrapperBatch>;
   rpc?: RpcClient;
@@ -112,6 +116,9 @@ export class ProveSession {
         onImport: (file) => void session.importRun(file).catch(error => panel.log(`Import refused: ${String(error)}`)),
         onReset: () => void session.reset(),
         onSubmit: () => void session.submit(),
+        onCommit: () => void session.commit(),
+        onRefreshCommit: () => void session.refreshCommitment(),
+        onReclaim: () => void session.reclaimCommitment(),
       },
     });
 
@@ -136,6 +143,7 @@ export class ProveSession {
       session = new ProveSession(pipeline, store, panel, run, options);
       options.host.append(panel.element);
       panel.setKeepOffline(run.keepOffline);
+      panel.setCommitment(run.submission);
       panel.update(pipeline.state, pipeline.segmentRecords);
 
       const available = await proverIsAvailable(workerUrl, options.signal);
@@ -333,6 +341,81 @@ export class ProveSession {
     }
   }
 
+  /**
+   * The open-prover commitment (D35, P4.7): the journal is flushed, `commit_log` and the
+   * `commitment_id` are computed locally, the chain is asked whether this journal is already
+   * committed, then the commit screen — the multicall's cost, the bounty, and Commit / Keep
+   * offline / Cancel. Nothing is proved here; "keep offline" stays the default.
+   */
+  async commit(): Promise<void> {
+    this.run = (await this.store.getRun(this.run.id)) ?? this.run;
+    const committer = this.committer();
+    if (!committer) return;
+    try {
+      if (this.options.program?.journalWords) await this.pipeline.syncGameJournal();
+      await this.pipeline.flushJournal();
+      const outcome = await committer.open(this.run);
+      this.run = (await this.store.getRun(this.run.id)) ?? this.run;
+      this.panel.setCommitment(this.run.submission);
+      if (outcome.choice === "commit" && !outcome.error) {
+        this.panel.log(`run ${this.run.id} is committed; export .hellproof to keep a copy, the journal stays on this device too`);
+      }
+    } catch (error) {
+      this.panel.log(`commit failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /** Reads the commitment back (pending / proved by whom / expired / reclaimed). */
+  async refreshCommitment(): Promise<void> {
+    this.run = (await this.store.getRun(this.run.id)) ?? this.run;
+    const committer = this.committer();
+    if (!committer) return;
+    try {
+      await committer.refresh(this.run);
+    } catch (error) {
+      this.panel.log(`commitment status unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    this.run = (await this.store.getRun(this.run.id)) ?? this.run;
+    this.panel.setCommitment(this.run.submission);
+  }
+
+  /** `reclaim` the bounty of an expired commitment. */
+  async reclaimCommitment(): Promise<void> {
+    this.run = (await this.store.getRun(this.run.id)) ?? this.run;
+    const committer = this.committer();
+    if (!committer) return;
+    try {
+      await committer.reclaim(this.run);
+    } catch (error) {
+      this.panel.log(`reclaim failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    this.run = (await this.store.getRun(this.run.id)) ?? this.run;
+    this.panel.setCommitment(this.run.submission);
+  }
+
+  /** The commit flow's dependencies, or `null` (logged) without an on-chain configuration. */
+  private committer(): RunCommitter | null {
+    const setup = this.options.onchain;
+    if (!setup) {
+      this.panel.log("this page has no on-chain configuration: export the run to commit it elsewhere");
+      return null;
+    }
+    if (!setup.config.ok) {
+      this.panel.log(setup.config.message.replace("on-chain submission", "the open-prover commitment"));
+      return null;
+    }
+    return new RunCommitter({
+      config: setup.config.config,
+      store: this.store,
+      host: this.options.host,
+      log: (message) => this.panel.log(message),
+      connectSigner: setup.connectSigner ?? connectSignerWithController,
+      onKeepOffline: () => this.setKeepOffline(true),
+      ...(setup.rpc ? { rpc: setup.rpc } : {}),
+      ...(setup.priceSource ? { priceSource: setup.priceSource } : {}),
+    });
+  }
+
   /** The cost screen and, on "submit", the signed sequence (P4.3, C5/C6). */
   private async submitOnChain(batchId: string, submitter: WrapperSubmitter | null): Promise<void> {
     const setup = this.options.onchain;
@@ -368,14 +451,19 @@ export class ProveSession {
   }
 }
 
-/** The browser's signer: a Cartridge Controller session over exactly the submission policies. */
-async function connectSignerWithController(config: OnChainConfig): Promise<Signer> {
+/**
+ * The browser's signer: a Cartridge Controller session over exactly the submission policies —
+ * and the commitment ones (`commit_run`, `reclaim`, `approve` on the fee token) when the commit
+ * flow asks for it.
+ */
+async function connectSignerWithController(config: OnChainConfig, feeToken?: string): Promise<Signer> {
   const { signer } = await connectController({
     router: config.router,
     doomRuns: config.doomRuns,
     chains: [{ rpcUrl: config.rpcUrl }],
     ...(config.chainId ? { defaultChainId: config.chainId } : {}),
     sponsored: config.sponsored,
+    ...(feeToken === undefined ? {} : { commit: { feeToken } }),
   });
   return signer;
 }
