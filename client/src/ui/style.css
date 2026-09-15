@@ -289,6 +289,22 @@ body.prove-page #status {
   padding-top: 6px;
 }
 
+/* The cost screen (P4.3): over the queue, on the game page and on prove.html alike. */
+.onchain-overlay {
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 24px));
+  max-height: 85vh;
+  overflow: auto;
+  padding: 0 0 10px;
+}
+
+.onchain-overlay > button[data-act="close"] {
+  margin: 0 18px;
+}
+
 /* The queue as an overlay on the game page (F4), rather than the whole page. */
 .proof-queue-overlay {
   position: absolute;

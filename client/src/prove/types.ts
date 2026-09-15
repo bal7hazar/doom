@@ -127,6 +127,12 @@ export interface RunSubmissionState {
   rootProofFeltCount?: number;
   /** Segments the server has acknowledged (see `wrapper/submitter.ts`). */
   uploadedSegments?: number;
+  /** Router proof id of the on-chain sequence (P4.3), as `0x…`; derived from the batch id. */
+  proofId?: string;
+  /** Where the on-chain leg stands: `waiting` (C6 "wait"), `submitting`, `done` or `failed`. */
+  chainStatus?: string;
+  /** The fact the router registered, once the FRI walk finished. */
+  fact?: string;
   error?: string;
   updatedAt?: number;
 }

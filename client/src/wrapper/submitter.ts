@@ -40,6 +40,7 @@ import type {
   SegmentSubmission,
   SubmitResponse,
 } from "@hellproof/wrapper-client";
+import { parseWrapperBatch, type BatchResponse, type WrapperBatch } from "../chain/batch.js";
 import type { RunStore } from "../store/runStore.js";
 import type { RunRecord, SegmentRecord } from "../prove/types.js";
 
@@ -440,9 +441,31 @@ export class WrapperSubmitter {
   }
 
   /**
+   * `GET /v1/batches/{id}?include=proof` — the batch with its root proof felts
+   * and packed tree, parsed into what `prepareSubmission` takes. Nothing of it
+   * is stored locally beyond the felt count: ~94 k felts are fetched again on
+   * a resume rather than kept next to the proofs.
+   */
+  async fetchBatchProof(localRunId: string, batchId: string): Promise<WrapperBatch> {
+    const doc = await this.request<BatchResponse & { status?: string }>(
+      "GET",
+      `/v1/batches/${encodeURIComponent(batchId)}?include=proof`,
+    );
+    if (!doc.root_proof_felts?.length) {
+      throw new Error(`batch ${batchId} (${doc.status ?? "?"}) has no root proof felts yet`);
+    }
+    await this.store.updateSubmission(localRunId, {
+      batchId,
+      ...(doc.status ? { batchStatus: doc.status } : {}),
+      rootProofFeltCount: doc.root_proof_felts.length,
+    });
+    return parseWrapperBatch(doc);
+  }
+
+  /**
    * `GET /v1/batches/{id}` — the root proof's felt count and the fold order. The
-   * felts themselves are P4.3's business (the on-chain submission screen); only
-   * the metadata is stored locally.
+   * felts themselves are fetched by `fetchBatchProof` for the on-chain screen;
+   * only the metadata is stored locally.
    */
   async fetchBatchSummary(
     localRunId: string,
