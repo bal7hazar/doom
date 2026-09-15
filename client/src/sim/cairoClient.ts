@@ -111,9 +111,16 @@ export class CairoClient {
    */
   async restore(data: JournalExport, assets = "/sim/"): Promise<void> {
     const journal = InputJournal.import(data), plan = journal.boundary(journal.ticEnd);
-    await this.init(assets, plan.state);
-    if (!compatibleSimulation(journal.identity, this.journal!.identity)) {
-      throw new Error("journal executable identity differs from loaded simulation");
+    const refuse = () => new Error("journal executable identity differs from loaded simulation");
+    if (this.loadedIdentity) {
+      // Refuse a foreign executable before any init: the live VM and journal stay untouched.
+      if (!compatibleSimulation(journal.identity, this.loadedIdentity)) throw refuse();
+      await this.init(assets, plan.state);
+    } else {
+      // Nothing is loaded yet: learn the executable identity at genesis, then accept the checkpoint.
+      await this.init(assets);
+      if (!compatibleSimulation(journal.identity, this.loadedIdentity!)) throw refuse();
+      await this.restart(plan.state);
     }
     await this.resume();
     for (const word of plan.prefix) await this.advance(word);
