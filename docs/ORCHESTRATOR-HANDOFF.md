@@ -496,7 +496,25 @@ Vagues lancées dans cette session (worktrees `wt/contract`, `wt/node`, `wt/mobi
 | Nœud P3.8 | `infra/prover-node` : découverte, reconstruction et vérification du commitment, découpe identique au client, `Executor`/`Prover` pluggables (réel = sous-processus natif sous verrou), reprise, wrapper, enregistrement D28 | vitest avec mocks ; aucune preuve ici |
 | Mobile P2.9 | Contrôles tactiles produisant les mêmes ticcmd, mise en page mobile, banc de cadence embarqué exportant un JSON | vitest, smokes Playwright avec émulation mobile |
 
-Si ces vagues ne sont pas fusionnées à la lecture : `git worktree list`, `git branch`.
+Toutes fusionnées et poussées :
+
+| Vague | Fusion | Validation |
+|---|---|---|
+| Contrat P4.6 | `b73afd6` | doom_runs **81 tests** (53 + 28) ; `commit_run` de 900 felts ≈ 76 868 steps, 5 événements, ≈ 16,2 M L2 gas ; constructeur désormais `(owner, fee_token, expiry_blocks)` : **changement cassant du déploiement**, drives Python mis à jour |
+| Nœud P3.8 | `d587082` | `infra/prover-node` **43 tests**, typecheck ; découpe sonde par sonde identique au client, alignée sur 7 tics ; preuve et exécution réelles = stand-ins |
+| Mobile P2.9 | `2a6f3a8` | client 291 tests, 11 smokes Playwright dont projet `mobile` (Pixel 7) ; banc `/?bench=1` ; le Worker exige un contexte sécurisé (HTTPS ou port forwarding) |
+| Client P4.7 | `988c8af` | client **323 tests**, indexeur 36, submit 95 ; Poseidon TS vérifié contre `poseidon_py` ; « Commit… » dans le panneau de fin de partie, suivi PENDING/PROVED/RECLAIMED, classement « en attente » |
+
+Règle de liaison du contrat à connaître : un membre règle l'engagement si version,
+level, player, `tics` et genesis coïncident et si le commitment de partie se
+recalcule : un segment → `inputs_commitment` de la feuille ; plusieurs → repli
+des `ReplayLog` fournis, **chaque segment non final couvrant un multiple de 7
+tics**. Le journal n'est pas stocké : les événements `RunLog` (≤ 256 felts) en
+sont la seule copie. Le nœud applique déjà ces règles.
+
+Reste non validé faute d'environnement : aucune preuve réelle, aucun devnet
+(`starknet-devnet` absent), Controller réel, sélecteurs contre l'ABI compilée
+(`decode.test.ts` se saute sans la classe compilée), cadence sur vrai téléphone.
 
 ### Mesures à faire par le sponsor (bloquantes pour le dimensionnement)
 
