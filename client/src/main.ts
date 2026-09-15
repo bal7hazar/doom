@@ -21,6 +21,9 @@ import { Hud, hudWeapon } from "./ui/hud.js";
 import { TouchInput } from "./game/touchInput.js";
 import { isTouchDevice, mountTouchControls, watchOrientation, type TouchControls } from "./ui/touchControls.js";
 import { quantize } from "./prove/ticcmd.js";
+import { BUILTIN_SCRIPT, CadenceBench, CAIRO_LABEL, DEFAULT_BENCH_TICS, DEFAULT_BURST_TICS, DEMO_LABEL, journalScript, probeMemory,
+  type BenchEnvironment, type BenchResult, type InputScript } from "./bench/cadence.js";
+import { mountBenchPanel, type BenchPanel } from "./ui/benchPanel.js";
 
 /**
  * Application entry point.
@@ -87,7 +90,14 @@ async function main(): Promise<void> {
     loadingProgress.value = Math.round(fraction * 100);
   };
 
-  const realCairo = new URLSearchParams(location.search).get("sim") !== "demo";
+  const params = new URLSearchParams(location.search);
+  const realCairo = params.get("sim") !== "demo";
+  // `?bench=1`: the cadence bench replaces the player's input with a script and
+  // reports tics/s, per-tic and per-frame times and memory (bench/cadence.ts).
+  const bench = params.has("bench") && params.get("bench") !== "0"
+    ? new CadenceBench(Math.max(35, Number(params.get("tics")) || DEFAULT_BENCH_TICS),
+      realCairo ? Math.max(0, Number(params.get("burst") ?? DEFAULT_BURST_TICS) || 0) : 0)
+    : undefined;
   const caps = await probeStorage(probeCapabilities());
   const profile = chooseProfile(caps);
   renderDiagnostics(diagnosticsEl, caps, profile);
@@ -106,8 +116,15 @@ async function main(): Promise<void> {
   say("fetching level + WAD…", 0.02);
   let level: LevelJson;
   let wadBytes: Uint8Array;
+  let script: InputScript = BUILTIN_SCRIPT;
   try {
+    const journalUrl = bench ? params.get("journal") : null;
     [level, wadBytes] = await Promise.all([fetchLevel(LEVEL_URL), fetchWad(WAD_URL, say)]);
+    if (journalUrl) {
+      const response = await fetch(journalUrl);
+      if (!response.ok) throw new Error(`bench journal ${journalUrl}: HTTP ${response.status}`);
+      script = journalScript(`journal:${journalUrl}`, await response.json());
+    }
   } catch (err) {
     fail(
       loading,
@@ -154,7 +171,11 @@ async function main(): Promise<void> {
     statsEl.hidden = true;
     say("loading real Cairo simulation…", 0.95);
     try { await cairo.init(); }
-    catch (error) { cairo.dispose(); fail(loading, loadingStatus, String(error)); return; }
+    catch (error) {
+      cairo.dispose();
+      fail(loading, loadingStatus, String(error) + (bench ? "\n\nThe bench needs the staged Cairo simulation (scripts/prepare-sim.py). `?sim=demo&bench=1` measures the renderer's demo stand-in instead - clearly not the Cairo VM." : ""));
+      return;
+    }
     profile.snapshotTransport = "copied";
     profile.reasons[0] = "Cairo Worker: transferred ArrayBuffers feed a local renderer ring";
     renderDiagnostics(diagnosticsEl, caps, profile);
@@ -178,19 +199,35 @@ async function main(): Promise<void> {
   // The demo tour has no ticcmd path; a look-zone drag still turns its camera
   // (through the same quantization), so the controls can be tried without Cairo.
   let demoTurn = 0;
+  let benchPanel: BenchPanel | undefined;
+  let finishPaced: () => void = () => undefined;
   const scheduler = cairo ? new CairoScheduler(cairo,
-    () => play!.input.sample(), error => play?.error(error)) : new TicScheduler(ring, (tic) => {
+    () => bench ? script.word(cairo.journal!.length) : play!.input.sample(),
+    error => { if (benchPanel) benchPanel.fail(`Bench stopped: ${error instanceof Error ? error.message : String(error)}`); play?.error(error); })
+    : new TicScheduler(ring, (tic) => {
     // Until P2.4 captures real input there is no command to record; the journal
     // takes the neutral one, so the wiring - and only the wiring - is exercised.
     if (prove) prove.recordTic(neutralWord);
+    const started = performance.now();
     const snapshot = sim!.stepTic(tic);
+    if (bench) {
+      const stepMs = performance.now() - started;
+      if (bench.recordTic({ vmMs: stepMs, roundTripMs: stepMs })) finishPaced();
+    }
     if (touch) {
       demoTurn = (demoTurn + quantize({ forward: 0, side: 0, turn: touch.consume(touch.run).turn, buttons: 0 }).turn) | 0;
       snapshot.player.angle = (snapshot.player.angle + demoTurn) >>> 0;
     }
     return snapshot;
   });
-  if (cairo && scheduler instanceof CairoScheduler) {
+  if (cairo && bench) {
+    cairo.onAdvance = info => {
+      const done = bench.recordTic({ vmMs: info.elapsedMs, roundTripMs: info.roundTripMs, steps: info.steps, memoryBytes: info.memoryBytes });
+      if (cairo.terminal) bench.terminal = true;
+      if (done || cairo.terminal) finishPaced();
+    };
+  }
+  if (cairo && scheduler instanceof CairoScheduler && !bench) {
     play = new PlaySession(cairo, scheduler, canvas, document.getElementById("stage")!, { touch });
     document.getElementById("help")!.textContent = "WASD / ↑↓ move · ←→ turn · Shift run · Mouse / Ctrl fire · E / Space use · 1–4, 7 weapons · Esc / P pause · Tab map · F4 proof / export";
   }
@@ -234,7 +271,7 @@ async function main(): Promise<void> {
   let showHud = true;
 
   let touchControls: TouchControls | undefined;
-  if (touch) {
+  if (touch && !bench) {
     touchControls = mountTouchControls(document.getElementById("stage")!, touch, {
       pause: () => { if (play) play.pause(); else if (scheduler.isRunning) scheduler.stop(); else scheduler.start(); },
       toggleMap: () => { showAutomap = !showAutomap; },
@@ -312,7 +349,49 @@ async function main(): Promise<void> {
     }
   });
 
-  if (!cairo) scheduler.start();
+  // The bench: the paced phase is the ordinary loop with scripted input; when
+  // it has its tics, a Cairo Worker also gets a short unpaced burst for its raw
+  // throughput. Then memory is probed and the panel shows the JSON to paste.
+  let benchDone: Promise<BenchResult> | undefined;
+  if (bench) {
+    const stage = document.getElementById("stage")!;
+    benchPanel = mountBenchPanel(stage, cairo ? CAIRO_LABEL : DEMO_LABEL);
+    statsEl.hidden = true;
+    const environment: BenchEnvironment = {
+      simulator: cairo ? "cairo" : "demo", script: script.name, userAgent: caps.userAgent,
+      platform: (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform ?? null,
+      hardwareConcurrency: caps.hardwareConcurrency, deviceMemoryGiB: caps.deviceMemoryGiB, crossOriginIsolated: caps.crossOriginIsolated,
+      viewport: { width: canvas.clientWidth, height: canvas.clientHeight, devicePixelRatio: window.devicePixelRatio || 1 },
+      gpu: caps.webgl2.renderer, softwareRasterizer: caps.webgl2.softwareRasterizer, touch: touch !== undefined,
+    };
+    benchDone = new Promise<BenchResult>((resolve, reject) => {
+      finishPaced = () => {
+        finishPaced = () => undefined;
+        bench.endPaced();
+        scheduler.stop();
+        void (async () => {
+          try {
+            if (cairo && bench.plannedBurst > 0 && !cairo.terminal) {
+              while (cairo.busy) await new Promise(r => setTimeout(r, 5));
+              await cairo.resume();
+              bench.startBurst();
+              for (let i = 0; i < bench.plannedBurst && !cairo.terminal; i++) await cairo.advance(script.word(cairo.journal!.length));
+              bench.endBurst();
+              await cairo.pause();
+            }
+            const result = bench.summarise(environment, await probeMemory(), scheduler.droppedTics);
+            console.log("hellproof cadence bench\n" + benchPanel!.show(result));
+            resolve(result);
+          } catch (error) {
+            benchPanel!.fail(`Bench failed: ${error instanceof Error ? error.message : String(error)}`);
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
+        })();
+      };
+    });
+    bench.startPaced();
+  }
+  if (!cairo || bench) scheduler.start();
   if (cairo && scheduler instanceof CairoScheduler) bindCairoPageLifecycle(scheduler, cairo);
   loading.hidden = true;
 
@@ -323,7 +402,8 @@ async function main(): Promise<void> {
   const loop = (): void => {
     if (cairo?.journal && !cairo.busy) realProof!.bridge.observe(cairo.journal);
     const now = performance.now();
-    frame.frameMs = frame.frameMs === 0 ? now - lastFrameTime : frame.frameMs * 0.9 + (now - lastFrameTime) * 0.1;
+    const frameDelta = now - lastFrameTime;
+    frame.frameMs = frame.frameMs === 0 ? frameDelta : frame.frameMs * 0.9 + frameDelta * 0.1;
     lastFrameTime = now;
     frame.frames++;
     frame.windowFrames++;
@@ -356,6 +436,10 @@ async function main(): Promise<void> {
         }
         renderer.render(view, renderOptions, appearance);
         renderError = undefined;
+        if (bench?.running) {
+          bench.recordFrame({ cpuMs: renderer.stats.cpuMs, frameMs: frameDelta });
+          if (frame.frames % 10 === 0) benchPanel!.progress(bench);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (scheduler.isRunning) scheduler.stop();
@@ -413,6 +497,8 @@ async function main(): Promise<void> {
     touchControls,
     /** Accumulated look-zone turn applied to the demo tour (BAM); 0 in the Cairo game. */
     demoTurn: (): number => demoTurn,
+    bench,
+    benchDone,
     resetFpsWindow(): void {
       frame.frames = 0;
       frame.windowFrames = 0;
