@@ -38,19 +38,21 @@
 //! 7 000–10 000-step traversal path on all but one tic in eight.
 
 pub mod actions;
+pub mod actors;
 pub mod event;
 pub mod tables;
 
 #[cfg(test)]
 mod tests;
 pub mod think;
+pub use actors::Actors;
 use doom_physics::{Mobj, World, maputl};
 pub use event::{
     EV_BLOOD, EV_CROSS, EV_DROP, EV_KILLED, EV_PUFF, EV_SOUND, EV_USE, EV_WAKE, MonsterEvent,
 };
 pub use think::{
-    awake_count, in_window, is_awake, is_dormant, mobj_thinker, monsters_ticker,
-    monsters_ticker_with_defense,
+    awake_count, awake_count_in, in_window, is_awake, is_dormant, mobj_thinker, monsters_ticker,
+    monsters_ticker_indexed, monsters_ticker_with_defense,
 };
 
 /// How many tics a sight verdict is cached for (R2-A3; the `doom_physics`

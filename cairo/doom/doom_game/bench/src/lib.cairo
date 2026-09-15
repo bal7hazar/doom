@@ -99,7 +99,19 @@ fn advance(log: Span<felt252>, tic: u32) -> GameState {
 /// state), so the round-robin window of 8 is exactly full.
 fn cap_awake(state: GameState, keep: u32) -> GameState {
     let GameState {
-        level, leveltime, status, noise, prng, mrng, player, mobjs, specials, floor, ceil, grid,
+        level,
+        leveltime,
+        status,
+        noise,
+        prng,
+        mrng,
+        player,
+        mobjs,
+        specials,
+        floor,
+        ceil,
+        grid,
+        actors: _,
     } = state;
     let ctx = ctx_of(level, floor, ceil);
     let mut out: Array<Box<Mobj>> = array![];
@@ -129,6 +141,7 @@ fn cap_awake(state: GameState, keep: u32) -> GameState {
         floor,
         ceil,
         grid,
+        actors: doom_monsters::actors::scan(out.span()),
     }
 }
 

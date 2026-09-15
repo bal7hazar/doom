@@ -11,7 +11,7 @@
 use doom_physics::maputl::{inc, opaque_zero, rd32};
 use doom_physics::{
     Blocker, KIND_NONE, MAX_MOBJS, MF_COUNTKILL, MF_MISSILE, MF_SOLID, Mobj, MoveEvent, NO_MOBJ,
-    PlayerDefense, ThingGrid, World, XyOutcome, explode_missile, first_free, maputl, removed_mobj,
+    PlayerDefense, ThingGrid, World, XyOutcome, explode_missile, maputl, removed_mobj,
     unset_thing_position, xy_movement, z_movement,
 };
 use doom_things::tables::{
@@ -23,6 +23,7 @@ use super::actions::{
     a_chase_in, a_look_in, a_pos_attack_in, a_sarg_attack_in, a_spos_attack_in, a_troop_attack_in,
     face_boxed, hurt_in, run_passive,
 };
+use super::actors::{ACTOR, Actors, class_of, patches_keep_classes, scan};
 use super::event::{MonsterEvent, drain, missile_hit};
 use super::{Ctx, Env, EnvData, Noise, Patch, WINDOW, env_of, read_boxed, read_mobj};
 
@@ -80,6 +81,29 @@ pub fn awake_count(w: World, mobjs: Span<Box<Mobj>>) -> u32 {
             && rd32(actions, *m.state) != A_LOOK
             && *m.health > 0 {
             c = inc(c);
+        }
+    }
+    c
+}
+
+/// [`awake_count`] reading only the actor slots of the derived index (O1):
+/// a monster is `MF_COUNTKILL`, so every awake monster is an actor, and a
+/// removed slot is canonical (`removed_mobj`, enforced by the state reader)
+/// so it never carries the flag. Same three fields, ~30 slots instead of 210.
+pub fn awake_count_in(w: World, mobjs: Span<Box<Mobj>>, mut indices: Span<u32>) -> u32 {
+    let actions = w.states.action_id;
+    let mut c: u32 = opaque_zero(mobjs.len());
+    while let Option::Some(bi) = indices.pop_front() {
+        match mobjs.get(*bi) {
+            Option::Some(b) => {
+                let m = b.unbox().as_snapshot().unbox();
+                if doom_physics::has(*m.flags, MF_COUNTKILL)
+                    && rd32(actions, *m.state) != A_LOOK
+                    && *m.health > 0 {
+                    c = inc(c);
+                }
+            },
+            Option::None => {},
         }
     }
     c
@@ -543,10 +567,32 @@ fn tick_actor(
     mo
 }
 
+/// Copy the passive run `[from, to)` — the front of `remaining` is slot
+/// `from` — with only the cursor and the output live: one pointer per slot,
+/// no classification (the index already did it). `Span::slice` would be a
+/// panic site; this loop has none, and it stops at the end of the list.
+#[inline(never)]
+fn copy_run(ref remaining: Span<Box<Mobj>>, ref out: Array<Box<Mobj>>, from: u32, to: u32) {
+    let mut k = from;
+    while k != to {
+        match remaining.pop_front() {
+            Option::Some(b) => { out.append(*b); },
+            Option::None => { break; },
+        }
+        k = inc(k);
+    }
+}
+
 // Copy a passive run with only its cursor and output live.
 // Return the next actor without changing its slot index or record.
+//
+// This is the **definition** of the actor set (`is_ours` on a live slot)
+// that `actors::scan` derives and the tests compare it with; the ticker
+// itself no longer classifies the list (O1).
 #[inline(never)]
-fn next_actor(ref remaining: Span<Box<Mobj>>, ref out: Array<Box<Mobj>>) -> Option<@Box<Mobj>> {
+pub(crate) fn next_actor(
+    ref remaining: Span<Box<Mobj>>, ref out: Array<Box<Mobj>>,
+) -> Option<@Box<Mobj>> {
     loop {
         match remaining.pop_front() {
             Option::Some(boxed) => {
@@ -564,50 +610,62 @@ fn next_actor(ref remaining: Span<Box<Mobj>>, ref out: Array<Box<Mobj>>) -> Opti
 
 /// One tic of every monster and missile in `mobjs`, under the D3 schedule.
 ///
-/// Returns the rebuilt list, the advanced RNG and the tic's events. The
-/// thing grid is updated in place; its canonical order is hashed (schema 2).
+/// `actors` is the derived index of `mobjs` (O1): the ticker visits only
+/// its slots, in order, and copies the passive runs between them by
+/// pointer. Returns the rebuilt list, the advanced RNG, the tic's events
+/// and the index of the rebuilt list — the same index when no slot changed
+/// class, a fresh [`scan`] otherwise. The thing grid is updated in place;
+/// its canonical order is hashed (schema 2).
 fn monsters_ticker_in(
     w: World,
     mobjs: Span<Box<Mobj>>,
+    actors: Actors,
     ref g: ThingGrid,
     players: Span<u32>,
     noise: Noise,
     tic: u32,
     rng: Prng,
     ref defense: Box<PlayerDefense>,
-) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>) {
+) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>, Actors) {
     let e = BoxTrait::new(EnvData { w: BoxTrait::new(w), players, noise, tic });
     let mut out: Array<Box<Mobj>> = array![];
     let n = mobjs.len();
-    let awake = awake_count(w, mobjs);
+    let awake = awake_count_in(w, mobjs, actors.indices);
     // Where a missile spawned this tic goes: a freed slot if there is one,
-    // otherwise the end of the list. Only an awake monster can fire, and
-    // `first_free` scans every slot of the list, so a tic with nothing
-    // awake does not pay for it.
+    // otherwise the end of the list. Only an awake monster can fire; the
+    // free slot is read off the index (it used to be a scan of the list).
     let mut spawn_at = n;
-    if awake != 0 {
-        let free = first_free(mobjs);
-        if free != NO_MOBJ {
-            spawn_at = free;
-        }
+    if awake != 0 && actors.first_free != NO_MOBJ {
+        spawn_at = actors.first_free;
     }
     let mut pass = BoxTrait::new(
         Pass { grid: g, rng, patches: array![], events: array![], spawn_at, defense },
     );
     let phase_now = look_phase(tic);
-    // The classification below is `is_ours`, `is_awake` and `is_dormant`
-    // spelled out (D24), reading the two state columns *through the boxed
-    // world*: a `let` here would put the twelve felts of `StateTables` and
-    // its action column in the loop's live set, and a loop is a function
-    // whose live set is pushed and returned on every iteration (S7 §8
-    // rule 4). A read through the box is free.
+    // The classification below is `is_awake` and `is_dormant` spelled out
+    // (D24), reading the two state columns *through the boxed world*: a
+    // `let` here would put the twelve felts of `StateTables` and its action
+    // column in the loop's live set, and a loop is a function whose live
+    // set is pushed and returned on every iteration (S7 §8 rule 4). A read
+    // through the box is free.
     let mut rank: u32 = opaque_zero(n);
     let mut remaining = mobjs;
+    let mut indices = actors.indices;
+    let mut from: u32 = opaque_zero(n);
+    // Set once an actor left its class this tic (removed itself, or a
+    // missile exploded): the index is rebuilt from the final list.
+    let mut dirty = false;
     // Keep the one-felt box live across branches and calls. A named @Mobj
     // snapshot here makes Cairo preserve 27 felts even on unchanged slots.
-    while let Option::Some(boxed) = next_actor(ref remaining, ref out) {
-        // Exactly one output record precedes each original slot.
-        let i = out.len();
+    while let Option::Some(bi) = indices.pop_front() {
+        let i = *bi;
+        copy_run(ref remaining, ref out, from, i);
+        // The actor's own record; an index past the list ends the pass.
+        let boxed = match remaining.pop_front() {
+            Option::Some(b) => b,
+            Option::None => { break; },
+        };
+        from = inc(i);
         let flags = boxed.flags;
         let countkill = doom_physics::has(flags, MF_COUNTKILL);
         let dormant = countkill && rd32(e.w.unbox().states.action_id, boxed.state) == A_LOOK;
@@ -661,17 +719,39 @@ fn monsters_ticker_in(
                 may_chase,
                 true,
             );
+            if !still_actor(@b) {
+                dirty = true;
+            }
             out.append(b);
             continue;
         }
         let b = tick_actor(e, mobjs, ref pass, *boxed, i, may_look, may_chase, false);
+        if !still_actor(@b) {
+            dirty = true;
+        }
         out.append(b);
     }
+    copy_run(ref remaining, ref out, from, n);
     let Pass { grid, rng, patches, events, spawn_at: _, defense: final_defense } = pass.unbox();
     g = grid;
     defense = final_defense;
     let final_list = apply(out, patches.span(), n);
-    (final_list, rng, events)
+    // The index survives the tic iff every visited actor is still one and
+    // every patch (a damaged mobj, a spawned missile) kept its slot's class.
+    let index = if !dirty && patches_keep_classes(mobjs, patches.span()) {
+        actors
+    } else {
+        scan(final_list.span())
+    };
+    (final_list, rng, events, index)
+}
+
+/// Whether a ticked actor is still an actor: it may have removed itself
+/// (`S_NULL`) or, for a missile, exploded (`P_ExplodeMissile` clears
+/// `MF_MISSILE`). Two field reads through the box.
+#[inline(always)]
+fn still_actor(b: @Box<Mobj>) -> bool {
+    class_of(b.kind, b.flags) == ACTOR
 }
 
 /// Write the tic's backward patches (damaged mobjs, spawned missiles) into
@@ -716,7 +796,8 @@ pub(crate) fn scale(r: u32, mul: u32) -> u32 {
     maputl::low32(doom_physics::maputl::to_u128((r.into() + 1) * mul.into()))
 }
 
-/// Compatibility entry point: no player-specific damage bookkeeping.
+/// Compatibility entry point: no player-specific damage bookkeeping, and
+/// the actor index derived from the list on the spot.
 #[inline(always)]
 pub fn monsters_ticker(
     w: World,
@@ -728,7 +809,10 @@ pub fn monsters_ticker(
     rng: Prng,
 ) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>) {
     let mut defense = BoxTrait::new(doom_physics::no_player_defense());
-    monsters_ticker_in(w, mobjs, ref g, players, noise, tic, rng, ref defense)
+    let (list, rng, events, _) = monsters_ticker_in(
+        w, mobjs, scan(mobjs), ref g, players, noise, tic, rng, ref defense,
+    );
+    (list, rng, events)
 }
 
 /// The same ordered ticker with player armor applied before each health,
@@ -744,8 +828,29 @@ pub fn monsters_ticker_with_defense(
     rng: Prng,
     ref defense: PlayerDefense,
 ) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>) {
+    let (list, rng, events, _) = monsters_ticker_indexed(
+        w, mobjs, scan(mobjs), ref g, players, noise, tic, rng, ref defense,
+    );
+    (list, rng, events)
+}
+
+/// [`monsters_ticker_with_defense`] carrying the derived actor index across
+/// tics (O1): `actors` must be `scan(mobjs)`, and the returned index is the
+/// one of the returned list. This is `doom_game`'s entry point.
+#[inline(always)]
+pub fn monsters_ticker_indexed(
+    w: World,
+    mobjs: Span<Box<Mobj>>,
+    actors: Actors,
+    ref g: ThingGrid,
+    players: Span<u32>,
+    noise: Noise,
+    tic: u32,
+    rng: Prng,
+    ref defense: PlayerDefense,
+) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>, Actors) {
     let mut boxed = BoxTrait::new(defense);
-    let out = monsters_ticker_in(w, mobjs, ref g, players, noise, tic, rng, ref boxed);
+    let out = monsters_ticker_in(w, mobjs, actors, ref g, players, noise, tic, rng, ref boxed);
     defense = boxed.unbox();
     out
 }
