@@ -21,8 +21,8 @@ use prng::from_index;
 use segment::{Status, from_felts as output_from_felts, to_felts};
 use ticcmd::{TicCmd, encode};
 use crate::level::{
-    SectorIndex, contains, ctx_of, moving_sectors, nofit_scan, occupancy_of, occupancy_scan,
-    refresh_heights, things_of_sector,
+    SectorIndex, contains, ctx_of, moving_sectors, no_index, nofit_scan, occupancy_of,
+    occupancy_scan, refresh_heights, things_of_sector,
 };
 use crate::tic::{
     apply_monster_events, apply_move_events, apply_player_events, clip_patches, clip_patches_scan,
@@ -473,7 +473,7 @@ fn test_touch_picks_up_and_removes_an_item_once() {
     assert(patches.len() == 1, 'removed once');
     assert(is_removed((@(*patches.at(0)).mo).as_snapshot().unbox()), 'a removed slot');
     // The rebuild writes the patch and the player.
-    let list = rebuild_list(w, mobjs, ref grid, mo, 0, patches.span(), array![].span());
+    let list = rebuild_list(w, mobjs, ref grid, mo, 0, patches.span(), array![].span(), no_index());
     assert(is_removed((list.at(1)).as_snapshot().unbox()), 'gone from the list');
     assert(list.at(0).unbox() == mo, 'player written');
     g.player = p;

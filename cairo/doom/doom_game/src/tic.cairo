@@ -51,7 +51,7 @@ use fixed::{BIAS, Fixed};
 use prng::Prng;
 use segment::Status;
 use super::level::{
-    Ctx, SectorIndex, contains, ctx_of, moving_sectors, occupancy_scan, refresh_heights,
+    Ctx, SectorIndex, contains, ctx_of, moving_sectors, occupancy_of, refresh_heights,
     things_of_sector,
 };
 use super::setup::status_from;
@@ -175,9 +175,12 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
 
     // 6. One rebuild, if anything changed on our side. The derived actor
     // index follows the list (O1): kept when no patch changed a slot's
-    // class, rescanned otherwise.
+    // class, rescanned otherwise. The things to clip are found through the
+    // blockmap (O3), the sector → cell table read once here.
+    let cells = ctx.unbox().m.s_cells;
     let (list_in, actors_in) = if mo != mo0 || patches.len() != 0 || clip.len() != 0 {
-        rebuild_list_in(w, mobjs, ref g, mo, me, patches.span(), clip, actors)
+        let index = SectorIndex { cells, off_grid: actors.off_grid };
+        rebuild_list_in(w, mobjs, ref g, mo, me, patches.span(), clip, actors, index)
     } else {
         (mobjs, actors)
     };
@@ -219,9 +222,11 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
         actors_now = scan(out.span());
     }
 
-    // 9. Doors, lifts, floors, lights.
+    // 9. Doors, lifts, floors, lights. `P_ChangeSector`'s things are read
+    // off the grid of the final list (O3), one walk per mover.
     let movers_before = s.movers.len();
-    let occupancy = occupancy_scan(out.span());
+    let index_now = SectorIndex { cells, off_grid: actors_now.off_grid };
+    let occupancy = occupancy_of(ref g, out.span(), me, w.map.grid, index_now, @s);
     let (s2, r3, _) = specials_ticker(@occupancy, s, ctx.unbox().tables, tic, rng, w.rndtable);
     s = s2;
     rng = r3;
@@ -441,9 +446,9 @@ fn apply_move_events_boxed(
 /// every iteration, so a per-mobj loop holding the 67-felt `World` cost
 /// 450 steps a slot (94 000 a tic). The patches are sorted (they are a
 /// handful) and the unpatched runs between them are copied with
-/// `append_span`, whose loop carries two spans; the clip case first finds
-/// the things to clip by reading one felt per slot, then joins the patch
-/// list.
+/// `append_span`, whose loop carries two spans; the clip case finds the
+/// things to clip through the blockmap cells of the clipping sectors
+/// (O3, `index`), then joins the patch list.
 pub fn rebuild_list(
     w: World,
     mobjs: Span<Box<Mobj>>,
@@ -452,8 +457,9 @@ pub fn rebuild_list(
     me: u32,
     patches: Span<Patch>,
     clip: Span<u32>,
+    index: SectorIndex,
 ) -> Span<Box<Mobj>> {
-    let (list, _) = rebuild_list_in(w, mobjs, ref g, mo, me, patches, clip, no_actors());
+    let (list, _) = rebuild_list_in(w, mobjs, ref g, mo, me, patches, clip, no_actors(), index);
     list
 }
 
@@ -470,6 +476,7 @@ fn rebuild_list_in(
     patches: Span<Patch>,
     clip: Span<u32>,
     actors: Actors,
+    index: SectorIndex,
 ) -> (Span<Box<Mobj>>, Actors) {
     let mut sorted = insert_patch(
         array![], BoxTrait::new(Patch { idx: me, mo: BoxTrait::new(mo) }),
@@ -479,7 +486,7 @@ fn rebuild_list_in(
         sorted = insert_patch(sorted, BoxTrait::new(*pt));
     }
     if clip.len() != 0 {
-        sorted = clip_patches_scan(BoxTrait::new(w), mobjs, ref g, sorted, clip, me);
+        sorted = clip_patches(BoxTrait::new(w), mobjs, ref g, sorted, clip, me, index);
     }
     let list = copy_patched(mobjs, sorted.span());
     let index = if patches_keep_classes(mobjs, sorted.span()) {
@@ -534,9 +541,8 @@ fn copy_patched(mobjs: Span<Box<Mobj>>, mut patches: Span<Patch>) -> Span<Box<Mo
 
 /// `P_ThingHeightClip` on every thing (other than the player, already
 /// done) whose centre is in a `clip` sector, as patches merged into
-/// `sorted` — the same patches as [`clip_patches_scan`], the scan the
-/// ticker runs, found through the blockmap (O3, not yet wired into the
-/// tic): the slots linked in the cells of each clipping sector,
+/// `sorted` — the same patches as [`clip_patches_scan`], found through the
+/// blockmap (O3): the slots linked in the cells of each clipping sector,
 /// then the slots off the grid, each clipped when its record's sector is
 /// one of `clip`. The order of the visits does not show in the result: a
 /// clip reads the original list and grid and writes its own slot's patch,
@@ -594,9 +600,9 @@ fn clip_slots(
     out
 }
 
-/// The clip of the ticker: every slot of the list read for its sector,
-/// and the oracle [`clip_patches`] is compared with (same patches, same
-/// order).
+/// The scan [`clip_patches`] replaced: every slot of the list read for its
+/// sector. Kept as the oracle of the tests (same patches, same order).
+#[cfg(test)]
 pub(crate) fn clip_patches_scan(
     w: Box<World>,
     mobjs: Span<Box<Mobj>>,

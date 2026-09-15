@@ -255,8 +255,8 @@ pub fn occupancy_of(
 }
 
 /// An occupancy over every slot of `mobjs` for any sector, with no grid at
-/// hand: the shape of the scan, as one list of every slot — what the
-/// ticker still asks until the walk is wired in.
+/// hand: the shape of the scan, as one list of every slot. For the bench
+/// and the tests.
 pub fn occupancy_scan(mobjs: Span<Box<Mobj>>) -> Occupancy {
     let mut all: Array<u32> = array![];
     let mut k: u32 = 0;
@@ -313,6 +313,7 @@ fn blocks_among(mobjs: Span<Box<Mobj>>, mut slots: Span<u32>, sector: u32, room:
 
 /// The scan the answer used to be: every slot of the list, in order, until
 /// one blocks. The oracle the cell walk is compared with.
+#[cfg(test)]
 pub(crate) fn nofit_scan(mut mobjs: Span<Box<Mobj>>, sector: u32, room: Fixed) -> bool {
     let mut blocked = false;
     while let Option::Some(m) = mobjs.pop_front() {

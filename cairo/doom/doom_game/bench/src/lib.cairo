@@ -254,7 +254,7 @@ fn main(op: u32, n: u32) -> felt252 {
         let patch = array![Patch { idx: 1, mo: *s.mobjs.at(1) }];
         while i != n {
             let list = doom_game::tic::rebuild_list(
-                ctx.w, s.mobjs, ref g, mo, 0, patch.span(), array![].span(),
+                ctx.w, s.mobjs, ref g, mo, 0, patch.span(), array![].span(), doom_game::no_index(),
             );
             acc += list.len().into();
             i += 1;
