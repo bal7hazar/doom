@@ -12,8 +12,10 @@
 //! arrays are rebuilt in full. `test_heights_track_the_specials` checks the
 //! two representations agree on every tic of the scripted door run.
 
-use doom_map::{LevelId, LevelMap, load, num_sectors};
-use doom_physics::{MF_SHOOTABLE, Mobj, World, has, with_heights, world_of};
+use blockmap::Grid;
+use doom_map::{LevelId, LevelMap, load, num_sectors, unpack_cells};
+use doom_physics::maputl::{cell_at, inc, rd};
+use doom_physics::{MF_SHOOTABLE, Mobj, ThingGrid, World, has, things_in, with_heights, world_of};
 use doom_specials::state::{moves_ceiling, set_felt};
 use doom_specials::{
     SectorBlocking, SectorTables, SpecialsMap, SpecialsState, ceiling_of, floor_of, heights,
@@ -138,34 +140,190 @@ pub fn contains(mut sectors: Span<u32>, sector: u32) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// P_ChangeSector's things, by blockmap cells (O3)
+// ---------------------------------------------------------------------------
+
+/// What finds the things standing in a sector without reading the roster
+/// (docs/design/d2-profile.md §5.3, optimisation O3): the sector → cell
+/// table of the level and the live slots the grid cannot find. Four felts,
+/// built once per tic; the thing grid itself travels by `ref`.
+///
+/// **The set it yields is the roster's.** A linked thing whose `sector` is
+/// `s` is linked in a cell of `S_CELLS[s]` (`gen_level.py`'s
+/// `sector_cell_ranges` proves it for both ways the engine attributes a
+/// sector, the BSP descent and the cached short step, on every state the
+/// engine produces from genesis; `from_felts` also requires every linked
+/// thing to be in the grid under its own cell); an unlinked live thing is
+/// in `off_grid` (`Actors::off_grid`, rebuilt whenever a write may change
+/// a slot's membership). The player is the one exception to the cached-step
+/// argument and is tested by index wherever it matters.
+#[derive(Copy, Drop)]
+pub struct SectorIndex {
+    /// `LevelMap::s_cells`.
+    pub cells: Span<felt252>,
+    /// The live slots not linked in the blockmap, ascending (on E1M1: the
+    /// missiles in flight, `MF_NOBLOCKMAP` in Doom).
+    pub off_grid: Span<u32>,
+}
+
+/// An index that finds nothing: for callers that clip no sector.
+pub fn no_index() -> SectorIndex {
+    SectorIndex { cells: array![].span(), off_grid: array![].span() }
+}
+
+/// The slots linked in the cells of `sector`'s range, cell by cell in
+/// row-major order, each cell's list in its committed order. Unfiltered: a
+/// thing of a neighbouring sector whose cell overlaps the range is in it
+/// too, so every consumer tests `sector` again. One loop over the range
+/// with two counters (S7 §8 rule 4); an empty range runs it zero times.
+pub fn things_of_sector(
+    ref g: ThingGrid, cells: Span<felt252>, grid: Grid, sector: u32,
+) -> Span<u32> {
+    let r = unpack_cells(rd(cells, sector));
+    let mut out: Array<u32> = array![];
+    let mut cx = r.x0;
+    let mut cy = r.y0;
+    while cx <= r.x1 && cy <= r.y1 {
+        out.append_span(things_in(ref g, cell_at(grid, cx, cy)));
+        if cx == r.x1 {
+            cx = r.x0;
+            cy = inc(cy);
+        } else {
+            cx = inc(cx);
+        }
+    }
+    out.span()
+}
+
+// ---------------------------------------------------------------------------
 // P_ChangeSector's question
 // ---------------------------------------------------------------------------
+
+/// The candidate slots of one mover's sector, gathered from the grid
+/// before the specials run (a `SectorBlocking` is a snapshot and cannot
+/// read the grid itself).
+#[derive(Copy, Drop)]
+pub struct SectorThings {
+    pub sector: u32,
+    pub things: Span<u32>,
+}
 
 /// The `SectorBlocking` the specials ticker asks: is a shootable thing in
 /// `sector` too tall for the planes as they would be? (`PIT_ChangeSector`:
 /// corpses gib and items are crunched, neither blocks; only a live
-/// `MF_SHOOTABLE` thing makes a door go back up.) One scan of the list per
-/// moving plane per tic; a thing is "in" the sector when its centre is.
+/// `MF_SHOOTABLE` thing makes a door go back up.) A thing is "in" the
+/// sector when its centre is. The answer used to be one scan of the list
+/// per moving plane per tic; it is now read off the blockmap cells of the
+/// sector (O3, [`SectorIndex`]): the player, the slots linked in those
+/// cells, and the slots off the grid — the same set, so the same answer.
+///
+/// The ticker asks for the sectors of the movers of the state it is given,
+/// and [`occupancy_of`] gathers one list per mover of that same state, in
+/// order: every sector asked is listed. (An unlisted sector holds nothing;
+/// `test_occupancy_lists_every_mover_the_ticker_asks_for` pins the shape.)
 #[derive(Copy, Drop)]
 pub struct Occupancy {
     pub mobjs: Span<Box<Mobj>>,
+    /// The player's slot, always tested (`SectorIndex`).
+    pub me: u32,
+    /// `SectorIndex::off_grid` of `mobjs`.
+    pub off_grid: Span<u32>,
+    /// One entry per mover, in mover order.
+    pub sectors: Span<SectorThings>,
+}
+
+/// The occupancy of `mobjs` for the sectors of `movers`: one grid walk per
+/// mover, nothing when no plane moves.
+pub fn occupancy_of(
+    ref g: ThingGrid,
+    mobjs: Span<Box<Mobj>>,
+    me: u32,
+    grid: Grid,
+    index: SectorIndex,
+    s: @SpecialsState,
+) -> Occupancy {
+    let mut movers = *s.movers;
+    let mut sectors: Array<SectorThings> = array![];
+    while let Option::Some(mv) = movers.pop_front() {
+        let sector = *mv.sector;
+        sectors
+            .append(
+                SectorThings { sector, things: things_of_sector(ref g, index.cells, grid, sector) },
+            );
+    }
+    Occupancy { mobjs, me, off_grid: index.off_grid, sectors: sectors.span() }
+}
+
+/// An occupancy over every slot of `mobjs` for any sector, with no grid at
+/// hand: the shape of the scan, as one list of every slot — what the
+/// ticker still asks until the walk is wired in.
+pub fn occupancy_scan(mobjs: Span<Box<Mobj>>) -> Occupancy {
+    let mut all: Array<u32> = array![];
+    let mut k: u32 = 0;
+    while k != mobjs.len() {
+        all.append(k);
+        k += 1;
+    }
+    Occupancy { mobjs, me: doom_physics::NO_MOBJ, off_grid: all.span(), sectors: array![].span() }
 }
 
 pub impl OccupancyBlocking of SectorBlocking<Occupancy> {
     fn nofit(self: @Occupancy, sector: u32, floor: Fixed, ceiling: Fixed) -> bool {
         let room = fixed::sub(ceiling, floor);
-        let mut mobjs = *self.mobjs;
-        let mut blocked = false;
-        while let Option::Some(m) = mobjs.pop_front() {
-            let m = m.as_snapshot().unbox();
-            if *m.sector == sector
-                && has(*m.flags, MF_SHOOTABLE)
-                && *m.health > 0
-                && fixed::lt(room, *m.height) {
-                blocked = true;
+        let mut lists = *self.sectors;
+        let mut things: Span<u32> = array![].span();
+        while let Option::Some(st) = lists.pop_front() {
+            if *st.sector == sector {
+                things = *st.things;
                 break;
             }
         }
-        blocked
+        blocks(*self.mobjs, *self.me, sector, room)
+            || blocks_among(*self.mobjs, things, sector, room)
+            || blocks_among(*self.mobjs, *self.off_grid, sector, room)
     }
+}
+
+/// `PIT_ChangeSector`'s test on slot `i`; `false` past the list.
+#[inline(never)]
+fn blocks(mobjs: Span<Box<Mobj>>, i: u32, sector: u32, room: Fixed) -> bool {
+    match mobjs.get(i) {
+        Option::Some(b) => {
+            let m = b.unbox();
+            m.sector == sector
+                && has(m.flags, MF_SHOOTABLE)
+                && m.health > 0
+                && fixed::lt(room, m.height)
+        },
+        Option::None => false,
+    }
+}
+
+/// Whether any slot of `slots` blocks.
+fn blocks_among(mobjs: Span<Box<Mobj>>, mut slots: Span<u32>, sector: u32, room: Fixed) -> bool {
+    let mut blocked = false;
+    while let Option::Some(i) = slots.pop_front() {
+        if blocks(mobjs, *i, sector, room) {
+            blocked = true;
+            break;
+        }
+    }
+    blocked
+}
+
+/// The scan the answer used to be: every slot of the list, in order, until
+/// one blocks. The oracle the cell walk is compared with.
+pub(crate) fn nofit_scan(mut mobjs: Span<Box<Mobj>>, sector: u32, room: Fixed) -> bool {
+    let mut blocked = false;
+    while let Option::Some(m) = mobjs.pop_front() {
+        let m = m.as_snapshot().unbox();
+        if *m.sector == sector
+            && has(*m.flags, MF_SHOOTABLE)
+            && *m.health > 0
+            && fixed::lt(room, *m.height) {
+            blocked = true;
+            break;
+        }
+    }
+    blocked
 }

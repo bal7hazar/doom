@@ -23,7 +23,7 @@ use super::actions::{
     a_chase_in, a_look_in, a_pos_attack_in, a_sarg_attack_in, a_spos_attack_in, a_troop_attack_in,
     face_boxed, hurt_in, run_passive,
 };
-use super::actors::{ACTOR, Actors, class_of, patches_keep_classes, scan};
+use super::actors::{ACTOR, Actors, class_of, linked, patches_keep_classes, scan};
 use super::event::{MonsterEvent, drain, missile_hit};
 use super::{Ctx, Env, EnvData, Noise, Patch, WINDOW, env_of, read_boxed, read_mobj};
 
@@ -719,14 +719,14 @@ fn monsters_ticker_in(
                 may_chase,
                 true,
             );
-            if !still_actor(@b) {
+            if !keeps_class(@b, flags, boxed.cell) {
                 dirty = true;
             }
             out.append(b);
             continue;
         }
         let b = tick_actor(e, mobjs, ref pass, *boxed, i, may_look, may_chase, false);
-        if !still_actor(@b) {
+        if !keeps_class(@b, flags, boxed.cell) {
             dirty = true;
         }
         out.append(b);
@@ -746,12 +746,14 @@ fn monsters_ticker_in(
     (final_list, rng, events, index)
 }
 
-/// Whether a ticked actor is still an actor: it may have removed itself
-/// (`S_NULL`) or, for a missile, exploded (`P_ExplodeMissile` clears
-/// `MF_MISSILE`). Two field reads through the box.
+/// Whether a ticked actor kept its slot class: it is still an actor — it
+/// may have removed itself (`S_NULL`) or, for a missile, exploded
+/// (`P_ExplodeMissile` clears `MF_MISSILE`) — and it is linked in the
+/// blockmap iff it was before the tic (`flags`, `cell`: it may have walked
+/// off the grid). Three field reads through the box.
 #[inline(always)]
-fn still_actor(b: @Box<Mobj>) -> bool {
-    class_of(b.kind, b.flags) == ACTOR
+fn keeps_class(b: @Box<Mobj>, flags: u32, cell: u32) -> bool {
+    class_of(b.kind, b.flags) == ACTOR && linked(b.flags, b.cell) == linked(flags, cell)
 }
 
 /// Write the tic's backward patches (damaged mobjs, spawned missiles) into

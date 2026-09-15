@@ -23,10 +23,19 @@
 //!   first one is `first_free`);
 //! * [`ACTOR`]: otherwise, `MF_COUNTKILL | MF_MISSILE` set (exactly
 //!   `next_actor`'s test, `is_ours`);
-//! * [`PASSIVE`]: everything else.
+//! * [`PASSIVE`]: everything else;
+//!
+//! plus one bit read from a third field, [`OFF_GRID`]: a live slot that is
+//! not linked in the blockmap (`MF_NOBLOCKMAP`, or a cell of `NO_CELL`).
+//! `doom_game`'s `P_ChangeSector` (docs/design/d2-profile.md O3) finds the
+//! things standing in a moving sector by walking the blockmap cells of that
+//! sector, and visits [`Actors::off_grid`] on top, so that the set it tests
+//! is exactly the roster's. The same conservative rule keeps that list
+//! right: a write that could change a slot's class *or* its membership
+//! triggers a full [`scan`].
 
 use doom_physics::maputl::{inc, opaque_zero};
-use doom_physics::{KIND_NONE, MF_COUNTKILL, MF_MISSILE, Mobj, NO_MOBJ};
+use doom_physics::{KIND_NONE, MF_COUNTKILL, MF_MISSILE, MF_NOBLOCKMAP, Mobj, NO_CELL, NO_MOBJ};
 use super::Patch;
 
 /// A slot the ticker copies unchanged: a decoration, an item, the player.
@@ -35,15 +44,22 @@ pub const PASSIVE: u32 = 0;
 pub const ACTOR: u32 = 1;
 /// A freed slot (`kind == KIND_NONE`).
 pub const REMOVED: u32 = 2;
+/// Added to [`ACTOR`] or [`PASSIVE`] by [`slot_class`] when the slot is not
+/// linked in the blockmap.
+pub const OFF_GRID: u32 = 4;
 
-/// The derived index of a roster: which slots are actors, and the first
-/// free slot. Three felts; `Copy`.
+/// The derived index of a roster: which slots are actors, the first free
+/// slot, and which live slots the blockmap cannot find. Five felts; `Copy`.
 #[derive(Copy, Drop, PartialEq, Debug)]
 pub struct Actors {
     /// The indices of the actor slots, ascending.
     pub indices: Span<u32>,
     /// The first removed slot, or `NO_MOBJ` (`doom_physics::first_free`).
     pub first_free: u32,
+    /// The live slots not linked in the blockmap, ascending (O3): what a
+    /// walk of the thing grid cannot find. On E1M1 these are the missiles
+    /// in flight (Doom's missiles carry `MF_NOBLOCKMAP`).
+    pub off_grid: Span<u32>,
 }
 
 /// The class of a slot from its two classifying fields.
@@ -64,11 +80,38 @@ pub fn is_actor(m: @Mobj) -> bool {
     class_of(*m.kind, *m.flags) == ACTOR
 }
 
-/// The index of `mobjs`, from scratch: one pass reading two fields per
+/// Whether a live slot with these fields is linked in the blockmap
+/// (`doom_physics::in_blockmap` on the fields alone, the kind being live).
+#[inline(always)]
+pub fn linked(flags: u32, cell: u32) -> bool {
+    !doom_physics::has(flags, MF_NOBLOCKMAP) && cell != NO_CELL
+}
+
+/// The class of a slot with its [`OFF_GRID`] bit: what the index keeps
+/// for the slot, and what a write must preserve for the index to survive.
+pub fn slot_class(kind: u32, flags: u32, cell: u32) -> u32 {
+    let class = class_of(kind, flags);
+    if class != REMOVED && !linked(flags, cell) {
+        class + OFF_GRID
+    } else {
+        class
+    }
+}
+
+/// `slot_class(a) == slot_class(b)` without the sum: the two classes and
+/// the two membership bits compared (a removed slot is never linked, so
+/// its bit is `false` on both sides).
+#[inline(always)]
+pub fn same_class(ka: u32, fa: u32, ca: u32, kb: u32, fb: u32, cb: u32) -> bool {
+    class_of(ka, fa) == class_of(kb, fb) && linked(fa, ca) == linked(fb, cb)
+}
+
+/// The index of `mobjs`, from scratch: one pass reading three fields per
 /// slot. ~25 steps a slot; this is the cost every tic used to pay twice.
 #[inline(never)]
 pub fn scan(mut mobjs: Span<Box<Mobj>>) -> Actors {
     let mut indices: Array<u32> = array![];
+    let mut off_grid: Array<u32> = array![];
     let mut first_free: u32 = NO_MOBJ;
     let mut k: u32 = opaque_zero(mobjs.len());
     while let Option::Some(boxed) = mobjs.pop_front() {
@@ -78,20 +121,24 @@ pub fn scan(mut mobjs: Span<Box<Mobj>>) -> Actors {
         } else if class == REMOVED && first_free == NO_MOBJ {
             first_free = k;
         }
+        if class != REMOVED && !linked(boxed.flags, boxed.cell) {
+            off_grid.append(k);
+        }
         k = inc(k);
     }
-    Actors { indices: indices.span(), first_free }
+    Actors { indices: indices.span(), first_free, off_grid: off_grid.span() }
 }
 
-/// The index of an empty roster: no actor, no free slot.
+/// The index of an empty roster: no actor, no free slot, nothing off the grid.
 pub fn none() -> Actors {
-    Actors { indices: array![].span(), first_free: NO_MOBJ }
+    Actors { indices: array![].span(), first_free: NO_MOBJ, off_grid: array![].span() }
 }
 
 /// `true` when writing `patches` into `before` leaves every slot in its
-/// class — in which case the index of `before` is also the index of the
-/// patched list. A patch past the end of the list (an appended missile), or
-/// one that changes a slot's class, answers `false`: the caller rescans.
+/// class (its blockmap membership included) — in which case the index of
+/// `before` is also the index of the patched list. A patch past the end of
+/// the list (an appended missile), or one that changes a slot's class,
+/// answers `false`: the caller rescans.
 ///
 /// Conservative on purpose: two patches on one slot are each compared with
 /// the original, so a class change undone by a later patch still rescans.
@@ -102,7 +149,7 @@ pub fn patches_keep_classes(before: Span<Box<Mobj>>, mut patches: Span<Patch>) -
         match before.get(*p.idx) {
             Option::Some(b) => {
                 let old = b.unbox();
-                if class_of(old.kind, old.flags) != class_of(new.kind, new.flags) {
+                if !same_class(old.kind, old.flags, old.cell, new.kind, new.flags, new.cell) {
                     same = false;
                     break;
                 }
@@ -119,29 +166,37 @@ pub fn patches_keep_classes(before: Span<Box<Mobj>>, mut patches: Span<Patch>) -
 #[cfg(test)]
 mod tests {
     use doom_physics::{
-        KIND_NONE, MF_COUNTKILL, MF_MISSILE, MF_SOLID, Mobj, NO_MOBJ, first_free, removed_mobj,
+        KIND_NONE, MF_COUNTKILL, MF_MISSILE, MF_NOBLOCKMAP, MF_SOLID, Mobj, NO_CELL, NO_MOBJ,
+        first_free, in_blockmap, is_removed, removed_mobj,
     };
     use crate::Patch;
     use crate::think::next_actor;
-    use super::{ACTOR, Actors, PASSIVE, REMOVED, class_of, none, patches_keep_classes, scan};
+    use super::{
+        ACTOR, Actors, OFF_GRID, PASSIVE, REMOVED, class_of, none, patches_keep_classes, scan,
+        slot_class,
+    };
 
+    /// Every live record of these tests is linked (cell 7), unless said.
     fn passive(kind: u32) -> Box<Mobj> {
-        BoxTrait::new(Mobj { kind, flags: MF_SOLID, ..removed_mobj() })
+        BoxTrait::new(Mobj { kind, flags: MF_SOLID, cell: 7, ..removed_mobj() })
     }
 
     fn monster(kind: u32) -> Box<Mobj> {
-        BoxTrait::new(Mobj { kind, flags: MF_COUNTKILL + MF_SOLID, health: 20, ..removed_mobj() })
+        BoxTrait::new(
+            Mobj { kind, flags: MF_COUNTKILL + MF_SOLID, health: 20, cell: 7, ..removed_mobj() },
+        )
     }
 
     fn missile(kind: u32) -> Box<Mobj> {
-        BoxTrait::new(Mobj { kind, flags: MF_MISSILE, ..removed_mobj() })
+        BoxTrait::new(Mobj { kind, flags: MF_MISSILE, cell: 7, ..removed_mobj() })
     }
 
     fn removed() -> Box<Mobj> {
         BoxTrait::new(removed_mobj())
     }
 
-    /// The definition: the slots `next_actor` stops on, in order.
+    /// The definition: the slots `next_actor` stops on, in order, the first
+    /// free slot, and the live slots `in_blockmap` rejects.
     fn reference(mobjs: Span<Box<Mobj>>) -> Actors {
         let mut remaining = mobjs;
         let mut out: Array<Box<Mobj>> = array![];
@@ -151,7 +206,17 @@ mod tests {
             out.append(*actor);
         }
         assert_eq!(out.len(), mobjs.len());
-        Actors { indices: indices.span(), first_free: first_free(mobjs) }
+        let mut off_grid: Array<u32> = array![];
+        let mut k: u32 = 0;
+        let mut ms = mobjs;
+        while let Option::Some(b) = ms.pop_front() {
+            let m = b.as_snapshot().unbox();
+            if !is_removed(m) && !in_blockmap(m) {
+                off_grid.append(k);
+            }
+            k += 1;
+        }
+        Actors { indices: indices.span(), first_free: first_free(mobjs), off_grid: off_grid.span() }
     }
 
     #[test]
@@ -161,6 +226,13 @@ mod tests {
         assert_eq!(class_of(3, MF_MISSILE + MF_SOLID), ACTOR);
         assert_eq!(class_of(3, MF_SOLID), PASSIVE);
         assert_eq!(class_of(0, 0), PASSIVE);
+        // The blockmap bit: `MF_NOBLOCKMAP` or no cell, on a live slot only.
+        assert_eq!(slot_class(3, MF_COUNTKILL, 7), ACTOR);
+        assert_eq!(slot_class(3, MF_COUNTKILL + MF_NOBLOCKMAP, 7), ACTOR + OFF_GRID);
+        assert_eq!(slot_class(3, MF_COUNTKILL, NO_CELL), ACTOR + OFF_GRID);
+        assert_eq!(slot_class(3, MF_SOLID, NO_CELL), PASSIVE + OFF_GRID);
+        assert_eq!(slot_class(KIND_NONE, MF_NOBLOCKMAP, NO_CELL), REMOVED);
+        assert_eq!(slot_class(KIND_NONE, 0, 7), REMOVED);
         // A removed slot with a stale monster flag is passive for both.
         let stale = BoxTrait::new(Mobj { flags: MF_COUNTKILL, ..removed_mobj() });
         let roster = array![
@@ -171,6 +243,38 @@ mod tests {
         assert_eq!(derived, reference(roster));
         assert_eq!(derived.indices, array![2, 4, 6].span());
         assert_eq!(derived.first_free, 1);
+        assert_eq!(derived.off_grid, array![].span());
+    }
+
+    #[test]
+    fn off_grid_slots_are_the_live_ones_in_blockmap_rejects() {
+        // A puff-like passive with MF_NOBLOCKMAP, a monster off the grid, a
+        // missile with both, a removed slot with a stale cell: the first
+        // three are off the grid, in slot order; the removed one is not.
+        let puff = BoxTrait::new(Mobj { kind: 9, flags: MF_NOBLOCKMAP, cell: 7, ..removed_mobj() });
+        let far = BoxTrait::new(
+            Mobj { kind: 2, flags: MF_COUNTKILL, health: 20, cell: NO_CELL, ..removed_mobj() },
+        );
+        let ghost = BoxTrait::new(
+            Mobj { kind: 1, flags: MF_MISSILE + MF_NOBLOCKMAP, cell: NO_CELL, ..removed_mobj() },
+        );
+        let stale = BoxTrait::new(Mobj { cell: 7, flags: 0, ..removed_mobj() });
+        let roster = array![passive(17), puff, monster(2), far, stale, ghost, missile(1)].span();
+        let derived = scan(roster);
+        assert_eq!(derived, reference(roster));
+        assert_eq!(derived.indices, array![2, 3, 5, 6].span());
+        assert_eq!(derived.off_grid, array![1, 3, 5].span());
+        assert_eq!(derived.first_free, 4);
+        // Linking or unlinking a slot, or flagging it, changes its class:
+        // the index must be rescanned.
+        let linked_far = array![Patch { idx: 3, mo: monster(2) }];
+        assert!(!patches_keep_classes(roster, linked_far.span()));
+        let unlinked = array![Patch { idx: 0, mo: puff }];
+        assert!(!patches_keep_classes(roster, unlinked.span()));
+        let moved = array![
+            Patch { idx: 2, mo: BoxTrait::new(Mobj { cell: 8, ..monster(2).unbox() }) },
+        ];
+        assert!(patches_keep_classes(roster, moved.span()));
     }
 
     #[test]

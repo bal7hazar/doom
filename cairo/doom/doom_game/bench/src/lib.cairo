@@ -216,7 +216,7 @@ fn main(op: u32, n: u32) -> felt252 {
         acc += rng.index.into();
     } else if what == 4 {
         let ctx = ctx_of(s.level, s.floor, s.ceil);
-        let occ = doom_game::Occupancy { mobjs: s.mobjs };
+        let occ = doom_game::occupancy_scan(s.mobjs);
         let mut sp = s.specials;
         let mut rng = s.prng;
         while i != n {

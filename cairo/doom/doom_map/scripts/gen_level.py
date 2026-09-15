@@ -19,7 +19,10 @@ runtime representation itself, in the exact shapes the generic crates of
   not Doom's offset/terminator format;
 * REJECT bit-packed 64 bits per felt, one row of sectors at a time;
 * the R2-A9 location accelerator, `CELL_NODE` (docs/DECISIONS.md D22: the
-  candidate lists of the first version are gone).
+  candidate lists of the first version are gone);
+* `S_CELLS`, the blockmap cell range of every sector (docs/design/d2-profile.md
+  optimisation O3): the cells a thing whose centre the engine attributes to
+  the sector can be linked in -- see `sector_cell_ranges()`.
 
 Layout policy (S1 sec. 5.9 / docs/G0.md D4): **hot data planar, cold data
 packed**, arbitrated by the measured rule
@@ -50,6 +53,7 @@ import argparse
 import json
 import subprocess
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -236,6 +240,287 @@ def cell_start_nodes(doc: dict, bm: dict) -> tuple[list[int], float, float]:
 
 
 # --------------------------------------------------------------------------
+# S_CELLS: the blockmap cells a sector's things can be linked in (O3)
+# --------------------------------------------------------------------------
+
+
+def pack_cells(x0: int, y0: int, x1: int, y1: int) -> int:
+    """`S_CELLS`: an inclusive cell rectangle, four 16-bit fields, `x0` lowest.
+
+    An empty range is `(1, 1, 0, 0)`: `x0 > x1`, so a row-major loop over
+    it runs zero times.
+    """
+    return x0 | (y0 << 16) | (x1 << 32) | (y1 << 48)
+
+
+def clip_polygon(poly: list, a: Fraction, b: Fraction, c: Fraction) -> list:
+    """Sutherland-Hodgman: the part of `poly` where `a*x + b*y + c >= 0`
+    (a closed half-plane), in exact rational arithmetic."""
+    out: list = []
+    n = len(poly)
+    for i in range(n):
+        p = poly[i]
+        q = poly[(i + 1) % n]
+        fp = a * p[0] + b * p[1] + c
+        fq = a * q[0] + b * q[1] + c
+        if fp >= 0:
+            out.append(p)
+        if (fp < 0) != (fq < 0) and fp != fq:
+            t = fp / (fp - fq)
+            out.append((p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t))
+    return out
+
+
+def line_of(v1: tuple[int, int], v2: tuple[int, int]) -> tuple[int, int, int]:
+    """`(a, b, c)` with `a*x + b*y + c = dy*(x - x1) - dx*(y - y1)`: positive on
+    the front side of `v1 -> v2`, exactly `node_side`'s predicate."""
+    dx, dy = v2[0] - v1[0], v2[1] - v1[1]
+    return (dy, -dx, -dy * v1[0] + dx * v1[1])
+
+
+def collinear_linedef(doc: dict, nd: dict) -> int | None:
+    """The index of a linedef whose line is exactly the partition of `nd`,
+    or `None` (a partition taken from a split seg with rounded vertices)."""
+    verts = doc["vertexes"]
+    x, y, dx, dy = nd["x"], nd["y"], nd["dx"], nd["dy"]
+    for i, ld in enumerate(doc["linedefs"]):
+        v1 = verts[ld["startVertex"]]
+        v2 = verts[ld["endVertex"]]
+        ldx, ldy = v2["x"] - v1["x"], v2["y"] - v1["y"]
+        if ldx * dy - ldy * dx == 0 and (v1["x"] - x) * dy - (v1["y"] - y) * dx == 0:
+            return i
+    return None
+
+
+def partition_linedef(doc: dict, nd: dict) -> int | None:
+    """The linedef of a seg lying on the partition of `nd` (the seg the node
+    builder took the partition from), or `None`."""
+    verts = doc["vertexes"]
+    x, y, dx, dy = nd["x"], nd["y"], nd["dx"], nd["dy"]
+
+    def on(vi: int) -> bool:
+        v = verts[vi]
+        return (v["x"] - x) * dy - (v["y"] - y) * dx == 0
+
+    for sg in doc["segs"]:
+        if on(sg["startVertex"]) and on(sg["endVertex"]):
+            return sg["linedef"]
+    return None
+
+
+def inside_map(doc: dict, x: int, y: int) -> bool | None:
+    """Parity of the one-sided linedefs a ray from `(x, y)` crosses: `True`
+    strictly inside the map, `False` in the void, `None` on a linedef."""
+    verts = doc["vertexes"]
+    sides = doc["sidedefs"]
+    crossings = 0
+    for ld in doc["linedefs"]:
+        v1 = verts[ld["startVertex"]]
+        v2 = verts[ld["endVertex"]]
+        x1, y1, x2, y2 = v1["x"], v1["y"], v2["x"], v2["y"]
+        # On the segment itself: ambiguous, skipped by the caller.
+        if (x2 - x1) * (y - y1) - (y2 - y1) * (x - x1) == 0 and min(x1, x2) <= x <= max(
+            x1, x2
+        ) and min(y1, y2) <= y <= max(y1, y2):
+            return None
+        two_sided = 0 <= ld["frontSidedef"] < len(sides) and 0 <= ld["backSidedef"] < len(
+            sides
+        )
+        if two_sided:
+            continue
+        # Horizontal ray towards +x, half-open in y (vertices counted once).
+        if (y1 > y) != (y2 > y):
+            xi = Fraction(x1) + Fraction((y - y1) * (x2 - x1), y2 - y1)
+            if xi > x:
+                crossings += 1
+    return crossings % 2 == 1
+
+
+def sector_cell_ranges(doc: dict, bm: dict, ssec_sector: list) -> tuple[list[int], dict]:
+    """For every sector, the inclusive rectangle of blockmap cells that can
+    hold a linked thing whose `sector` field is that sector.
+
+    `doom_game` height-clips the things standing in a moving sector and
+    asks whether one blocks a closing door (`P_ChangeSector`) by visiting
+    the thing lists of these cells instead of the whole roster (O3,
+    docs/design/d2-profile.md section 5.3). The engine attributes a sector
+    to a thing in two ways, and the table covers both:
+
+    * **`locate`**: the sector of the BSP leaf a descent reaches from the
+      thing's cell (`CELL_NODE` answers exactly like the root, see
+      `cell_start_nodes`). A leaf's region is bounded by partition lines,
+      and every partition of a correct node build lies on a linedef -- so a
+      point inside the map descends to a leaf of the sector whose polygon
+      contains it, **except** near a partition taken from a split seg with
+      rounded vertices (`collinear_linedef` finds none): the sliver between
+      that partition and its linedef's true line is attributed to the leaf
+      on the partition's side. The table adds, for every leaf under such a
+      node, the cells of its region intersected with that sliver (exact
+      rational clipping, closed half-planes, so ties count for both sides).
+    * **the cached short step** of `P_TryMove` (`doom_physics::movement`):
+      a step shorter than the thing's radius that straddles no line keeps
+      the previous sector; the thing was then at least `radius - step`
+      away from every line, hence outside any sliver, and it stays inside
+      that sector's polygon, whose bounding box is the box of its
+      linedefs' endpoints (both sides of every line, as `P_GroupLines`).
+
+    The range is the box of both cell sets. The player is not covered by
+    this argument (its step can reach its radius) and `doom_game` tests it
+    by index. A dense lattice of points inside the map, the sampled points
+    and the THINGS are then checked against a root descent: every point's
+    cell must fall in the range of the sector the descent names.
+    """
+    nodes = doc["nodes"]
+    verts = [(v["x"], v["y"]) for v in doc["vertexes"]]
+    sides = doc["sidedefs"]
+    nsec = len(doc["sectors"])
+    unit = bm["unit"]
+    ox, oy = bm["originX"], bm["originY"]
+    cols, rows = bm["columns"], bm["rows"]
+
+    def cell_x(x) -> int:
+        return min(max(int((Fraction(x) - ox) // unit), 0), cols - 1)
+
+    def cell_y(y) -> int:
+        return min(max(int((Fraction(y) - oy) // unit), 0), rows - 1)
+
+    boxes: list = [None] * nsec
+
+    def widen(sec: int, cx0: int, cy0: int, cx1: int, cy1: int) -> None:
+        if not (0 <= sec < nsec):
+            return
+        b = boxes[sec]
+        if b is None:
+            boxes[sec] = [cx0, cy0, cx1, cy1]
+        else:
+            b[0] = min(b[0], cx0)
+            b[1] = min(b[1], cy0)
+            b[2] = max(b[2], cx1)
+            b[3] = max(b[3], cy1)
+
+    def widen_poly(sec: int, poly: list) -> None:
+        if poly:
+            xs = [p[0] for p in poly]
+            ys = [p[1] for p in poly]
+            widen(sec, cell_x(min(xs)), cell_y(min(ys)), cell_x(max(xs)), cell_y(max(ys)))
+
+    # (a) the polygon of every sector: its linedefs' endpoints, both sides.
+    for ld in doc["linedefs"]:
+        for vi in (ld["startVertex"], ld["endVertex"]):
+            x, y = verts[vi]
+            for sd in (ld["frontSidedef"], ld["backSidedef"]):
+                if 0 <= sd < len(sides):
+                    widen(sides[sd]["sector"], cell_x(x), cell_y(y), cell_x(x), cell_y(y))
+
+    # (b) the slivers of the partitions that are not on a linedef.
+    slivers: dict[int, tuple | None] = {}
+    for i, nd in enumerate(nodes):
+        if collinear_linedef(doc, nd) is not None:
+            continue
+        ld = partition_linedef(doc, nd)
+        if ld is None:
+            slivers[i] = None  # unknown true line: the whole subtree is kept
+            continue
+        line = doc["linedefs"][ld]
+        slivers[i] = line_of(verts[line["startVertex"]], verts[line["endVertex"]])
+
+    grid_box = [
+        (Fraction(ox), Fraction(oy)),
+        (Fraction(ox + cols * unit), Fraction(oy)),
+        (Fraction(ox + cols * unit), Fraction(oy + rows * unit)),
+        (Fraction(ox), Fraction(oy + rows * unit)),
+    ]
+    root = len(nodes) - 1
+    # (node id, region, sliver wedges to intersect at the leaves, keep all)
+    stack = [(root, grid_box, [], False)]
+    sliver_cells = 0
+    while stack:
+        cur, poly, wedges, keep = stack.pop()
+        if not poly:
+            continue
+        if cur & WAD_SUBSECTOR_FLAG:
+            sec = ssec_sector[cur & (WAD_SUBSECTOR_FLAG - 1)]
+            if keep:
+                widen_poly(sec, poly)
+                continue
+            for wedge in wedges:
+                part = poly
+                for a, b, c in wedge:
+                    part = clip_polygon(part, a, b, c)
+                if part:
+                    sliver_cells += 1
+                    widen_poly(sec, part)
+            continue
+        nd = nodes[cur]
+        a, b, c = (Fraction(v) for v in line_of((nd["x"], nd["y"]), (nd["x"] + nd["dx"], nd["y"] + nd["dy"])))
+        front = clip_polygon(poly, a, b, c)
+        back = clip_polygon(poly, -a, -b, -c)
+        if cur in slivers:
+            true_line = slivers[cur]
+            if true_line is None:
+                stack.append((nd["rightChild"], front, wedges, True))
+                stack.append((nd["leftChild"], back, wedges, True))
+                continue
+            ta, tb, tc = (Fraction(v) for v in true_line)
+            # Between the partition and the true line, on either side.
+            w1 = [(a, b, c), (-ta, -tb, -tc)]
+            w2 = [(-a, -b, -c), (ta, tb, tc)]
+            stack.append((nd["rightChild"], front, wedges + [w1, w2], keep))
+            stack.append((nd["leftChild"], back, wedges + [w1, w2], keep))
+        else:
+            stack.append((nd["rightChild"], front, wedges, keep))
+            stack.append((nd["leftChild"], back, wedges, keep))
+
+    packed: list[int] = []
+    cells_total = 0
+    cells_max = 0
+    for b in boxes:
+        if b is None:
+            packed.append(pack_cells(1, 1, 0, 0))
+            continue
+        packed.append(pack_cells(*b))
+        n = (b[2] - b[0] + 1) * (b[3] - b[1] + 1)
+        cells_total += n
+        cells_max = max(cells_max, n)
+
+    # The check: a lattice inside the map (every 8 units), the THINGS and
+    # the sampled points, against a root descent.
+    checked = 0
+
+    def check(x: int, y: int) -> None:
+        nonlocal checked
+        if not (ox <= x < ox + cols * unit and oy <= y < oy + rows * unit):
+            return
+        if inside_map(doc, x, y) is not True:
+            return
+        checked += 1
+        sec = ssec_sector[locate_subsector(doc, x, y)]
+        b = boxes[sec]
+        cx, cy = (x - ox) // unit, (y - oy) // unit
+        if b is None or not (b[0] <= cx <= b[2] and b[1] <= cy <= b[3]):
+            raise SystemExit(
+                "S_CELLS: point (%d, %d) in cell (%d, %d) descends to sector %d whose "
+                "range is %s" % (x, y, cx, cy, sec, b)
+            )
+
+    step = 8
+    for y in range(oy, oy + rows * unit + 1, step):
+        for x in range(ox, ox + cols * unit + 1, step):
+            check(x, y)
+    for t in doc["things"]:
+        check(t["x"], t["y"])
+
+    stats = dict(
+        sector_cells_mean=cells_total / float(nsec),
+        sector_cells_max=cells_max,
+        sector_cells_slivers=len(slivers),
+        sector_cells_sliver_leaves=sliver_cells,
+        sector_cells_checked=checked,
+    )
+    return packed, stats
+
+
+# --------------------------------------------------------------------------
 # Build
 # --------------------------------------------------------------------------
 
@@ -351,6 +636,8 @@ def build(doc: dict, skill_bit: int) -> tuple[Arrays, dict]:
             | (s["tag"] << SM_TAG)
         )
     arr.add("S_META", "felt252", s_meta, "sectorMeta")
+    s_cells, cell_stats = sector_cell_ranges(doc, bm, ssec_sector)
+    arr.add("S_CELLS", "felt252", s_cells, "sectorCells")
 
     # -- blockmap as blockmap::PackedLists --------------------------------
     cells = bm["cells"]
@@ -432,6 +719,7 @@ def build(doc: dict, skill_bit: int) -> tuple[Arrays, dict]:
         blockmap_entries=len(bm_items),
         depth_before=depth_before,
         depth_after=depth_after,
+        **cell_stats,
     )
     return arr, meta
 
@@ -524,7 +812,10 @@ VECTORS_HEADER = """// SPDX-License-Identifier: GPL-2.0-only
 //!   (the "pin the Python builder against `geom2d::half_plane`" test), and
 //!   check the recovered endpoints and boxes against the same source;
 //! * `SAMPLE_POINTS` -- sampled points with the subsector a transcription of
-//!   `R_PointInSubsector` reaches, for the `CELL_NODE` (D22) exactness test.
+//!   `R_PointInSubsector` reaches, for the `CELL_NODE` (D22) exactness test;
+//! * `SECTOR_POINTS` -- a lattice of points strictly inside the map (a ray
+//!   parity test on the one-sided linedefs) with the sector the same descent
+//!   names, for the `S_CELLS` (O3) coverage test.
 """
 
 
@@ -566,7 +857,25 @@ def sample_points(doc: dict, lattice: int = 200, centroids: int = 200) -> list[i
     return out
 
 
-def emit_vectors(doc: dict, points: list[int], pinned: int) -> str:
+def sector_points(doc: dict, step: int = 64) -> list[int]:
+    """Lattice points strictly inside the map, three felts each: `x, y,
+    sector` -- the sector of the subsector a root descent reaches. The void
+    is left out on purpose: `S_CELLS` covers the positions a thing can have."""
+    bb = doc["boundingBox"]
+    ss_sector = doc["derived"]["subsectorSectors"]
+    out: list[int] = []
+    y = bb["minY"]
+    while y <= bb["maxY"]:
+        x = bb["minX"]
+        while x <= bb["maxX"]:
+            if inside_map(doc, x, y) is True:
+                out.extend([x, y, ss_sector[locate_subsector(doc, x, y)]])
+            x += step
+        y += step
+    return out
+
+
+def emit_vectors(doc: dict, points: list[int], sectors: list[int], pinned: int) -> str:
     verts = [(v["x"], v["y"]) for v in doc["vertexes"]]
     lines = doc["linedefs"]
     n = min(pinned, len(lines))
@@ -583,6 +892,8 @@ def emit_vectors(doc: dict, points: list[int], pinned: int) -> str:
     out.append(emit_array("LINE_VERTICES", "felt252", lv))
     out.append("/// (x, y, subsector) in map units, three felts per sampled point.\n")
     out.append(emit_array("SAMPLE_POINTS", "felt252", points))
+    out.append("/// (x, y, sector) in map units, three felts per lattice point inside the map.\n")
+    out.append(emit_array("SECTOR_POINTS", "felt252", sectors))
     return "".join(out)
 
 
@@ -590,6 +901,7 @@ PACKED = (
     "L_BOX",
     "L_PACKED",
     "S_META",
+    "S_CELLS",
     "THINGS",
     "REJECT_ROWS",
 )
@@ -617,6 +929,7 @@ def main() -> int:
     name = (args.map or doc["map"]).lower()
     arr, meta = build(doc, args.skill_bit)
     points = sample_points(doc)
+    sectors = sector_points(doc)
 
     total = arr.words() + SCALAR_WORDS
     print("%-16s %-18s %-7s %8s" % ("array", "group", "layout", "words"))
@@ -631,6 +944,18 @@ def main() -> int:
     print(
         "R2-A9 (D22): %d sampled points; mean BSP descent depth %.2f from the root, "
         "%.2f from CELL_NODE" % (len(points) // 3, meta["depth_before"], meta["depth_after"])
+    )
+    print("S_CELLS test vectors: %d lattice points inside the map" % (len(sectors) // 3))
+    print(
+        "S_CELLS (O3): %.2f cells per sector on average, %d at most; %d partition(s) off "
+        "a linedef, %d leaf slivers; %d lattice/thing points checked"
+        % (
+            meta["sector_cells_mean"],
+            meta["sector_cells_max"],
+            meta["sector_cells_slivers"],
+            meta["sector_cells_sliver_leaves"],
+            meta["sector_cells_checked"],
+        )
     )
     print(
         "REJECT: %d of %d sector pairs blocked (%.1f %%)"
@@ -656,7 +981,7 @@ def main() -> int:
     (CRATE / "bench").mkdir(parents=True, exist_ok=True)
     (CRATE / "src" / "levels" / ("%s.cairo" % name)).write_text(emit_level(arr, meta))
     (CRATE / "src" / "tests" / "vectors.cairo").write_text(
-        emit_vectors(doc, points, args.pin_lines)
+        emit_vectors(doc, points, sectors, args.pin_lines)
     )
     manifest = dict(
         map=meta["map"],
@@ -682,6 +1007,7 @@ def main() -> int:
         descent_depth=dict(
             from_root=meta["depth_before"], from_cell_node=meta["depth_after"]
         ),
+        sector_cells=dict(mean=meta["sector_cells_mean"], max=meta["sector_cells_max"]),
     )
     (CRATE / "bench" / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print("\nwrote src/levels/%s.cairo, src/tests/vectors.cairo, bench/manifest.json" % name)

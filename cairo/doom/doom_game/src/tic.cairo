@@ -29,7 +29,7 @@
 
 use core::num::traits::WrappingAdd;
 use doom_monsters::actions::passive;
-use doom_monsters::actors::{Actors, class_of, none as no_actors, patches_keep_classes, scan};
+use doom_monsters::actors::{Actors, none as no_actors, patches_keep_classes, same_class, scan};
 use doom_monsters::{
     Ctx as MonsterCtx, EV_CROSS, EV_DROP, EV_KILLED, EV_USE, MonsterEvent, Noise, Patch,
     monsters_ticker_indexed, read_mobj,
@@ -50,7 +50,10 @@ use doom_specials::{
 use fixed::{BIAS, Fixed};
 use prng::Prng;
 use segment::Status;
-use super::level::{Ctx, Occupancy, contains, ctx_of, moving_sectors, refresh_heights};
+use super::level::{
+    Ctx, SectorIndex, contains, ctx_of, moving_sectors, occupancy_scan, refresh_heights,
+    things_of_sector,
+};
 use super::setup::status_from;
 use super::state::GameState;
 
@@ -204,7 +207,9 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
     let after = *out.span().at(me);
     if after.health < mo.health && p.playerstate != PST_DEAD {
         let fixed_mo = reconcile_player(env, ref g, ref rng, ref p, after.unbox(), defense);
-        if class_of(after.kind, after.flags) != class_of(fixed_mo.kind, fixed_mo.flags) {
+        if !same_class(
+            after.kind, after.flags, after.cell, fixed_mo.kind, fixed_mo.flags, fixed_mo.cell,
+        ) {
             rescan = true;
         }
         replace(ref out, me, BoxTrait::new(fixed_mo));
@@ -216,7 +221,7 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
 
     // 9. Doors, lifts, floors, lights.
     let movers_before = s.movers.len();
-    let occupancy = Occupancy { mobjs: out.span() };
+    let occupancy = occupancy_scan(out.span());
     let (s2, r3, _) = specials_ticker(@occupancy, s, ctx.unbox().tables, tic, rng, w.rndtable);
     s = s2;
     rng = r3;
@@ -474,7 +479,7 @@ fn rebuild_list_in(
         sorted = insert_patch(sorted, BoxTrait::new(*pt));
     }
     if clip.len() != 0 {
-        sorted = clip_patches(BoxTrait::new(w), mobjs, ref g, sorted, clip, me);
+        sorted = clip_patches_scan(BoxTrait::new(w), mobjs, ref g, sorted, clip, me);
     }
     let list = copy_patched(mobjs, sorted.span());
     let index = if patches_keep_classes(mobjs, sorted.span()) {
@@ -529,8 +534,70 @@ fn copy_patched(mobjs: Span<Box<Mobj>>, mut patches: Span<Patch>) -> Span<Box<Mo
 
 /// `P_ThingHeightClip` on every thing (other than the player, already
 /// done) whose centre is in a `clip` sector, as patches merged into
-/// `sorted`. One felt read per slot to find them.
-fn clip_patches(
+/// `sorted` — the same patches as [`clip_patches_scan`], the scan the
+/// ticker runs, found through the blockmap (O3, not yet wired into the
+/// tic): the slots linked in the cells of each clipping sector,
+/// then the slots off the grid, each clipped when its record's sector is
+/// one of `clip`. The order of the visits does not show in the result: a
+/// clip reads the original list and grid and writes its own slot's patch,
+/// `insert_patch` keeps the patches in slot order, and clipping a slot
+/// twice (two movers on one sector) rewrites the same record — the clip
+/// of a clipped record is itself, `check_position` not reading `z`.
+pub(crate) fn clip_patches(
+    w: Box<World>,
+    mobjs: Span<Box<Mobj>>,
+    ref g: ThingGrid,
+    sorted: Array<Patch>,
+    clip: Span<u32>,
+    me: u32,
+    index: SectorIndex,
+) -> Array<Patch> {
+    let grid = w.unbox().map.grid;
+    let mut out = sorted;
+    let mut sectors = clip;
+    while let Option::Some(s) = sectors.pop_front() {
+        let things = things_of_sector(ref g, index.cells, grid, *s);
+        out = clip_slots(w, mobjs, ref g, out, clip, me, things);
+    }
+    clip_slots(w, mobjs, ref g, out, clip, me, index.off_grid)
+}
+
+/// The clip of every slot of `slots` whose record's sector is one of
+/// `clip`, the player excepted: the body of the scan, on the candidates.
+fn clip_slots(
+    w: Box<World>,
+    mobjs: Span<Box<Mobj>>,
+    ref g: ThingGrid,
+    sorted: Array<Patch>,
+    clip: Span<u32>,
+    me: u32,
+    mut slots: Span<u32>,
+) -> Array<Patch> {
+    let mut out = sorted;
+    while let Option::Some(bi) = slots.pop_front() {
+        let i = *bi;
+        let record = match mobjs.get(i) {
+            Option::Some(b) => *b.unbox(),
+            Option::None => { continue; },
+        };
+        if i != me && contains(clip, record.sector) {
+            let mut cur = match patch_at(out.span(), i) {
+                Option::Some(p) => p.unbox(),
+                Option::None => record.unbox(),
+            };
+            if !is_removed(@cur) {
+                height_clip(w.unbox(), mobjs, ref g, ref cur, i);
+                out = insert_patch(out, BoxTrait::new(Patch { idx: i, mo: BoxTrait::new(cur) }));
+            }
+        }
+    }
+    out
+}
+
+/// The clip of the ticker: every slot of the list read for its sector,
+/// and the oracle [`clip_patches`] is compared with (same patches, same
+/// order).
+pub(crate) fn clip_patches_scan(
     w: Box<World>,
     mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,

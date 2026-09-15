@@ -60,12 +60,13 @@ at K = 100, not by taste.
 | `SS_SECTOR` | planar | 682 | 10+ reads per tic; packing 8-per-felt would save 596 words (88 steps/tic) and cost ~60 steps per read |
 | `S_FLOOR` / `S_CEIL` | planar | 364 | `P_LineOpening`, every move |
 | `S_META` (light, special, tag) | **packed** | 182 | read only when a special fires |
+| `S_CELLS` (blockmap cell range of the sector) | **packed** (4 × 16 bits) | 182 | read once per moving sector per tic by `doom_game`'s `P_ChangeSector` (O3); see below |
 | `BM_START` / `BM_ITEMS` | planar | 2 929 | `blockmap::PackedLists`, the hottest list in `P_TryMove`; **note this is 1 699 words *less* than Doom's own offset/terminator blockmap** (4 628), because the terminators and the 16-bit offsets disappear |
 | `CELL_NODE` | planar | 864 | one read on every location, the whole point of it |
 | `REJECT_ROWS` + `POW2` | **packed** (64 bits/felt) | 610 | S1 §7's headline: flat REJECT is 33 124 felts = 4 870 steps/tic amortized, packed is 90 |
 | `THINGS` | **packed** (64 bits) | 221 | read once, at genesis |
 | scalars | — | 19 | counts, blockmap header, player start, bounds |
-| **Total** | | **15 151** | measured at **15 568 words** (D22 removed the 1 578-word candidate lists; the one-felt `L_BOX` another 1 175) |
+| **Total** | | **15 333** | measured at **15 568 words** before `S_CELLS` (D22 removed the 1 578-word candidate lists; the one-felt `L_BOX` another 1 175) |
 
 Two sizing decisions differ from S1 §7's suggestions, both deliberately:
 
@@ -90,6 +91,31 @@ VERTEXES (2 392 words) and a linedef→vertex mapping (1 175) are simply not
 needed: **3 567 words saved, 525 steps/tic amortized at K = 100**. Callers
 that need a `geom2d::DivLine` for `P_InterceptVector` can use any point on
 the line, and `linedef_v1` is one.
+
+### `S_CELLS`: the blockmap cells a sector's things can be linked in (O3)
+
+`doom_game` height-clips the things standing in a moving sector and asks
+whether one blocks a closing door (`P_ChangeSector`). Vanilla walks the
+blockmap blocks of the sector's bounding box; the first transcription
+scanned the whole roster (~11 000 steps a tic while a door moves,
+docs/design/d2-profile.md §5.3). `S_CELLS[s]` is the inclusive rectangle of
+cells that can hold a linked thing whose `sector` field is `s`, one packed
+felt per sector (`x0 | y0 << 16 | x1 << 32 | y1 << 48`), and the walk visits
+those cells' thing lists instead.
+
+The table is exact for both ways the engine attributes a sector to a thing
+(`scripts/gen_level.py`, `sector_cell_ranges`): a BSP descent from the
+thing's cell — every partition of E1M1 lies on a linedef except one taken
+from a split seg with rounded vertices (node 302, linedef 90), whose
+sliver between the partition and the true line is added leaf by leaf in
+exact rational arithmetic — and the cached short step of `P_TryMove`, after
+which the thing stays inside its sector's polygon, whose box is the box of
+its linedefs' endpoints. The generator then checks a lattice of 97 012
+points inside the map (every 8 units) and every THINGS position against a
+root descent; the crate's tests check the linedef endpoints, a 64-unit
+lattice (`SECTOR_POINTS`, 1 384 points) and the things again in Cairo. On
+E1M1 a sector spans 9.8 cells on average (132 for the outdoor sector 5, two
+for the door of the `door` replay).
 
 ### The BSP node bounding boxes are not compiled in
 

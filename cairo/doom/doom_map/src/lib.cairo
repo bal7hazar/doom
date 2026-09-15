@@ -47,7 +47,7 @@ pub mod levels;
 #[cfg(test)]
 mod tests;
 use bam::{ANG45, Angle};
-use blockmap::{Grid, PackedLists};
+use blockmap::{CellRange, Grid, PackedLists};
 use bsp::Nodes;
 use fixed::Fixed;
 use geom2d::{Box, HalfPlane, Point};
@@ -127,6 +127,9 @@ pub struct LevelMap {
     pub s_ceil: Span<felt252>,
     /// Sector light level, special type and tag, packed.
     pub s_meta: Span<felt252>,
+    /// The blockmap cell range of every sector, packed (O3): see
+    /// [`sector_cells`].
+    pub s_cells: Span<felt252>,
     /// The blockmap grid and its linedef lists.
     pub grid: Grid,
     pub blockmap: PackedLists,
@@ -258,6 +261,7 @@ pub fn load(level: LevelId) -> LevelMap {
             s_floor: e1m1::S_FLOOR.span(),
             s_ceil: e1m1::S_CEIL.span(),
             s_meta: e1m1::S_META.span(),
+            s_cells: e1m1::S_CELLS.span(),
             grid: Grid {
                 origin_x: Fixed { enc: e1m1::BM_ORIGIN_X },
                 origin_y: Fixed { enc: e1m1::BM_ORIGIN_Y },
@@ -489,6 +493,44 @@ pub fn sector(m: @LevelMap, i: u32) -> MapSector {
         light: field(meta, 1, W8).try_into().unwrap(),
         special: field(meta, SM_SPECIAL, W8).try_into().unwrap(),
         tag: field(meta, SM_TAG, W16).try_into().unwrap(),
+    }
+}
+
+/// The inclusive rectangle of blockmap cells that can hold a linked thing
+/// whose `sector` field is `i` (`S_CELLS`, docs/design/d2-profile.md O3).
+///
+/// `gen_level.py`'s `sector_cell_ranges` derives it from the sector's
+/// polygon and from the slivers of the BSP partitions that do not lie on a
+/// linedef, and documents the argument; `doom_game` walks these cells'
+/// thing lists instead of the whole roster when the sector's plane moves
+/// (`P_ChangeSector`). Four 16-bit fields, `x0` lowest; an empty range, or
+/// a sector past the table, comes back with `x0 > x1`, so a row-major loop
+/// over it runs zero times. Panic-free (docs/spikes/S7.md §8): one `get`,
+/// a matched `u128` conversion and three divmods by a literal.
+pub fn sector_cells(m: @LevelMap, i: u32) -> CellRange {
+    match (*m.s_cells).get(i) {
+        Option::Some(b) => unpack_cells(*b.unbox()),
+        Option::None => CellRange { x0: 1, y0: 1, x1: 0, y1: 0 },
+    }
+}
+
+/// Decode one `S_CELLS` felt: `x0 | y0 << 16 | x1 << 32 | y1 << 48`.
+pub fn unpack_cells(packed: felt252) -> CellRange {
+    let v = fixed::to_u128(packed);
+    let w16: NonZero<u128> = 0x10000;
+    let (q1, x0) = DivRem::div_rem(v, w16);
+    let (q2, y0) = DivRem::div_rem(q1, w16);
+    let (y1, x1) = DivRem::div_rem(q2, w16);
+    CellRange { x0: low32(x0), y0: low32(y0), x1: low32(x1), y1: low32(y1) }
+}
+
+/// A `u128` below 2^32 as a `u32`, `0` otherwise (no panic site). Out of
+/// line: four calls per decode, one decode per moving sector per tic.
+#[inline(never)]
+fn low32(v: u128) -> u32 {
+    match v.try_into() {
+        Option::Some(x) => x,
+        Option::None => 0,
     }
 }
 

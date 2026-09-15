@@ -6,13 +6,19 @@
 //! test prints what it computed.
 
 use doom_map::LevelId;
+use doom_monsters::Patch;
+use doom_monsters::actors::scan;
 use doom_physics::{MF_COUNTITEM, MF_COUNTKILL, has, is_removed};
 use doom_player::PST_DEAD;
+use doom_specials::SectorBlocking;
+use fixed::Fixed;
 use segment::Status;
 use ticcmd::{TicCmd, encode};
+use crate::level::{SectorIndex, moving_sectors, nofit_scan, occupancy_of};
+use crate::tic::{clip_patches, clip_patches_scan};
 use crate::{
-    GameState, TOTAL_ITEMS, TOTAL_KILLS, TOTAL_SECRETS, genesis, hash, run_segment, stats_of,
-    step_tic,
+    GameState, TOTAL_ITEMS, TOTAL_KILLS, TOTAL_SECRETS, ctx_of, genesis, hash, run_segment,
+    stats_of, step_tic,
 };
 
 fn word(forward: i64, side: i64, turn: i64, buttons: u8) -> felt252 {
@@ -162,6 +168,31 @@ fn door_log() -> Array<felt252> {
         k += 1;
     }
     segs.append((12, 0, 0, 0, 0));
+    script(segs.span())
+}
+
+/// The door run up to the moment the player walks into the opening door
+/// (tic 262), the key released so that its momentum carries it into the
+/// doorway (sector 10, y in [512, 544]) and friction stops it there, then
+/// standing still: the door finishes opening (tic 294), waits its 150
+/// tics and closes onto the player from tic 448, whose `P_ChangeSector`
+/// answer sends it back up at tic 480 — the blocked-door rule, exercised
+/// through the blockmap walk
+/// (`test_clip_by_cells_matches_the_scan_when_the_player_blocks_the_door`).
+/// The two zombiemen of the trench shoot the player all along (health 64
+/// at the reversal); 500 tics keep it alive.
+fn door_block_log() -> Array<felt252> {
+    let mut segs: Array<(u32, i64, i64, i64, u8)> = array![
+        (136, 25, 0, 0, 0), (1, 0, 0, 10240, 0), (25, 25, 0, 0, 0), (1, 0, 0, 6144, 0),
+    ];
+    let mut k: u32 = 0;
+    while k != 2 {
+        segs.append((34, 25, 0, 0, 0));
+        segs.append((1, 25, 0, 0, 2));
+        k += 1;
+    }
+    segs.append((29, 25, 0, 0, 0));
+    segs.append((238, 0, 0, 0, 0));
     script(segs.span())
 }
 
@@ -357,6 +388,126 @@ fn check_actor_index(log: Span<felt252>, from: u32, to: u32) {
     assert(hash(@carried) == hash(@rescanned), 'same hash with and without');
 }
 
+/// O3: on every tic of `log` from `from` to `to`, the height clip found
+/// through the blockmap cells (`clip_patches`) and the occupancy read off
+/// them (`Occupancy::nofit`) answer exactly what the scans of the roster
+/// answer (`clip_patches_scan`, `nofit_scan`) — same patches in the same
+/// order, same verdict for every mover at the current heights and at a
+/// ladder of rooms — and the run itself ends on its pinned hash.
+fn check_clip_oracle(log: Span<felt252>, from: u32, to: u32, pin: felt252, v1_pin: felt252) -> u32 {
+    let mut s = genesis(LevelId::E1M1);
+    let mut k: u32 = 0;
+    while k != from {
+        let (next, _) = step_tic(s, *log.at(k));
+        s = next;
+        k += 1;
+    }
+    let rooms = array![0, 8, 40, 55, 56, 57, 128].span();
+    let mut moving_tics: u32 = 0;
+    let mut clipped: u32 = 0;
+    let mut asked: u32 = 0;
+    let mut blocked: u32 = 0;
+    let mut off_grid: u32 = 0;
+    let mut blocked_now: u32 = 0;
+    while k != to {
+        let clip = moving_sectors(@s.specials);
+        if clip.len() != 0 {
+            moving_tics += 1;
+            let ctx = ctx_of(s.level, s.floor, s.ceil);
+            let w = BoxTrait::new(ctx.w);
+            let me = s.player.mo;
+            let mo = *s.mobjs.at(me);
+            let index = SectorIndex { cells: ctx.m.s_cells, off_grid: s.actors.off_grid };
+            assert(index.off_grid == scan(s.mobjs).off_grid, 'carried off-grid slots');
+            off_grid = index.off_grid.len();
+            let expected = clip_patches_scan(
+                w, s.mobjs, ref s.grid, array![Patch { idx: me, mo }], clip, me,
+            );
+            let got = clip_patches(
+                w, s.mobjs, ref s.grid, array![Patch { idx: me, mo }], clip, me, index,
+            );
+            assert_same_patches(expected.span(), got.span());
+            clipped += expected.len() - 1;
+            let occ = occupancy_of(ref s.grid, s.mobjs, me, ctx.w.map.grid, index, @s.specials);
+            let mut movers = s.specials.movers;
+            while let Option::Some(mv) = movers.pop_front() {
+                let sector = *mv.sector;
+                let floor = Fixed { enc: *s.floor.at(sector) };
+                let ceiling = Fixed { enc: *s.ceil.at(sector) };
+                // The question the ticker asks: the planes one step further
+                // (a blocked plane never moves, so the current heights
+                // always fit).
+                let speed = doom_specials::thinkers::speed_of(*mv.kind);
+                let (f, c) = if doom_specials::state::moves_ceiling(*mv.kind) {
+                    (floor, fixed::sub(ceiling, speed))
+                } else {
+                    (fixed::add(floor, speed), ceiling)
+                };
+                let now = nofit_scan(s.mobjs, sector, fixed::sub(c, f));
+                assert(occ.nofit(sector, f, c) == now, 'same verdict now');
+                if now {
+                    blocked_now += 1;
+                }
+                let mut rs = rooms;
+                while let Option::Some(r) = rs.pop_front() {
+                    let room = fixed::from_units(*r);
+                    let scan = nofit_scan(s.mobjs, sector, room);
+                    assert(
+                        occ.nofit(sector, floor, fixed::add(floor, room)) == scan, 'same verdict',
+                    );
+                    asked += 1;
+                    if scan {
+                        blocked += 1;
+                    }
+                }
+            }
+        }
+        let (next, _) = step_tic(s, *log.at(k));
+        s = next;
+        k += 1;
+    }
+    println!(
+        "clip oracle: {} tics with a moving plane, {} things clipped, {} verdicts, {} blocked ({} at the ticker's next step), {} slots off the grid",
+        moving_tics,
+        clipped,
+        asked,
+        blocked,
+        blocked_now,
+        off_grid,
+    );
+    assert(moving_tics != 0 && asked != 0, 'planes moved');
+    if to == log.len() && pin != 0 {
+        check('clip oracle', @s, pin, v1_pin);
+    }
+    blocked_now
+}
+
+fn assert_same_patches(mut a: Span<Patch>, mut b: Span<Patch>) {
+    assert(a.len() == b.len(), 'same number of patches');
+    while let Option::Some(x) = a.pop_front() {
+        let y = b.pop_front().unwrap();
+        assert(*x.idx == *y.idx, 'same slot');
+        assert(x.mo.unbox() == y.mo.unbox(), 'same record');
+    }
+}
+
+#[test]
+fn test_clip_by_cells_matches_the_scan_on_the_door() {
+    check_clip_oracle(door_log().span(), 0, 350, DOOR_HASH, DOOR_V1_HASH);
+}
+
+#[test]
+fn test_clip_by_cells_matches_the_scan_on_the_walk() {
+    check_clip_oracle(walk_log().span(), 0, 350, WALK_HASH, WALK_V1_HASH);
+}
+
+#[test]
+fn test_clip_by_cells_matches_the_scan_when_the_player_blocks_the_door() {
+    let log = door_block_log();
+    let blocked = check_clip_oracle(log.span(), 260, log.len(), 0, 0);
+    assert(blocked != 0, 'the door closed onto the player');
+}
+
 #[test]
 fn test_actor_index_tracks_the_fight() {
     check_actor_index(fight_log().span(), 100, 340);
@@ -461,3 +612,4 @@ fn test_fight_variable_serialized_segments() {
 fn test_death_variable_serialized_segments() {
     check_variable_cuts(death_log().span(), DEATH_HASH);
 }
+
