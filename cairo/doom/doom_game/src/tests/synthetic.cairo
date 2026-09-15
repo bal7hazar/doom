@@ -809,21 +809,32 @@ fn test_refresh_preserves_sequential_movers_in_the_same_sector() {
     assert(c2 == set_felt(g.ceil, sector, original + 1), 'later mover wins');
 }
 
+/// The v2 live snapshot is a render-only projection: it is the v1 snapshot
+/// plus the two psprite slots, computed from the same state a plain
+/// `step_tic` run reaches with no projection at all, and the scenario (hold
+/// fire with the pistol) shows the slots doing something: a live flash and
+/// more than one weapon frame.
 #[test]
 fn test_live_psprites_are_exact_render_only_projection() {
+    let tics: u32 = 45;
+    let fire = word(0, 0, 0, 1);
+    // `plain` never sees a projection; `game` is projected before every tic.
+    let mut plain = genesis(LevelId::E1M1);
     let mut game = genesis(LevelId::E1M1);
+    let mut flash_seen = false;
+    let mut first_weapon_frame: Option<(felt252, felt252)> = Option::None;
+    let mut second_weapon_frame = false;
     let mut tic: u32 = 0;
-    while tic < 45 {
-        let before = serialize(@game);
+    while tic < tics {
         let legacy = snapshot(@game);
         let live = crate::render::snapshot_with_psprites(@game);
-        assert(*live.at(0) == 2, 'v2');
+        // (c) version, then the v1 body word for word.
+        assert(*legacy.at(0) == crate::render::SNAPSHOT_VERSION, 'v1 version');
+        assert(*live.at(0) == 2, 'v2 version');
         assert(live.len() == legacy.len() + 10, 'trailer length');
-        let mut i = 1;
-        while i < legacy.len() {
-            assert(*live.at(i) == *legacy.at(i), 'v1 projection');
-            i += 1;
-        }
+        let body = legacy.len() - 1;
+        assert(live.span().slice(1, body) == legacy.span().slice(1, body), 'v1 prefix');
+        // The trailer is exactly the player's psprite fields.
         let states = doom_things::states();
         let p = @game.player;
         let expected = array![
@@ -832,10 +843,29 @@ fn test_live_psprites_are_exact_render_only_projection() {
             (*p.flash_state).into(), (*states.sprite.at(*p.flash_state)).into(),
             (*states.frame.at(*p.flash_state)).into(), *p.psp_sx.enc, *p.psp_sy.enc,
         ];
-        assert(live.span().slice(legacy.len(), 10) == expected.span(), 'psprite fields');
-        assert(serialize(@game) == before, 'no state change');
-        let (next, _) = step_tic(game, word(0, 0, 0, 1));
+        let trailer = live.span().slice(legacy.len(), 10);
+        assert(trailer == expected.span(), 'psprite fields');
+        // (b) the scenario exercises both slots.
+        let weapon = (*trailer.at(1), *trailer.at(2));
+        match first_weapon_frame {
+            Option::Some(first) => { if weapon != first {
+                second_weapon_frame = true;
+            } },
+            Option::None => { first_weapon_frame = Option::Some(weapon); },
+        }
+        if *trailer.at(5) != 0 && *trailer.at(6) != 0 && *trailer.at(7) != 0 {
+            flash_seen = true;
+        }
+        let (next, _) = step_tic(game, fire);
         game = next;
+        let (next_plain, _) = step_tic(plain, fire);
+        plain = next_plain;
         tic += 1;
     }
+    assert(flash_seen, 'a flash slot was live');
+    assert(second_weapon_frame, 'weapon frames changed');
+    // (a) projecting between tics changes nothing about the run.
+    assert(serialize(@game) == serialize(@plain), 'projection is render only');
+    assert(hash(@game) == hash(@plain), 'same canonical hash');
+    assert(game.leveltime == tics, 'no tic consumed');
 }
