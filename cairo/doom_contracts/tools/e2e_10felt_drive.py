@@ -52,7 +52,8 @@ from devnet_drive import (
     trace,
     wait_receipt,
 )
-from doomruns_drive import account_address, digest_felts, invoke, submit_calldata
+from doomruns_drive import (EXPIRY_BLOCKS, FEE_TOKEN, account_address, digest_felts, invoke,
+                            submit_calldata)
 from real_batch import load
 
 HERE = Path(__file__).resolve().parent
@@ -282,7 +283,7 @@ def main() -> None:
 
     # --- P4.2: the consumer, pointed at that router ------------------------
     runs_class = declare(cfg, "DoomRuns", RUNS_PACKAGE)
-    runs, runs_deploy = deploy(cfg, runs_class["class_hash"], [owner])
+    runs, runs_deploy = deploy(cfg, runs_class["class_hash"], [owner, FEE_TOKEN, hex(EXPIRY_BLOCKS)])
     print("DoomRuns", runs, "owner", owner)
 
     head = batches[0]

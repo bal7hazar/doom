@@ -62,7 +62,11 @@ fn setup() -> World {
     let registry_class = declare("MockFactRegistry").unwrap().contract_class();
     let (registry_address, _) = registry_class.deploy(@array![]).unwrap();
     let runs_class = declare("DoomRuns").unwrap().contract_class();
-    let (runs_address, _) = runs_class.deploy(@array![owner().into()]).unwrap();
+    // D35: a fee token (unused here — no bounty is ever escrowed) and an expiry.
+    let fee_token: ContractAddress = 0xFEE.try_into().unwrap();
+    let (runs_address, _) = runs_class
+        .deploy(@array![owner().into(), fee_token.into(), 100])
+        .unwrap();
     let world = World {
         runs: IDoomRunsDispatcher { contract_address: runs_address },
         registry: IMockFactRegistryDispatcher { contract_address: registry_address },
