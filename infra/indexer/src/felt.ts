@@ -26,3 +26,8 @@ export function feltToShortString(v: string): string {
   if (bytes.length === 0 || !bytes.every((b) => b >= 0x20 && b < 0x7f)) return v;
   return String.fromCharCode(...bytes);
 }
+
+/** A `u256` split over two felts (low, high) as a decimal string, exact at any size. */
+export function u256ToDecimal(low: string, high: string): string {
+  return ((BigInt(high) << 128n) + BigInt(low)).toString();
+}

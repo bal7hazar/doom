@@ -7,8 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 
 D21 puts the top-10 per `(version, kind)` on chain and everything else — full rankings, player
 histories, replay logs — behind "events + indexer". This is that indexer: it follows `DoomRuns`'s
-seven event kinds into SQLite and serves a small read API the leaderboard page
-(`client/leaderboard.html`, `client/src/leaderboard/`) talks to.
+seven event kinds — plus the four of the open prover (D35, P4.7: `RunCommitted`, `RunLog`,
+`CommitmentProved`, `CommitmentReclaimed`) — into SQLite and serves a small read API the
+leaderboard page (`client/leaderboard.html`, `client/src/leaderboard/`) talks to.
 
 ## Quick start
 
@@ -34,9 +35,12 @@ leaderboard page's two data sources (this API and the RPC fallback) share one sh
 | route | what |
 |---|---|
 | `GET /leaderboard?version=&kind=&offset=&limit=` | `kind=0` (score, descending) or `kind=1` (tics, ascending — lower is better); `{version_id, kind, offset, limit, total, rows: [{rank, run_id, player, ...the Run fields, block_number, tx_hash}]}` |
-| `GET /players/{address}` | `{player, run_count, attempt_count, best_score, best_tics, runs: [...]}` — `runs` mixes finished runs and `DEAD` attempts, newest block first |
+| `GET /players/{address}` | `{player, run_count, attempt_count, best_score, best_tics, commitment_count, pending_commitment_count, runs: [...], pending_commitments: [...]}` — `runs` mixes finished runs and `DEAD` attempts, newest block first; `pending_commitments` are the player's games still waiting for a prover (D35), newest first, each a commitment row (below) |
 | `GET /runs/{run_id}` | the `Run` (or attempt) row plus `replay: [{leaf_index, tic_start, tic_end, packed}]`, empty when no `Replay` event was published for it; `404` if the id is unknown |
-| `GET /stats` | `{indexed_block, total_runs, total_attempts, total_players, versions: [{version_id, run_count, attempt_count}]}` |
+| `GET /players/{address}/commitments?status=pending&offset=&limit=` | `{player, total, pending, offset, limit, commitments: [...]}` — every commitment of the player (`status=pending` keeps the unsettled ones), newest first |
+| `GET /commitments/{commitment_id}` | one commitment row: `{commitment_id, player, version_id, level_id, genesis, inputs_commitment, tics, bounty, expires_at, n_chunks, log_chunks, status, run_id, prover, block_number, tx_hash, settled_block, settled_tx}`; `status` is `PENDING`, `PROVED` or `RECLAIMED` (whether a pending one is past `expires_at` is the reader's call against the chain head — the indexer only knows `indexed_block`); `bounty` is the `u256` as a decimal string; `log_chunks` counts the `RunLog` events seen against `n_chunks` |
+| `GET /commitments/pending?offset=&limit=` | `{total, pending, offset, limit, commitments: [...]}` — every unsettled commitment, oldest first (what a prover node walks) |
+| `GET /stats` | `{indexed_block, total_runs, total_attempts, total_players, total_commitments, pending_commitments, versions: [{version_id, run_count, attempt_count}]}` |
 
 `leaderboard` reads only `runs` (finished, `EXIT`) — attempts never enter a board, matching the
 contract. This is deliberately the *full* ranking beyond the on-chain top 10, not a mirror of it:
@@ -58,6 +62,14 @@ learned from:
   "which season is this" display.
 - `frozen_events` — mirrors `Frozen`, append-only (there is exactly one in practice, since
   `freeze()` is one-way, but the table does not assume that).
+- `commitments` — one row per `RunCommitted` (D35), primary key `commitment_id`. A `RECLAIMED` id
+  committed again replaces its row (new bounty, new expiry) and drops the older settlement.
+- `commitment_settlements` — one row per `CommitmentProved` / `CommitmentReclaimed`, kept
+  **apart** from the commitment so that purging a reorg window reverts a settled commitment to
+  `PENDING` instead of deleting it (the `status` column of the API is derived by a `LEFT JOIN`).
+- `commitment_logs` — one row per `RunLog` chunk: `(commitment_id, chunk)`, its `offset` and
+  `packed_len`. The felts themselves are **not** stored (~900 per game; rebuilding a log from
+  the events is the prover node's job, not the leaderboard's) — only counted.
 - `cursor` — one row (`id = 1`), `last_block`: where the next poll resumes from.
 
 Player stats (`best_score`, `run_count`, …) are **not** materialized — they are `MIN`/`MAX`/`COUNT`
@@ -97,8 +109,13 @@ blocks instead of the whole chain.
 `npm test` (vitest):
 
 - `test/decode.test.ts` — every event kind decoded from raw `keys`/`data`, the `MemberRejected`
-  short-string `reason`, and (when `cairo/doom_contracts` has been built) a cross-check that every
-  selector this package computes matches a name in the compiled ABI.
+  short-string `reason`, the four D35 events at their exact selectors (`RunLog` counted, never
+  stored; the `u256` bounty exact), and (when `cairo/doom_contracts` has been built) a
+  cross-check that every selector this package computes matches a name in the compiled ABI.
+- `test/commitments.test.ts` — the commitments through the real decode + apply path: a player's
+  pending games and their log-chunk count, settlement by a third-party prover and reclaim, a
+  reorg that un-proves a commitment (back to `PENDING`, not gone), a `RECLAIMED` id committed
+  again, and the four routes.
 - `test/indexer.test.ts` — `pollOnce` against a fixed, in-memory `EventSource` (no network): paging
   via `continuation_token`, the cursor advancing past a start block, idempotent re-polling, **the
   reorg**: a run replaced within the rescanned window disappears and the new one takes its place,

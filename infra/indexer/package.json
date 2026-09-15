@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "DoomRuns event indexer (P4.4): follows RunSubmitted/AttemptRecorded/MemberRejected/Replay/VersionAdded/GenesisSet/Frozen into SQLite and serves a small read API for the leaderboard page.",
+  "description": "DoomRuns event indexer (P4.4, P4.7): follows RunSubmitted/AttemptRecorded/MemberRejected/Replay/VersionAdded/GenesisSet/Frozen and the D35 commitment events (RunCommitted/RunLog/CommitmentProved/CommitmentReclaimed) into SQLite and serves a small read API for the leaderboard page.",
   "engines": {
     "node": ">=22"
   },
