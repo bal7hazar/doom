@@ -8,21 +8,25 @@ use doom_map::LevelId;
 use doom_monsters::actors::scan;
 use doom_monsters::{Ctx as MonsterCtx, EV_CROSS, EV_DROP, EV_KILLED, EV_SOUND, MonsterEvent, Patch};
 use doom_physics::{
-    Hit, MF_DROPPED, MF_SHOOTABLE, MF_SPECIAL, Mobj, MoveEvent, NO_MOBJ, SpawnZ, ThingGrid, has,
-    is_removed, new_grid, removed_mobj, set_thing_position, spawn_mobj,
+    Hit, MF_DROPPED, MF_NOBLOCKMAP, MF_SHOOTABLE, MF_SPECIAL, Mobj, MoveEvent, NO_CELL, NO_MOBJ,
+    SpawnZ, ThingGrid, has, is_removed, new_grid, removed_mobj, set_thing_position, spawn_mobj,
 };
 use doom_player::{PST_DEAD, PST_LIVE, PlayerEvent, WP_CHAINSAW, env_of};
 use doom_specials::state::{Mover, MoverKind, Phase, set_felt};
 use doom_specials::{SectorBlocking, SpecialsState};
 use doom_things::tables::{KIND_CLIP, KIND_MISC2, KIND_POSSESSED};
+use fixed::Fixed;
 use geom2d::Point;
 use prng::from_index;
 use segment::{Status, from_felts as output_from_felts, to_felts};
 use ticcmd::{TicCmd, encode};
-use crate::level::{Occupancy, contains, ctx_of, moving_sectors, refresh_heights};
+use crate::level::{
+    SectorIndex, contains, ctx_of, moving_sectors, no_index, nofit_scan, occupancy_of,
+    occupancy_scan, refresh_heights, things_of_sector,
+};
 use crate::tic::{
-    apply_monster_events, apply_move_events, apply_player_events, height_clip, place_drops,
-    rebuild_list, reconcile_player,
+    apply_monster_events, apply_move_events, apply_player_events, clip_patches, clip_patches_scan,
+    height_clip, place_drops, rebuild_list, reconcile_player,
 };
 use crate::{
     GameEngine, GameState, MOBJ_WORDS, PLAYER_WORDS, SECTOR_WORDS, SNAPSHOT_HEADER, STATS_WORDS,
@@ -469,7 +473,7 @@ fn test_touch_picks_up_and_removes_an_item_once() {
     assert(patches.len() == 1, 'removed once');
     assert(is_removed((@(*patches.at(0)).mo).as_snapshot().unbox()), 'a removed slot');
     // The rebuild writes the patch and the player.
-    let list = rebuild_list(w, mobjs, ref grid, mo, 0, patches.span(), array![].span());
+    let list = rebuild_list(w, mobjs, ref grid, mo, 0, patches.span(), array![].span(), no_index());
     assert(is_removed((list.at(1)).as_snapshot().unbox()), 'gone from the list');
     assert(list.at(0).unbox() == mo, 'player written');
     g.player = p;
@@ -588,7 +592,7 @@ fn test_reconcile_player_synchronizes_resolved_damage_and_death() {
 fn test_occupancy_blocks_a_closing_door_on_a_live_shootable_thing() {
     let g = genesis(LevelId::E1M1);
     let mobjs = g.mobjs;
-    let occ = Occupancy { mobjs };
+    let occ = occupancy_scan(mobjs);
     let pmo = mobjs.at(0).unbox();
     // The player's own sector, with no room: blocked; with plenty: free.
     assert(
@@ -600,7 +604,7 @@ fn test_occupancy_blocks_a_closing_door_on_a_live_shootable_thing() {
     let mut corpse = pmo;
     corpse.health = 0;
     corpse.flags = 0;
-    let dead = Occupancy { mobjs: array![BoxTrait::new(corpse)].span() };
+    let dead = occupancy_scan(array![BoxTrait::new(corpse)].span());
     assert(!dead.nofit(pmo.sector, pmo.z, fixed::add(pmo.z, fixed::from_units(8))), 'corpse');
     assert(has(pmo.flags, MF_SHOOTABLE), 'the player is shootable');
 }
@@ -875,3 +879,306 @@ fn test_live_psprites_are_exact_render_only_projection() {
     assert(hash(@game) == hash(@plain), 'same canonical hash');
     assert(game.leveltime == tics, 'no tic consumed');
 }
+
+// ---------------------------------------------------------------------------
+// O3: the clip and the occupancy by blockmap cells, against the scans
+// ---------------------------------------------------------------------------
+
+/// Two patch lists are the same patches in the same order.
+fn assert_same_patches(mut a: Span<Patch>, mut b: Span<Patch>) {
+    assert(a.len() == b.len(), 'same number of patches');
+    while let Option::Some(x) = a.pop_front() {
+        let y = b.pop_front().unwrap();
+        assert(*x.idx == *y.idx, 'same slot');
+        assert(x.mo.unbox() == y.mo.unbox(), 'same record');
+    }
+}
+
+/// A roster that exercises every case the scan answers on: the genesis
+/// things in their grid, a monster copy off the blockmap (`MF_NOBLOCKMAP`),
+/// another with no cell, a removed slot whose stale `sector` is a clipping
+/// sector, a damaged patch on a clipped monster, a pickup patch (removed)
+/// on a clipped item still linked in the grid — and the clipping sectors
+/// given twice (two movers on one sector). The clip and the occupancy read
+/// off the cells must produce exactly what the scans produce.
+fn o3_roster() -> (GameState, Array<Box<Mobj>>, ThingGrid, Span<u32>, Array<Patch>, u32, u32) {
+    let g = genesis(LevelId::E1M1);
+    let GameState {
+        level,
+        leveltime,
+        status,
+        noise,
+        prng,
+        mrng,
+        player,
+        mobjs,
+        specials,
+        floor,
+        ceil,
+        grid,
+        actors: _,
+    } = g;
+    let me = player.mo;
+    // Three monsters of different rooms and an item: their sectors move.
+    let a: u32 = 5;
+    let b: u32 = 20;
+    let c: u32 = 40;
+    let mut item: u32 = 0;
+    let mut k: u32 = 1;
+    while k != mobjs.len() {
+        if has(mobjs.at(k).flags, MF_SPECIAL) && item == 0 {
+            item = k;
+        }
+        k += 1;
+    }
+    assert(item != 0, 'an item to pick up');
+    let sa = mobjs.at(a).sector;
+    let sb = mobjs.at(b).sector;
+    let sc = mobjs.at(c).sector;
+    let si = mobjs.at(item).sector;
+    let clip = array![sa, sb, 10, sc, si, sa].span();
+    let mut roster: Array<Box<Mobj>> = array![];
+    let mut src = mobjs;
+    while let Option::Some(m) = src.pop_front() {
+        roster.append(*m);
+    }
+    let n = roster.len();
+    // Off the blockmap, in a clipping sector: the scan clips them, the grid
+    // cannot find them (`Actors::off_grid` does).
+    let mut ghost = mobjs.at(a).unbox();
+    ghost.flags = ghost.flags | MF_NOBLOCKMAP;
+    ghost.cell = NO_CELL;
+    roster.append(BoxTrait::new(ghost));
+    let mut far = mobjs.at(b).unbox();
+    far.cell = NO_CELL;
+    far.z = fixed::add(far.z, fixed::from_units(24));
+    roster.append(BoxTrait::new(far));
+    // A removed slot whose stale sector is clipping: skipped by both.
+    let mut stale = removed_mobj();
+    stale.sector = sc;
+    roster.append(BoxTrait::new(stale));
+    // The patches of the tic so far: the player, monster `a` shot, the
+    // item picked up (its slot removed while the grid still lists it).
+    let mut hurt = mobjs.at(a).unbox();
+    hurt.health = hurt.health - 3;
+    let sorted = array![
+        Patch { idx: me, mo: *mobjs.at(me) }, Patch { idx: a, mo: BoxTrait::new(hurt) },
+        Patch { idx: item, mo: BoxTrait::new(removed_mobj()) },
+    ];
+    let back = GameState {
+        level,
+        leveltime,
+        status,
+        noise,
+        prng,
+        mrng,
+        player,
+        mobjs,
+        specials,
+        floor,
+        ceil,
+        grid: new_grid(),
+        actors: scan(mobjs),
+    };
+    (back, roster, grid, clip, sorted, me, n)
+}
+
+#[test]
+fn test_clip_by_cells_matches_the_scan_on_a_synthetic_roster() {
+    let (g, roster, mut grid, clip, sorted, me, n) = o3_roster();
+    let ctx = ctx_of(g.level, g.floor, g.ceil);
+    let w = BoxTrait::new(ctx.w);
+    let mobjs = roster.span();
+    let index = SectorIndex { cells: ctx.m.s_cells, off_grid: scan(mobjs).off_grid };
+    assert(index.off_grid == array![n, n + 1].span(), 'two slots off the grid');
+    let mut sorted_a: Array<Patch> = array![];
+    let mut sorted_b: Array<Patch> = array![];
+    let mut ps = sorted.span();
+    while let Option::Some(p) = ps.pop_front() {
+        sorted_a.append(*p);
+        sorted_b.append(*p);
+    }
+    let expected = clip_patches_scan(w, mobjs, ref grid, sorted_a, clip, me);
+    let got = clip_patches(w, mobjs, ref grid, sorted_b, clip, me, index);
+    assert_same_patches(expected.span(), got.span());
+    // The clip did something: the off-grid pair, the hurt monster (its
+    // patch composed), the two other monsters and the item's neighbours.
+    assert(expected.len() > sorted.len() + 4, 'things were clipped');
+    let mut seen_ghost = false;
+    let mut seen_far = false;
+    let mut seen_item = false;
+    let mut hurt_composed = false;
+    let mut es = expected.span();
+    while let Option::Some(p) = es.pop_front() {
+        if *p.idx == n {
+            seen_ghost = true;
+        }
+        if *p.idx == n + 1 {
+            // Lifted off its floor before the clip: `P_ThingHeightClip`
+            // leaves a hovering thing off the floor (under the ceiling).
+            seen_far = true;
+            assert(p.mo.z != p.mo.floorz, 'hovering');
+        }
+        if *p.idx == n + 2 {
+            assert(false, 'a removed slot is never clipped');
+        }
+        if *p.idx == 5 {
+            hurt_composed = p.mo.health == mobjs.at(5).health - 3;
+        }
+        if *p.idx == g.player.mo {
+            assert(p.mo.unbox() == mobjs.at(g.player.mo).unbox(), 'the player is not clipped');
+        }
+        let picked = *p.idx != me && is_removed(@p.mo.unbox());
+        if picked {
+            seen_item = true;
+        }
+    }
+    assert(seen_ghost && seen_far, 'off-grid things clipped');
+    assert(hurt_composed, 'the patch was clipped');
+    assert(seen_item, 'the pickup patch is kept as is');
+}
+
+#[test]
+fn test_occupancy_by_cells_matches_the_scan_on_a_synthetic_roster() {
+    let (g, roster, mut grid, clip, _, me, n) = o3_roster();
+    let ctx = ctx_of(g.level, g.floor, g.ceil);
+    let mobjs = roster.span();
+    let index = SectorIndex { cells: ctx.m.s_cells, off_grid: scan(mobjs).off_grid };
+    // One mover per clipping sector, the player's sector too (it blocks
+    // by index), and a sector with nothing in it.
+    let pmo = mobjs.at(me).unbox();
+    let mut sectors: Array<u32> = array![pmo.sector, 3];
+    sectors.append_span(clip);
+    let mut movers: Array<Mover> = array![];
+    let mut ss = sectors.span();
+    while let Option::Some(s) = ss.pop_front() {
+        movers
+            .append(
+                Mover {
+                    kind: MoverKind::DoorNormal,
+                    phase: Phase::Down,
+                    sector: *s,
+                    height: fixed::ZERO,
+                    top: fixed::ZERO,
+                    bottom: fixed::ZERO,
+                    count: 0,
+                },
+            );
+    }
+    let mut specials = g.specials;
+    specials.movers = movers.span();
+    let occ = occupancy_of(ref grid, mobjs, me, ctx.w.map.grid, index, @specials);
+    assert(occ.sectors.len() == movers.len(), 'one list per mover');
+    let rooms = array![0, 8, 24, 40, 55, 56, 57, 64, 128].span();
+    let mut asked: u32 = 0;
+    let mut blocked: u32 = 0;
+    let mut ss = sectors.span();
+    while let Option::Some(s) = ss.pop_front() {
+        let floor = Fixed { enc: *g.floor.at(*s) };
+        let mut rs = rooms;
+        while let Option::Some(r) = rs.pop_front() {
+            let room = fixed::from_units(*r);
+            let expected = nofit_scan(mobjs, *s, room);
+            assert(occ.nofit(*s, floor, fixed::add(floor, room)) == expected, 'same verdict');
+            asked += 1;
+            if expected {
+                blocked += 1;
+            }
+        }
+    }
+    assert(asked == 9 * sectors.len() && blocked != 0 && blocked != asked, 'both verdicts met');
+    // The off-grid monster blocks too, through `off_grid`; a sector no list
+    // was gathered for holds nothing.
+    let sb = mobjs.at(20).sector;
+    assert(occ.nofit(sb, fixed::ZERO, fixed::from_units(8)), 'blocked');
+    let mut only_far: Array<Box<Mobj>> = array![];
+    let mut k: u32 = 0;
+    while k != mobjs.len() {
+        only_far.append(if k == n + 1 {
+            *mobjs.at(k)
+        } else {
+            BoxTrait::new(removed_mobj())
+        });
+        k += 1;
+    }
+    let far_index = SectorIndex { cells: ctx.m.s_cells, off_grid: scan(only_far.span()).off_grid };
+    assert(far_index.off_grid == array![n + 1].span(), 'the far one only');
+    let far_occ = occupancy_of(ref grid, only_far.span(), me, ctx.w.map.grid, far_index, @specials);
+    assert(far_occ.nofit(sb, fixed::ZERO, fixed::from_units(8)), 'off-grid blocks');
+    assert(!far_occ.nofit(sb, fixed::ZERO, fixed::from_units(128)), 'off-grid fits');
+    assert(nofit_scan(only_far.span(), sb, fixed::from_units(8)), 'the scan agrees');
+    assert(!occ.nofit(181, fixed::ZERO, fixed::ZERO), 'unlisted: nothing');
+}
+
+#[test]
+fn test_things_of_sector_walks_the_cells_of_the_range() {
+    // Every genesis thing is found by the walk of its own sector's range,
+    // and the walk of an empty range (past the table) finds nothing.
+    let g = genesis(LevelId::E1M1);
+    let GameState { level, floor, ceil, mobjs, grid, .. } = g;
+    let mut grid = grid;
+    let ctx = ctx_of(level, floor, ceil);
+    let mut k: u32 = 0;
+    let mut found_total: u32 = 0;
+    while k != mobjs.len() {
+        let m = mobjs.at(k);
+        let things = things_of_sector(ref grid, ctx.m.s_cells, ctx.w.map.grid, m.sector);
+        assert(contains(things, k), 'found in its sector range');
+        found_total += things.len();
+        k += 1;
+    }
+    // The walks visit far fewer candidates than the scans read (210 slots
+    // per clipped sector): about a fifth, the big outdoor sector included.
+    println!("things_of_sector: {} candidates over {} walks", found_total, mobjs.len());
+    assert(found_total * 4 < mobjs.len() * mobjs.len(), 'small candidate sets');
+    let none = things_of_sector(ref grid, ctx.m.s_cells, ctx.w.map.grid, 5000);
+    assert(none.len() == 0, 'past the table: nothing');
+    let empty = things_of_sector(ref grid, array![].span(), ctx.w.map.grid, 0);
+    assert(empty.len() == 0, 'no table: nothing');
+}
+
+#[test]
+fn test_off_grid_slots_are_the_noblockmap_things() {
+    // Every live slot Doom does not link into the blockmap (`MF_NOBLOCKMAP`:
+    // on E1M1 the missiles in flight; nothing collides with them) is in
+    // the derived index for the cell walk to visit — the scan of a moving
+    // sector clipped them — and no other live slot is. Genesis links every
+    // thing; a fireball spawned at the player's feet is off the grid.
+    let mut g = genesis(LevelId::E1M1);
+    assert(g.actors.off_grid.len() == 0, 'genesis links everything');
+    let w = ctx_of(g.level, g.floor, g.ceil).w;
+    let player = g.mobjs.at(0).unbox();
+    let mut ball = spawn_mobj(
+        w, doom_things::tables::KIND_TROOPSHOT, player.x, player.y, SpawnZ::OnFloor,
+    );
+    assert(has(ball.flags, MF_NOBLOCKMAP), 'a missile is NOBLOCKMAP');
+    let mut roster: Array<Box<Mobj>> = array![];
+    let mut src = g.mobjs;
+    while let Option::Some(m) = src.pop_front() {
+        roster.append(*m);
+    }
+    set_thing_position(@w.map, ref g.grid, ref ball, roster.len());
+    roster.append(BoxTrait::new(ball));
+    g.mobjs = roster.span();
+    g.actors = scan(g.mobjs);
+    let off = g.actors.off_grid;
+    assert(off == array![g.mobjs.len() - 1].span(), 'the fireball only');
+    let mut k: u32 = 0;
+    let mut listed: u32 = 0;
+    while k != g.mobjs.len() {
+        let m = g.mobjs.at(k);
+        let unlinked = !is_removed(m.as_snapshot().unbox())
+            && !doom_physics::in_blockmap(m.as_snapshot().unbox());
+        if unlinked {
+            assert(has(m.flags, MF_NOBLOCKMAP), 'off the grid by its flag');
+            assert(contains(off, k), 'listed');
+            listed += 1;
+        } else {
+            assert(!contains(off, k), 'not listed');
+        }
+        k += 1;
+    }
+    assert(listed == off.len(), 'exactly the unlinked slots');
+    assert_state_roundtrip(@g);
+}
+

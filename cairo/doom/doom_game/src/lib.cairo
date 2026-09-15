@@ -20,7 +20,10 @@ mod tests;
 pub mod tic;
 
 pub use engine::{GameEngine, run_segment, stats_of};
-pub use level::{Ctx, Occupancy, TOTAL_ITEMS, TOTAL_KILLS, TOTAL_SECRETS, ctx_of};
+pub use level::{
+    Ctx, Occupancy, SectorIndex, TOTAL_ITEMS, TOTAL_KILLS, TOTAL_SECRETS, ctx_of, no_index,
+    occupancy_of, occupancy_scan,
+};
 pub use render::{
     MOBJ_WORDS, PLAYER_WORDS, SECTOR_WORDS, SNAPSHOT_HEADER, SNAPSHOT_VERSION, STATS_WORDS,
     snapshot,

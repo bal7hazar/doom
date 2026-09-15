@@ -29,6 +29,7 @@ name = "doom_game"
 version = "0.1.0"
 dependencies = [
  "bam",
+ "blockmap",
  "doom_map",
  "doom_monsters",
  "doom_physics",

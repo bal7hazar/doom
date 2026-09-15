@@ -1,7 +1,7 @@
 {
   "map": "E1M1",
   "scalars": 19,
-  "total_words": 15151,
+  "total_words": 15333,
   "arrays": [
     {
       "name": "L_AB",
@@ -88,6 +88,12 @@
       "words": 182
     },
     {
+      "name": "S_CELLS",
+      "group": "sectorCells",
+      "layout": "packed",
+      "words": 182
+    },
+    {
       "name": "BM_START",
       "group": "blockmap",
       "layout": "planar",
@@ -137,5 +143,9 @@
   "descent_depth": {
     "from_root": 11.364583333333334,
     "from_cell_node": 4.153935185185185
+  },
+  "sector_cells": {
+    "mean": 9.76923076923077,
+    "max": 132
   }
 }

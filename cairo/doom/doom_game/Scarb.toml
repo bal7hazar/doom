@@ -7,6 +7,7 @@ edition.workspace = true
 fixed = { path = "../../crates/fixed" }
 bam = { path = "../../crates/bam" }
 geom2d = { path = "../../crates/geom2d" }
+blockmap = { path = "../../crates/blockmap" }
 fsm = { path = "../../crates/fsm" }
 prng = { path = "../../crates/prng" }
 ticcmd = { path = "../../crates/ticcmd" }

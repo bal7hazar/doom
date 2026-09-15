@@ -80,6 +80,43 @@ See `docs/spikes/S8-tic-profile.md` for methodology, exact-version results
 and open D2/D29 limits. Recorded regression budgets are not success targets:
 D2 remains **12,000 mean / 25,000 p99 steps per tic**.
 
+### O3: `P_ChangeSector` through the blockmap
+
+`docs/design/d2-profile.md` §5.3 measured the two roster scans of a tic
+where a plane moves — `clip_patches` reading the sector of every slot to
+height-clip the things standing in the moving sectors, `Occupancy::nofit`
+scanning them again per mover — at 11 250 + 1 600 steps/tic on `door`.
+Both now walk the blockmap: `doom_map::S_CELLS` gives each sector its cell
+range, `things_of_sector` reads those cells' thing lists, and the derived
+index (`Actors::off_grid`) supplies the live slots the grid cannot hold
+(the missiles in flight). The set visited is the roster's, and the tests
+say so: `test_clip_by_cells_matches_the_scan_*` compare the walk with the
+scans kept as `#[cfg(test)]` oracles, patch for patch and verdict for
+verdict, on synthetic rosters (things off the grid, a removed slot with a
+stale sector, patched and picked-up things, a sector moved twice), on every
+tic of `door` and `walk`, and on a scripted run where the door closes onto
+the player (`door_block_log`). The five replay pins are unchanged.
+
+Measured with `bench/attribute_tics.py --all --chunk 35` (steps per tic,
+boundary excluded; the O1 build `d56e68b6…` against this one
+`84c9bae1…`):
+
+| Replay | Mean before | Mean after | p99 before | p99 after |
+|---|---:|---:|---:|---:|
+| idle | 20 870 | 21 168 | 24 053 | 24 405 |
+| walk | 43 021 | 36 138 | 83 227 | 66 824 |
+| door | 57 624 | 46 013 | 119 121 | 105 557 |
+| fight | 55 525 | 52 494 | 145 470 | 135 559 |
+| death | 39 266 | 36 640 | 83 861 | 71 996 |
+| **aggregate (2 946 tics)** | **41 385** | **37 785** | **115 056** | **110 220** |
+
+`clip_patches` + `contains` fall from 11 266 to ~300 steps/tic on `door`
+(`things_of_sector` and the clips themselves); idle pays ~300 steps more
+for the membership check of the index (`keeps_class`, three field reads
+per ticked actor) and the per-tic table read. `run_segment` under the
+proving profile: 107 632 → 108 976 words (+182 for `S_CELLS`, the rest the
+walk and the gathered occupancy), under the D29 ceiling of 120 000.
+
 The follow-up consumer-size pass is documented in
 [`bench_sizing/README.md`](bench_sizing/README.md): 111,321 proving words,
 275,020 native steps for an empty Worker call, unchanged schema-2 felts in
