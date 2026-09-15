@@ -357,6 +357,8 @@ failing an RPC call.
 | season sponsoring (R7-A4) | `VITE_SPONSORED` | `sponsored` | no |
 | publish the packed input logs (R10-A3) | `VITE_REPLAY` | `replay` | no |
 | wrapper base URL | `VITE_WRAPPER_URL` | `wrapper` | for the upload |
+| default bounty of a commitment, in whole STRK (P4.7) | `VITE_DEFAULT_BOUNTY` | `bounty` | no, default `0` |
+| fee token of the bounties (P4.7) | `VITE_FEE_TOKEN` | `feeToken` | no, read from `DoomRuns.fee_token()` |
 
 The proof id keys the router's checkpoint (`(caller, proof_id)`), so it must be the same on
 every attempt for one batch and different for the next: `proofIdFor(batchId)` derives it from the
@@ -396,7 +398,57 @@ stopped:
 
 The real-game route (`prove/gameBridge.ts`) keeps its documented offline policy — no wrapper,
 `keepOffline` set — so the on-chain leg is reached from `index.html`'s F4 panel (demo route) with
-the variables above, and from `infra/submit` for a batch on disk.
+the variables above, and from `infra/submit` for a batch on disk. The **commitment** below needs
+no wrapper and is offered on both routes.
+
+## Commit a run (P4.7)
+
+D35 makes proving somebody else's job: the player's client **commits** the game to `DoomRuns`
+with its whole packed input log and a bounty in escrow, and any address may execute, prove and
+record it and be paid. **Commit…** is the fourth answer at the end of a game, next to prove
+locally / keep offline / export, on the demo route and the real game route alike; "keep
+offline" stays the default and the `.hellproof` export works before and after a commitment.
+
+```
+  ProveSession.commit()
+      |  flushJournal → RunStore.getInputs → packed = complete felts + tail   (TicLog.toFelts())
+      |  inputs_commitment = commit_log(packed)        chain/commit.ts, chain/poseidon.ts
+      |  Controller connected (commit policies)  →  commitment_id = poseidon('HP.COMMIT', …, player, inputs_commitment)
+      |  get_commitment(id): PENDING / PROVED  →  refused, never committed twice
+      +- CommitScreen (ui/commitScreen.ts): simulateCalls([approve?, commit_run]) → priced like the cost screen
+             |  bounty editable (re-priced), Commit / Keep offline / Cancel
+             `- signer.execute(multicall) → receipt → RunCommitted checked against the local id
+  run record: commitmentId, inputsCommitment, commitStatus, commitTx, commitBounty, commitExpiresAt, commitProver, commitRunId
+```
+
+* **What is sent.** One transaction: ERC20 `approve(DoomRuns, bounty)` on `fee_token()` when
+  the bounty is non-zero, then `commit_run(version_id, level_id, packed, tics, bounty)` with
+  `packed.len() == ceil(tics / 7)` exactly — the same check the contract makes, made before
+  anything is simulated. `version_id` / `level_id` / `DoomRuns` / RPC come from the P4.3
+  configuration above; the bounty defaults to `VITE_DEFAULT_BOUNTY` (zero allowed) and is
+  editable on the screen. The cost is the same estimator, margins and prices as the cost
+  screen (`simulateCalls` returns a one-step `SequenceEstimate`); the bounty is shown apart
+  from the fee, because it is escrowed, not spent.
+* **The id is known before signing.** `chain/poseidon.ts` is Starknet's Poseidon with no
+  dependency (round constants derived as StarkWare does, pinned against `poseidon_py` and the
+  contract's own test vectors); `commit_log` and `commitment_id_of` are computed locally, stored
+  on the run record, and the `RunCommitted` event of the receipt is checked against them (a
+  disagreement is logged and kept on the record as `error`).
+* **Never twice.** A record with a live commitment (`committing` / `pending` / `proved`) is
+  refused before the wallet is asked; the chain is then asked for the id and `PENDING` / `PROVED`
+  refuse too (the record learns the status, and who proved it). A `RECLAIMED` id may be
+  committed again, as the contract allows.
+* **Following it.** The panel shows the commitment line — *waiting for a prover (reclaimable
+  from block N)*, *proved by 0x… as run …*, *expired — reclaimable*, *reclaimed* — with
+  **Commitment status** (`get_commitment` + `starknet_blockNumber`) and, once expired,
+  **Reclaim bounty** (`reclaim`, player only). The leaderboard page lists the same pending games
+  under a player's recorded runs (`infra/indexer` decodes `RunCommitted` / `CommitmentProved` /
+  `CommitmentReclaimed` and counts `RunLog` chunks; the RPC fallback walks
+  `pending_commitments`).
+* **Guards.** Without `VITE_RPC_URL` / `VITE_DOOM_RUNS_ADDRESS` / `VITE_VERSION_ID` the button
+  logs which names to set and touches no network; a run kept offline is refused; nothing here
+  holds or shows a key — the Controller session covers exactly `approve`, `commit_run` and
+  `reclaim` on top of the six submission entrypoints.
 
 ## Leaderboard (P4.4)
 
@@ -427,6 +479,11 @@ Without an indexer, `/stats` and full player history are unavailable (no on-chai
 every run or player) — the RPC fallback still serves the board, run details and a player's own
 `player_runs`, just less efficiently (P4.4 exists precisely for the case an indexer answers
 better). See `infra/indexer/README.md` for the indexer's API, schema and reorg handling.
+
+A player page also lists the player's games **waiting for a prover** (P4.7) under the recorded
+runs — commitment id, version, level, tics, bounty, *pending until block N* or *expired,
+reclaimable*, and the published log chunks when the indexer is behind the page. They are not
+results and are not ranked: any prover may still prove them.
 
 ### The stand-in program, and how `doom_run` drops in
 
@@ -513,7 +570,7 @@ assets decoded in 19 ms.
 
 ## Tests
 
-`npm test` — 276 vitest tests (10 skip themselves without the staged prover).
+`npm test` — 314 vitest tests (10 skip themselves without the staged prover).
 
 *Renderer and assets* (79): pegging (all four vanilla cases and the row offset),
 wall quad generation (including that it follows moving heights), BSP clipping and
@@ -533,13 +590,16 @@ the stub sim on the real E1M1.
 | `store.test.ts` | IndexedDB round trips, segment+proof atomicity, reopen, `deleteRun`, and `.hellproof` export/import including the renaming collision, a corrupted payload caught by its checksum, and the quota projections |
 | `pipeline.test.ts` | the pipeline against a fake prover: planning and shrinking, the step ceiling, a hung threaded prove killed and retried single-threaded, a segment that fails for good, the prover dropped between segments, resume after a simulated reload (exactly one segment re-proved), waiting mid-game vs cutting at the end, and the event stream |
 | `wrapper.test.ts` | the submitter against a fake server: the per-segment probe and its fallback, skipping what the server holds, retries under the same `run_id`, `keepOffline` refused, gaps refused, failures recorded locally, and the status/batch mirror |
+| `commit.test.ts` (jsdom) | the open-prover commitment (P4.7): the Poseidon port against `poseidon_py` and the contract's `INPUTS_SEED` / nine-tic vectors, packing → `commit_log` and `commitment_id` on a short journal with explicit expected values, the exact `approve` + `commit_run` multicall calldata (`packed_len(tics)`, both `u256` limbs) and the refusals the contract makes, the `Commitment` decoder, the session policies, `VITE_DEFAULT_BOUNTY`; then the flow against a mocked node and wallet: id on the record before signing, cost and bounty on the screen, re-pricing on a changed bounty, the record after the receipt, double commitment refused three ways (live record, `PENDING`, `PROVED`) and allowed after `RECLAIMED`, C6, a wallet failure, a `RunCommitted` that disagrees, status refresh (pending → proved by X → expired) and `reclaim` (player only, after expiry), the panel line, and `ProveSession.commit()` without configuration touching no network |
 | `onchain.test.ts` (jsdom) | the on-chain leg on the real `B2-1_doom` fixture against a mocked node and wallet: the configuration reader (missing names listed, URL overrides, malformed values, the derived proof id), the cost screen's six rows and totals in STRK and fiat, "wait" and "keep offline" sending nothing, "submit" playing `begin → merkle → answers → fri → fri → register_member` in order and recording the fact, a wallet interruption between two transactions resumed from the saved D28 cut and `localStorage` echoes (the remaining phases re-priced, no trace round trip), a batch refused before paying, `?include=proof`, and `ProveSession.submit()` with no configuration touching no network |
 
 *Leaderboard* (`leaderboard.test.ts`, jsdom): every render function against fixtures (board rows,
 ranking, empty state, pager edges, run detail with/without replay, an attempt vs a finished run,
 Voyager links on sepolia vs the devnet hint), route parsing and `configFromLocation`'s
-indexer/RPC-fallback choice, and the replay journal reconstruction (per-segment repacking, the
-`.hellproof` container's magic/manifest/no-proof-bytes shape).
+indexer/RPC-fallback choice, the replay journal reconstruction (per-segment repacking, the
+`.hellproof` container's magic/manifest/no-proof-bytes shape), and the pending commitments of a
+player (rendered under the runs; the indexer source's mapping and expiry judgement; the RPC
+fallback's walk of `pending_commitments`, and its absence on an older contract).
 
 Tests that need the WAD skip themselves when `test/fixtures/generated/` or
 `public/levels/e1m1.json` is absent, so a clone without the IWAD is still
