@@ -5,6 +5,7 @@
 //! the map things do not), both RNG streams at `from_index(1)` (D24).
 
 use doom_map::{LevelId, genesis as level_genesis, num_things, thing};
+use doom_monsters::actors::scan;
 use doom_monsters::silence;
 use doom_physics::{new_grid, set_thing_position, spawn_map_thing};
 use doom_player::{PST_DEAD, PlayerEvent, bring_up_weapon, env_of, spawn};
@@ -57,6 +58,7 @@ pub fn genesis(level: LevelId) -> GameState {
 
     let (specials, prng) = spawn_specials(@m, @ctx.lm, rng, rndtable());
     let (floor, ceil) = materialise_heights(@m, @ctx.lm, @specials);
+    let actors = scan(mobjs.span());
     GameState {
         level,
         leveltime: 0,
@@ -70,6 +72,7 @@ pub fn genesis(level: LevelId) -> GameState {
         floor,
         ceil,
         grid,
+        actors,
     }
 }
 

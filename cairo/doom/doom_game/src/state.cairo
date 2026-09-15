@@ -37,6 +37,7 @@
 
 use doom_map::{LevelId, LevelMap, genesis as level_genesis};
 use doom_monsters::Noise;
+use doom_monsters::actors::{Actors, scan};
 use doom_physics::{HEALTH_BIAS, MOBJ_FELTS, Mobj, NO_MOBJ, ThingGrid, push_felts as push_mobj};
 use doom_player::{PLAYER_FELTS, Player, push_felts as push_player};
 use doom_specials::state::append_to as append_specials;
@@ -86,6 +87,11 @@ pub struct GameState {
     pub ceil: Span<felt252>,
     /// The blockmap thing lists; visitation order is committed in schema 2.
     pub grid: ThingGrid,
+    /// Derived (O1): the actor slots of `mobjs` and its first free slot,
+    /// `doom_monsters::actors::scan(mobjs)`. Never serialized; rebuilt on
+    /// load and whenever a tic changes a slot's class. Whoever assigns
+    /// `mobjs` directly must reset it with `scan`.
+    pub actors: Actors,
 }
 
 // ---------------------------------------------------------------------------
@@ -575,6 +581,7 @@ fn read_state(data: Span<felt252>) -> Option<Box<GameState>> {
         return Option::None;
     }
     let (floor, ceil) = materialise_heights(@m, @lm, @specials);
+    let actors = scan(mobjs);
     Option::Some(
         BoxTrait::new(
             GameState {
@@ -590,6 +597,7 @@ fn read_state(data: Span<felt252>) -> Option<Box<GameState>> {
                 floor,
                 ceil,
                 grid,
+                actors,
             },
         ),
     )

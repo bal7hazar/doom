@@ -307,6 +307,7 @@ fn game_tic_synchronizes_only_net_damage_after_both_attacks() {
     set_thing_position(@w.map, ref grid, ref b, 2);
     g.grid = grid;
     g.mobjs = array![BoxTrait::new(me), BoxTrait::new(a), BoxTrait::new(b)].span();
+    g.actors = doom_monsters::actors::scan(g.mobjs);
     g.prng = from_index(1);
     // Keep this integration fixture focused on combat RNG: no random lights.
     g.specials.lights = array![].span();

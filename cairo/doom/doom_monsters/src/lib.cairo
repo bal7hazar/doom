@@ -52,7 +52,7 @@ pub use event::{
 };
 pub use think::{
     awake_count, awake_count_in, in_window, is_awake, is_dormant, mobj_thinker, monsters_ticker,
-    monsters_ticker_with_defense,
+    monsters_ticker_indexed, monsters_ticker_with_defense,
 };
 
 /// How many tics a sight verdict is cached for (R2-A3; the `doom_physics`

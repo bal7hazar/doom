@@ -5,6 +5,7 @@
 //! `doom_map`'s miniature level as well.
 
 use doom_map::LevelId;
+use doom_monsters::actors::scan;
 use doom_monsters::{Ctx as MonsterCtx, EV_CROSS, EV_DROP, EV_KILLED, EV_SOUND, MonsterEvent, Patch};
 use doom_physics::{
     Hit, MF_DROPPED, MF_SHOOTABLE, MF_SPECIAL, Mobj, MoveEvent, NO_MOBJ, SpawnZ, ThingGrid, has,
@@ -474,6 +475,7 @@ fn test_touch_picks_up_and_removes_an_item_once() {
     g.player = p;
     g.specials = s;
     g.mobjs = list;
+    g.actors = scan(g.mobjs);
     g.grid = grid;
     assert_state_roundtrip(@g);
 }
@@ -497,17 +499,20 @@ fn test_grid_roundtrip_after_missile_removal_and_drop() {
     set_thing_position(@w.map, ref grid, ref player, 0);
     set_thing_position(@w.map, ref grid, ref missile, 1);
     g.mobjs = array![BoxTrait::new(player), BoxTrait::new(missile)].span();
+    g.actors = scan(g.mobjs);
     g.grid = grid;
     assert_state_roundtrip(@g);
     // The same unlink/tombstone transition used by the missile ticker.
     doom_physics::unset_thing_position(ref g.grid, @missile, 1);
     let mut out = array![BoxTrait::new(player), BoxTrait::new(removed_mobj())];
     g.mobjs = out.span();
+    g.actors = scan(g.mobjs);
     assert_state_roundtrip(@g);
     let mut clip = spawn_mobj(w, KIND_CLIP, player.x, player.y, SpawnZ::OnFloor);
     clip.flags = clip.flags | MF_DROPPED;
     place_drops(w, ref g.grid, ref out, array![BoxTrait::new(clip)].span());
     g.mobjs = out.span();
+    g.actors = scan(g.mobjs);
     assert_state_roundtrip(@g);
 }
 
@@ -660,6 +665,7 @@ fn test_serialized_boundary_preserves_pickup_order() {
     // A previous move changes visitation order without changing any mobj.
     doom_physics::relink(ref grid, bonus.cell, 1);
     g.mobjs = array![BoxTrait::new(me), BoxTrait::new(bonus), BoxTrait::new(stim)].span();
+    g.actors = scan(g.mobjs);
     g.grid = grid;
     let saved = serialize(@g);
     let restored = from_felts(saved.span()).expect('readable');

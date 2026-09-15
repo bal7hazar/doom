@@ -64,6 +64,7 @@ fn test_grid_member_bits_cover_all_256_slots() {
         mobjs.append(BoxTrait::new(repeated));
     }
     g.mobjs = mobjs.span();
+    g.actors = doom_monsters::actors::scan(g.mobjs);
     g.grid = doom_physics::grid::rebuild(g.mobjs);
     let encoded = serialize(@g);
     let restored = from_felts(encoded.span()).expect('all 256 members');

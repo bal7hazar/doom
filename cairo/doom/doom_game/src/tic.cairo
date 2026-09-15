@@ -29,9 +29,10 @@
 
 use core::num::traits::WrappingAdd;
 use doom_monsters::actions::passive;
+use doom_monsters::actors::{Actors, class_of, none as no_actors, patches_keep_classes, scan};
 use doom_monsters::{
     Ctx as MonsterCtx, EV_CROSS, EV_DROP, EV_KILLED, EV_USE, MonsterEvent, Noise, Patch,
-    monsters_ticker_with_defense, read_mobj,
+    monsters_ticker_indexed, read_mobj,
 };
 use doom_physics::{
     Hit, MAX_MOBJS, MF_DROPPED, Mobj, MoveEvent, NO_MOBJ, PlayerDefense, SpawnZ, ThingGrid, World,
@@ -68,7 +69,19 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
         Option::None => { return (state, Status::Abort); },
     };
     let GameState {
-        level, leveltime, status: _, noise, prng, mrng, player, mobjs, specials, floor, ceil, grid,
+        level,
+        leveltime,
+        status: _,
+        noise,
+        prng,
+        mrng,
+        player,
+        mobjs,
+        specials,
+        floor,
+        ceil,
+        grid,
+        actors,
     } = state;
     let me = player.mo;
     let entered = match mobjs.get(me) {
@@ -91,6 +104,7 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
                 floor,
                 ceil,
                 grid,
+                actors,
             };
             return (back, Status::Abort);
         },
@@ -156,11 +170,13 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
         ctx, env, mctx, mobjs, ref g, ref rng, ref p, ref mo, ref s, input, ref patches, ref cues,
     );
 
-    // 6. One rebuild, if anything changed on our side.
-    let list_in = if mo != mo0 || patches.len() != 0 || clip.len() != 0 {
-        rebuild_list(w, mobjs, ref g, mo, me, patches.span(), clip)
+    // 6. One rebuild, if anything changed on our side. The derived actor
+    // index follows the list (O1): kept when no patch changed a slot's
+    // class, rescanned otherwise.
+    let (list_in, actors_in) = if mo != mo0 || patches.len() != 0 || clip.len() != 0 {
+        rebuild_list_in(w, mobjs, ref g, mo, me, patches.span(), clip, actors)
     } else {
-        mobjs
+        (mobjs, actors)
     };
 
     // 7. The monsters and the missiles.
@@ -171,11 +187,15 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
         damagecount: p.damagecount,
         attacker: p.attacker,
     };
-    let (list_out, r2, mev) = monsters_ticker_with_defense(
-        w, list_in, ref g, players, noise_now, tic, rng, ref defense,
+    let (list_out, r2, mev, actors_out) = monsters_ticker_indexed(
+        w, list_in, actors_in, ref g, players, noise_now, tic, rng, ref defense,
     );
     rng = r2;
     let mut out = list_out;
+    let mut actors_now = actors_out;
+    // Set when a write below may change a slot's class: the index is
+    // rescanned from the final list.
+    let mut rescan = drops.len() != 0;
 
     // 8. Their events, then synchronize the player after per-impact damage.
     apply_monster_events_boxed(
@@ -184,9 +204,15 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
     let after = *out.span().at(me);
     if after.health < mo.health && p.playerstate != PST_DEAD {
         let fixed_mo = reconcile_player(env, ref g, ref rng, ref p, after.unbox(), defense);
+        if class_of(after.kind, after.flags) != class_of(fixed_mo.kind, fixed_mo.flags) {
+            rescan = true;
+        }
         replace(ref out, me, BoxTrait::new(fixed_mo));
     }
     place_drops(w, ref g, ref out, drops.span());
+    if rescan {
+        actors_now = scan(out.span());
+    }
 
     // 9. Doors, lifts, floors, lights.
     let movers_before = s.movers.len();
@@ -211,6 +237,7 @@ pub fn step_tic(state: GameState, word: felt252) -> (GameState, Status) {
         floor: floor2,
         ceil: ceil2,
         grid: g,
+        actors: actors_now,
     };
     (next, status)
 }
@@ -421,6 +448,24 @@ pub fn rebuild_list(
     patches: Span<Patch>,
     clip: Span<u32>,
 ) -> Span<Box<Mobj>> {
+    let (list, _) = rebuild_list_in(w, mobjs, ref g, mo, me, patches, clip, no_actors());
+    list
+}
+
+/// [`rebuild_list`] carrying the derived actor index (O1): `actors` is the
+/// index of `mobjs`; the result's index is the same one when every written
+/// slot (the player, the patches, the clipped things) kept its class, a
+/// fresh `scan` of the new list otherwise.
+fn rebuild_list_in(
+    w: World,
+    mobjs: Span<Box<Mobj>>,
+    ref g: ThingGrid,
+    mo: Mobj,
+    me: u32,
+    patches: Span<Patch>,
+    clip: Span<u32>,
+    actors: Actors,
+) -> (Span<Box<Mobj>>, Actors) {
     let mut sorted = insert_patch(
         array![], BoxTrait::new(Patch { idx: me, mo: BoxTrait::new(mo) }),
     );
@@ -431,7 +476,13 @@ pub fn rebuild_list(
     if clip.len() != 0 {
         sorted = clip_patches(BoxTrait::new(w), mobjs, ref g, sorted, clip, me);
     }
-    copy_patched(mobjs, sorted.span())
+    let list = copy_patched(mobjs, sorted.span());
+    let index = if patches_keep_classes(mobjs, sorted.span()) {
+        actors
+    } else {
+        scan(list)
+    };
+    (list, index)
 }
 
 /// `sorted` with `pt` inserted at its index (replacing an entry with the

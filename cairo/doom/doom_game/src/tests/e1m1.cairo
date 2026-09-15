@@ -321,6 +321,57 @@ fn test_replay_death() {
     check('death', @s, DEATH_HASH, DEATH_V1_HASH);
 }
 
+/// O1: the derived actor index carried across tics is, after every tic,
+/// exactly the scan of the list (`next_actor`'s set in slot order, and the
+/// first free slot), and a run that throws it away before every tic — the
+/// definition — hashes identically tic for tic. Fireballs spawned into
+/// freed slots and appended, explosions, deaths, pickups and a moving
+/// plane all happen inside these windows.
+fn check_actor_index(log: Span<felt252>, from: u32, to: u32) {
+    let mut carried = genesis(LevelId::E1M1);
+    let mut k: u32 = 0;
+    while k != from {
+        let (next, _) = step_tic(carried, *log.at(k));
+        carried = next;
+        k += 1;
+    }
+    let mut rescanned = crate::from_felts(crate::serialize(@carried).span()).expect('readable');
+    while k != to {
+        let w = *log.at(k);
+        let (a, sa) = step_tic(carried, w);
+        rescanned.actors = doom_monsters::actors::scan(rescanned.mobjs);
+        let (b, sb) = step_tic(rescanned, w);
+        assert(sa == sb, 'same status');
+        assert(a.actors == doom_monsters::actors::scan(a.mobjs), 'carried index is the scan');
+        assert(a.actors.first_free == doom_physics::first_free(a.mobjs), 'first free slot');
+        k += 1;
+        // The two records are compared in full every ten tics and at the
+        // end: a serialization is ~50 000 steps, and the test runner keeps
+        // every step in memory.
+        if k % 10 == 0 || k == to {
+            assert(crate::serialize(@a) == crate::serialize(@b), 'same state with and without');
+        }
+        carried = a;
+        rescanned = b;
+    }
+    assert(hash(@carried) == hash(@rescanned), 'same hash with and without');
+}
+
+#[test]
+fn test_actor_index_tracks_the_fight() {
+    check_actor_index(fight_log().span(), 100, 340);
+}
+
+#[test]
+fn test_actor_index_tracks_the_door() {
+    check_actor_index(door_log().span(), 0, 350);
+}
+
+#[test]
+fn test_actor_index_tracks_the_death() {
+    check_actor_index(death_log().span(), 700, 846);
+}
+
 #[test]
 fn test_segment_over_the_walk_matches_the_loop() {
     let log = walk_log();

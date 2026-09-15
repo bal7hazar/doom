@@ -980,3 +980,141 @@ fn test_boxed_patches_keep_last_write_and_free_slot_order() {
     assert(doom_physics::first_free(roster) == 1, 'earliest free slot');
     assert(crate::mobj_at(roster, 99).unbox() == doom_physics::removed_mobj(), 'missing slot');
 }
+
+// ---------------------------------------------------------------------------
+// The derived actor index (O1)
+// ---------------------------------------------------------------------------
+
+/// Two rosters that must be identical record for record.
+fn assert_same_lists(a: Span<Box<Mobj>>, b: Span<Box<Mobj>>) {
+    assert(a.len() == b.len(), 'same length');
+    let mut i: u32 = 0;
+    while i != a.len() {
+        assert(a.at(i).unbox() == b.at(i).unbox(), 'same record');
+        i += 1;
+    }
+}
+
+/// `mo` located and linked as slot `idx` of a roster under construction.
+fn placed(w: World, ref g: ThingGrid, mut mo: Mobj, idx: u32) -> Box<Mobj> {
+    set_thing_position(@w.map, ref g, ref mo, idx);
+    BoxTrait::new(mo)
+}
+
+/// An imp at `(x, y)` about to throw its fireball at the player (slot 0).
+fn thrower(w: World, x: felt252, y: felt252) -> Mobj {
+    let mut imp = spawn_mobj(w, KIND_TROOP, units(x), units(y), SpawnZ::OnFloor);
+    set_state(w, ref imp, *MI_SEESTATE.span().at(KIND_TROOP));
+    imp.target = 0;
+    imp.reaction_time = 0;
+    imp.sight_ok = false;
+    imp.sight_expires = 100000;
+    imp.state = state_before(w, doom_things::tables::A_TROOPATTACK);
+    imp.tics = 1;
+    imp
+}
+
+/// The ticker carrying the derived actor index across tics
+/// (`monsters_ticker_indexed`) computes exactly what the ticker that scans
+/// the list on every tic does (`monsters_ticker`, the definition), and the
+/// carried index is, after every tic, the scan of the list it describes —
+/// through a fireball spawned into a free slot and another appended, their
+/// flight and explosions, a corpse animating to its final frame, and
+/// twelve awake monsters sharing the window of eight.
+#[test]
+fn test_the_carried_actor_index_matches_the_scan_on_every_tic() {
+    let w = world();
+    let s = genesis(LevelId::E1M1).start;
+    let mut scratch = new_grid();
+    let mut roster: Array<core::box::Box<Mobj>> = array![];
+    // 0: the player at the start; 1: a barrel that stays passive; 2 and 3:
+    // two imps in the open hall east of it, both about to throw (the
+    // physics tests fly a fireball from `(-216, 256)`); 4: a corpse.
+    let mut p = spawn_mobj(w, KIND_PLAYER, s.x, s.y, SpawnZ::OnFloor);
+    p.health = 10000;
+    roster.append(placed(w, ref scratch, p, 0));
+    let barrel = spawn_mobj(w, KIND_BARREL, fixed::add(s.x, units(-40)), s.y, SpawnZ::OnFloor);
+    roster.append(placed(w, ref scratch, barrel, 1));
+    roster.append(placed(w, ref scratch, thrower(w, -216, 256), 2));
+    roster.append(placed(w, ref scratch, thrower(w, -216, 296), 3));
+    let mut corpse = spawn_mobj(
+        w, KIND_POSSESSED, fixed::add(s.x, units(40)), s.y, SpawnZ::OnFloor,
+    );
+    set_state(w, ref corpse, *MI_DEATHSTATE.span().at(KIND_POSSESSED));
+    corpse.health = 0;
+    corpse.flags = (corpse.flags | MF_CORPSE) & (0xFFFFFFFF - MF_SHOOTABLE - MF_SOLID);
+    roster.append(placed(w, ref scratch, corpse, 4));
+    // Twelve awake zombiemen east of the player: more than the window.
+    let mut k: u32 = 0;
+    while k != 12 {
+        let dx: felt252 = (64 + k * 40).into();
+        let mut mo = spawn_mobj(
+            w, KIND_POSSESSED, fixed::add(s.x, units(dx)), s.y, SpawnZ::OnFloor,
+        );
+        set_state(w, ref mo, *MI_SEESTATE.span().at(KIND_POSSESSED));
+        mo.target = 0;
+        mo.reaction_time = 0;
+        mo.sight_ok = false;
+        mo.sight_expires = 100000;
+        let idx = roster.len();
+        roster.append(placed(w, ref scratch, mo, idx));
+        k += 1;
+    }
+    // 17: a freed slot at the end: the first fireball claims it, the second
+    // is appended.
+    roster.append(BoxTrait::new(removed_mobj()));
+    // The blind sight caches point at the player's sector, now known.
+    let player_sector = roster.at(0).sector;
+    let mut placed_roster: Array<core::box::Box<Mobj>> = array![];
+    let mut src = roster.span();
+    while let Option::Some(b) = src.pop_front() {
+        placed_roster.append(BoxTrait::new(Mobj { sight_sector: player_sector, ..b.unbox() }));
+    }
+    // Two identical grids, one per ticker (a grid is a dictionary).
+    let mut ga = doom_physics::grid::rebuild(placed_roster.span());
+    let mut gb = doom_physics::grid::rebuild(placed_roster.span());
+    let mut a = placed_roster.span();
+    let mut b = placed_roster.span();
+    let mut index = crate::actors::scan(b);
+    assert(index.first_free == 17, 'slot 17 is free');
+    assert(index.indices.len() == 15, 'two imps, corpse, twelve');
+    let players = array![0].span();
+    let mut rng: Prng = from_index(1);
+    let mut tic: u32 = 0;
+    let mut most: u32 = 0;
+    let mut reused = false;
+    while tic != 48 {
+        let (la, ra, ea) = monsters_ticker(w, a, ref ga, players, silence(), tic, rng);
+        let mut defense = doom_physics::no_player_defense();
+        let (lb, rb, eb, next) = crate::monsters_ticker_indexed(
+            w, b, index, ref gb, players, silence(), tic, rng, ref defense,
+        );
+        assert_same_lists(la.span(), lb.span());
+        assert(ra.index == rb.index, 'same rng');
+        assert(ea.span() == eb.span(), 'same events');
+        assert(next == crate::actors::scan(lb.span()), 'carried index is the scan');
+        assert(
+            doom_physics::grid::canonical_order(
+                @ga, la.span(),
+            ) == doom_physics::grid::canonical_order(@gb, lb.span()),
+            'same grid order',
+        );
+        if next.indices.len() > most {
+            most = next.indices.len();
+        }
+        if next.first_free == NO_MOBJ {
+            reused = true;
+        }
+        a = la.span();
+        b = lb.span();
+        index = next;
+        rng = ra;
+        tic += 1;
+    }
+    // The second fireball explodes where it spawns (a passive slot from
+    // tic 0 on); the first flies for a few tics, then explodes too.
+    assert(most >= 16, 'a fireball joined the actors');
+    assert(reused, 'the free slot was reused');
+    assert(a.len() == 19, 'a fireball was appended');
+    assert(index.indices.len() < most, 'the fireball exploded');
+}
