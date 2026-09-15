@@ -17,7 +17,10 @@ import { mountGameProofUI } from "./prove/gameBridge.js";
 import { PlaySession } from "./game/playSession.js";
 import { DEFAULT_AUTOMAP, drawAutomap, type AutomapOptions } from "./ui/automap.js";
 import { renderDiagnostics } from "./ui/diagnostics.js";
-import { Hud } from "./ui/hud.js";
+import { Hud, hudWeapon } from "./ui/hud.js";
+import { TouchInput } from "./game/touchInput.js";
+import { isTouchDevice, mountTouchControls, watchOrientation, type TouchControls } from "./ui/touchControls.js";
+import { quantize } from "./prove/ticcmd.js";
 
 /**
  * Application entry point.
@@ -88,6 +91,12 @@ async function main(): Promise<void> {
   const caps = await probeStorage(probeCapabilities());
   const profile = chooseProfile(caps);
   renderDiagnostics(diagnosticsEl, caps, profile);
+
+  // Phones and tablets: on-screen controls feed the same ticcmd fields as the
+  // keyboard (game/touchInput.ts); the layout is decided by `body.touch`.
+  const touch = isTouchDevice() ? new TouchInput() : undefined;
+  document.body.classList.toggle("touch", touch !== undefined);
+  if (touch) watchOrientation(document.getElementById("orientation") as HTMLElement);
 
   if (!caps.webgl2.available) {
     fail(loading, loadingStatus, "WebGL2 is required and this browser does not provide it.");
@@ -166,15 +175,23 @@ async function main(): Promise<void> {
   let provePending = false;
   let neutralWord = 0;
   let play: PlaySession | undefined;
+  // The demo tour has no ticcmd path; a look-zone drag still turns its camera
+  // (through the same quantization), so the controls can be tried without Cairo.
+  let demoTurn = 0;
   const scheduler = cairo ? new CairoScheduler(cairo,
     () => play!.input.sample(), error => play?.error(error)) : new TicScheduler(ring, (tic) => {
     // Until P2.4 captures real input there is no command to record; the journal
     // takes the neutral one, so the wiring - and only the wiring - is exercised.
     if (prove) prove.recordTic(neutralWord);
-    return sim!.stepTic(tic);
+    const snapshot = sim!.stepTic(tic);
+    if (touch) {
+      demoTurn = (demoTurn + quantize({ forward: 0, side: 0, turn: touch.consume(touch.run).turn, buttons: 0 }).turn) | 0;
+      snapshot.player.angle = (snapshot.player.angle + demoTurn) >>> 0;
+    }
+    return snapshot;
   });
   if (cairo && scheduler instanceof CairoScheduler) {
-    play = new PlaySession(cairo, scheduler, canvas, document.getElementById("stage")!);
+    play = new PlaySession(cairo, scheduler, canvas, document.getElementById("stage")!, { touch });
     document.getElementById("help")!.textContent = "WASD / ↑↓ move · ←→ turn · Shift run · Mouse / Ctrl fire · E / Space use · 1–4, 7 weapons · Esc / P pause · Tab map · F4 proof / export";
   }
   const toggleProofQueue = async (): Promise<void> => {
@@ -215,6 +232,18 @@ async function main(): Promise<void> {
   const automapOptions: AutomapOptions = { ...DEFAULT_AUTOMAP };
   let showAutomap = false;
   let showHud = true;
+
+  let touchControls: TouchControls | undefined;
+  if (touch) {
+    touchControls = mountTouchControls(document.getElementById("stage")!, touch, {
+      pause: () => { if (play) play.pause(); else if (scheduler.isRunning) scheduler.stop(); else scheduler.start(); },
+      toggleMap: () => { showAutomap = !showAutomap; },
+      currentWeapon: () => {
+        const weapon = ring.readLatest()?.player.weapon;
+        return weapon === undefined ? undefined : hudWeapon(weapon, cairo ? "cairo" : "demo");
+      },
+    });
+  }
 
   const frame: FrameStats = { fps: 0, frameMs: 0, frames: 0, windowFrames: 0, windowStart: performance.now() };
   let captureRequest: ((histogram: FrameHistogram) => void) | null = null;
@@ -305,6 +334,7 @@ async function main(): Promise<void> {
     }
 
     play?.refresh();
+    touchControls?.setPlaying(scheduler.isRunning && !(cairo?.terminal ?? false));
     resize();
     const latest = ring.readLatest();
     const pair = ring.readPair() ?? (latest ? { previous: latest, current: latest } : null);
@@ -379,6 +409,10 @@ async function main(): Promise<void> {
     ring,
     cairo,
     play,
+    touch,
+    touchControls,
+    /** Accumulated look-zone turn applied to the demo tour (BAM); 0 in the Cairo game. */
+    demoTurn: (): number => demoTurn,
     resetFpsWindow(): void {
       frame.frames = 0;
       frame.windowFrames = 0;
