@@ -21,6 +21,7 @@
  */
 
 import { checkBatch, membersFromPlacements, type Member, type WrapperBatch } from "../chain/batch.js";
+import { parseTokenAmount } from "../chain/commit.js";
 import type { PriceSource } from "../chain/prices.js";
 import { RpcClient } from "../chain/rpc.js";
 import type { StepProgress } from "../chain/sequence.js";
@@ -48,6 +49,13 @@ export interface OnChainConfig {
   sponsored: boolean;
   /** Publish the packed input logs (R10-A3), +24 % consumer gas. */
   replay: boolean;
+  /**
+   * D35 / P4.7: the bounty proposed on the commit screen, in the fee token's smallest unit
+   * (`VITE_DEFAULT_BOUNTY` is written in whole tokens, e.g. `0.5`). Zero when unset.
+   */
+  defaultBounty: bigint;
+  /** The fee token, when known up front; read from `DoomRuns.fee_token()` otherwise. */
+  feeToken?: string;
 }
 
 /** Every setting, its Vite variable and the URL parameter that overrides it. */
@@ -61,6 +69,8 @@ export const ON_CHAIN_SETTINGS = {
   chainId: { env: "VITE_CHAIN_ID", param: "chain", required: false },
   sponsored: { env: "VITE_SPONSORED", param: "sponsored", required: false },
   replay: { env: "VITE_REPLAY", param: "replay", required: false },
+  defaultBounty: { env: "VITE_DEFAULT_BOUNTY", param: "bounty", required: false },
+  feeToken: { env: "VITE_FEE_TOKEN", param: "feeToken", required: false },
 } as const;
 
 export type OnChainConfigResult =
@@ -114,6 +124,17 @@ export function readOnChainConfig(
       missing.push(label("proofId"));
     }
   }
+  const bountyRaw = read("defaultBounty");
+  let defaultBounty = 0n;
+  if (bountyRaw !== undefined) {
+    try {
+      defaultBounty = parseTokenAmount(bountyRaw);
+    } catch {
+      missing.push(label("defaultBounty"));
+    }
+  }
+  const feeToken = read("feeToken");
+  if (feeToken !== undefined && !isAddress(feeToken)) missing.push(label("feeToken"));
 
   if (missing.length) {
     return {
@@ -137,6 +158,8 @@ export function readOnChainConfig(
       ...(chainId ? { chainId } : {}),
       sponsored: truthy(read("sponsored")),
       replay: truthy(read("replay")),
+      defaultBounty,
+      ...(feeToken ? { feeToken } : {}),
     },
   };
 }

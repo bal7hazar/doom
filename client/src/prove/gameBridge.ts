@@ -124,7 +124,7 @@ export function mountGameProofUI(host: HTMLElement): {
   element.setAttribute("aria-label", "Real game proof");
   const title = document.createElement("h2"); title.textContent = "Real game · local proof";
   const status = document.createElement("p"); status.setAttribute("role", "status");
-  status.textContent = "This run is not certified. Proof requires a fresh resource check. Your journal remains exportable if it is refused.";
+  status.textContent = "This run is not certified. Proof requires a fresh resource check, or commit the journal to the open prover (untick Keep offline first). Your journal remains exportable either way.";
   const actions = document.createElement("div"), archives = document.createElement("div"), panelHost = document.createElement("div");
   actions.className = "proof-queue-actions"; archives.className = "proof-queue-actions";
   const download = (blob: Blob, filename: string) => {
@@ -146,13 +146,17 @@ export function mountGameProofUI(host: HTMLElement): {
     archived(run) { button(archives, `Export previous game (${run.journal.length} tics)`, () => exportJournal(run)); },
     async createSession(program, runId, imported, signal) {
       const { ProveSession } = await import("./session.js");
+      const { readOnChainConfig } = await import("./onchain.js");
       if (imported) {
         const { RunStore } = await import("../store/runStore.js");
         const { importRun } = await import("../store/hellproofFile.js");
         const store = await RunStore.open();
         try { runId = (await importRun(store, imported)).runId; } finally { store.close(); }
       }
+      // No wrapper on the real route (its offline policy), but the open-prover commitment (P4.7)
+      // needs only the RPC, `DoomRuns` and the version: read now, explained on "Commit…".
       const session = await ProveSession.create({ host: panelHost, program, runId, signal, wrapperUrl: null,
+        onchain: { config: readOnChainConfig(import.meta.env, location.search) },
         onImport: async file => { await bridge.importFile(await file.arrayBuffer()); } });
       try { await session.setKeepOffline(true); }
       catch (error) { await session.dispose(); throw error; }

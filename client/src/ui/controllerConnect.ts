@@ -18,7 +18,7 @@
  * keeps showing the full cost with the payer named. A sponsored submission is not a free one.
  */
 
-import { ControllerSigner, submissionPolicies, type Policy } from "../chain/signer.js";
+import { commitPolicies, ControllerSigner, submissionPolicies, type Policy } from "../chain/signer.js";
 
 /** The subset of `@cartridge/controller` this module uses. */
 interface ControllerLike {
@@ -38,6 +38,11 @@ export interface ConnectOptions {
   defaultChainId?: string;
   /** Season sponsoring (R7-A4): the paymaster pays, the cost is still displayed. */
   sponsored?: boolean;
+  /**
+   * P4.7: also pre-approve the open-prover commitment (`commit_run`, `reclaim`, and `approve`
+   * on `feeToken` when given), so an end-of-game "Commit" is one signature, not three.
+   */
+  commit?: { feeToken?: string };
   /** Module specifier, overridable in tests. */
   moduleSpecifier?: string;
 }
@@ -52,14 +57,18 @@ export interface ConnectResult {
  * The policies a session must carry, in the shape the Controller SDK expects
  * (`{ contracts: { <address>: { methods: [{ name, entrypoint, description }] } } }`).
  */
-export function sessionPolicies(router: string, doomRuns: string): {
+export function sessionPolicies(
+  router: string,
+  doomRuns: string,
+  extra: Policy[] = [],
+): {
   contracts: Record<string, { methods: { name: string; entrypoint: string; description: string }[] }>;
 } {
   const contracts: Record<
     string,
     { methods: { name: string; entrypoint: string; description: string }[] }
   > = {};
-  for (const p of submissionPolicies({ router, doomRuns })) {
+  for (const p of [...submissionPolicies({ router, doomRuns }), ...extra]) {
     const entry = (contracts[p.target] ??= { methods: [] });
     entry.methods.push({ name: p.method, entrypoint: p.method, description: p.description });
   }
@@ -81,8 +90,9 @@ export async function connectController(options: ConnectOptions): Promise<Connec
   const Controller = mod.default ?? mod.Controller;
   if (!Controller) throw new Error(`${specifier} does not export a Controller`);
 
+  const extra = options.commit ? commitPolicies({ doomRuns: options.doomRuns, ...options.commit }) : [];
   const controller: ControllerLike = new Controller({
-    policies: sessionPolicies(options.router, options.doomRuns),
+    policies: sessionPolicies(options.router, options.doomRuns, extra),
     ...(options.chains ? { chains: options.chains } : {}),
     ...(options.defaultChainId ? { defaultChainId: options.defaultChainId } : {}),
   });
@@ -93,7 +103,7 @@ export async function connectController(options: ConnectOptions): Promise<Connec
 
   return {
     signer: new ControllerSigner(account as never, options.sponsored ?? false),
-    policies: submissionPolicies({ router: options.router, doomRuns: options.doomRuns }),
+    policies: [...submissionPolicies({ router: options.router, doomRuns: options.doomRuns }), ...extra],
     address: account.address,
   };
 }

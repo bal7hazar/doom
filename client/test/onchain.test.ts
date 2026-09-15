@@ -45,6 +45,7 @@ const CONFIG: OnChainConfig = {
   chainId: CHAIN_ID,
   sponsored: false,
   replay: false,
+  defaultBounty: 0n,
 };
 
 /** One STRK of L2 gas per transaction index, so rows read 1.00, 2.00, … and the total 21.00. */
@@ -259,6 +260,7 @@ describe("the configuration", () => {
         levelId: 1,
         sponsored: true,
         replay: false,
+        defaultBounty: 0n,
       },
     });
   });

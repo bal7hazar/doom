@@ -68,6 +68,24 @@ export function submissionPolicies({ router, doomRuns }: PolicyTargets): Policy[
   ];
 }
 
+/**
+ * The entrypoints the open-prover commitment touches (D35, P4.7): `commit_run` and `reclaim`
+ * on `DoomRuns`, and `approve` on the fee token so the escrow can be pulled. `feeToken` is
+ * `DoomRuns.fee_token()`; without it (a page that only ever commits with a zero bounty) the
+ * allowance policy is left out.
+ */
+export function commitPolicies({ doomRuns, feeToken }: { doomRuns: string; feeToken?: string }): Policy[] {
+  const policies: Policy[] = [];
+  if (feeToken) {
+    policies.push({ target: feeToken, method: "approve", description: "Allow DoomRuns to escrow the bounty" });
+  }
+  policies.push(
+    { target: doomRuns, method: "commit_run", description: "Commit a game's input log with its bounty" },
+    { target: doomRuns, method: "reclaim", description: "Reclaim the bounty of an expired commitment" },
+  );
+  return policies;
+}
+
 /** Shape of the Cartridge Controller account object this package relies on (structural typing). */
 export interface ControllerAccountLike {
   address: string;
