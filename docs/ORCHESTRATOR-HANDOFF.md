@@ -547,6 +547,24 @@ Deux conséquences à assumer :
    doit être construite et déployée avant tout enregistrement d'une vraie partie ;
    elle exige le wrapper sur 64 Go. C'est le dernier maillon crypto non validé.
 
+### Arrêt pour quota — 2026-09-16
+
+Le sponsor a demandé l'arrêt des sous-agents. Deux vagues ont été interrompues
+avant validation ; leur travail est conservé en commits **WIP non revus, non
+testés, non fusionnés** sur des branches locales de cet environnement (elles
+n'existent pas sur `origin`) :
+
+- `wave/sepolia` : `infra/submit/scripts/sepolia_setup.sh` en cours
+  (bibliothèque `infra/submit/src/sepolia.ts`, `version.ts`, README), unité
+  systemd `infra/prover-node/deploy/`. Objectif : déploiement Sepolia à sec par
+  défaut, sans jamais afficher la clé.
+- `wave/sim-artifact` : `.github/workflows/sim-artifact.yml`,
+  `prover/sim/build-pkg.sh`, `client/scripts/fetch-sim.sh` + test. Objectif :
+  faire de la CI la source canonique du `.wasm` du simulateur (pin Linux).
+
+Si cet environnement est perdu, ces deux objectifs sont à refaire depuis les
+descriptions ci-dessus. Le check-in programmé et l'abonnement PR sont coupés.
+
 ### Reste à faire côté sponsor
 
 1. Ouvrir une PR de suivi `codex/game-integration` (ou cette branche) → `main`
