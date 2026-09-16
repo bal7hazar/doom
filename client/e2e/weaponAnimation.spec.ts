@@ -91,32 +91,45 @@ test("empty pistol has no flash and weapon change lowers then raises the Cairo s
   expect(result.empty.every(s => s.ammo === 0 && s.flash === 0)).toBe(true);
 });
 
-test("audited v1 save migration preserves state and allows subsequent v2 restores", async ({ page }) => {
+// The only audited render-only migration (src/sim/simulationCompatibility.ts): a schema-1 save of
+// this session may be restored by the schema-2 session below, and by no other.
+const AUDITED_V1_SESSION = "dcb7193cbb8d77cdb08c66517e1c5e68453b15687808e40ea2abb5acbc4a0cac";
+const AUDITED_V2_SESSION = "2f2be024e3f91e24385aa3d73dead26394b924fd36d16be98c83dca935e39300";
+
+test("audited v1 save migration preserves state and allows subsequent v2 restores; any other session refuses it", async ({ page }) => {
   await guardWorkers(page);
   await page.goto("/?sim=cairo");
   await page.waitForFunction(() => Boolean((window as any).hellproof?.cairo?.latest));
-  const result = await page.evaluate(async () => {
+  const result = await page.evaluate(async ([v1, v2]) => {
     const a = (window as any).hellproof;
     await a.cairo.resume(); for (let i = 0; i < 30; i++) await a.cairo.advance(0x1808080);
     await a.cairo.pause(); await a.cairo.checkpoint();
     const current = a.cairo.journal.export(), old = structuredClone(current);
     old.identity.snapshotSchema = 1;
-    old.identity.hashes.session = "dcb7193cbb8d77cdb08c66517e1c5e68453b15687808e40ea2abb5acbc4a0cac";
+    old.identity.hashes.session = v1;
     const unknown = structuredClone(old); unknown.identity.hashes.session = "a".repeat(64);
-    let rejected = false;
+    let rejected = false, oldRejected = false;
     try { await a.play.restore(unknown); } catch { rejected = true; }
     const before = JSON.stringify(a.cairo.journal.export());
-    await a.play.restore(old);
+    try { await a.play.restore(old); } catch { oldRejected = true; }
     const migrated = a.cairo.journal.export(), slots = a.cairo.latest.snapshot.player.psprites;
     await a.play.restore(current);
     const restored = a.cairo.journal.export();
-    return { rejected, before, current: JSON.stringify(current), restored: JSON.stringify(restored),
+    return { audited: a.cairo.loadedIdentity.hashes.session === v2, rejected, oldRejected, before,
+      current: JSON.stringify(current), restored: JSON.stringify(restored), migrated: JSON.stringify(migrated),
       migratedInputs: migrated.inputs, inputs: current.inputs, migratedCheckpoint: migrated.checkpoint,
       checkpoint: current.checkpoint, slots, finalSlots: a.cairo.latest.snapshot.player.psprites,
       loadedSchema: a.cairo.loadedIdentity.snapshotSchema };
-  });
+  }, [AUDITED_V1_SESSION, AUDITED_V2_SESSION]);
   expect(result.rejected).toBe(true); expect(result.before).toBe(result.current);
-  expect(result.restored).toBe(result.current);
-  expect(result.migratedInputs).toEqual(result.inputs); expect(result.migratedCheckpoint).toEqual(result.checkpoint);
-  expect(result.slots).toEqual(result.finalSlots); expect(result.loadedSchema).toBe(2);
+  expect(result.restored).toBe(result.current); expect(result.loadedSchema).toBe(2);
+  if (result.audited) {
+    expect(result.oldRejected).toBe(false);
+    expect(result.migratedInputs).toEqual(result.inputs); expect(result.migratedCheckpoint).toEqual(result.checkpoint);
+    expect(result.slots).toEqual(result.finalSlots);
+  } else {
+    // A later engine has no audited path from the v1 session: the save is refused, the run untouched.
+    expect(result.oldRejected).toBe(true);
+    expect(result.migrated).toBe(result.current);
+  }
 });

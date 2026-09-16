@@ -335,13 +335,16 @@ until they are migrated. `scripts/migrate-identity.mjs` (Node >= 22, no
 dependency) makes the migration one command, and never guesses the task hash.
 
 On a machine with Scarb 2.16.0 and the built prover runtime
-(`prover/wasm/pkg/dist/core.js`; the measurement itself needs Node 24, so run
-under Node 24 or pass `--node <node24>`), from the repository root:
+(`prover/wasm/build.sh` then `npm run build` in `prover/wasm/pkg` gives
+`prover/wasm/pkg/dist/core.js`; the measurement itself needs Node 24, so run
+under Node 24 or pass `--node <node24>` — a Node 24 tarball from nodejs.org
+unpacked anywhere is enough), from the repository root:
 
 ```sh
 # 1. build doom_run, hash the executables, measure the task hash, rewrite the pins
 #    (from client/: npm run identity -- --build --core ../prover/wasm/pkg/dist/core.js)
-node client/scripts/migrate-identity.mjs --build --core prover/wasm/pkg/dist/core.js
+node client/scripts/migrate-identity.mjs --build --core prover/wasm/pkg/dist/core.js \
+  --sim /path/to/prover/sim/pkg            # verifies the R5 pins; add --pin-sim to move them
 # 2. restage the game Worker (session/genesis/step manifest) and the proof assets
 python3 client/scripts/prepare-sim.py /path/to/prover/sim/pkg && \
 python3 client/scripts/prepare-game-proof.py --target cairo/target --sim /path/to/prover/sim/pkg
@@ -354,6 +357,26 @@ When the task hash was measured elsewhere with
 `--program-hash 0x…` (with `--target cairo/target` pointing at the exact
 executables that were measured). Without either the script prints the SHA-256
 summary and stops with exit code 2 before writing anything.
+
+The R5 simulator (`prover/sim/pkg`, wasm-pack `--target web`) is pinned by the
+same file. Its bytes are reproducible per host, not across hosts (the crates.io
+registry path of the build machine is embedded in panic locations), so a
+package rebuilt elsewhere differs from the pinned one and both `--sim` and
+`prepare-sim.py` refuse it. Re-pinning the VM is an explicit decision:
+`--sim <pkg> --pin-sim` moves the `wasm`/`glue`/`snippet` pins to that
+package's measured files (with or without an engine change; a VM-only re-pin
+needs no new task hash), freezes the former VM in the retired identity and
+lists the files still quoting the old hash. `prepare-sim.py` then stages the
+newly pinned VM. When building the package here, note that wasm-pack 0.12
+downloads binaryen `version_111` itself and fails behind a proxy it does not
+trust; fetch that tarball by hand and run its `wasm-opt` with the flags of
+`prover/sim/Cargo.toml` (`[package.metadata.wasm-pack.profile.release]`) on
+`pkg/hellproof_sim_bg.wasm` before pinning.
+
+Without a staged `public/sim/manifest.json` of the identity being retired
+(a fresh clone, or a manifest already restaged for another engine), pass
+`--legacy-session <sha256>`: the R5 `session` executable SHA-256 the retiring
+client verified, as its `manifest.json` recorded it.
 
 What one run rewrites: the pins (revision from `git rev-parse HEAD` or
 `--revision`), `test/fixtures/legacyDoomIdentity.ts` (the identity being retired
