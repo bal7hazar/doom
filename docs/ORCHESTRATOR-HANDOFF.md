@@ -537,9 +537,11 @@ Reste non validé faute d'environnement : aucune preuve réelle, aucun devnet
    pour n = 32, 64, 128, 256 tics (≈ 3, 4, 7, 12 M steps avec le moteur O1),
    relever temps mur et RSS max. Le seul point mesuré est 2,68 M steps en 53,5 s
    et 11,7 Go. C3 révisé (10 min pour 3 min de jeu) se décide sur ce tableau.
-2. **Cadence mobile** : ouvrir le banc embarqué livré par la vague mobile sur un
-   Android milieu de gamme et un iPhone, coller les JSON dans STATUS. Si la
-   cadence est loin de 35 tics/s, le moteur redevient le chemin critique.
+2. **Cadence mobile** : iPhone mesuré le 2026-09-16 (voir STATUS) : 33,7 tics/s
+   soutenus avec l'ancien moteur, rendu 60 fps ; à rejouer après migration
+   d'identité (O1+O3) et à compléter par un Android milieu de gamme. Procédure :
+   `vite build` + `vite preview` avec `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=<hôte du tunnel>`,
+   tunnel HTTPS (localtunnel/cloudflared), `public/sim` et `public/prover` stagés.
 3. **Migration d'identité** du moteur O1 (voir ci-dessus) avant tout replay
    navigateur du moteur courant.
 
