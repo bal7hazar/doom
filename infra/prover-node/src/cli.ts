@@ -26,7 +26,7 @@ import { assertNotMainnet, NodeSigner } from "./nodeSigner.js";
 import { DEFAULT_POLICY, type SelectionPolicy } from "./policy.js";
 import { FakeProver, SubprocessProver, type Prover } from "./prover.js";
 import { StarknetRpcEventSource } from "./rpcSource.js";
-import { ScarbExecutor } from "./scarbExecutor.js";
+import { missingExecutables, probeScarb, SCARB_VERSION, scarbBinary, ScarbExecutor } from "./scarbExecutor.js";
 import { FileJobStore } from "./store.js";
 
 const REPO = resolve(import.meta.dirname, "../../..");
@@ -69,7 +69,8 @@ policy:
 
 execution and proof:
   --executor scarb|fake    scarb execute on doom_run (default scarb); fake is a toy game
-  --manifest <Scarb.toml>  (default cairo/Scarb.toml)      --scarb <bin>
+  --manifest <Scarb.toml>  (default cairo/Scarb.toml)      --scarb <bin> (default $HELLPROOF_SCARB, else scarb)
+                           needs "scarb --profile proving build -p doom_run" done once (README, "Real executor")
   --prover stwo|fake       stwo-run-and-prove (default stwo); fake never yields a valid proof
   --stwo-bin <path>        (default $PROVING/target/release/stwo-run-and-prove)
   --bootloader <path>      leaf simple bootloader (default under $PROVING)
@@ -107,11 +108,14 @@ function policyFromArgs(): SelectionPolicy {
 
 function executorFromArgs(work: string): Executor {
   if (arg("executor", "scarb") === "fake") return new FakeExecutor();
-  return new ScarbExecutor({
-    manifest: arg("manifest", join(REPO, "cairo/Scarb.toml")),
-    workDir: join(work, "execute"),
-    ...(flag("scarb") ? { scarb: arg("scarb") } : {}),
-  });
+  const manifest = arg("manifest", join(REPO, "cairo/Scarb.toml"));
+  const scarb = probeScarb(scarbBinary(flag("scarb") ? arg("scarb") : undefined));
+  if (!scarb) throw new Error(`no runnable scarb (--scarb or $HELLPROOF_SCARB, Scarb ${SCARB_VERSION} expected)`);
+  const missing = missingExecutables(manifest);
+  if (missing.length) {
+    throw new Error(`doom_run is not built for the proving profile (missing ${missing.join(", ")}): run scarb --manifest-path ${manifest} --profile proving build -p doom_run`);
+  }
+  return new ScarbExecutor({ manifest, workDir: join(work, "execute"), scarb: scarb.bin });
 }
 
 function proverFromArgs(): Prover {
