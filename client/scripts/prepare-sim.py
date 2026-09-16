@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage the pinned R5 VM and build the real Cairo adapters at this checkout.
+"""Stage the pinned R5 VM (SHA-256 from src/prove/doomArtifacts.ts) and build the real Cairo adapters at this checkout.
 
 Usage: python3 scripts/prepare-sim.py /path/to/prover/sim/pkg
 Generated files stay in ignored public/sim; no Rust rebuild or download.
@@ -9,12 +9,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
-WASM_SHA = "dd73ce152f44a9e00368e195c6de36d40b2948b0740794f056b2e557c94b67c5"
+# The R5 VM pin lives in doomArtifacts.ts only (client/scripts/migrate-identity.mjs --sim --pin-sim moves it).
+WASM_SHA = re.search(r'\bwasm: "([0-9a-f]{64})"', (ROOT / "client/src/prove/doomArtifacts.ts").read_text()).group(1)
 
 
 def build(cwd, extra):
