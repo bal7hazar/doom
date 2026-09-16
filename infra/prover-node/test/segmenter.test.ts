@@ -171,4 +171,38 @@ describe("scarb output parsing", () => {
     expect(parsed.nSteps).toBe(693425);
     expect(parsed.output).toEqual(["0x1", "0x7b", "0x800000000000011000000000000000000000000000000000000000000000000"]);
   });
+
+  it("reads what Scarb 2.16.0 really prints: signed decimals and a step count with thousands separators", () => {
+    // Verbatim shape of `scarb execute --print-program-output --print-resource-usage` on the
+    // real `run_segment` (70 tics of the walk): the commitment came out negative, the step count
+    // with commas — read as 2 instead of 2,383,556 the D26 ceiling would never bind.
+    const text = [
+      "   Executing doom_run",
+      "Program output:",
+      "1",
+      "1274278165169918663920846137645782095596786929756411483948674016230306792794",
+      "721861253222809819190156455560350791108641517704002613494693279197264662941",
+      "0",
+      "70",
+      "0",
+      "-1490066978920888978358014582453116020816513122388232826822029463219497483464",
+      "0",
+      "0",
+      "0",
+      "Resources:",
+      "\tsteps: 2,383,556",
+      "\tmax memory address: 2,417,013",
+      "\tbuiltins:",
+      "\t\trange_check_builtin: 85,898",
+      "",
+    ].join("\n");
+    const parsed = parseScarbOutput(text);
+    expect(parsed.nSteps).toBe(2_383_556);
+    expect(parsed.output).toHaveLength(10);
+    expect(parsed.output[1]).toBe("0x2d1374414503eb8db44adb1498990546a9b5e20a8e62f3c70b29fb07d78c55a"); // E1M1 genesis
+    expect(parsed.output[4]).toBe("0x46");
+    expect(BigInt(parsed.output[6]!)).toBe(
+      (1n << 251n) + 17n * (1n << 192n) + 1n - 1490066978920888978358014582453116020816513122388232826822029463219497483464n,
+    );
+  });
 });
