@@ -219,7 +219,13 @@ export interface SubprocessProverOptions {
   /** The shared lock directory, `$SCRATCH/.proof-lock`. */
   lockDir: string;
   hashFunction?: "blake" | "poseidon";
-  /** What `--proof-format` produces: `bincode` is what the wrapper folds; `cairo-serde` is the felt stream. */
+  /**
+   * `bincode` is what the wrapper folds (`bincode_b64`): the extended `CairoProof`, which
+   * `stwo-run-and-prove` writes with `--proof-format extended-binary` (bzip2-wrapped bincode,
+   * accepted as is by the wrapper and `leaf-verify`; there is no `bincode` value in the binary's
+   * `ProofFormat`, and `binary` drops the `aux` the leaf circuit needs). `cairo-serde` is the felt
+   * stream.
+   */
   proofFormat?: "bincode" | "cairo-serde";
   timeoutMs?: number;
   lockTimeoutMs?: number;
@@ -230,6 +236,11 @@ export interface SubprocessProverOptions {
   /** Arguments placed before the prover's own (a wrapper script, `/usr/bin/time -l`, …). */
   prefixArgs?: string[];
   extraArgs?: string[];
+}
+
+/** The `--proof-format` value of `stwo-run-and-prove` (`cairo_air::utils::ProofFormat`) for ours. */
+export function proofFormatFlag(format: "bincode" | "cairo-serde"): "extended-binary" | "cairo-serde" {
+  return format === "bincode" ? "extended-binary" : "cairo-serde";
 }
 
 export class SubprocessProver implements Prover {
@@ -249,6 +260,7 @@ export class SubprocessProver implements Prover {
     const preimageFile = join(dir, "output_preimage.json");
     const format = o.proofFormat ?? "bincode";
     const proofFile = join(dir, format === "bincode" ? "proof.bin" : "proof.cairo_serde.json");
+    const cliFormat = proofFormatFlag(format);
     const programOutput = join(dir, "program_output.json");
     writeFileSync(argsFile, JSON.stringify(request.args));
     writeFileSync(
@@ -284,7 +296,7 @@ export class SubprocessProver implements Prover {
           "--program_input", inputFile,
           "--prover_params_json", o.params,
           "--proof_path", proofFile,
-          "--proof-format", format,
+          "--proof-format", cliFormat,
           "--program_output", programOutput,
           "--verify",
           ...(o.extraArgs ?? []),
