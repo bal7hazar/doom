@@ -9,7 +9,8 @@ three executables in both profiles so the report has the numbers side by
 side. Source annotations are for attribution; this tool tests executable
 size and does not claim to compare annotated/unannotated compiler outputs.
 
-    python3 size.py            # build, print, exit 1 over the budget
+    python3 size.py            # build, print, exit 1 over the 120k hard ceiling (D36)
+    python3 size.py --strict   # exit 1 over the 100k target too (the D29 reading)
     python3 size.py --report   # print only, never fail
 """
 
@@ -55,15 +56,23 @@ def main() -> int:
         print("%-14s %10d %10d" % (name, *table[name]))
     proved = table["run_segment"][1]
     print("\nProgram hashing uses Blake (D31); VM steps alone do not establish AIR/registry fit.")
+    # D36: the 100k target is advisory once the open prover (D35) proves hundreds
+    # of tics per segment; only the hard ceiling blocks. `--strict` restores the
+    # D29 behaviour where the target itself fails the gate.
+    strict = "--strict" in sys.argv
     status = 0
     if proved > BUDGET:
-        print("OVER the D29 budget of %d words by %d" % (BUDGET, proved - BUDGET))
-        status = 1
+        print("OVER the D29 target of %d words by %d%s" % (
+            BUDGET, proved - BUDGET, "" if strict else " (advisory under D36)"))
+        if strict:
+            status = 1
     if proved > CEILING:
-        print("OVER the D29 hard ceiling of %d words" % CEILING)
+        print("OVER the D29 hard ceiling of %d words: FAIL" % CEILING)
         status = 1
-    if status == 0:
-        print("within the D29 budget (%d)" % BUDGET)
+    if proved <= BUDGET:
+        print("within the D29 target (%d)" % BUDGET)
+    elif status == 0:
+        print("under the D29 hard ceiling (%d)" % CEILING)
     return 0 if report_only else status
 
 

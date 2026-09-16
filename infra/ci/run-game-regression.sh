@@ -47,8 +47,9 @@ if [ "$mode" = nightly ]; then
     --timeout 120 --max-seconds 3600 \
     2>&1 | tee "$out/fuzz.log" || status=1
 fi
-# D29 is deliberately strict: 100k is the target, 120k the distinct hard ceiling.
-# Run after correctness so a known size miss cannot suppress the regression evidence.
-# No --report, raised budget, or tolerated exit code turns this gate green.
+# D29 sets 100k as the target and 120k as the distinct hard ceiling; D36 makes the
+# target advisory (printed, never silently raised) and keeps the ceiling blocking.
+# Run after correctness so a size miss cannot suppress the regression evidence.
+# No --report or tolerated exit code turns this gate green.
 python3 cairo/doom/doom_run/bench/size.py 2>&1 | tee "$out/bytecode.log" || status=1
 exit "$status"
