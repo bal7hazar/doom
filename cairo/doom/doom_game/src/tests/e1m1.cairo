@@ -535,10 +535,14 @@ fn test_segment_over_the_walk_matches_the_loop() {
 
 /// A process boundary reconstructs derived data; associativity must hold
 /// across that boundary, not only while keeping the same in-memory grid.
+/// The whole run is not replayed here: its hash is the `FIGHT_HASH` pin
+/// that `test_replay_fight` checks, so the sliced reconstruction is
+/// compared with the pin. The test runner keeps every step of a test in
+/// memory and the 700 tics of the fight alone are ~8 GB of it; replaying
+/// them twice in one test was ~17 GB, more than a CI runner has.
 #[test]
 fn test_fight_is_associative_across_serialized_boundaries() {
     let log = fight_log();
-    let (whole, _) = run(genesis(LevelId::E1M1), log.span());
     let mut sliced = genesis(LevelId::E1M1);
     let mut start: u32 = 0;
     while start < log.len() {
@@ -553,7 +557,8 @@ fn test_fight_is_associative_across_serialized_boundaries() {
         sliced = next;
         start += count;
     }
-    assert(hash(@whole) == hash(@sliced), 'serialized split associative');
+    assert(sliced.leveltime == log.len(), 'every slice ran');
+    check('fight sliced', @sliced, FIGHT_HASH, FIGHT_V1_HASH);
 }
 
 fn check_variable_cuts(log: Span<felt252>, expected: felt252) {
