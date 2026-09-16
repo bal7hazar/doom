@@ -301,8 +301,13 @@ jobs:
 
       - name: infra submit, indexer and prover-node (typecheck, test)
         run: |
+          # Install all three first: submit's tests import indexer and
+          # prover-node sources, which resolve `starknet` from their own
+          # node_modules.
           for package in infra/submit infra/indexer infra/prover-node; do
             npm ci --prefix "$package"
+          done
+          for package in infra/submit infra/indexer infra/prover-node; do
             npm run typecheck --prefix "$package"
             npm test --prefix "$package"
           done
