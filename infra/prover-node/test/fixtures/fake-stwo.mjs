@@ -17,9 +17,16 @@ if (mode === "hang") {
   const args = JSON.parse(readFileSync(input.tasks[0].user_args_file, "utf8"));
   const preimage = JSON.parse(process.env.FAKE_STWO_PREIMAGE ?? "[]");
   writeFileSync(input.output_preimage_dump_path, JSON.stringify(preimage));
+  // The real binary's clap enum: json | cairo-serde | binary | extended-binary. Anything else is
+  // a usage error there, so it is one here too.
   const format = opt("--proof-format");
-  if (format === "bincode") writeFileSync(opt("--proof_path"), Buffer.from(`bincode:${args.length}`));
-  else writeFileSync(opt("--proof_path"), JSON.stringify(["0x1", "0x2", String(args.length)]));
+  if (format === "extended-binary") writeFileSync(opt("--proof_path"), Buffer.from(`bincode:${args.length}`));
+  else if (format === "cairo-serde") writeFileSync(opt("--proof_path"), JSON.stringify(["0x1", "0x2", String(args.length)]));
+  else {
+    console.error(`error: invalid value '${format}' for '--proof-format <PROOF_FORMAT>'`);
+    process.exit(2);
+  }
   writeFileSync(opt("--program_output"), "[]");
   console.log(`fake stwo: proved ${args.length} args with ${input.tasks[0].program_hash_function}`);
+  console.log(`fake stwo argv: ${argv.join(" ")}`);
 }

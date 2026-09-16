@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { FakeExecutor } from "../src/executor.js";
-import { FakeProver, ProofLock, ProofTimeoutError, spawnWithTimeout, SubprocessProver } from "../src/prover.js";
+import { FakeProver, ProofLock, ProofTimeoutError, proofFormatFlag, spawnWithTimeout, SubprocessProver } from "../src/prover.js";
 import { proveSegments } from "../src/proving.js";
 import { cutJournal } from "../src/segmenter.js";
 import { FileJobStore, newJob } from "../src/store.js";
@@ -113,12 +113,19 @@ describe("SubprocessProver on a stand-in stwo-run-and-prove", () => {
     const input = JSON.parse(readFileSync(join(work, "segment-3/bl_input.json"), "utf8"));
     expect(input.tasks[0]).toMatchObject({ type: "Cairo1Executable", program_hash_function: "blake", path: "/run_segment.executable.json" });
     expect(JSON.parse(readFileSync(input.tasks[0].user_args_file, "utf8"))).toEqual(["0x1", "0x2", "0x3"]);
-    expect(readFileSync(join(work, "segment-3/prove.log"), "utf8")).toMatch(/proved 3 args with blake/);
+    const log = readFileSync(join(work, "segment-3/prove.log"), "utf8");
+    expect(log).toMatch(/proved 3 args with blake/);
+    // The wrapper's `bincode_b64` is the extended CairoProof, which the binary only writes as
+    // `extended-binary`; `bincode` is not a value of its `--proof-format`.
+    expect(log).toMatch(/--proof-format extended-binary --program_output/);
+    expect(log).toMatch(/--verify/);
     expect(JSON.parse(readFileSync(join(work, "segment-3/proof_metrics.json"), "utf8"))).toMatchObject({ exitCode: 0, timedOut: false });
 
     const felts = await prover(work, { FAKE_STWO_PREIMAGE: JSON.stringify(preimage) }, "cairo-serde").prove(request(work));
     expect(felts.format).toBe("cairo_serde_felts");
     expect(felts.felts).toEqual(["0x1", "0x2", "0x3"]);
+    expect(readFileSync(join(work, "segment-3/prove.log"), "utf8")).toMatch(/--proof-format cairo-serde/);
+    expect(proofFormatFlag("bincode")).toBe("extended-binary");
   });
 
   it("times out, kills the group, releases the lock and never returns a proof", async () => {
