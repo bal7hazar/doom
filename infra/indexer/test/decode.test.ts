@@ -1,17 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { hash } from "starknet";
 
 import { decodeEvent, EVENT_SELECTORS } from "../src/decode.js";
 import type { RawEvent } from "../src/types.js";
-
-const CONTRACT_CLASS = fileURLToPath(
-  new URL(
-    "../../../cairo/doom_contracts/target/dev/doom_runs_DoomRuns.contract_class.json",
-    import.meta.url,
-  ),
-);
+import { camel, eventLayout, loadDoomRunsAbi, shortName, structLayout, synthesize, u256Of } from "./abi.js";
 
 const sel = (name: string): string => hash.getSelectorFromName(name);
 const normalize = (felt: string): string => "0x" + BigInt(felt).toString(16);
@@ -187,12 +179,66 @@ describe("decodeEvent", () => {
     expect(decodeEvent(evt(["0xdeadbeef"], []))).toBeUndefined();
   });
 
-  it("cross-checks every selector against the compiled ABI, when it has been built", () => {
-    if (!existsSync(CONTRACT_CLASS)) return; // same convention as client/ and infra/submit
-    const abi = JSON.parse(readFileSync(CONTRACT_CLASS, "utf8")).abi as { type: string; name: string }[];
-    const eventNames = abi.filter((i) => i.type === "event").map((i) => i.name.split("::").pop()!);
+  // -- against the compiled ABI (`scarb build -p doom_runs`; skipped until it exists) --------
+
+  const abi = loadDoomRunsAbi();
+
+  it.skipIf(!abi)("cross-checks every selector against the compiled ABI", () => {
+    const eventNames = abi!.filter((i) => i.type === "event").map((i) => shortName(i.name));
     for (const name of Object.values(EVENT_SELECTORS)) {
       expect(eventNames, `event ${name} missing from the compiled ABI`).toContain(name);
     }
+  });
+
+  it.skipIf(!abi)("decodes every event field from the position the ABI serialises it at", () => {
+    // The oracle: a raw event whose every felt is distinct, laid out as the ABI says (keys then
+    // data, declaration order, `u256` two felts, `Span` length-prefixed); the decoder must map
+    // each ABI field, spelled in camel case, onto exactly those felts.
+    for (const name of Object.values(EVENT_SELECTORS)) {
+      const layout = eventLayout(abi!, name);
+      const keys = synthesize(layout.keys, 0x1000);
+      const data = synthesize(layout.data, 0x2000, 2);
+      const decoded = decodeEvent(evt([sel(name), ...keys.felts], data.felts)) as Record<string, unknown> | undefined;
+      expect(decoded, `${name} did not decode`).toBeDefined();
+      expect(decoded!["kind"]).toBe(name);
+      for (const [fields, values] of [
+        [layout.keys, keys.values],
+        [layout.data, data.values],
+      ] as const) {
+        for (const f of fields) {
+          const got = values.get(f.name)!;
+          const key = camel(f.name);
+          const where = `${name}.${f.name} (${f.type})`;
+          if (f.felts === -1) {
+            // `Replay.packed` keeps the felts; `RunLog.packed` keeps only their count.
+            if (key in decoded!) expect(decoded![key], where).toEqual(got.map((v) => normalize(v)));
+            else expect(decoded![`${key}Len`], where).toBe(got.length);
+          } else if (f.type === "core::integer::u256") {
+            expect(decoded![key], where).toBe(u256Of(got).toString());
+          } else if (/^core::integer::u(8|16|32|64)$/.test(f.type)) {
+            expect(decoded![key], where).toBe(Number(BigInt(got[0]!)));
+          } else {
+            expect(decoded![key], where).toBe(normalize(got[0]!));
+          }
+        }
+      }
+    }
+  });
+
+  it.skipIf(!abi)("pins the D35 shapes the other decoders assume: keys and data counts, Commitment = 13 felts", () => {
+    const counts = (name: string) => {
+      const l = eventLayout(abi!, name);
+      return { keys: l.keys.length, data: l.data.reduce((n, f) => n + (f.felts === -1 ? 0 : f.felts), 0), spans: l.data.filter((f) => f.felts === -1).length };
+    };
+    expect(counts("RunCommitted")).toEqual({ keys: 3, data: 8, spans: 0 });
+    expect(counts("RunLog")).toEqual({ keys: 1, data: 2, spans: 1 });
+    expect(counts("CommitmentProved")).toEqual({ keys: 3, data: 3, spans: 0 });
+    expect(counts("CommitmentReclaimed")).toEqual({ keys: 2, data: 2, spans: 0 });
+    const commitment = structLayout(abi!, "Commitment");
+    expect(commitment.map((f) => f.name)).toEqual([
+      "player", "version_id", "level_id", "genesis", "inputs_commitment", "tics", "bounty",
+      "created_block", "expires_at", "status", "run_id", "prover",
+    ]);
+    expect(commitment.reduce((n, f) => n + f.felts, 0)).toBe(13);
   });
 });

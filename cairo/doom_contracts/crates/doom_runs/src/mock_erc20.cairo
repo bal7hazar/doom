@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-//! A minimal ERC20 stand-in for the fee token (STRK) of the commitment tests: `mint`,
-//! `approve`, `transfer`, `transfer_from`, `balance_of`, `allowance`. The snake-case
-//! entrypoints are the ones `DoomRuns::IERC20` calls. Never deployed outside snforge.
+//! A minimal ERC20 stand-in for the fee token (STRK) of the commitment tests and of the devnet
+//! commitment drive (`tools/commit_drive.py`): `mint` (open to anyone), `approve`, `transfer`,
+//! `transfer_from`, `balance_of`, `allowance`. The snake-case entrypoints are the ones
+//! `DoomRuns::IERC20` calls. Like `MockFactRegistry`, it lives in `src/` only so that sncast can
+//! declare it; it is never deployed in production, where the fee token is STRK.
 #[starknet::contract]
 pub mod MockERC20 {
     use starknet::storage::{

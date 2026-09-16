@@ -4,10 +4,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { hash } from "starknet";
 
+import { camel, entrypointOutputs, eventLayout, loadDoomRunsAbi, shortName, structLayout, synthesize, u256Of } from "../../indexer/test/abi.js";
 import {
   assembleJournal,
   checkCommitment,
+  COMMITMENT_EVENT_NAMES,
   COMMITMENT_SELECTORS,
   commitmentIdOf,
   decodeCommitmentEvent,
@@ -216,5 +219,57 @@ describe("selection policy", () => {
     expect(sel.selected.map((x) => x.commitmentId)).toEqual([c.commitmentId]);
     expect(sel.skipped.map((s) => s.reason)).toEqual(["queue full (waiting)", "queue full (waiting)"]);
     expect(selectCommitments([a, b, c], { ...DEFAULT_POLICY, allowPlayers: ["0x0"] }, { done: new Set(), inFlight: new Set() }).selected).toEqual([]);
+  });
+});
+
+// -- against the compiled ABI (`scarb build -p doom_runs`; skipped until it exists) ------------
+
+describe("the compiled DoomRuns ABI", () => {
+  const abi = loadDoomRunsAbi();
+  const norm = (v: string): string => "0x" + BigInt(v).toString(16);
+
+  it.skipIf(!abi)("serialises the four commitment events exactly as decodeCommitmentEvent reads them", () => {
+    for (const name of COMMITMENT_EVENT_NAMES) {
+      const layout = eventLayout(abi!, name);
+      const keys = synthesize(layout.keys, 0x1000);
+      const data = synthesize(layout.data, 0x2000, 3);
+      const decoded = decodeCommitmentEvent({
+        from_address: "0x1",
+        keys: [hash.getSelectorFromName(name), ...keys.felts],
+        data: data.felts,
+        block_number: 7,
+        block_hash: "0xb",
+        transaction_hash: "0xt",
+      }) as Record<string, unknown> | undefined;
+      expect(decoded?.["kind"], name).toBe(name);
+      for (const [fields, values] of [
+        [layout.keys, keys.values],
+        [layout.data, data.values],
+      ] as const) {
+        for (const f of fields) {
+          const got = values.get(f.name)!;
+          const where = `${name}.${f.name} (${f.type})`;
+          if (f.felts === -1) expect(decoded![camel(f.name)], where).toEqual(got.map(norm));
+          else if (f.type === "core::integer::u256") expect(decoded![camel(f.name)], where).toBe(u256Of(got));
+          else if (/^core::integer::u(8|16|32|64)$/.test(f.type)) expect(decoded![camel(f.name)], where).toBe(Number(BigInt(got[0]!)));
+          else expect(decoded![camel(f.name)], where).toBe(norm(got[0]!));
+        }
+      }
+    }
+  });
+
+  it.skipIf(!abi)("returns Commitment from get_commitment as the 13 felts decodeCommitmentView expects", () => {
+    expect(entrypointOutputs(abi!, "get_commitment").map(shortName)).toEqual(["Commitment"]);
+    expect(entrypointOutputs(abi!, "commitment_of").map(shortName)).toEqual(["Commitment"]);
+    const layout = structLayout(abi!, "Commitment");
+    expect(layout.reduce((n, f) => n + f.felts, 0)).toBe(13);
+    const { felts, values } = synthesize(layout, 0x3000);
+    const view = decodeCommitmentView(felts) as unknown as Record<string, unknown>;
+    for (const f of layout) {
+      const got = values.get(f.name)!;
+      if (f.type === "core::integer::u256") expect(view[camel(f.name)], f.name).toBe(u256Of(got));
+      else if (/^core::integer::u(8|16|32|64)$/.test(f.type)) expect(view[camel(f.name)], f.name).toBe(Number(BigInt(got[0]!)));
+      else expect(view[camel(f.name)], f.name).toBe(norm(got[0]!));
+    }
   });
 });
