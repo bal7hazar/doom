@@ -43,6 +43,7 @@ import type { RunRecord } from "../src/prove/types.js";
 import { RunStore } from "../src/store/runStore.js";
 import { sessionPolicies } from "../src/ui/controllerConnect.js";
 import { ProofQueuePanel } from "../src/ui/proofQueue.js";
+import { camel, entrypointInputs, entrypointOutputs, eventLayout, loadDoomRunsAbi, shortName, structLayout, synthesize, u256Of } from "../../infra/indexer/test/abi.js";
 
 const hex = (v: bigint): string => "0x" + v.toString(16);
 
@@ -709,5 +710,62 @@ describe("findRunCommitted and simulateCalls", () => {
     expect(est.bounds[0]!.l2GasBound).toBe(BigInt(Math.ceil(16_200_000 * 1.15)));
     expect(est.bounds[0]!.overCap).toBe(false);
     expect(toHex(est.totalL2Gas)).toBe(hex(16_200_000n));
+  });
+});
+
+// -- against the compiled ABI (`scarb build -p doom_runs` in cairo/doom_contracts; skipped until it exists)
+
+describe("the compiled DoomRuns ABI", () => {
+  const abi = loadDoomRunsAbi();
+  const norm = (v: string): string => hex(BigInt(v));
+
+  it.skipIf(!abi)("takes commit_run, reclaim and the constructor in the order the calldata builders write", () => {
+    expect(entrypointInputs(abi!, "commit_run").map((f) => [f.name, f.felts])).toEqual([
+      ["version_id", 1], ["level_id", 1], ["packed", -1], ["tics", 1], ["bounty", 2],
+    ]);
+    const calldata = commitRunCalldata({ versionId: 1, levelId: 2, packed: SHORT_LOG, tics: 9, bounty: (1n << 128n) + 5n });
+    expect(calldata).toEqual(["0x1", "0x2", "0x2", ...SHORT_LOG, "0x9", "0x5", "0x1"]);
+    expect(entrypointInputs(abi!, "reclaim").map((f) => [f.name, f.felts])).toEqual([["commitment_id", 1]]);
+    expect(entrypointInputs(abi!, "constructor").map((f) => [f.name, f.felts])).toEqual([["owner", 1], ["fee_token", 1], ["expiry_blocks", 1]]);
+    expect(entrypointOutputs(abi!, "commit_run")).toEqual(["core::felt252"]);
+    expect(entrypointOutputs(abi!, "fee_token")).toEqual(["core::starknet::contract_address::ContractAddress"]);
+  });
+
+  it.skipIf(!abi)("returns Commitment as the 13 felts decodeCommitment reads, in the ABI's member order", () => {
+    expect(entrypointOutputs(abi!, "get_commitment").map(shortName)).toEqual(["Commitment"]);
+    const layout = structLayout(abi!, "Commitment");
+    expect(layout.reduce((n, f) => n + f.felts, 0)).toBe(13);
+    const { felts, values } = synthesize(layout, 0x3000);
+    // `status` must be a legal code: rewrite that one felt (the decoder refuses > 3).
+    const statusAt = layout.slice(0, layout.findIndex((f) => f.name === "status")).reduce((n, f) => n + f.felts, 0);
+    felts[statusAt] = "0x2";
+    values.set("status", ["0x2"]);
+    const decoded = decodeCommitment(felts) as unknown as Record<string, unknown>;
+    for (const f of layout) {
+      const got = values.get(f.name)!;
+      if (f.type === "core::integer::u256") expect(decoded[camel(f.name)], f.name).toBe(u256Of(got));
+      else if (/^core::integer::u(8|16|32|64)$/.test(f.type)) expect(decoded[camel(f.name)], f.name).toBe(Number(BigInt(got[0]!)));
+      else expect(decoded[camel(f.name)], f.name).toBe(norm(got[0]!));
+    }
+  });
+
+  it.skipIf(!abi)("finds RunCommitted's fields where the ABI puts them", () => {
+    const layout = eventLayout(abi!, "RunCommitted");
+    expect(layout.keys.map((f) => f.name)).toEqual(["commitment_id", "player", "version_id"]);
+    const keys = synthesize(layout.keys, 0x1000);
+    const data = synthesize(layout.data, 0x2000);
+    const found = findRunCommitted([{ from_address: RUNS, keys: [getSelectorFromName("RunCommitted"), ...keys.felts], data: data.felts }], RUNS) as unknown as Record<string, unknown>;
+    expect(found).toBeDefined();
+    for (const [fields, values] of [[layout.keys, keys.values], [layout.data, data.values]] as const) {
+      for (const f of fields) {
+        const got = values.get(f.name)!;
+        const key = camel(f.name);
+        if (!(key in found)) continue; // `genesis` is not carried by the client's view
+        if (f.type === "core::integer::u256") expect(found[key], f.name).toBe(u256Of(got));
+        else if (/^core::integer::u(8|16|32|64)$/.test(f.type)) expect(found[key], f.name).toBe(Number(BigInt(got[0]!)));
+        else expect(found[key], f.name).toBe(norm(got[0]!));
+      }
+    }
+    expect(Object.keys(found).sort()).toEqual(["bounty", "commitmentId", "expiresAt", "inputsCommitment", "levelId", "nChunks", "player", "tics", "versionId"]);
   });
 });
