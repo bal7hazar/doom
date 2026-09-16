@@ -511,6 +511,42 @@ auditée n'existe plus, le refus est attendu), `gameProof` 4/4, `bench` 2/2 ;
 banc Cairo ici sous charge : 32,3 tics/s cadencés, 56,9 en rafale. Client 333
 tests.
 
+### Calibration native et première preuve du nœud — `4ff6a81`
+
+Monorepo `cd7bc5f` construit ici (release, 17 min), `prove_segment.sh` rejoué
+sur Linux x86_64 (Xeon 2,1 GHz, cgroup **13,36 Go**, voir
+`docs/design/native-calibration.md`) :
+
+| Segment `fight` | Steps | Threads | Résultat | Mur | RSS max | Preuve |
+|---|---|---|---|---|---|---|
+| 7 tics | 2 293 560 | 1 | vérifiée | 75,95 s | 13,68 Go | 767 478 felts |
+| 7 tics | 2 293 560 | 4 | vérifiée, felts identiques | 37,31 s | 12,79 Go | idem |
+| 35 tics | 3 041 338 | 1 | tué par le cgroup | — | > 12,84 Go | — |
+
+≈ 33 s par million de steps mono, ≈ 16 s à 4 threads ; mémoire ≈ 9 Go fixes
++ ≈ 2 Go par million de steps (pente au-delà de 3 M non mesurée), soit ≈ 25 Go
+à 8 M et ≈ 35 Go à 13 M steps. **Le task hash mesuré nativement est identique à
+celui du runtime WASM** (`0x5c3f9de0…`). Le nœud a produit **sa première vraie
+preuve** via `SubprocessProver` (format `extended-binary`, le flag `bincode`
+n'existait pas ; corrigé avec test) : préimage égale aux dix felts, vérifiée par
+`hellproof-leaf-verify --expect-bootloader` en 25 ms. Script
+`infra/prover-node/scripts/prove-one.mjs`.
+
+Deux conséquences à assumer :
+
+1. **C3 révisé à 10 min n'est pas tenable sur un seul nœud de 64 Go.** À
+   ≈ 16 s/M steps sur 4 threads (peut-être ≈ 8 s/M sur 16 cœurs), une partie
+   de 3 min avec monstres éveillés (≈ 100 k steps/tic, ≈ 630 M steps + coût fixe)
+   demande de l'ordre de **1 h à 1 h 30** de preuve séquentielle par nœud ; la
+   mémoire (≈ 35 Go par segment de 13 M) interdit deux segments en parallèle sur
+   64 Go. Le prouveur ouvert permet à plusieurs nœuds de se partager les parties,
+   pas un segment. Fixer N à la mesure sur la machine de référence (P3.9) plutôt
+   que promettre 10 min.
+2. **Admission registre** : la vraie preuve a `trace_log_size = 21` ; le registre
+   de production est log20 (D31/D32). La route `doom_21` (circuit feuille + racine)
+   doit être construite et déployée avant tout enregistrement d'une vraie partie ;
+   elle exige le wrapper sur 64 Go. C'est le dernier maillon crypto non validé.
+
 ### Reste à faire côté sponsor
 
 1. Ouvrir une PR de suivi `codex/game-integration` (ou cette branche) → `main`
