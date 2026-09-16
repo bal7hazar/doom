@@ -39,7 +39,9 @@ jobs:
   cairo:
     name: cairo (fmt, build, test, execute, crate graph, benches)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The memory-bounded test batches (infra/ci/run-cairo-tests.sh) take
+    # about seven minutes on a loaded 4-core machine; keep a real margin.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
