@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { legacyDoomIdentity } from "./fixtures/legacyDoomIdentity.js";
+import { legacyDoomIdentities, legacyDoomIdentity } from "./fixtures/legacyDoomIdentity.js";
 import { DoomPreparation, type DoomExecutor } from "../src/prove/doomPreparation.js";
 import { createDoomProgram, DoomPreparationClient, type PreparationPort } from "../src/prove/doomProgram.js";
 import { D29_PROOF_ARTIFACTS as pins } from "../src/prove/doomArtifacts.js";
@@ -116,17 +116,20 @@ describe("real program preparation contract", () => {
     resumed.dispose();
     await expect(createDoomProgram({ resume: { run: { ...run, programIdentity: run.programIdentity!.replace(pins.segment, "b".repeat(64)) }, words }, preparation: port() })).rejects.toThrow(/identity differs/);
     await expect(createDoomProgram({ resume: { run, words: words.slice(1) }, preparation: port() })).rejects.toThrow(/length/);
-    // The previous release's complete identity is not migrated in-place, even
+    // No previous release's complete identity is migrated in-place, even
     // though its gameplay state/D14 format is the same.
-    const legacyRun = { ...run, programIdentity: JSON.stringify(legacyDoomIdentity) };
-    const before = JSON.stringify(legacyRun);
-    await expect(createDoomProgram({ resume: { run: legacyRun, words }, preparation: port() })).rejects.toThrow("incompatible Cairo journal identity");
-    expect(JSON.stringify(legacyRun)).toBe(before);
-    expect(legacyDoomIdentity.artifacts.wasm).toBe(pins.wasm);
-    expect(legacyDoomIdentity.artifacts.glue).toBe(pins.glue);
-    expect(legacyDoomIdentity.artifacts.snippet).toBe(pins.snippet);
-    expect(legacyDoomIdentity.artifacts.segment).not.toBe(pins.segment);
-
+    expect(legacyDoomIdentities.at(-1)).toBe(legacyDoomIdentity);
+    for (const legacy of legacyDoomIdentities) {
+      const legacyRun = { ...run, programIdentity: JSON.stringify(legacy) };
+      const before = JSON.stringify(legacyRun);
+      await expect(createDoomProgram({ resume: { run: legacyRun, words }, preparation: port() })).rejects.toThrow("incompatible Cairo journal identity");
+      expect(JSON.stringify(legacyRun)).toBe(before);
+      expect(legacy.artifacts.wasm).toBe(pins.wasm);
+      expect(legacy.artifacts.glue).toBe(pins.glue);
+      expect(legacy.artifacts.snippet).toBe(pins.snippet);
+      expect(legacy.artifacts.segment).not.toBe(pins.segment);
+      expect(legacy.artifacts.programHash).not.toBe(pins.programHash);
+    }
   });
   it("checks the entire D14 including D13 and refuses journal identity or persistence mismatch", async () => {
     const data = journal(), program = await createDoomProgram({ journal: () => data, preparation: port() });

@@ -36,6 +36,7 @@ ship the WAD, but it must never enter git history. Point `VITE_WAD_URL` and
 | `npm test` | vitest unit tests |
 | `npm run fixtures` | Regenerates the WAD-derived test fixtures |
 | `npm run prover` | Stages `@hellproof/prover-wasm` into `public/prover/` (see below) |
+| `npm run identity:check` | Verifies the Doom proof pins against `cairo/target/proving/` (see [Migrating the Doom proof identity](#migrating-the-doom-proof-identity)) |
 | `npm run test:e2e` | Playwright: the renderer smoke test, two proved segments, the leaderboard smoke test, the demo cadence bench, **and** (project `mobile`) the touch-control smoke test on an emulated phone |
 
 Keys: **F1** diagnostics · **Tab** automap · **F2** HUD · **F3** light-only
@@ -321,6 +322,58 @@ persisted so a reload knows what is left. `GET /v1/runs/{id}` and
 `GET /v1/batches/{id}` are mirrored into the run record (status, batch id, root
 felt count); once the batch is `done`, `ProveSession.submit()` continues with
 the on-chain leg below.
+
+### Migrating the Doom proof identity
+
+`src/prove/doomArtifacts.ts` pins the exact engine the client proves: the
+SHA-256 of `genesis`/`step_tic`/`run_segment` from `cairo/target/proving/`, the
+Blake **task hash** of `run_segment` (output-preimage element zero, which only a
+real execution by the built WASM runtime can measure), the engine revision and
+the unchanged R5 simulator files. Every merged change to the engine's bytecode
+leaves those pins stale, and the client then refuses that engine for proof
+until they are migrated. `scripts/migrate-identity.mjs` (Node >= 22, no
+dependency) makes the migration one command, and never guesses the task hash.
+
+On a machine with Scarb 2.16.0 and the built prover runtime
+(`prover/wasm/pkg/dist/core.js`; the measurement itself needs Node 24, so run
+under Node 24 or pass `--node <node24>`), from the repository root:
+
+```sh
+# 1. build doom_run, hash the executables, measure the task hash, rewrite the pins
+#    (from client/: npm run identity -- --build --core ../prover/wasm/pkg/dist/core.js)
+node client/scripts/migrate-identity.mjs --build --core prover/wasm/pkg/dist/core.js
+# 2. restage the game Worker (session/genesis/step manifest) and the proof assets
+python3 client/scripts/prepare-sim.py /path/to/prover/sim/pkg && \
+python3 client/scripts/prepare-game-proof.py --target cairo/target --sim /path/to/prover/sim/pkg
+```
+
+Step 1 uses an empty segment over the genesis state as the measured arguments
+(`scarb execute` of `genesis`; pass `--args <args.json>` to use other felts).
+When the task hash was measured elsewhere with
+`prover/wrapper/scripts/measure_task_hash.mjs`, pass it instead of `--core`:
+`--program-hash 0x…` (with `--target cairo/target` pointing at the exact
+executables that were measured). Without either the script prints the SHA-256
+summary and stops with exit code 2 before writing anything.
+
+What one run rewrites: the pins (revision from `git rev-parse HEAD` or
+`--revision`), `test/fixtures/legacyDoomIdentity.ts` (the identity being retired
+is appended, byte-exact as the client persisted it, so `doomProgram.test.ts`
+keeps proving that stored runs of that engine are refused rather than migrated
+in place; its R5 session hash comes from the staged `public/sim/manifest.json`,
+or from `--legacy-session`), and the pin table of `src/prove/README.md`. It then
+lists every other file still mentioning a former pin for review, and it is
+idempotent: rerunning it on the same executables changes nothing. Run step 1
+before step 2, since `prepare-sim.py` replaces the manifest that identifies the
+retiring session. `prepare-game-proof.py` reads the pins from
+`doomArtifacts.ts` and copies nothing whose SHA-256 differs.
+
+`node client/scripts/migrate-identity.mjs --check [--target cairo/target] [--sim /path/to/prover/sim/pkg]`
+verifies without writing: exit 1 when a pinned SHA-256 differs from the
+target's executables (or the simulator files, with `--sim`), when the legacy
+fixture lists the current `run_segment`, or when the README table disagrees
+with the pins. With `--core` or `--program-hash` it compares the task hash too.
+The migration commit is then the diff of those three files plus a fresh
+`npx vitest run`.
 
 ## On-chain submission (P4.3, D28)
 
@@ -695,7 +748,7 @@ assets decoded in 19 ms.
 
 ## Tests
 
-`npm test` — 333 vitest tests (10 skip themselves without the staged prover).
+`npm test` — 334 vitest tests (10 skip themselves without the staged prover).
 
 *Renderer and assets* (79): pegging (all four vanilla cases and the row offset),
 wall quad generation (including that it follows moving heights), BSP clipping and
@@ -716,6 +769,7 @@ the stub sim on the real E1M1.
 | `pipeline.test.ts` | the pipeline against a fake prover: planning and shrinking, the step ceiling, a hung threaded prove killed and retried single-threaded, a segment that fails for good, the prover dropped between segments, resume after a simulated reload (exactly one segment re-proved), waiting mid-game vs cutting at the end, and the event stream |
 | `wrapper.test.ts` | the submitter against a fake server: the per-segment probe and its fallback, skipping what the server holds, retries under the same `run_id`, `keepOffline` refused, gaps refused, failures recorded locally, and the status/batch mirror |
 | `commit.test.ts` (jsdom) | the open-prover commitment (P4.7): the Poseidon port against `poseidon_py` and the contract's `INPUTS_SEED` / nine-tic vectors, packing → `commit_log` and `commitment_id` on a short journal with explicit expected values, the exact `approve` + `commit_run` multicall calldata (`packed_len(tics)`, both `u256` limbs) and the refusals the contract makes, the `Commitment` decoder, the session policies, `VITE_DEFAULT_BOUNTY`; then the flow against a mocked node and wallet: id on the record before signing, cost and bounty on the screen, re-pricing on a changed bounty, the record after the receipt, double commitment refused three ways (live record, `PENDING`, `PROVED`) and allowed after `RECLAIMED`, C6, a wallet failure, a `RunCommitted` that disagrees, status refresh (pending → proved by X → expired) and `reclaim` (player only, after expiry), the panel line, and `ProveSession.commit()` without configuration touching no network |
+| `migrateIdentity.test.ts` | `scripts/migrate-identity.mjs` on a fabricated Cairo target: the executables' SHA-256, `--check` red then green (and red again after one executable changes), the refusal without a measured task hash (exit 2, nothing written), the rewritten pins in the exact shape `prepare-game-proof.py` parses, the retired identity appended byte-exact to the legacy fixture (and importable), the README table, `--core` through a fake measurement script (a measurement of another executable is refused), the unknown-session stop, `--dry-run`, idempotence, and that the repository's own pins, fixture and table agree |
 | `onchain.test.ts` (jsdom) | the on-chain leg on the real `B2-1_doom` fixture against a mocked node and wallet: the configuration reader (missing names listed, URL overrides, malformed values, the derived proof id), the cost screen's six rows and totals in STRK and fiat, "wait" and "keep offline" sending nothing, "submit" playing `begin → merkle → answers → fri → fri → register_member` in order and recording the fact, a wallet interruption between two transactions resumed from the saved D28 cut and `localStorage` echoes (the remaining phases re-priced, no trace round trip), a batch refused before paying, `?include=proof`, and `ProveSession.submit()` with no configuration touching no network |
 
 *Mobile* (`touchInput.test.ts`, `cadenceBench.test.ts`, `simulationSupport.test.ts`): the touch → ticcmd
