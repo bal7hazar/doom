@@ -9,7 +9,7 @@
 // `prover/wrapper/leaf-verify` is run on the proof as the wrapper would.
 //
 //   npx tsx scripts/prove-one.mjs --words <words.json | prove_segment.sh args.json> --tics 35 \
-//       --out <dir> [--level 1] [--threads 1] [--timeout 900] [--proof-format bincode|cairo-serde] \
+//       --out <dir> [--level 0] [--threads 1] [--timeout 900] [--proof-format bincode|cairo-serde] \
 //       [--stwo-bin …] [--bootloader …] [--params …] [--executable …] [--lock-dir …] \
 //       [--leaf-verify <hellproof-leaf-verify>] [--expect-task-hash <felt>]
 //
@@ -42,7 +42,7 @@ const scratch = process.env["SCRATCH"] ?? join(process.env["HOME"] ?? ".", ".hel
 const proving = process.env["PROVING"] ?? join(scratch, "proving-s4");
 const out = resolve(arg("out"));
 const tics = Number(arg("tics", "35"));
-const levelId = Number(arg("level", "1"));
+const levelId = Number(arg("level", "0")); // 0 = E1M1 (doom_run README)
 const threads = Number(arg("threads", "1"));
 const timeoutMs = Number(arg("timeout", "900")) * 1000;
 const format = arg("proof-format", "bincode");
