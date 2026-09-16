@@ -27,7 +27,8 @@ starknet-devnet --seed 42 --port 5081 --accounts 3 --state-archive-capacity full
 sncast --accounts-file .work/accounts.json account import --url http://127.0.0.1:5081/rpc \
   --name devnet42 --type oz --address <addr> --private-key <key>
 
-# 2. the router and DoomRuns (declare + deploy half of tools/e2e_10felt_drive.py)
+# 2. the router, a MockERC20 fee token and DoomRuns(owner, fee_token, expiry_blocks = 20)
+#    (declare + deploy half of tools/e2e_10felt_drive.py; FEE_TOKEN=0x… / EXPIRY_BLOCKS=… override)
 scripts/devnet_setup.sh .work/accounts.json http://127.0.0.1:5081/rpc .work/deployment.json
 
 # 3. the cost screen — simulates the whole ordered sequence, sends nothing
@@ -152,9 +153,19 @@ Both historical sent plans register the same fact and land within 0.014 % of the
 npm test                    # calldata vs the Python emitter, bounds, median, resume, selectors
 SUBMIT_TEST_RPC=http://127.0.0.1:5081/rpc SUBMIT_TEST_ROUTER=0x… SUBMIT_TEST_RUNS=0x… \
   SUBMIT_TEST_ACCOUNT=0x…:0x… npm test    # + the devnet integration test
+SUBMIT_TEST_PLAYER=0x…:0x… …              # + the D35 round: another account commits
 ```
 
 Without `SUBMIT_TEST_RPC` the integration test skips itself, so a clone with no devnet still has
-a green `npm test`. The integration test expects an optimized P4.1 router. Offline tests
+a green `npm test`. The integration test expects an optimized P4.1 router and a bare `DoomRuns`
+it can pin the fixture's version on (it does so itself when `SUBMIT_TEST_ACCOUNT` is the owner,
+i.e. after `scripts/devnet_setup.sh`). With `SUBMIT_TEST_PLAYER` (a second predeployed
+account) it also plays the D35 round: the player commits the single-segment game of
+`B2-1_doom` with a bounty (`buildCommitCalls`, an `approve` + `commit_run` multicall), the
+submission from `SUBMIT_TEST_ACCOUNT` settles it (`CommitmentProved`, bounty paid to the
+submitter, `get_commitment` = PROVED — every event read back with `infra/indexer`'s and
+`infra/prover-node`'s decoders), then a second commitment nothing can settle is refused before
+expiry and reclaimed after `expiry_blocks` empty blocks (`devnet_createBlock`). The same round
+driven by sncast, with receipts, is `cairo/doom_contracts/tools/commit_drive.py`. Offline tests
 compare complete calldata against the independent Python emitter and `calldata_for` on the
 `n4`, `B2-1_doom`, and `B2_doom` roots, and cover cap fallback and legacy resume refusal/restoration.
