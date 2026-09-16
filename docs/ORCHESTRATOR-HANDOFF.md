@@ -468,12 +468,26 @@ le jeu R5 (`prepare-sim.py`) doit être reconstruit avec les nouveaux exécutabl
 Prochaine vague moteur candidate : O3 (clip/`nofit` par cellules, −3 500 moyen,
 −10 000 p99 door), puis la frontière `from_felts` (−20–30 %).
 
+### Suite de session — 2026-09-16 (fusions `01c3b42`, `b326802`, `4d435dc`, tests `3edb34e`, CI `4607709`)
+
+| Vague | Résultat |
+|---|---|
+| Exécuteur réel du nœud | Bug bloquant corrigé : `--print-resource-usage` imprime `steps: 2,383,556` et la regex lisait `2`, le plafond D26 ne s'appliquait jamais. Test d'intégration sur le vrai moteur : genèse, walk (dix felts D14 et `h_out` = golden), sortie du niveau en **27 segments** alignés sur 7 tics, `commit_log` = golden ; flux nœud complet avec exécuteur réel. `run_segment` 350 tics ≈ 5,3 s ; ≈ 1 s de lancement par appel `scarb execute` |
+| ABI compilée | Aucun écart entre la classe compilée et les décodeurs de l'indexeur, du client et du nœud (sélecteurs, ordre clés/données, 13 felts de `Commitment`) ; tests sautés proprement sans la classe |
+| **Tour devnet complet** | `starknet-devnet 0.10.0` : router P4.1 + MockERC20 + `DoomRuns(owner, token, 20)`, `commit_run` du jeu 1 de `B2-1_doom` (137 tics, prime 1 jeton), preuve fixture soumise **par un second compte** → `CommitmentProved`, prime chez le prouveur, PROVED ; second engagement non réglé par un `submit_batch` sans replay, `reclaim` refusé avant échéance puis accepté. Script `cairo/doom_contracts/tools/commit_drive.py`, reçus `results/commit_receipts.json`, `infra/submit/test/devnet.test.ts` étendu, `scripts/devnet_setup.sh` corrigé pour le constructeur à trois arguments. `MockERC20` déplacé dans `src/` pour être déclarable |
+| Gas réel devnet | `commit_run` **6,84 M L2 gas** (0,209 STRK, coût fixe dominant) ; `register_member` réglant 12,0 M ; `reclaim` 2,3 M ; vérifieur 5 tx 1,54 G (46,95 STRK) |
+| Migration d'identité | `client/scripts/migrate-identity.mjs` (`npm run identity`, `identity:check`) : SHA du target, task hash via `measure_task_hash.mjs` ou `--program-hash`, réécriture des pins, fixture legacy en liste, README ; refuse d'écrire sans task hash. Procédure en deux commandes dans client/README.md « Migrating the Doom proof identity » |
+| Test instable | `commit.test.ts` C6 ciblait « le premier run listé » ; corrigé, 8/8 |
+
+Point de calibration utile : avec les monstres éveillés le moteur coûte 90–110 k
+steps/tic, donc sous 2,3 M le planner descend à ~21 tics par segment ; c'est le
+p99, pas la moyenne, qui dimensionne les segments du nœud.
+
 ### Reste à faire côté sponsor
 
 1. Ouvrir une PR de suivi `codex/game-integration` (ou cette branche) → `main`
    sans la fusionner, pour obtenir CI et `game-regression` à chaque push.
-2. Mesurer le task hash du nouveau `run_segment` (`84c9bae1…`, O1 + O3) et migrer
-   `doomArtifacts.ts` ; vérifier que le job `cairo` tient en 16 Go (la suite
+2. `node client/scripts/migrate-identity.mjs --build --core prover/wasm/pkg/dist/core.js` sous Node 24, puis `prepare-sim.py` et `prepare-game-proof.py` (procédure client/README.md) ; vérifier que le job `cairo` tient en 16 Go (la suite
    `doom_game` seule approche 14 Go ; prévoir `RAYON_NUM_THREADS` réduit ou un
    découpage par filtre).
 3. Trancher l'arbitrage C3 ci-dessus.
