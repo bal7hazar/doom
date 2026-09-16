@@ -40,7 +40,7 @@ fn main(op: u32) -> felt252 {
     let word = tic_word(zero); // SIZE:think
     // `op`-derived arguments, never literals: a literal specialises the
     // callee and this program then measures a folded copy (S7 §8 rule 7).
-    let e = env_of(w, array![mo].span(), zero, op, zero + 3); // SIZE:inter
+    let e = env_of(w, array![BoxTrait::new(mo)].span(), zero, op, zero + 3); // SIZE:inter
     let mut felts: Array<felt252> = array![];
     let mut thing: Mobj = removed_mobj(); // SIZE:inter
     // `op - op` is a zero the compiler cannot see: a literal `kind` here
@@ -72,7 +72,7 @@ fn main(op: u32) -> felt252 {
     bring_up_weapon(e, ref g, ref rng, ref p, ref mo, ref events, zero); // SIZE:weapon
     drop_weapon(e, ref g, ref rng, ref p, ref mo, ref events); // SIZE:weapon
     acc += bool_felt(check_ammo(e, ref g, ref rng, ref p, ref mo, ref events, zero)); // SIZE:weapon
-    acc += bullet_slope(w, array![mo].span(), ref g, @mo, zero).enc; // SIZE:weapon
+    acc += bullet_slope(w, array![BoxTrait::new(mo)].span(), ref g, @mo, zero).enc; // SIZE:weapon
 
     player_think(
         e, ref g, ref rng, ref p, ref mo, word, zero + 5, zero == 0, ref events,

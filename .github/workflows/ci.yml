@@ -39,7 +39,9 @@ jobs:
   cairo:
     name: cairo (fmt, build, test, execute, crate graph, benches)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The memory-bounded test batches (infra/ci/run-cairo-tests.sh) take
+    # about seven minutes on a loaded 4-core machine; keep a real margin.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -68,15 +70,18 @@ jobs:
         working-directory: cairo
         run: scarb build
 
-      - name: scarb test
+      # One `scarb test` per package, and doom_game per module / per E1M1
+      # replay: cairo-test keeps every test's VM memory in one process and
+      # the 73 doom_game tests together exceed the runner's 16 GB (the job
+      # used to die with "runner has received a shutdown signal").
+      - name: scarb test (batched, infra/ci/run-cairo-tests.sh)
         if: steps.check.outputs.present == 'true'
-        working-directory: cairo
-        run: scarb test
+        run: bash infra/ci/run-cairo-tests.sh
 
-      - name: scarb execute -p doom_run
+      - name: scarb execute doom_run genesis
         if: steps.check.outputs.present == 'true'
         working-directory: cairo
-        run: scarb execute -p doom_run --arguments 1 --output none
+        run: scarb execute -p doom_run --executable-name genesis --arguments 0 --output none
 
       - name: Crate dependency graph check (PLAN.md §3.1 A10)
         if: steps.check.outputs.present == 'true'
@@ -299,10 +304,15 @@ jobs:
       - name: Install the submit oracle dependency
         run: python3 -m pip install poseidon-py==0.1.5
 
-      - name: infra submit and indexer (typecheck, test)
+      - name: infra submit, indexer and prover-node (typecheck, test)
         run: |
-          for package in infra/submit infra/indexer; do
+          # Install all three first: submit's tests import indexer and
+          # prover-node sources, which resolve `starknet` from their own
+          # node_modules.
+          for package in infra/submit infra/indexer infra/prover-node; do
             npm ci --prefix "$package"
+          done
+          for package in infra/submit infra/indexer infra/prover-node; do
             npm run typecheck --prefix "$package"
             npm test --prefix "$package"
           done

@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "s14_cairo_costs"
+version = "0.1.0"
+edition = "2024_07"
+[dependencies]
+bam = { path = "../../cairo/crates/bam" }
+cairo_execute = "2.16.0"
+[cairo]
+enable-gas = false
+[profile.proving]
+inherits = "release"
+[profile.proving.cairo]
+unsafe-panic = true
+
+[[target.executable]]
+name = "mod_operator"
+function = "s14_cairo_costs::mod_operator"
+sierra = true
+
+[[target.executable]]
+name = "mod_nonzero"
+function = "s14_cairo_costs::mod_nonzero"
+sierra = true
+
+[[target.executable]]
+name = "mask_byte"
+function = "s14_cairo_costs::mask_byte"
+sierra = true
+
+[[target.executable]]
+name = "pair_operator"
+function = "s14_cairo_costs::pair_operator"
+sierra = true
+
+[[target.executable]]
+name = "pair_nonzero"
+function = "s14_cairo_costs::pair_nonzero"
+sierra = true
+
+[[target.executable]]
+name = "sparse_mask"
+function = "s14_cairo_costs::sparse_mask"
+sierra = true
+
+[[target.executable]]
+name = "sparse_arithmetic"
+function = "s14_cairo_costs::sparse_arithmetic"
+sierra = true
+
+[[target.executable]]
+name = "sin_cos_reference"
+function = "s14_cairo_costs::sin_cos_reference"
+sierra = true
+
+[[target.executable]]
+name = "sin_cos_shared"
+function = "s14_cairo_costs::sin_cos_shared"
+sierra = true

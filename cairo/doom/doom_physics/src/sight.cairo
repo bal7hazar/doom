@@ -27,9 +27,11 @@
 //! the expensive question at most once per `ttl` tics.
 
 use doom_map::{ML_TWOSIDED, reject_of};
-use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
+use fixed::{BIAS, Fixed, felt_ge_narrow};
 use geom2d::Point;
-use super::maputl::{add32, inc, line_box_misses, line_hp, line_opening, line_sides, rd, rd32};
+use super::maputl::{
+    add32, inc, line_box_misses, line_hp, line_opening, line_sides, rd, rd32, to_u128,
+};
 use super::mobj::{Mobj, has};
 use super::ray::{
     Trace, crosses_sight, crossing_fraction, ray_advance, ray_cell, ray_start, trace_of,

@@ -72,7 +72,7 @@ fn item(kind: u32, flags: u32) -> Mobj {
 
 /// An `Env` over the real level, with `mobjs = [mo]` and the player at 0.
 fn env_for(w: World, mo: Mobj, tic: u32, buttons: u32) -> Env {
-    env_of(w, array![mo].span(), 0, tic, buttons)
+    env_of(w, array![BoxTrait::new(mo)].span(), 0, tic, buttons)
 }
 
 fn row(data: Span<felt252>, stride: u32, i: u32, k: u32) -> felt252 {
@@ -177,7 +177,7 @@ fn test_friction_runs() {
             let e = env_for(w, mo, tic, 0);
             move_player(e, ref p, ref mo, f, s, 0);
             calc_height(ref p, @mo, tic);
-            let mobjs = array![mo].span();
+            let mobjs = array![BoxTrait::new(mo)].span();
             let mut events: Array<doom_physics::MoveEvent> = array![];
             let mut rng = from_index(1);
             let _ = rng;
@@ -489,7 +489,7 @@ fn test_scripted_walk_on_e1m1() {
         let mut events: Array<PlayerEvent> = array![];
         player_think(e, ref g, ref rng, ref p, ref mo, word, 0, false, ref events);
         // The thinker pass `P_Ticker` runs after every `P_PlayerThink`.
-        let mobjs = array![mo].span();
+        let mobjs = array![BoxTrait::new(mo)].span();
         let mut moves: Array<doom_physics::MoveEvent> = array![];
         let input = cmd.forward != 0 || cmd.side != 0;
         let out = xy_movement(w, mobjs, ref g, ref mo, 0, input, true, ref moves);

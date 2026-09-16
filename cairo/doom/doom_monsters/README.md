@@ -1,5 +1,12 @@
 # doom_monsters
 
+D33 migrates the shared roster to `Span<Box<Mobj>>` and `Patch.mo` to
+`Box<Mobj>`. The ticker returns an array of those boxes, preserving unchanged
+actors and allocating changed countdowns. The [current assembled measurements](../doom_game/bench_boxed/README.md)
+include those allocations: idle tic 300 improves by 24.35%, fight tic 493 by
+11.41%. Historical S7/S8 measurements below retain their original value-roster
+reference; they are not the current per-tic copy cost.
+
 **Does**: the monster AI of a Doom-like tic — the `p_enemy.c` half of
 linuxdoom-1.10 (GPL-2.0-only; semantics derived, no C copied) — for the five
 kinds Freedoom E1M1 can put in front of the player (zombieman, shotgun guy,
@@ -134,8 +141,8 @@ and return types of 30 to 41 for functions that answer a `bool`. So:
 
 * the **public API is the boundary** — every public function still takes
   `Ctx` and the actor by `ref` — and each of them converts once and calls an
-  `_in` twin that carries the six-felt [`Env`] (the `World` behind one
-  pointer, since a field read through a `Box` is free) and the actor as a
+  `_in` twin that carries the one-pointer `Env` (a boxed six-felt payload,
+  with `World` itself boxed too) and the actor as a
   `Box<Mobj>`, unboxed into a local at the top of a function and re-boxed
   once, where it is written;
 * what only needs a `P_Random` takes the `rndtable` span, what only needs
@@ -198,11 +205,11 @@ all for a mobj that is not this crate's.
 ```cairo
 // One tic. `players` are the mobj indices of the players; `noise` is the
 // last P_NoiseAlert. Returns the rebuilt list, the advanced RNG and the
-// tic's events; `g` is updated in place (derived data, never hashed).
+// tic's events; `g` is updated in place (canonical order is hashed in schema 2).
 pub fn monsters_ticker(
-    w: World, mobjs: Span<Mobj>, ref g: ThingGrid, players: Span<u32>,
+    w: World, mobjs: Span<Box<Mobj>>, ref g: ThingGrid, players: Span<u32>,
     noise: Noise, tic: u32, rng: Prng,
-) -> (Array<Mobj>, Prng, Array<MonsterEvent>);
+) -> (Array<Box<Mobj>>, Prng, Array<MonsterEvent>);
 
 pub struct Noise { pub source: u32, pub sector: u32 }   // NO_MOBJ = silent
 pub fn silence() -> Noise;
@@ -216,10 +223,10 @@ pub const WINDOW: u32 = 8;         // D3
 
 pub fn is_dormant(w: World, mo: @Mobj) -> bool;
 pub fn is_awake(w: World, mo: @Mobj) -> bool;
-pub fn awake_count(w: World, mobjs: Span<Mobj>) -> u32;
+pub fn awake_count(w: World, mobjs: Span<Box<Mobj>>) -> u32;
 pub fn in_window(rank: u32, tic: u32, n: u32) -> bool;
 pub fn mobj_thinker(...) -> bool;                       // one mobj, one tic
-pub fn read_mobj(mobjs: Span<Mobj>, patches: Span<Patch>, i: u32) -> Mobj;
+pub fn read_mobj(mobjs: Span<Box<Mobj>>, patches: Span<Patch>, i: u32) -> Box<Mobj>;
 ```
 
 `actions` also exports every action function and `p_move`/`new_chase_dir`/
@@ -527,3 +534,191 @@ emit if it cannot find one. A changed `SCENARIO_CHECKSUM` in
   crate that ticks a list gains.
 * **`MF_SHADOW`.** The spectre never spawns at skill 2, so `A_FaceTarget`'s
   spread against a shadow target is implemented but only reached by a test.
+
+
+### R2: fixed ticker cost on the complete roster
+
+The 2026-09-13 pass keeps the same public functions, actor visitation order,
+D3 ranks/cadence, physics guards and event order. Its reference is `b11fd7f`,
+which already includes canonical grid serialization and per-impact player
+armor. `Env` is now one pointer to its six-felt payload. A linear boxed
+`Pass` owns the grid, RNG, pending patches, events, spawn cursor and player
+defense; an inactive slot carries that pointer, and an acting monster opens
+and rebuilds the record once. Its destructor forwards the grid's dictionary
+squash on panic. The two roster scans use `Span::pop_front`, keeping the
+same slot index for D3 while removing the separate bounds-checked lookup.
+A combined `MF_COUNTKILL | MF_MISSILE` mask rejects non-actors in one test.
+
+Measured inside the real `doom_run::step_tic` consumer, Scarb 2.16.0 proving
+profile, with identical serialized inputs and complete profiler stacks:
+
+| Fixture | Before | After | Change |
+|---|---:|---:|---:|
+| E1M1 idle tic 300, all 210 slots: monster subtree | 46,802 | 34,765 | -25.72% |
+| Fight tic 493: monster subtree | 136,183 | 123,418 | -9.37% |
+| Ticker's own disjoint cost, idle | 29,888 | 22,503 | -24.71% |
+| `awake_count` disjoint cost, idle | 6,732 | 3,581 | -46.81% |
+| Ticker-only attributed code, proving | 14,574 | 14,101 | -473 words |
+| Complete `run_segment` program, proving | 116,287 | 115,814 | -473 words |
+
+Direct CASM counters in the ticker loop explain the reduction: `store_temp`
+falls from 20,244 to 13,620 executed instructions, copies of `Env` from
+2,508 to 219, `ThingGrid` from 1,230 to 27, and each of the patch/event array
+headers from 820 to 18. Mobj copies (6,696) and output `array_append`
+instructions (5,670 = 210 × 27) remain identical. Those counters exclude
+out-of-line callees and are not added to the disjoint profiler costs.
+
+The first-pass 25% idle reduction is met. The 15,000-word ticker allocation
+is still met; the whole-program 100,000-word target and whole-tic 12,000-step
+target remain open. Traversal algorithms and the mandatory output Mobj
+copies remain; the combat spike still spends most of its cost in physics.
+No replay hash or budget is raised by this pass. Across complete proving
+replays, including input loading and final serialization/snapshot, total
+execution cost falls by 22.52% (idle), 13.60% (walk), 11.35% (door), 12.05%
+(fight) and 14.98% (death). These whole-execution percentages are separate
+from the single-tic subtree figures above.
+
+`bench/profile_loop.py` derives a real pre-tic state from a golden replay,
+or accepts an existing arguments file to use exactly the same state across
+revisions. It runs the real executable, then `cairo-profiler` at depth 512
+(default depth 100 truncates this recursive loop). The report records the
+executable/input SHA-256 and checks the observed depth is below the limit.
+For example, from this package's directory:
+
+```sh
+ASDF_SCARB_VERSION=2.16.0 scarb --manifest-path ../../Scarb.toml --profile proving build -p doom_run
+python3 bench/profile_loop.py --scenario idle --tic 300 --out /tmp/monster-idle
+python3 bench/profile_loop.py --scenario fight --tic 493 --out /tmp/monster-fight
+```
+
+Use `--profiler /path/to/cairo-profiler` if the pinned 0.17.0 binary is not
+selected by the shell. To compare a revision, preserve its executables,
+Sierra files and `arguments.json`, then use `--arguments` with that file.
+`--keep-trace` preserves the trace for the game's `statement_costs.py` tool.
+
+`bench/compare_replays.py` compares every output felt of the five game
+replays against a preserved baseline workspace, both whole and resumed
+from serialized states every 25 tics. The companion `bench/ticker_probe`
+executes the raw monster API on those real boundary states and returns
+all Mobj fields, RNG, defense, every event payload/position and the canonical
+grid order. These raw passes cover the boundary scenes; they are not a log
+of `step_tic`'s unexposed internal cues. Reports contain output digests only
+after exact array equality has passed, never replacement expectations.
+
+Build `doom_run` and an identical copy of `bench/ticker_probe` against both
+workspaces before comparing. With `reference/cairo` an archived baseline:
+
+```sh
+ASDF_SCARB_VERSION=2.16.0 scarb --manifest-path bench/ticker_probe/Scarb.toml --profile proving build
+python3 bench/compare_replays.py --reference /tmp/reference/cairo --json /tmp/monster-equivalence.json
+```
+
+The same harness accepts `--profile dev` after building both workspaces and
+probes under dev. The validation run passed 247 exact comparisons per
+profile across all five logs, 118 serialized cuts and 47 raw probe events;
+every output digest also matched between dev and proving. The existing
+56 monster tests, including their 700-tic checksum, remain unchanged; `bench/measure.py` continues to enforce every
+recorded operation and code-size budget.
+
+### Passive runs outside the actor loop (D29 integration base 3e210317)
+
+`next_actor` copies consecutive passive slots in a separate small loop and
+returns the next monster or missile to the ticker. The passive loop carries
+only the input cursor and output array, rather than the ticker's environment,
+pass record, scheduling state and other live values. Every record remains in
+its original position. The actor's D3 index is the output length before that
+actor is appended; no additional index advances through passive slots.
+
+The predicate is unchanged, including its short-circuit for `KIND_NONE` even
+when a direct caller supplies inconsistent flags. `awake_count` still reads
+the complete initial roster before any actor runs. Ranks, look cadence, RNG,
+patch application, spawned-slot selection and dictionary visitation order
+remain unchanged. No persistent cache, schema field or public interface is
+introduced. Two edge-case tests cover interleaved passive/actor runs, original
+indices, removed slots with flags, and empty or fully passive lists.
+
+Validation: 567 Cairo tests across 23 targets; 35 native ABI cases plus four
+malformed envelopes rejected per profile; 70 exact comparisons of five full
+replays, serialized cuts, D14 and terminal boundaries per profile. Physics,
+player and monster benchmarks retain their existing limits. The measured
+ledger is `bench/passive-runs.json`.
+
+| Complete executable | dev before → after | proving before → after |
+|---|---:|---:|
+| run_segment | 125854 → 125836 | 106878 → 106855 |
+| step_tic | 125981 → 125963 | 108365 → 108342 |
+| genesis | 50746 → 50746 | 46434 → 46434 |
+
+| Proving frame | before → after steps | boundary before → after | Mobj allocations |
+|---|---:|---:|---:|
+| idle300 | 30012 → 26298 | 266508 → 266508 | 48 → 48 |
+| fight493 | 170333 → 166596 | 267743 → 267743 | 120 → 120 |
+
+These are two exact frame measurements, not the mean or p99 across all
+2946 replay tics. The complete proving program remains **106855 words**, so
+the unchanged 100000-word D29 guard still fails by **6855**. No proof, AIR,
+RAM or browser-throughput improvement is inferred from this VM experiment.
+
+Reproduce with the existing game `bench_sizing/compare.py` (immutable base
+executables via `--reference`, each profile), `bench_boundary/measure.py`,
+then `doom_monsters/bench/profile_loop.py --arguments ... --keep-trace` and
+`doom_game/bench_boxed/inspect.py` on the two fixed pre-tic arguments. Keep
+Scarb 2.16.0 and the existing profiles, and check the executable/input SHA
+recorded by every report. No expected values or thresholds are regenerated.
+
+Small rosters with few passive slots pay the extra helper return per actor.
+These dev benchmark tradeoffs remain inside the existing limits. Raw steps
+are per iteration before subtracting the operand baseline:
+
+| Scene | raw steps before → after | differential net before → after |
+|---|---:|---:|
+| monsters_ticker, 29 dormant monsters | 12854.95 → 13249.95 | 12400.95 → 12806.95 |
+| monsters_ticker, 8 awake monsters (D3's cap) | 29976.1 → 30077.1 | 29968.1 → 30069.1 |
+| 29 dormant monsters, nobody to look for | 9845.7 → 10240.7 | 9391.7 → 9797.7 |
+
+The 29-dormant raw cost rises 3.07%; eight-awake raw cost rises 0.34%. The
+full-roster improvement is not a universal ticker speedup.
+
+## Scalar-mask pass (Cairo 2.16.0)
+
+The look phase now uses `value & 3`, and `A_Chase`'s two octant
+remainders use `value & 7`. These replace `DivRem` by a **literal,
+power-of-two** divisor, with exactly the same result on the entire `u32`
+domain. Angular quotients, signed arithmetic, RNG draws, the four-tic look
+cadence and the eight-monster window are unchanged. Tests compare every
+roster index and values around all 32 clock bit boundaries against integer
+remainders; existing scene/model tests still cover the actual turn and look
+rules (62 monster tests passed).
+
+This is a measured local choice, not a rule that division or bitwise always
+wins in Cairo. The same `bench/measure.py` inputs (`n = 20, 40`, runtime
+operation selector and loop counter) produced the following **raw per-loop
+iteration** resources, before subtraction of each operation's baseline:
+
+| Real scene | VM steps before → after | Range checks before → after | Bitwise instances before → after |
+|---|---:|---:|---:|
+| Player only | 443 → 438 | 5 → 2 | 2 → 3 |
+| 29 dormant monsters | 13 249.95 → 13 128.95 | 365.90 → 275.90 | 89.20 → 119.20 |
+| 5 awake monsters | 12 782.45 → 12 747.70 | 703.85 → 680.15 | 55.70 → 63.60 |
+| 8 awake monsters | 30 077.10 → 30 025.60 | 1 916.60 → 1 881.80 | 126.05 → 137.65 |
+| 20 awake monsters | 59 588.05 → 59 475.30 | 3 758.15 → 3 685.85 | 282.00 → 306.10 |
+| Cached `A_Chase` | 8 233 → 8 228 | 439 → 433 | 15 → 17 |
+
+The cadence change saves 13 CASM words in the ticker's proving differential;
+the octant change saves another 6: **12 954 → 12 935**. The complete step
+benchmark shrinks **78 521 → 78 502** words. The full API differential is
+**16 672 → 16 653** proving words and **20 013 → 19 994** dev words;
+ticker-only dev is **15 024 → 15 005**. These are this module's existing
+harness metrics, not a fresh full-game bytecode or proof-admission result.
+All existing budget checks passed without changing any baseline or limit.
+
+[`bench/scalar-masks.json`](bench/scalar-masks.json) records the paired
+measurements and resource counts, including the cadence-only intermediate.
+Each replacement adds a bitwise instance while removing range checks and a
+few VM steps. A whole-game proof must still account for all builtin table
+sizes; no AIR, proof-duration or framerate claim follows from this table.
+
+The audit also checked mask-based sets: weapon ownership and hitscan batch
+membership already use them. `doom_map::reject_of` was left unchanged:
+its public `pow2` span can contain an arbitrary divisor, so replacing its
+division by an unchecked bitwise mask would change that API's behavior.

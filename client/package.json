@@ -10,6 +10,8 @@
   "scripts": {
     "assets": "bash scripts/prepare-assets.sh",
     "prover": "bash scripts/prepare-prover.sh",
+    "identity": "node scripts/migrate-identity.mjs",
+    "identity:check": "node scripts/migrate-identity.mjs --check",
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",

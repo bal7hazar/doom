@@ -117,6 +117,14 @@ export interface SegmentRecord {
 /** Lifecycle of a whole run (one game). */
 export type RunStage = "recording" | "proving" | "proved" | "failed";
 
+/**
+ * Where the open-prover commitment of a run stands (D35, P4.7), as `RunSubmissionState.commitStatus`:
+ * `committing` (signed, no receipt yet), `pending` (on chain, waiting for a prover), `proved`
+ * (settled, `commitProver` was paid), `expired` (pending past `commitExpiresAt`: `reclaim` is
+ * open), `reclaimed`, `failed` (the transaction was refused or reverted).
+ */
+export type CommitStatus = "committing" | "pending" | "proved" | "expired" | "reclaimed" | "failed";
+
 export interface RunSubmissionState {
   /** Idempotency key used with `POST /v1/runs`; stable across retries. */
   runId?: string;
@@ -127,6 +135,26 @@ export interface RunSubmissionState {
   rootProofFeltCount?: number;
   /** Segments the server has acknowledged (see `wrapper/submitter.ts`). */
   uploadedSegments?: number;
+  /** Router proof id of the on-chain sequence (P4.3), as `0x…`; derived from the batch id. */
+  proofId?: string;
+  /** Where the on-chain leg stands: `waiting` (C6 "wait"), `submitting`, `done` or `failed`. */
+  chainStatus?: string;
+  /** The fact the router registered, once the FRI walk finished. */
+  fact?: string;
+  /** D35: `commitment_id` computed locally before signing, checked against `RunCommitted`. */
+  commitmentId?: string;
+  /** `commit_log(packed)` over the whole journal at commit time. */
+  inputsCommitment?: string;
+  commitStatus?: CommitStatus;
+  /** The `commit_run` transaction hash. */
+  commitTx?: string;
+  /** Bounty escrowed, in the fee token's smallest unit, as a decimal string. */
+  commitBounty?: string;
+  /** Block from which `reclaim` is accepted (`created_block + expiry_blocks`). */
+  commitExpiresAt?: number;
+  /** Set once `PROVED`: who was paid, and the run id the game was recorded under. */
+  commitProver?: string;
+  commitRunId?: string;
   error?: string;
   updatedAt?: number;
 }
@@ -138,6 +166,10 @@ export interface RunRecord {
   /** The wrapper's program id (`segment_stub10`, later `doom_run`). */
   program: string;
   programHashFunction: "blake" | "poseidon";
+  programIdentity?: string;
+  /** Last rejected preparation remains exportable even if no segment fits. */
+  admissionFailure?: { ticStart: number; ticCount: number; args: Felt[]; outputPreimage: Felt[];
+    reason: string; resources: unknown; updatedAt: number };
   /** `h_in` of the first segment. */
   genesis: Felt;
   stage: RunStage;

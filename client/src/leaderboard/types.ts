@@ -66,6 +66,25 @@ export interface PlayerRunSummary {
   blockNumber?: number;
 }
 
+/** A game committed to the open prover (D35) and not settled yet — shown under the recorded runs. */
+export interface PlayerCommitment {
+  commitmentId: string;
+  versionId: number;
+  levelId: number;
+  tics: number;
+  /** In the fee token's smallest unit, as a decimal string (a `u256`). */
+  bounty: string;
+  /** Block from which the player may `reclaim`; whether it is past is `expired` below. */
+  expiresAt: number;
+  /** `PENDING` still within its expiry, or `EXPIRED` (pending past `expiresAt`, reclaimable). */
+  status: "PENDING" | "EXPIRED";
+  /** `RunLog` chunks seen / announced; only the indexer knows. */
+  logChunks?: number;
+  nChunks?: number;
+  blockNumber?: number;
+  txHash?: string;
+}
+
 export interface PlayerStats {
   player: string;
   runCount: number;
@@ -73,6 +92,8 @@ export interface PlayerStats {
   bestScore: number | null;
   bestTics: number | null;
   runs: PlayerRunSummary[];
+  /** D35 / P4.7: the player's games still waiting for a prover, newest first. */
+  pendingCommitments?: PlayerCommitment[];
 }
 
 export interface ChainStats {

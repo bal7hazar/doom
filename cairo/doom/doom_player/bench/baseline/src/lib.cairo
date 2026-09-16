@@ -38,7 +38,7 @@ fn main(op: u32) -> felt252 {
     let mut g: ThingGrid = new_grid();
     set_thing_position(@w.map, ref g, ref mo, 0);
     let mut rng = from_index(1);
-    let mobjs = array![mo].span();
+    let mobjs = array![BoxTrait::new(mo)].span();
 
     // `doom_physics`, as `doom_player` reaches it.
     let p1 = Point { x: mo.x, y: mo.y };

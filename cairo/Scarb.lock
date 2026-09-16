@@ -28,14 +28,18 @@ dependencies = [
 name = "doom_game"
 version = "0.1.0"
 dependencies = [
+ "bam",
+ "blockmap",
  "doom_map",
  "doom_monsters",
+ "doom_physics",
  "doom_player",
  "doom_specials",
  "doom_things",
  "fixed",
  "fsm",
  "geom2d",
+ "prng",
  "segment",
  "state_hash",
  "ticcmd",
@@ -103,6 +107,8 @@ version = "0.1.0"
 dependencies = [
  "doom_game",
  "doom_map",
+ "segment",
+ "state_hash",
  "ticcmd",
 ]
 

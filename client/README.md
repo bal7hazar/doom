@@ -36,11 +36,13 @@ ship the WAD, but it must never enter git history. Point `VITE_WAD_URL` and
 | `npm test` | vitest unit tests |
 | `npm run fixtures` | Regenerates the WAD-derived test fixtures |
 | `npm run prover` | Stages `@hellproof/prover-wasm` into `public/prover/` (see below) |
-| `npm run test:e2e` | Playwright: the renderer smoke test, two proved segments, **and** the leaderboard smoke test |
+| `npm run identity:check` | Verifies the Doom proof pins against `cairo/target/proving/` (see [Migrating the Doom proof identity](#migrating-the-doom-proof-identity)) |
+| `npm run test:e2e` | Playwright: the renderer smoke test, two proved segments, the leaderboard smoke test, the demo cadence bench, **and** (project `mobile`) the touch-control smoke test on an emulated phone |
 
 Keys: **F1** diagnostics · **Tab** automap · **F2** HUD · **F3** light-only
 view · **F4** proof queue · **Space** pause · **[** / **]** sim rate ·
-**+** / **−** / **R** automap zoom and rotation.
+**+** / **−** / **R** automap zoom and rotation. On a phone or tablet the
+on-screen controls replace them — see [Mobile](#mobile).
 
 `npm run prover` copies the package's built JS and the two 45 MB wasm64
 artifacts into `public/prover/{dist,wasm}/` — gitignored, like the WAD. It does
@@ -197,7 +199,11 @@ every row of the table in `map/walls.ts`.
       +- chain ---- h_in/h_out, tics, status (D14)
       +- persist -- RunStore: segment + 4.2 MB proof, one transaction, then drop the prover
                       |
-   ProofQueuePanel <--+   WrapperSubmitter --> POST /v1/runs   (P4.3 takes it on chain)
+   ProofQueuePanel <--+   WrapperSubmitter --> POST /v1/runs --> batch folded
+                                                                    |
+                          OnChainSubmitter (P4.3) <-- GET /v1/batches/{id}?include=proof
+                              prepareSubmission --> CostScreen --> submit / wait / offline
+                                                       `-- runSequence (Controller signs)
 ```
 
 ### The planner's policy
@@ -314,10 +320,85 @@ Either way the wrapper `run_id` is stored locally and reused on every retry, so 
 retry is a dedupe rather than a double proof, and `uploadedSegments` is
 persisted so a reload knows what is left. `GET /v1/runs/{id}` and
 `GET /v1/batches/{id}` are mirrored into the run record (status, batch id, root
-felt count); the transactions that follow are **P4.3**, and the hook is
-`ProveSession.submit()`.
+felt count); once the batch is `done`, `ProveSession.submit()` continues with
+the on-chain leg below.
 
-## On-chain submission (D28)
+### Migrating the Doom proof identity
+
+`src/prove/doomArtifacts.ts` pins the exact engine the client proves: the
+SHA-256 of `genesis`/`step_tic`/`run_segment` from `cairo/target/proving/`, the
+Blake **task hash** of `run_segment` (output-preimage element zero, which only a
+real execution by the built WASM runtime can measure), the engine revision and
+the unchanged R5 simulator files. Every merged change to the engine's bytecode
+leaves those pins stale, and the client then refuses that engine for proof
+until they are migrated. `scripts/migrate-identity.mjs` (Node >= 22, no
+dependency) makes the migration one command, and never guesses the task hash.
+
+On a machine with Scarb 2.16.0 and the built prover runtime
+(`prover/wasm/build.sh` then `npm run build` in `prover/wasm/pkg` gives
+`prover/wasm/pkg/dist/core.js`; the measurement itself needs Node 24, so run
+under Node 24 or pass `--node <node24>` — a Node 24 tarball from nodejs.org
+unpacked anywhere is enough), from the repository root:
+
+```sh
+# 1. build doom_run, hash the executables, measure the task hash, rewrite the pins
+#    (from client/: npm run identity -- --build --core ../prover/wasm/pkg/dist/core.js)
+node client/scripts/migrate-identity.mjs --build --core prover/wasm/pkg/dist/core.js \
+  --sim /path/to/prover/sim/pkg            # verifies the R5 pins; add --pin-sim to move them
+# 2. restage the game Worker (session/genesis/step manifest) and the proof assets
+python3 client/scripts/prepare-sim.py /path/to/prover/sim/pkg && \
+python3 client/scripts/prepare-game-proof.py --target cairo/target --sim /path/to/prover/sim/pkg
+```
+
+Step 1 uses an empty segment over the genesis state as the measured arguments
+(`scarb execute` of `genesis`; pass `--args <args.json>` to use other felts).
+When the task hash was measured elsewhere with
+`prover/wrapper/scripts/measure_task_hash.mjs`, pass it instead of `--core`:
+`--program-hash 0x…` (with `--target cairo/target` pointing at the exact
+executables that were measured). Without either the script prints the SHA-256
+summary and stops with exit code 2 before writing anything.
+
+The R5 simulator (`prover/sim/pkg`, wasm-pack `--target web`) is pinned by the
+same file. Its bytes are reproducible per host, not across hosts (the crates.io
+registry path of the build machine is embedded in panic locations), so a
+package rebuilt elsewhere differs from the pinned one and both `--sim` and
+`prepare-sim.py` refuse it. Re-pinning the VM is an explicit decision:
+`--sim <pkg> --pin-sim` moves the `wasm`/`glue`/`snippet` pins to that
+package's measured files (with or without an engine change; a VM-only re-pin
+needs no new task hash), freezes the former VM in the retired identity and
+lists the files still quoting the old hash. `prepare-sim.py` then stages the
+newly pinned VM. When building the package here, note that wasm-pack 0.12
+downloads binaryen `version_111` itself and fails behind a proxy it does not
+trust; fetch that tarball by hand and run its `wasm-opt` with the flags of
+`prover/sim/Cargo.toml` (`[package.metadata.wasm-pack.profile.release]`) on
+`pkg/hellproof_sim_bg.wasm` before pinning.
+
+Without a staged `public/sim/manifest.json` of the identity being retired
+(a fresh clone, or a manifest already restaged for another engine), pass
+`--legacy-session <sha256>`: the R5 `session` executable SHA-256 the retiring
+client verified, as its `manifest.json` recorded it.
+
+What one run rewrites: the pins (revision from `git rev-parse HEAD` or
+`--revision`), `test/fixtures/legacyDoomIdentity.ts` (the identity being retired
+is appended, byte-exact as the client persisted it, so `doomProgram.test.ts`
+keeps proving that stored runs of that engine are refused rather than migrated
+in place; its R5 session hash comes from the staged `public/sim/manifest.json`,
+or from `--legacy-session`), and the pin table of `src/prove/README.md`. It then
+lists every other file still mentioning a former pin for review, and it is
+idempotent: rerunning it on the same executables changes nothing. Run step 1
+before step 2, since `prepare-sim.py` replaces the manifest that identifies the
+retiring session. `prepare-game-proof.py` reads the pins from
+`doomArtifacts.ts` and copies nothing whose SHA-256 differs.
+
+`node client/scripts/migrate-identity.mjs --check [--target cairo/target] [--sim /path/to/prover/sim/pkg]`
+verifies without writing: exit 1 when a pinned SHA-256 differs from the
+target's executables (or the simulator files, with `--sim`), when the legacy
+fixture lists the current `run_segment`, or when the README table disagrees
+with the pins. With `--core` or `--program-hash` it compares the task hash too.
+The migration commit is then the diff of those three files plus a fresh
+`npx vitest run`.
+
+## On-chain submission (P4.3, D28)
 
 `src/chain/prepareSubmission` selects five verifier transactions by default with the optimized
 P4.1 router: FRI cut `[2]`, followed by a separate `DoomRuns` consumer transaction. Explicit
@@ -333,6 +414,118 @@ refuses to guess it from the FRI tag. The CLI recovery command for the former de
 P4.1 needs its newly deployed router classes; an older deployment still has its historical
 costs. Measurements, compatibility and offline regression tests live in
 [`infra/submit/README.md`](../infra/submit/README.md).
+
+### Configuration
+
+`src/prove/onchain.ts` reads the settings from Vite variables, each overridable by a query
+parameter (the parameter wins, as on the leaderboard page). Nothing is hard-coded: with a value
+missing the game still boots, and pressing **Submit…** logs which names to set instead of
+failing an RPC call.
+
+| Setting | Vite variable | URL parameter | Required |
+|---|---|---|---|
+| Starknet JSON-RPC URL | `VITE_RPC_URL` | `rpc` | yes |
+| `StwoCircuitRouter` (P4.1 classes) | `VITE_ROUTER_ADDRESS` | `router` | yes |
+| `DoomRuns` | `VITE_DOOM_RUNS_ADDRESS` | `runs` | yes |
+| `DoomRuns` version id | `VITE_VERSION_ID` | `version` | yes |
+| level id recorded for the run | `VITE_LEVEL_ID` | `level` | no, default `1` |
+| router proof id override | `VITE_PROOF_ID` | `proofId` | no, derived from the batch id |
+| chain id (skips `starknet_chainId`, seeds the Controller) | `VITE_CHAIN_ID` | `chain` | no |
+| season sponsoring (R7-A4) | `VITE_SPONSORED` | `sponsored` | no |
+| publish the packed input logs (R10-A3) | `VITE_REPLAY` | `replay` | no |
+| wrapper base URL | `VITE_WRAPPER_URL` | `wrapper` | for the upload |
+| default bounty of a commitment, in whole STRK (P4.7) | `VITE_DEFAULT_BOUNTY` | `bounty` | no, default `0` |
+| fee token of the bounties (P4.7) | `VITE_FEE_TOKEN` | `feeToken` | no, read from `DoomRuns.fee_token()` |
+
+The proof id keys the router's checkpoint (`(caller, proof_id)`), so it must be the same on
+every attempt for one batch and different for the next: `proofIdFor(batchId)` derives it from the
+wrapper's batch id (a hex id is read as a number, anything else is hashed under 2^250), which
+is why a reload resumes without a second piece of state. `?proofId=` exists for the "restart
+under a fresh proof id" recovery the resume code sometimes asks for.
+
+### The flow
+
+`ProveSession.submit()` is the whole path, and pressing the button again continues wherever it
+stopped:
+
+1. **upload** — as above, unless the run record already carries a batch id;
+2. **fold** — `GET /v1/batches/{id}`; a batch that is not `done` yet is reported and the
+   button can be pressed again later;
+3. **proof** — `WrapperSubmitter.fetchBatchProof` fetches `?include=proof` (the ~94 k root
+   felts and the packed tree); nothing of it is stored locally beyond the felt count;
+4. **member** — the Controller is connected (session policies = exactly the six submission
+   entrypoints, `controllerConnect.ts`), and the batch is mapped onto the player's own run. The
+   browser knows one address, so the sequence records one member: `submit_batch` when the run
+   is alone in its batch, `register_member` — D20's per-player fallback — when the wrapper
+   folded it with other players' games. `checkBatch` refuses a batch the contract would reject
+   (chain break, `ABORT`, wrong genesis) *before* anything is paid for;
+5. **cost screen** (`ui/costScreen.ts`, C5) — `resumePoint` first, so a sequence that already
+   paid for some phases is priced for what is left; then the ordered simulation from the
+   signing account, the per-transaction STRK and fiat figures with the quote's timestamp, the
+   24 h-median verdict (or "cannot tell" on a fresh device), and the three answers of C6:
+   * **Submit now** — `runSequence` with the connected signer and the R7-A1 bounds; the FRI
+     cut and every checkpoint echo go to `localStorage` before each send, so a closed tab or a
+     wallet that stops half-way resumes from the router's checkpoint with **Resume**, and
+     nothing accepted is paid for twice. The fact and `chainStatus: done` land on the run record;
+   * **Wait** — the overlay closes, nothing is sent, the run keeps its batch id and
+     `chainStatus: waiting`; the next press of **Submit…** skips straight to step 3;
+   * **Keep offline** — sets the run's `keepOffline` flag (the one the wrapper submitter refuses
+     to upload past); the run, its journal and its proofs stay on this device and remain
+     submittable later under the same proof id.
+
+The real-game route (`prove/gameBridge.ts`) keeps its documented offline policy — no wrapper,
+`keepOffline` set — so the on-chain leg is reached from `index.html`'s F4 panel (demo route) with
+the variables above, and from `infra/submit` for a batch on disk. The **commitment** below needs
+no wrapper and is offered on both routes.
+
+## Commit a run (P4.7)
+
+D35 makes proving somebody else's job: the player's client **commits** the game to `DoomRuns`
+with its whole packed input log and a bounty in escrow, and any address may execute, prove and
+record it and be paid. **Commit…** is the fourth answer at the end of a game, next to prove
+locally / keep offline / export, on the demo route and the real game route alike; "keep
+offline" stays the default and the `.hellproof` export works before and after a commitment.
+
+```
+  ProveSession.commit()
+      |  flushJournal → RunStore.getInputs → packed = complete felts + tail   (TicLog.toFelts())
+      |  inputs_commitment = commit_log(packed)        chain/commit.ts, chain/poseidon.ts
+      |  Controller connected (commit policies)  →  commitment_id = poseidon('HP.COMMIT', …, player, inputs_commitment)
+      |  get_commitment(id): PENDING / PROVED  →  refused, never committed twice
+      +- CommitScreen (ui/commitScreen.ts): simulateCalls([approve?, commit_run]) → priced like the cost screen
+             |  bounty editable (re-priced), Commit / Keep offline / Cancel
+             `- signer.execute(multicall) → receipt → RunCommitted checked against the local id
+  run record: commitmentId, inputsCommitment, commitStatus, commitTx, commitBounty, commitExpiresAt, commitProver, commitRunId
+```
+
+* **What is sent.** One transaction: ERC20 `approve(DoomRuns, bounty)` on `fee_token()` when
+  the bounty is non-zero, then `commit_run(version_id, level_id, packed, tics, bounty)` with
+  `packed.len() == ceil(tics / 7)` exactly — the same check the contract makes, made before
+  anything is simulated. `version_id` / `level_id` / `DoomRuns` / RPC come from the P4.3
+  configuration above; the bounty defaults to `VITE_DEFAULT_BOUNTY` (zero allowed) and is
+  editable on the screen. The cost is the same estimator, margins and prices as the cost
+  screen (`simulateCalls` returns a one-step `SequenceEstimate`); the bounty is shown apart
+  from the fee, because it is escrowed, not spent.
+* **The id is known before signing.** `chain/poseidon.ts` is Starknet's Poseidon with no
+  dependency (round constants derived as StarkWare does, pinned against `poseidon_py` and the
+  contract's own test vectors); `commit_log` and `commitment_id_of` are computed locally, stored
+  on the run record, and the `RunCommitted` event of the receipt is checked against them (a
+  disagreement is logged and kept on the record as `error`).
+* **Never twice.** A record with a live commitment (`committing` / `pending` / `proved`) is
+  refused before the wallet is asked; the chain is then asked for the id and `PENDING` / `PROVED`
+  refuse too (the record learns the status, and who proved it). A `RECLAIMED` id may be
+  committed again, as the contract allows.
+* **Following it.** The panel shows the commitment line — *waiting for a prover (reclaimable
+  from block N)*, *proved by 0x… as run …*, *expired — reclaimable*, *reclaimed* — with
+  **Commitment status** (`get_commitment` + `starknet_blockNumber`) and, once expired,
+  **Reclaim bounty** (`reclaim`, player only). The leaderboard page lists the same pending games
+  under a player's recorded runs (`infra/indexer` decodes `RunCommitted` / `CommitmentProved` /
+  `CommitmentReclaimed` and counts `RunLog` chunks; the RPC fallback walks
+  `pending_commitments`).
+* **Guards.** Without `VITE_RPC_URL` / `VITE_DOOM_RUNS_ADDRESS` / `VITE_VERSION_ID` the button
+  logs which names to set and touches no network; a run kept offline is refused; nothing here
+  holds or shows a key — the Controller session covers exactly `approve`, `commit_run` and
+  `reclaim` on top of the six submission entrypoints.
 
 ## Leaderboard (P4.4)
 
@@ -363,6 +556,11 @@ Without an indexer, `/stats` and full player history are unavailable (no on-chai
 every run or player) — the RPC fallback still serves the board, run details and a player's own
 `player_runs`, just less efficiently (P4.4 exists precisely for the case an indexer answers
 better). See `infra/indexer/README.md` for the indexer's API, schema and reorg handling.
+
+A player page also lists the player's games **waiting for a prover** (P4.7) under the recorded
+runs — commitment id, version, level, tics, bounty, *pending until block N* or *expired,
+reclaimable*, and the published log chunks when the indexer is behind the page. They are not
+results and are not ranked: any prover may still prove them.
 
 ### The stand-in program, and how `doom_run` drops in
 
@@ -396,7 +594,143 @@ proves one of these segments in 23.2 s at 2.00 GiB. Thread scaling is measured i
 `prover/wasm/harness`, not here; this test is a regression gate and deliberately
 takes the path R1-A8 says never fails.
 
+## Mobile
+
+PLAN C1 (revised by **D35**) wants 35 tics/s **on a mid-range smartphone** with
+touch controls, and D35 keeps proving off the phone entirely: the phone plays and
+commits its journal, anybody proves. This section is what the client does for
+that and how to measure it on a device.
+
+### Touch controls
+
+`src/game/touchInput.ts` (model) and `src/ui/touchControls.ts` (DOM) mount an
+overlay when the page runs on a touch screen — a coarse primary pointer, or a
+touch screen without hover (`?touch=1` / `?touch=0` force it either way; a
+touch-screen laptop with a mouse keeps the keyboard layout). Nothing of it exists
+on a desktop.
+
+| Control | Where | Command |
+|---|---|---|
+| Floating joystick | left half (the base appears under the finger) | forward/back and strafe; full deflection is the keyboard's 25 / 24, the Run toggle makes it 50 / 40, in between is scaled like vanilla's analog joystick and truncated |
+| Look zone | right half | turn: 128 BAM per pixel of horizontal drag (≈ 700 px per revolution), consumed once per tic, bounded like the mouse |
+| FIRE, USE | bottom right, held | `BT_ATTACK = 1`, `BT_USE = 2` |
+| RUN | bottom right, toggle | the Shift tier |
+| WPN | bottom right, tap | `BT_CHANGE | code << 3`, cycling pistol → shotgun → chaingun → fist → chainsaw from the weapon held |
+| PAUSE, MAP | top right | pause (the central panel takes over: Resume, Save, Export…), automap |
+
+The contributions land in **the same ticcmd fields as the keyboard and mouse**
+and go through the same `quantize()` in `GameInput.sample()`, so a phone journal
+is a keyboard journal in nature (D12) — nothing in the journal, the proof or the
+chain knows which device played. Every pointer is tracked by id (a moving finger,
+a turning finger and a Fire finger coexist); a cancelled or captured-and-lost
+pointer, a blur, a hidden tab, a rotation or a pause releases everything held.
+Scroll, pinch-zoom, double-tap zoom, text selection and the long-press menu are
+suppressed under the game (`touch-action: none`, a non-passive `touchmove`,
+`gesturestart`), the viewport is `viewport-fit=cover` with the safe-area insets
+applied to the overlay, `#stage` uses the dynamic viewport height, and portrait
+shows a dismissible "turn your phone" notice. The HUD status bar scales down
+under 720 CSS px so its key labels and the level tally do not collide on a
+narrow landscape phone. Pointer lock is never requested on a touch device.
+
+The renderer demo (`?sim=demo`) has no input path, so there the look drag turns
+the tour's camera through the same quantization: the controls can be tried
+without the Cairo artifacts.
+
+### Cadence bench: measuring 35 tics/s on the device
+
+`/?bench=1` runs the ordinary game loop — Worker, renderer, HUD — with a
+scripted input instead of the player's, then shows a panel with a pass/fail
+verdict, a table and the JSON to paste back (**Copy JSON**). Procedure for the
+sponsor, on an Android and on an iPhone:
+
+1. serve a production build to the phone (below) and open `/?bench=1`;
+2. wait: 700 paced tics (20 s) at 35 Hz, then 175 unpaced tics (the Worker's
+   raw throughput), then the memory probes — the status line counts;
+3. tap **Copy JSON** and paste the result into the issue or the report.
+
+Without `public/sim/` the page says so; `/?sim=demo&bench=1` measures the
+renderer's demo stand-in instead and labels the result **"DEMO SIMULATOR — not
+the Cairo VM"** everywhere (its "VM time" is the stub's JavaScript step). Query
+parameters: `tics=` (paced tics, default 700), `burst=` (unpaced tics, Cairo
+only, default 175, `0` disables), `journal=<url>` (replay a saved game's
+**Export** file instead of the built-in script, which cycles ten seconds of
+idle, walk, turn, walk while firing, strafe, use and run while turning with the
+keyboard's own words).
+
+The JSON (`format: hellproof-cadence-bench/1`) carries: `paced` — tics, elapsed,
+**tics/s**, dropped tics, `vmMs` (the Worker's time per tic including the
+checkpoint every 32 inputs; p50/p95/max/mean), `roundTripMs` (request to
+acknowledged frame on the main thread), `overBudget` (round trips over
+28.57 ms), Cairo steps per tic; `burst` — the same for the unpaced phase;
+`render` — fps, renderer CPU ms per frame and frame-to-frame ms (p50/p95/max);
+`memory` — the Worker's peak wasm linear memory, the page's JS heap
+(`performance.memory`, Chromium) and `performance.measureUserAgentSpecificMemory()`
+(Chromium, cross-origin isolated documents only; `null` elsewhere);
+`environment` — user agent, platform, cores, `deviceMemory`, viewport and
+`devicePixelRatio`, GPU string, isolation, touch. `verdict.sustained35` is true
+when every planned tic ran, at ≥ 34 tics/s, with under 5 % of round trips over
+budget and under 1 % dropped. The desktop reference figures are in
+[`src/sim/README.md`](src/sim/README.md).
+
+### Serving the game to a phone
+
+The game needs **no SharedArrayBuffer, no cross-origin isolation and no
+Memory64**: `CairoClient`'s ring is a plain `ArrayBuffer` and frames are
+transferred (`src/sim/README.md`, "with and without isolation"); those are the
+browser prover's requirements, and D35 keeps the prover off phones. The COOP/COEP
+headers `vite preview` and `vite dev` send are still correct on a phone (all
+resources are same-origin) and are what lets `measureUserAgentSpecificMemory()`
+work; without them only the demo's shared ring falls back to copies.
+
+What the Worker *does* need is a **secure context**: it verifies the four Cairo
+artifacts' SHA-256 with WebCrypto, which browsers expose only on `https://` and
+`localhost`. `npm run preview -- --host` on `http://192.168.x.y:4173` is
+therefore not enough — the page says so before creating the Worker
+(`src/sim/simulationSupport.ts`) rather than failing on `crypto.subtle`. Two
+ways that work:
+
+* **Android over USB**: `chrome://inspect` → *Port forwarding* → `4173` to
+  `localhost:4173`; the phone then opens `http://localhost:4173/`, which is a
+  secure context. Chrome's remote DevTools also give the console and the
+  performance panel on the phone.
+* **Any phone**: put the preview behind HTTPS — a tunnel (`cloudflared tunnel
+  --url http://localhost:4173`, `ngrok http 4173`) or the deployment itself.
+  iOS Safari has no port-forwarding equivalent, so it needs this.
+
+Other failures are reported in one sentence too: artifacts not staged
+(`public/sim/` missing, with the `?sim=demo` alternative), an artifact that
+fails its manifest hash, a browser that cannot allocate the ~450 MiB of wasm
+memory, or one without module Workers (Safari < 15, old WebViews).
+
+### Validating without a phone
+
+`npm run test:e2e -- --project mobile` runs `e2e/mobile.spec.ts` in an emulated
+Pixel 7 (landscape, touch emulation, SwiftShader): the controls appear on
+`/?sim=demo`, three simultaneous touch points (stick, look drag, Fire) are
+injected through CDP and read back from the model and the applied turn, the
+overlay's Pause stops the scheduler, a portrait Pixel 7 gets the orientation
+notice, a desktop viewport gets no controls, and without `public/sim/` the real
+route explains what is missing — all with no page error. `e2e/bench.spec.ts`
+runs the demo bench for 70 tics in the production bundle and checks the
+labelled JSON (the Cairo variant runs when `public/sim/` is staged).
+`test/touchInput.test.ts` pins the touch → ticcmd translation (bounds, return to
+zero, multi-touch, the merge with the keyboard) and `test/cadenceBench.test.ts`
+the bench's accounting. What none of this measures is a real phone's Worker
+cadence: that is what the bench is for.
+
 ## What is rendered, and what is not yet
+
+The current default Cairo route uses the numeric `sprite` and `frame` from the
+same acknowledged tic, joined by actor id. All 49 source sprite families are
+loaded, including missiles, blood, puff and barrel explosions. Only the validated
+`player.mo` actor is excluded; FULLBRIGHT and SHADOW come from Cairo. Missing
+resources stop rendering explicitly. Compact weapon 4 is the chainsaw, with no
+current-ammo counter; the explicit `?sim=demo` route retains classic weapon ids.
+The source sprite-name asset and its GPL-2.0-only license ship together; no client
+state machine consumes the source state tables. See [the simulation notes](src/sim/README.md)
+for the live v2 weapon/flash animation and the remaining approximate visual effects.
+Legacy v1/demo snapshots keep their static weapon fallback. The historical demonstration measurements below are
+not measurements of the real Cairo simulation.
 
 **Rendered.** Sector floors and ceilings with per-sector light and moving
 heights; walls (upper / lower / one-sided middle / masked two-sided middle)
@@ -437,7 +771,7 @@ assets decoded in 19 ms.
 
 ## Tests
 
-`npm test` — 160 vitest tests.
+`npm test` — 334 vitest tests (10 skip themselves without the staged prover).
 
 *Renderer and assets* (79): pegging (all four vanilla cases and the row offset),
 wall quad generation (including that it follows moving heights), BSP clipping and
@@ -457,12 +791,21 @@ the stub sim on the real E1M1.
 | `store.test.ts` | IndexedDB round trips, segment+proof atomicity, reopen, `deleteRun`, and `.hellproof` export/import including the renaming collision, a corrupted payload caught by its checksum, and the quota projections |
 | `pipeline.test.ts` | the pipeline against a fake prover: planning and shrinking, the step ceiling, a hung threaded prove killed and retried single-threaded, a segment that fails for good, the prover dropped between segments, resume after a simulated reload (exactly one segment re-proved), waiting mid-game vs cutting at the end, and the event stream |
 | `wrapper.test.ts` | the submitter against a fake server: the per-segment probe and its fallback, skipping what the server holds, retries under the same `run_id`, `keepOffline` refused, gaps refused, failures recorded locally, and the status/batch mirror |
+| `commit.test.ts` (jsdom) | the open-prover commitment (P4.7): the Poseidon port against `poseidon_py` and the contract's `INPUTS_SEED` / nine-tic vectors, packing → `commit_log` and `commitment_id` on a short journal with explicit expected values, the exact `approve` + `commit_run` multicall calldata (`packed_len(tics)`, both `u256` limbs) and the refusals the contract makes, the `Commitment` decoder, the session policies, `VITE_DEFAULT_BOUNTY`; then the flow against a mocked node and wallet: id on the record before signing, cost and bounty on the screen, re-pricing on a changed bounty, the record after the receipt, double commitment refused three ways (live record, `PENDING`, `PROVED`) and allowed after `RECLAIMED`, C6, a wallet failure, a `RunCommitted` that disagrees, status refresh (pending → proved by X → expired) and `reclaim` (player only, after expiry), the panel line, and `ProveSession.commit()` without configuration touching no network |
+| `migrateIdentity.test.ts` | `scripts/migrate-identity.mjs` on a fabricated Cairo target: the executables' SHA-256, `--check` red then green (and red again after one executable changes), the refusal without a measured task hash (exit 2, nothing written), the rewritten pins in the exact shape `prepare-game-proof.py` parses, the retired identity appended byte-exact to the legacy fixture (and importable), the README table, `--core` through a fake measurement script (a measurement of another executable is refused), the unknown-session stop, `--dry-run`, idempotence, and that the repository's own pins, fixture and table agree |
+| `onchain.test.ts` (jsdom) | the on-chain leg on the real `B2-1_doom` fixture against a mocked node and wallet: the configuration reader (missing names listed, URL overrides, malformed values, the derived proof id), the cost screen's six rows and totals in STRK and fiat, "wait" and "keep offline" sending nothing, "submit" playing `begin → merkle → answers → fri → fri → register_member` in order and recording the fact, a wallet interruption between two transactions resumed from the saved D28 cut and `localStorage` echoes (the remaining phases re-priced, no trace round trip), a batch refused before paying, `?include=proof`, and `ProveSession.submit()` with no configuration touching no network |
+
+*Mobile* (`touchInput.test.ts`, `cadenceBench.test.ts`, `simulationSupport.test.ts`): the touch → ticcmd
+translation and the overlay's pointer wiring, the cadence bench's script, accounting, verdict and panel,
+and the one-sentence Worker failure messages — see [Mobile](#mobile).
 
 *Leaderboard* (`leaderboard.test.ts`, jsdom): every render function against fixtures (board rows,
 ranking, empty state, pager edges, run detail with/without replay, an attempt vs a finished run,
 Voyager links on sepolia vs the devnet hint), route parsing and `configFromLocation`'s
-indexer/RPC-fallback choice, and the replay journal reconstruction (per-segment repacking, the
-`.hellproof` container's magic/manifest/no-proof-bytes shape).
+indexer/RPC-fallback choice, the replay journal reconstruction (per-segment repacking, the
+`.hellproof` container's magic/manifest/no-proof-bytes shape), and the pending commitments of a
+player (rendered under the runs; the indexer source's mapping and expiry judgement; the RPC
+fallback's walk of `pending_commitments`, and its absence on an older contract).
 
 Tests that need the WAD skip themselves when `test/fixtures/generated/` or
 `public/levels/e1m1.json` is absent, so a clone without the IWAD is still

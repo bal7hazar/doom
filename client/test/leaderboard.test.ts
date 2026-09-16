@@ -279,3 +279,137 @@ describe("replay: journal reconstruction", () => {
     expect(replayFileName(finishedRun)).toMatch(/^doomruns-v1-.*\.hellproof$/);
   });
 });
+
+// -- D35 / P4.7: a player's games waiting for a prover ---------------------------------------
+
+import { RpcClient } from "../src/chain/rpc.js";
+import { IndexerSource, RpcSource } from "../src/leaderboard/source.js";
+import { renderPendingCommitments } from "../src/leaderboard/render.js";
+import type { PlayerCommitment } from "../src/leaderboard/types.js";
+
+const pendingOne: PlayerCommitment = {
+  commitmentId: "0x41d40fa574f040b0e2274eabd600adba330a3352c0fa10aee49a2da0c427060",
+  versionId: 1,
+  levelId: 1,
+  tics: 900,
+  bounty: "500000000000000000",
+  expiresAt: 150,
+  status: "PENDING",
+  logChunks: 4,
+  nChunks: 4,
+  blockNumber: 100,
+  txHash: "0xc00",
+};
+
+describe("render: pending commitments on the player page", () => {
+  it("lists them under the runs, with the bounty in STRK and the expiry", () => {
+    const mount = document.createElement("div");
+    renderPlayer(
+      mount,
+      {
+        player: "0xa11ce",
+        runCount: 1,
+        bestScore: 900,
+        bestTics: 200,
+        runs: [{ runId: "0xaaa", versionId: 1, levelId: 1, tics: 320, score: 1150, status: "EXIT" }],
+        pendingCommitments: [pendingOne, { ...pendingOne, commitmentId: "0xbeef", status: "EXPIRED", bounty: "0", expiresAt: 90 }],
+      },
+      links,
+    );
+    // The runs table first, the commitments after it: not results, not ranked.
+    const tables = mount.querySelectorAll("table");
+    expect(tables).toHaveLength(2);
+    expect(mount.querySelector(".pending-commitments h3")?.textContent).toBe("waiting for a prover (2)");
+    const rows = [...tables[1]!.querySelectorAll("tbody tr")].map((tr) => [...tr.querySelectorAll("td")].map((td) => td.textContent));
+    expect(rows[0]).toEqual(["0x41d40f…427060", "1", "1", "900", "0.5", "pending until block 150", "4 / 4 chunk(s)"]);
+    expect(rows[1]![5]).toBe("expired at block 90 — reclaimable");
+    expect(tables[1]!.querySelector("td.dead")?.textContent).toMatch(/reclaimable/);
+    expect(tables[1]!.querySelector("td.pending")?.textContent).toMatch(/pending until/);
+  });
+
+  it("is absent without commitments, and shows a dash when the RPC fallback knows no chunk count", () => {
+    const mount = document.createElement("div");
+    renderPlayer(mount, { player: "0xa11ce", runCount: 0, bestScore: null, bestTics: null, runs: [] }, links);
+    expect(mount.querySelector(".pending-commitments")).toBeNull();
+    const section = renderPendingCommitments([{ ...pendingOne, logChunks: undefined, nChunks: undefined }]);
+    expect([...section.querySelectorAll("tbody td")].at(-1)?.textContent).toBe("—");
+  });
+});
+
+describe("sources: pending commitments", () => {
+  it("the indexer source maps pending_commitments and judges expiry against the indexed block", async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      const body = url.endsWith("/stats")
+        ? { indexed_block: 120, total_runs: 1, total_attempts: 0, total_players: 1, versions: [] }
+        : {
+            player: "0xa11ce",
+            run_count: 1,
+            attempt_count: 0,
+            best_score: 900,
+            best_tics: 200,
+            runs: [{ run_id: "0xaaa", version_id: 1, level_id: 1, tics: 320, score: 1150, status: "EXIT", block_number: 5 }],
+            pending_commitments: [
+              { commitment_id: "0xc2", version_id: 1, level_id: 2, tics: 400, bounty: "0", expires_at: 160, n_chunks: 2, log_chunks: 2, block_number: 110, tx_hash: "0xc110" },
+              { commitment_id: "0xc1", version_id: 1, level_id: 1, tics: 900, bounty: "5", expires_at: 120, n_chunks: 4, log_chunks: 3, block_number: 70, tx_hash: "0xc70" },
+            ],
+          };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    const stats = await new IndexerSource("http://indexer.invalid", fetchImpl).player("0xa11ce", 0, 20);
+    expect(calls[0]).toBe("http://indexer.invalid/players/0xa11ce?offset=0&limit=20");
+    expect(stats.runs).toHaveLength(1);
+    expect(stats.pendingCommitments).toEqual([
+      { commitmentId: "0xc2", versionId: 1, levelId: 2, tics: 400, bounty: "0", expiresAt: 160, status: "PENDING", logChunks: 2, nChunks: 2, blockNumber: 110, txHash: "0xc110" },
+      { commitmentId: "0xc1", versionId: 1, levelId: 1, tics: 900, bounty: "5", expiresAt: 120, status: "EXPIRED", logChunks: 3, nChunks: 4, blockNumber: 70, txHash: "0xc70" },
+    ]);
+  });
+
+  it("the RPC fallback walks pending_commitments and keeps the player's own, newest first", async () => {
+    const u256 = (v: bigint): [string, string] => ["0x" + (v & ((1n << 128n) - 1n)).toString(16), "0x" + (v >> 128n).toString(16)];
+    const commitment = (player: string, tics: number, status: number, expiresAt: number) => [
+      player, "0x1", "0x1", "0xdead", "0x1c0", "0x" + tics.toString(16), ...u256(5n), "0x64", "0x" + expiresAt.toString(16), "0x" + status.toString(16), "0x0", "0x0",
+    ];
+    const views: Record<string, string[]> = {
+      player_run_count: ["0x0"],
+      player_runs: ["0x0"],
+      commitment_count: ["0x3"],
+      pending_commitments: ["0x2", "0xc1", "0xc3", "0x3"], // (Array<felt252>, next cursor): 0xc2 is settled
+      "get_commitment:0xc1": commitment("0xa11ce", 900, 1, 150),
+      "get_commitment:0xc3": commitment("0xb0b", 40, 1, 150),
+    };
+    const rpc = {
+      call: vi.fn(async (c: { entrypoint: string; calldata: string[] }) => {
+        const out = views[c.entrypoint === "get_commitment" ? `get_commitment:${c.calldata[0]}` : c.entrypoint];
+        if (!out) throw new Error(`unexpected view ${c.entrypoint}`);
+        return out;
+      }),
+      request: vi.fn(async (method: string) => {
+        expect(method).toBe("starknet_blockNumber");
+        return 200;
+      }),
+    } as unknown as RpcClient;
+    const stats = await new RpcSource("http://rpc.invalid", "0x2e10", rpc).player("0xa11ce", 0, 20);
+    expect(stats.runCount).toBe(0);
+    expect(stats.pendingCommitments).toEqual([
+      { commitmentId: "0xc1", versionId: 1, levelId: 1, tics: 900, bounty: "5", expiresAt: 150, status: "EXPIRED" },
+    ]);
+    expect((rpc.call as ReturnType<typeof vi.fn>).mock.calls.map(([c]) => (c as { entrypoint: string }).entrypoint)).toEqual([
+      "player_run_count", "player_runs", "commitment_count", "pending_commitments", "get_commitment", "get_commitment",
+    ]);
+    expect((rpc.call as ReturnType<typeof vi.fn>).mock.calls[3]![0]).toMatchObject({ calldata: ["0x0", "0x3"] });
+  });
+
+  it("the RPC fallback leaves the section out on an older DoomRuns without the D35 views", async () => {
+    const rpc = {
+      call: vi.fn(async (c: { entrypoint: string }) => {
+        if (c.entrypoint === "player_run_count" || c.entrypoint === "player_runs") return ["0x0"];
+        throw new Error("Entry point not found");
+      }),
+    } as unknown as RpcClient;
+    const stats = await new RpcSource("http://rpc.invalid", "0x2e10", rpc).player("0xa11ce", 0, 20);
+    expect(stats.pendingCommitments).toBeUndefined();
+  });
+});

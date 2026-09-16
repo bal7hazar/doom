@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0-only
+[package]
+name = "doom_game_journal_bench"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_game = { path = "../.." }
+doom_physics = { path = "../../../doom_physics" }
+doom_map = { path = "../../../doom_map" }
+cairo_execute = "2.16.0"
+
+[[target.executable]]
+function = "doom_game_journal_bench::main"
+
+[cairo]
+enable-gas = false
+
+[profile.proving]
+inherits = "release"
+
+[profile.proving.cairo]
+unsafe-panic = true

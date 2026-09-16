@@ -60,7 +60,7 @@ fn main(op: u32, n: u32) -> felt252 {
     set_thing_position(@w.map, ref g, ref mo, 0);
     let mut other = spawn_mobj(w, KIND_POSSESSED, units(-100), units(256), SpawnZ::OnFloor);
     set_thing_position(@w.map, ref g, ref other, 1);
-    let both = array![mo, other].span();
+    let both = array![BoxTrait::new(mo), BoxTrait::new(other)].span();
 
     if op == 0 { // bare loop
         while i != n {
@@ -93,7 +93,7 @@ fn main(op: u32, n: u32) -> felt252 {
         // try_move, a monster whose box straddles the cell boundary at -200
         let mut z = spawn_mobj(w, KIND_POSSESSED, units(-204), units(256), SpawnZ::OnFloor);
         set_thing_position(@w.map, ref g, ref z, 2);
-        let three = array![mo, other, z].span();
+        let three = array![BoxTrait::new(mo), BoxTrait::new(other), BoxTrait::new(z)].span();
         while i != n {
             let x = fixed::add(z.x, wiggle(i));
             if try_move(w, three, ref g, ref z, 2, x, z.y, ref events).ok {
@@ -106,7 +106,7 @@ fn main(op: u32, n: u32) -> felt252 {
         // (checked, not hit)
         let mut near = spawn_mobj(w, KIND_POSSESSED, units(-250), units(256), SpawnZ::OnFloor);
         set_thing_position(@w.map, ref g, ref near, 2);
-        let three = array![mo, other, near].span();
+        let three = array![BoxTrait::new(mo), BoxTrait::new(other), BoxTrait::new(near)].span();
         while i != n {
             let x = fixed::add(mo.x, wiggle(i));
             if try_move(w, three, ref g, ref mo, 0, x, mo.y, ref events).ok {
@@ -221,16 +221,16 @@ fn main(op: u32, n: u32) -> felt252 {
         }
     } else if op == 17 {
         // replace on a 210-slot list (per call)
-        let mut list: Array<Mobj> = array![];
+        let mut list: Array<Box<Mobj>> = array![];
         let mut k: u32 = 0;
         while k != 210 {
-            list.append(mo);
+            list.append(BoxTrait::new(mo));
             k += 1;
         }
         while i != n {
             let mut p = mo;
             p.x = fixed::add(p.x, wiggle(i));
-            replace(ref list, i % 210, p);
+            replace(ref list, i % 210, BoxTrait::new(p));
             i += 1;
         }
         acc += (*list.at(0)).x.enc;

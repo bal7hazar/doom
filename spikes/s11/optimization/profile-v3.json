@@ -1,0 +1,471 @@
+{
+  "steps": 456048,
+  "libfunc_steps": [
+    [
+      "store_temp",
+      223649
+    ],
+    [
+      "u32_try_from_felt252",
+      31816
+    ],
+    [
+      "u128_overflowing_sub",
+      31810
+    ],
+    [
+      "u128s_from_felt252",
+      25448
+    ],
+    [
+      "bitwise",
+      25448
+    ],
+    [
+      "downcast",
+      19089
+    ],
+    [
+      "array_append",
+      14341
+    ],
+    [
+      "return",
+      13641
+    ],
+    [
+      "function_call",
+      13640
+    ],
+    [
+      "array_snapshot_pop_front",
+      12741
+    ],
+    [
+      "felt252_div",
+      12724
+    ],
+    [
+      "enum_match",
+      6365
+    ],
+    [
+      "felt252_is_zero",
+      6362
+    ],
+    [
+      "branch_align",
+      4772
+    ],
+    [
+      "u32_overflowing_sub",
+      4484
+    ],
+    [
+      "u32_overflowing_add",
+      3580
+    ],
+    [
+      "array_snapshot_multi_pop_front",
+      3580
+    ],
+    [
+      "jump",
+      1592
+    ],
+    [
+      "blake2s_compress",
+      895
+    ],
+    [
+      "int_range_pop_front",
+      28
+    ],
+    [
+      "executable_scaffolding",
+      14
+    ],
+    [
+      "array_slice",
+      10
+    ],
+    [
+      "store_local",
+      7
+    ],
+    [
+      "int_range_try_new",
+      3
+    ],
+    [
+      "tuple_from_span",
+      3
+    ],
+    [
+      "array_new",
+      2
+    ],
+    [
+      "const_as_box",
+      2
+    ],
+    [
+      "finalize_locals",
+      1
+    ],
+    [
+      "blake2s_finalize",
+      1
+    ]
+  ],
+  "source_steps": [
+    [
+      "s11_state_hash::hash9::packed_words",
+      241756
+    ],
+    [
+      "s11_state_hash::hash9::digest",
+      192509
+    ],
+    [
+      "s11_state_hash::hash9::digest_words",
+      21655
+    ],
+    [
+      "s11_state_hash::__executable_wrapper__hash_blake9",
+      41
+    ],
+    [
+      "core::array::ArrayImpl::append_span",
+      36
+    ],
+    [
+      "s11_state_hash::hash9::array_inline_macro",
+      17
+    ],
+    [
+      "executable_scaffolding",
+      14
+    ],
+    [
+      "s11_state_hash::hash9::reduce",
+      13
+    ],
+    [
+      "s11_state_hash::hash9::hash",
+      6
+    ],
+    [
+      "unannotated",
+      1
+    ]
+  ],
+  "source_libfunc_steps": [
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "store_temp",
+      "steps": 120914
+    },
+    {
+      "source": "s11_state_hash::hash9::packed_words",
+      "libfunc": "store_temp",
+      "steps": 95430
+    },
+    {
+      "source": "s11_state_hash::hash9::packed_words",
+      "libfunc": "u128_overflowing_sub",
+      "steps": 31810
+    },
+    {
+      "source": "s11_state_hash::hash9::packed_words",
+      "libfunc": "u128s_from_felt252",
+      "steps": 25448
+    },
+    {
+      "source": "s11_state_hash::hash9::packed_words",
+      "libfunc": "bitwise",
+      "steps": 25448
+    },
+    {
+      "source": "s11_state_hash::hash9::packed_words",
+      "libfunc": "u32_try_from_felt252",
+      "steps": 25448
+    },
+    {
+      "source": "s11_state_hash::hash9::packed_words",
+      "libfunc": "downcast",
+      "steps": 19086
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "array_append",
+      "steps": 14315
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "array_snapshot_pop_front",
+      "steps": 12727
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "function_call",
+      "steps": 12725
+    },
+    {
+      "source": "s11_state_hash::hash9::packed_words",
+      "libfunc": "felt252_div",
+      "steps": 12724
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "store_temp",
+      "steps": 7250
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "u32_try_from_felt252",
+      "steps": 6364
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "return",
+      "steps": 6364
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "enum_match",
+      "steps": 6363
+    },
+    {
+      "source": "s11_state_hash::hash9::packed_words",
+      "libfunc": "return",
+      "steps": 6362
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "felt252_is_zero",
+      "steps": 6362
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "branch_align",
+      "steps": 4771
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "u32_overflowing_sub",
+      "steps": 4478
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "array_snapshot_multi_pop_front",
+      "steps": 3580
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "u32_overflowing_add",
+      "steps": 3576
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "jump",
+      "steps": 1590
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "function_call",
+      "steps": 911
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "return",
+      "steps": 910
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "blake2s_compress",
+      "steps": 895
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "int_range_pop_front",
+      "steps": 28
+    },
+    {
+      "source": "core::array::ArrayImpl::append_span",
+      "libfunc": "store_temp",
+      "steps": 17
+    },
+    {
+      "source": "executable_scaffolding",
+      "libfunc": "executable_scaffolding",
+      "steps": 14
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "store_temp",
+      "steps": 14
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "array_append",
+      "steps": 13
+    },
+    {
+      "source": "s11_state_hash::hash9::reduce",
+      "libfunc": "store_temp",
+      "steps": 13
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "array_slice",
+      "steps": 10
+    },
+    {
+      "source": "core::array::ArrayImpl::append_span",
+      "libfunc": "array_snapshot_pop_front",
+      "steps": 9
+    },
+    {
+      "source": "s11_state_hash::hash9::array_inline_macro",
+      "libfunc": "array_append",
+      "steps": 8
+    },
+    {
+      "source": "s11_state_hash::hash9::array_inline_macro",
+      "libfunc": "store_temp",
+      "steps": 7
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "array_snapshot_pop_front",
+      "steps": 5
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "store_local",
+      "steps": 5
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "u32_try_from_felt252",
+      "steps": 4
+    },
+    {
+      "source": "s11_state_hash::hash9::hash",
+      "libfunc": "store_temp",
+      "steps": 4
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "u32_overflowing_add",
+      "steps": 4
+    },
+    {
+      "source": "core::array::ArrayImpl::append_span",
+      "libfunc": "return",
+      "steps": 4
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "u32_overflowing_sub",
+      "steps": 3
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "u32_overflowing_sub",
+      "steps": 3
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "downcast",
+      "steps": 3
+    },
+    {
+      "source": "core::array::ArrayImpl::append_span",
+      "libfunc": "array_append",
+      "steps": 3
+    },
+    {
+      "source": "core::array::ArrayImpl::append_span",
+      "libfunc": "function_call",
+      "steps": 3
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "int_range_try_new",
+      "steps": 3
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "tuple_from_span",
+      "steps": 3
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "store_local",
+      "steps": 2
+    },
+    {
+      "source": "s11_state_hash::hash9::array_inline_macro",
+      "libfunc": "array_new",
+      "steps": 2
+    },
+    {
+      "source": "s11_state_hash::hash9::digest",
+      "libfunc": "const_as_box",
+      "steps": 2
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "array_append",
+      "steps": 2
+    },
+    {
+      "source": "s11_state_hash::hash9::hash",
+      "libfunc": "function_call",
+      "steps": 1
+    },
+    {
+      "source": "unannotated",
+      "libfunc": "finalize_locals",
+      "steps": 1
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "branch_align",
+      "steps": 1
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "jump",
+      "steps": 1
+    },
+    {
+      "source": "s11_state_hash::hash9::digest_words",
+      "libfunc": "blake2s_finalize",
+      "steps": 1
+    },
+    {
+      "source": "s11_state_hash::hash9::hash",
+      "libfunc": "enum_match",
+      "steps": 1
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "jump",
+      "steps": 1
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "enum_match",
+      "steps": 1
+    },
+    {
+      "source": "s11_state_hash::__executable_wrapper__hash_blake9",
+      "libfunc": "return",
+      "steps": 1
+    }
+  ],
+  "note": "Flat count of executed PCs mapped to Sierra CASM ranges; no recursive-stack depth cap. VM scaffolding is separate."
+}

@@ -33,10 +33,12 @@
 use bam::Angle;
 use core::num::traits::WrappingAdd;
 use doom_map::ML_TWOSIDED;
-use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
+use fixed::{BIAS, Fixed, felt_ge_narrow};
 use geom2d::{DivLine, Point, intercept_fraction};
 use super::grid::{ThingGrid, things_in};
-use super::maputl::{inc, line_box_misses, line_hp, line_opening, line_sides, opaque_zero, rd, rd32};
+use super::maputl::{
+    inc, line_box_misses, line_hp, line_opening, line_sides, opaque_zero, rd, rd32, to_u128,
+};
 use super::mobj::{MF_NOBLOOD, MF_SHOOTABLE, Mobj, NO_MOBJ, has};
 use super::ray::{
     Cursor, Trace, crosses, crossing_fraction, ray_advance, ray_cell, ray_next_entry, ray_start,
@@ -141,7 +143,7 @@ fn cell_lines(
 /// The things whose centre is in `cell` and whose box diagonal the trace
 /// crosses (`PIT_AddThingIntercepts`), appended to `batch`.
 fn cell_things(
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     tr: Box<Trace>,
     cell: u32,
@@ -159,7 +161,7 @@ fn cell_things(
             continue;
         }
         let t = match mobjs.get(idx) {
-            Option::Some(b) => b.unbox(),
+            Option::Some(b) => b.unbox().as_snapshot().unbox(),
             Option::None => { continue; },
         };
         let r = *t.radius;
@@ -192,7 +194,7 @@ fn cell_things(
 /// Every intercept of the current cell of `cur`, unsorted.
 fn cell_intercepts(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     tr: Box<Trace>,
     cur: Cursor,
@@ -219,7 +221,7 @@ fn cell_intercepts(
 /// the things. Returns `true` when the whole trace was walked.
 pub fn traverse<T, impl V: Traverser<T>, +Drop<T>>(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     p1: Point,
     p2: Point,
@@ -233,7 +235,7 @@ pub fn traverse<T, impl V: Traverser<T>, +Drop<T>>(
 /// [`traverse`] on a [`Level`].
 pub fn traverse_in<T, impl V: Traverser<T>, +Drop<T>>(
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     p1: Point,
     p2: Point,
@@ -304,7 +306,7 @@ impl CollectorTraverser of Traverser<Collector> {
 /// Every crossing along `p1 -> p2`, in the order [`traverse`] visits them.
 pub fn path_traverse(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     p1: Point,
     p2: Point,
@@ -335,7 +337,7 @@ fn shoot_z(t: @Mobj) -> Fixed {
 #[derive(Copy, Drop)]
 struct ShotCtx {
     lv: Level,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     tr: Box<Trace>,
 }
 
@@ -401,7 +403,7 @@ impl AimerTraverser of Traverser<Aimer> {
 
     fn thing(ref self: Aimer, idx: u32, frac: Fixed) -> bool {
         let t = match self.ctx.unbox().mobjs.get(idx) {
-            Option::Some(b) => b.unbox(),
+            Option::Some(b) => b.unbox().as_snapshot().unbox(),
             Option::None => { return true; },
         };
         if !has(*t.flags, MF_SHOOTABLE) {
@@ -438,11 +440,11 @@ impl AimerTraverser of Traverser<Aimer> {
 /// `P_AimLineAttack`: the first shootable thing inside the auto-aim cone
 /// along `angle` within `distance`, and the slope to it.
 pub fn aim_line_attack(
-    w: World, mobjs: Span<Mobj>, ref g: ThingGrid, shooter: u32, angle: Angle, distance: Fixed,
+    w: World, mobjs: Span<Box<Mobj>>, ref g: ThingGrid, shooter: u32, angle: Angle, distance: Fixed,
 ) -> Aim {
     let lv = level_of(w);
     let t1 = match mobjs.get(shooter) {
-        Option::Some(b) => b.unbox(),
+        Option::Some(b) => b.unbox().as_snapshot().unbox(),
         Option::None => { return Aim { slope: fixed::ZERO, target: NO_MOBJ }; },
     };
     let p1 = Point { x: *t1.x, y: *t1.y };
@@ -534,7 +536,7 @@ impl ShooterTraverser of Traverser<Shooter> {
 
     fn thing(ref self: Shooter, idx: u32, frac: Fixed) -> bool {
         let t = match self.ctx.unbox().mobjs.get(idx) {
-            Option::Some(b) => b.unbox(),
+            Option::Some(b) => b.unbox().as_snapshot().unbox(),
             Option::None => { return true; },
         };
         if !has(*t.flags, MF_SHOOTABLE) {
@@ -568,7 +570,7 @@ impl ShooterTraverser of Traverser<Shooter> {
 /// carries no flat names, so a puff is reported there too (visual only).
 pub fn line_attack(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     shooter: u32,
     angle: Angle,
@@ -577,7 +579,7 @@ pub fn line_attack(
 ) -> Hit {
     let lv = level_of(w);
     let t1 = match mobjs.get(shooter) {
-        Option::Some(b) => b.unbox(),
+        Option::Some(b) => b.unbox().as_snapshot().unbox(),
         Option::None => { return Hit::Nothing; },
     };
     let p1 = Point { x: *t1.x, y: *t1.y };

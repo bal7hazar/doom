@@ -274,7 +274,7 @@ fn missile_aim(
 /// spawn.
 pub fn spawn_missile(
     w: World,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     source: @Mobj,

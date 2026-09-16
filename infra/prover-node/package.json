@@ -1,0 +1,27 @@
+{
+  "name": "@hellproof/prover-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "prover-node: the open prover of D35 — reads RunCommitted commitments from DoomRuns, re-executes the published journal, proves its segments natively, folds them through the wrapper and registers the run (D28) for the bounty.",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "prover-node": "./src/cli.ts"
+  },
+  "scripts": {
+    "prover-node": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "starknet": "10.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vitest": "^2.1.8"
+  }
+}

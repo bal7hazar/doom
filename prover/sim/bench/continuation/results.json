@@ -1,0 +1,671 @@
+{
+  "base": "91719f8fca61426077712b2052a19e8f8e804da4",
+  "date": "2026-09-13",
+  "rustTests": 11,
+  "exactTics": 386,
+  "native": [
+    {
+      "name": "idle",
+      "tics": 80,
+      "exact": true,
+      "meanMs": 4.8447406625,
+      "meanSteps": 79446.3,
+      "meanCheckpointMs": 3.162500025,
+      "finalOutputSha256": "d687b3a6fe7a852249aa98a866f4654704c36cb0a24b17a7f08e460100039d79"
+    },
+    {
+      "name": "walk",
+      "tics": 80,
+      "exact": true,
+      "meanMs": 7.9270593875,
+      "meanSteps": 131414.4,
+      "meanCheckpointMs": 3.1477734375,
+      "finalOutputSha256": "1d0ebcb744bd943c2d8143ecbbef53207f55f1f3c1da8d74ee968e776a9cf2bb"
+    },
+    {
+      "name": "door",
+      "tics": 80,
+      "exact": true,
+      "meanMs": 9.62978235,
+      "meanSteps": 154446.6875,
+      "meanCheckpointMs": 3.058679125,
+      "finalOutputSha256": "8d6a22fa98768a6582c69be573d728b6c7ffcaf848058a151bc0211da38111ac"
+    },
+    {
+      "name": "fight",
+      "tics": 80,
+      "exact": true,
+      "meanMs": 7.6001146375,
+      "meanSteps": 125996.225,
+      "meanCheckpointMs": 3.0870026125,
+      "finalOutputSha256": "d9f14b035f09e70fcb306b61cabd578df81389567f16cae5caaedbb5cf70d9c4"
+    },
+    {
+      "name": "death",
+      "tics": 66,
+      "exact": true,
+      "meanMs": 6.261935666666667,
+      "meanSteps": 101134.60606060606,
+      "meanCheckpointMs": 3.171832060606061,
+      "finalOutputSha256": "b0189e799d2b6f3754f83cf34d7b4a1647e5f9ec696806e3280f6124bff90aad"
+    }
+  ],
+  "chromium": {
+    "wasmSha256": "dd73ce152f44a9e00368e195c6de36d40b2948b0740794f056b2e557c94b67c5",
+    "executableSha256": "33e4783ca16e6cda20dd96e7245fa07d6cc44b064767a10c5929f45d1cc3b33b",
+    "browser": "153.0.8010.12",
+    "ok": true,
+    "results": {
+      "hardwareConcurrency": 12,
+      "crossOriginIsolated": true,
+      "cases": [
+        {
+          "name": "idle",
+          "tics": 80,
+          "setupMs": 95.68500000238419,
+          "tickMs": {
+            "mean": 8.95481250025332,
+            "p50": 8.74499998986721,
+            "p99": 12.745000004768372,
+            "max": 12.745000004768372
+          },
+          "includingMaintenanceMs": {
+            "mean": 9.73112500011921,
+            "p50": 8.74499998986721,
+            "p99": 40.16999998688698,
+            "max": 40.16999998688698
+          },
+          "steps": {
+            "mean": 79446.3,
+            "p50": 78929,
+            "p99": 83277,
+            "max": 83277
+          },
+          "overBudget": 2,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 6.530000001192093,
+              "restartMs": 24.515000000596046,
+              "memoryBytes": 226951168
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 6.379999995231628,
+              "restartMs": 24.679999992251396,
+              "memoryBytes": 330301440
+            }
+          ],
+          "memoryBytes": 330301440,
+          "outputSha256": "d687b3a6fe7a852249aa98a866f4654704c36cb0a24b17a7f08e460100039d79",
+          "exact": true
+        },
+        {
+          "name": "walk",
+          "tics": 80,
+          "setupMs": 25.87000000476837,
+          "tickMs": {
+            "mean": 15.06675000116229,
+            "p50": 14.394999995827675,
+            "p99": 25.54500000178814,
+            "max": 25.54500000178814
+          },
+          "includingMaintenanceMs": {
+            "mean": 15.869062501192094,
+            "p50": 14.394999995827675,
+            "p99": 47.70999999344349,
+            "max": 47.70999999344349
+          },
+          "steps": {
+            "mean": 131414.4,
+            "p50": 126257,
+            "p99": 163149,
+            "max": 163149
+          },
+          "overBudget": 2,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 6.319999992847443,
+              "restartMs": 25.780000001192093,
+              "memoryBytes": 536936448
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 6.245000004768372,
+              "restartMs": 25.84000000357628,
+              "memoryBytes": 536936448
+            }
+          ],
+          "memoryBytes": 536936448,
+          "outputSha256": "1d0ebcb744bd943c2d8143ecbbef53207f55f1f3c1da8d74ee968e776a9cf2bb",
+          "exact": true
+        },
+        {
+          "name": "door",
+          "tics": 80,
+          "setupMs": 25.87000000476837,
+          "tickMs": {
+            "mean": 17.848562500439584,
+            "p50": 16.689999997615814,
+            "p99": 32.21500000357628,
+            "max": 32.21500000357628
+          },
+          "includingMaintenanceMs": {
+            "mean": 18.642375000379978,
+            "p50": 16.99500000476837,
+            "p99": 60.60999999940395,
+            "max": 60.60999999940395
+          },
+          "steps": {
+            "mean": 154446.6875,
+            "p50": 147561,
+            "p99": 262217,
+            "max": 262217
+          },
+          "overBudget": 3,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 6.105000004172325,
+              "restartMs": 25.394999995827675,
+              "memoryBytes": 950140928
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 6.239999994635582,
+              "restartMs": 25.765000000596046,
+              "memoryBytes": 950140928
+            }
+          ],
+          "memoryBytes": 950140928,
+          "outputSha256": "8d6a22fa98768a6582c69be573d728b6c7ffcaf848058a151bc0211da38111ac",
+          "exact": true
+        },
+        {
+          "name": "fight",
+          "tics": 80,
+          "setupMs": 24.765000000596046,
+          "tickMs": {
+            "mean": 14.57837499883026,
+            "p50": 13.009999990463257,
+            "p99": 30.944999992847443,
+            "max": 30.944999992847443
+          },
+          "includingMaintenanceMs": {
+            "mean": 15.346812498755753,
+            "p50": 13.010000005364418,
+            "p99": 45.36499999463558,
+            "max": 45.36499999463558
+          },
+          "steps": {
+            "mean": 125996.225,
+            "p50": 114909,
+            "p99": 230135,
+            "max": 230135
+          },
+          "overBudget": 3,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 6.144999995827675,
+              "restartMs": 24.390000000596046,
+              "memoryBytes": 950140928
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 6.240000009536743,
+              "restartMs": 24.69999998807907,
+              "memoryBytes": 950140928
+            }
+          ],
+          "memoryBytes": 950140928,
+          "outputSha256": "d9f14b035f09e70fcb306b61cabd578df81389567f16cae5caaedbb5cf70d9c4",
+          "exact": true
+        },
+        {
+          "name": "death",
+          "tics": 66,
+          "setupMs": 25.00499999523163,
+          "tickMs": {
+            "mean": 11.601136363591209,
+            "p50": 11.254999995231628,
+            "p99": 20.855000004172325,
+            "max": 20.855000004172325
+          },
+          "includingMaintenanceMs": {
+            "mean": 13.015151515151516,
+            "p50": 11.290000006556511,
+            "p99": 51.1700000166893,
+            "max": 51.1700000166893
+          },
+          "steps": {
+            "mean": 101134.60606060606,
+            "p50": 99260,
+            "p99": 179297,
+            "max": 179297
+          },
+          "overBudget": 3,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 6.170000001788139,
+              "restartMs": 24.819999992847443,
+              "memoryBytes": 950140928
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 6.120000004768372,
+              "restartMs": 24.724999994039536,
+              "memoryBytes": 950140928
+            },
+            {
+              "tic": 65,
+              "checkpointMs": 6.33500000834465,
+              "restartMs": 25.155000001192093,
+              "memoryBytes": 950140928
+            }
+          ],
+          "memoryBytes": 950140928,
+          "outputSha256": "b0189e799d2b6f3754f83cf34d7b4a1647e5f9ec696806e3280f6124bff90aad",
+          "exact": true
+        }
+      ]
+    }
+  },
+  "stateless": {
+    "reference": "91719f8",
+    "outputReference": "883efbb",
+    "programWords": 112334,
+    "programSha256": "f9a36d53aaa121aa569b8c40aa0382751963e877e71c077a9a5c01694d761a55",
+    "wasmSha256": "52721b82d3216e89929f876fc2a5ed74af74060e5e45ad29039af65ed10ab29a",
+    "browser": "153.0.8010.12",
+    "ok": true,
+    "results": {
+      "initAndFetchMs": 39.12000000476837,
+      "loadMs": 61.25,
+      "cases": [
+        {
+          "name": "idle",
+          "ticStart": 300,
+          "ticEnd": 380,
+          "tics": 80,
+          "status": 0,
+          "totalMs": {
+            "mean": 46.645187499187884,
+            "p50": 46.304999992251396,
+            "p99": 59.46999999880791,
+            "max": 59.46999999880791
+          },
+          "runMs": {
+            "mean": 46.54637499935925,
+            "p50": 46.230000004172325,
+            "p99": 59.39000000059605,
+            "max": 59.39000000059605
+          },
+          "steps": {
+            "mean": 314970.3,
+            "p50": 314453,
+            "p99": 318801,
+            "max": 318801
+          },
+          "ticsPerSecond": 21.438438853255988,
+          "over35HzBudget": 80,
+          "memoryBytes": 49217536,
+          "outputSha256": "d687b3a6fe7a852249aa98a866f4654704c36cb0a24b17a7f08e460100039d79",
+          "exact": true
+        },
+        {
+          "name": "walk",
+          "ticStart": 80,
+          "ticEnd": 160,
+          "tics": 80,
+          "status": 0,
+          "totalMs": {
+            "mean": 54.1043124999851,
+            "p50": 53.564999997615814,
+            "p99": 61.945000007748604,
+            "max": 61.945000007748604
+          },
+          "runMs": {
+            "mean": 54.035749999061224,
+            "p50": 53.49499998986721,
+            "p99": 61.894999995827675,
+            "max": 61.894999995827675
+          },
+          "steps": {
+            "mean": 377060.675,
+            "p50": 372292,
+            "p99": 409283,
+            "max": 409283
+          },
+          "ticsPerSecond": 18.482815025147495,
+          "over35HzBudget": 80,
+          "memoryBytes": 70254592,
+          "outputSha256": "1d0ebcb744bd943c2d8143ecbbef53207f55f1f3c1da8d74ee968e776a9cf2bb",
+          "exact": true
+        },
+        {
+          "name": "door",
+          "ticStart": 230,
+          "ticEnd": 310,
+          "tics": 80,
+          "status": 0,
+          "totalMs": {
+            "mean": 57.81106250043958,
+            "p50": 56.5,
+            "p99": 74.33000001311302,
+            "max": 74.33000001311302
+          },
+          "runMs": {
+            "mean": 57.74424999989569,
+            "p50": 56.42499999701977,
+            "p99": 74.26500000059605,
+            "max": 74.26500000059605
+          },
+          "steps": {
+            "mean": 401127.25,
+            "p50": 393593,
+            "p99": 507852,
+            "max": 507852
+          },
+          "ticsPerSecond": 17.29772740282011,
+          "over35HzBudget": 80,
+          "memoryBytes": 70254592,
+          "outputSha256": "8d6a22fa98768a6582c69be573d728b6c7ffcaf848058a151bc0211da38111ac",
+          "exact": true
+        },
+        {
+          "name": "fight",
+          "ticStart": 450,
+          "ticEnd": 530,
+          "tics": 80,
+          "status": 0,
+          "totalMs": {
+            "mean": 52.537250000052154,
+            "p50": 50.98499999940395,
+            "p99": 69.0300000011921,
+            "max": 69.0300000011921
+          },
+          "runMs": {
+            "mean": 52.472250000201164,
+            "p50": 50.900000005960464,
+            "p99": 68.98499999940395,
+            "max": 68.98499999940395
+          },
+          "steps": {
+            "mean": 361972.8375,
+            "p50": 350716,
+            "p99": 466889,
+            "max": 466889
+          },
+          "ticsPerSecond": 19.03411389060157,
+          "over35HzBudget": 80,
+          "memoryBytes": 70254592,
+          "outputSha256": "d9f14b035f09e70fcb306b61cabd578df81389567f16cae5caaedbb5cf70d9c4",
+          "exact": true
+        },
+        {
+          "name": "death",
+          "ticStart": 780,
+          "ticEnd": 846,
+          "tics": 66,
+          "status": 1,
+          "totalMs": {
+            "mean": 49.51568181812763,
+            "p50": 48.99500000476837,
+            "p99": 59.09499999880791,
+            "max": 59.09499999880791
+          },
+          "runMs": {
+            "mean": 49.446893939917736,
+            "p50": 48.939999997615814,
+            "p99": 59.00999999046326,
+            "max": 59.00999999046326
+          },
+          "steps": {
+            "mean": 336497.4090909091,
+            "p50": 334589,
+            "p99": 414644,
+            "max": 414644
+          },
+          "ticsPerSecond": 20.195622139931864,
+          "over35HzBudget": 66,
+          "memoryBytes": 70254592,
+          "outputSha256": "b0189e799d2b6f3754f83cf34d7b4a1647e5f9ec696806e3280f6124bff90aad",
+          "exact": true
+        }
+      ],
+      "hardwareConcurrency": 12,
+      "crossOriginIsolated": true
+    },
+    "wallMs": 21971
+  },
+  "firstChromiumCampaign": {
+    "wasmSha256": "d9a92fd2d265506e03727680fb0e0c96c76dadccdea52b371d0414aac006db1a",
+    "executableSha256": "33e4783ca16e6cda20dd96e7245fa07d6cc44b064767a10c5929f45d1cc3b33b",
+    "browser": "153.0.8010.12",
+    "ok": true,
+    "results": {
+      "hardwareConcurrency": 12,
+      "crossOriginIsolated": true,
+      "cases": [
+        {
+          "name": "idle",
+          "tics": 80,
+          "setupMs": 94.9699999988079,
+          "tickMs": {
+            "mean": 8.830875000543893,
+            "p50": 8.63000001013279,
+            "p99": 12.375,
+            "max": 12.375
+          },
+          "includingMaintenanceMs": {
+            "mean": 9.60818750038743,
+            "p50": 8.63000001013279,
+            "p99": 40.56999999284744,
+            "max": 40.56999999284744
+          },
+          "steps": {
+            "mean": 79446.3,
+            "p50": 78929,
+            "p99": 83277,
+            "max": 83277
+          },
+          "overBudget": 2,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 6.780000001192093,
+              "restartMs": 24.62999999523163,
+              "memoryBytes": 226951168
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 6.355000004172325,
+              "restartMs": 24.419999986886978,
+              "memoryBytes": 330301440
+            }
+          ],
+          "memoryBytes": 330301440,
+          "outputSha256": "d687b3a6fe7a852249aa98a866f4654704c36cb0a24b17a7f08e460100039d79",
+          "exact": true
+        },
+        {
+          "name": "walk",
+          "tics": 80,
+          "setupMs": 25.91499999165535,
+          "tickMs": {
+            "mean": 14.951312498934566,
+            "p50": 14.83500000834465,
+            "p99": 25.285000011324883,
+            "max": 25.285000011324883
+          },
+          "includingMaintenanceMs": {
+            "mean": 15.73681249897927,
+            "p50": 14.859999999403954,
+            "p99": 47.16500000655651,
+            "max": 47.16500000655651
+          },
+          "steps": {
+            "mean": 131414.4,
+            "p50": 126257,
+            "p99": 163149,
+            "max": 163149
+          },
+          "overBudget": 2,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 6.344999998807907,
+              "restartMs": 25.515000000596046,
+              "memoryBytes": 536936448
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 5.959999993443489,
+              "restartMs": 25.020000010728836,
+              "memoryBytes": 536936448
+            }
+          ],
+          "memoryBytes": 536936448,
+          "outputSha256": "1d0ebcb744bd943c2d8143ecbbef53207f55f1f3c1da8d74ee968e776a9cf2bb",
+          "exact": true
+        },
+        {
+          "name": "door",
+          "tics": 80,
+          "setupMs": 26.16500000655651,
+          "tickMs": {
+            "mean": 17.621749999560414,
+            "p50": 16.730000004172325,
+            "p99": 31.36999998986721,
+            "max": 31.36999998986721
+          },
+          "includingMaintenanceMs": {
+            "mean": 18.39787499997765,
+            "p50": 16.765000000596046,
+            "p99": 59.7150000333786,
+            "max": 59.7150000333786
+          },
+          "steps": {
+            "mean": 154446.6875,
+            "p50": 147561,
+            "p99": 262217,
+            "max": 262217
+          },
+          "overBudget": 3,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 5.975000008940697,
+              "restartMs": 24.80000001192093,
+              "memoryBytes": 950140928
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 5.950000002980232,
+              "restartMs": 25.365000009536743,
+              "memoryBytes": 950140928
+            }
+          ],
+          "memoryBytes": 950140928,
+          "outputSha256": "8d6a22fa98768a6582c69be573d728b6c7ffcaf848058a151bc0211da38111ac",
+          "exact": true
+        },
+        {
+          "name": "fight",
+          "tics": 80,
+          "setupMs": 23.969999998807907,
+          "tickMs": {
+            "mean": 14.139562499895693,
+            "p50": 12.600000008940697,
+            "p99": 30.469999998807907,
+            "max": 30.469999998807907
+          },
+          "includingMaintenanceMs": {
+            "mean": 14.888749999925494,
+            "p50": 12.674999997019768,
+            "p99": 43.929999992251396,
+            "max": 43.929999992251396
+          },
+          "steps": {
+            "mean": 125996.225,
+            "p50": 114909,
+            "p99": 230135,
+            "max": 230135
+          },
+          "overBudget": 3,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 5.885000005364418,
+              "restartMs": 23.924999997019768,
+              "memoryBytes": 950140928
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 5.915000006556511,
+              "restartMs": 24.20999999344349,
+              "memoryBytes": 950140928
+            }
+          ],
+          "memoryBytes": 950140928,
+          "outputSha256": "d9f14b035f09e70fcb306b61cabd578df81389567f16cae5caaedbb5cf70d9c4",
+          "exact": true
+        },
+        {
+          "name": "death",
+          "tics": 66,
+          "setupMs": 24.299999997019768,
+          "tickMs": {
+            "mean": 11.586212122304874,
+            "p50": 11.269999995827675,
+            "p99": 19.929999992251396,
+            "max": 19.929999992251396
+          },
+          "includingMaintenanceMs": {
+            "mean": 12.984545455963323,
+            "p50": 11.480000004172325,
+            "p99": 50.80500000715256,
+            "max": 50.80500000715256
+          },
+          "steps": {
+            "mean": 101134.60606060606,
+            "p50": 99260,
+            "p99": 179297,
+            "max": 179297
+          },
+          "overBudget": 3,
+          "maintenance": [
+            {
+              "tic": 31,
+              "checkpointMs": 6.105000004172325,
+              "restartMs": 24.375,
+              "memoryBytes": 950140928
+            },
+            {
+              "tic": 63,
+              "checkpointMs": 6.225000008940697,
+              "restartMs": 24.650000005960464,
+              "memoryBytes": 950140928
+            },
+            {
+              "tic": 65,
+              "checkpointMs": 6.424999997019768,
+              "restartMs": 24.510000005364418,
+              "memoryBytes": 950140928
+            }
+          ],
+          "memoryBytes": 950140928,
+          "outputSha256": "b0189e799d2b6f3754f83cf34d7b4a1647e5f9ec696806e3280f6124bff90aad",
+          "exact": true
+        }
+      ]
+    }
+  },
+  "fixtureSha256": "5c6e2e5f96d1b42b07f7b97627afffdb19b7c0b4b1fa0d85f1d5c9cd1a3611b1",
+  "implementationCommit": "b51cefe0ed12815a2df11f129307cda5ea6101a2",
+  "sessionProgramWords": 112010,
+  "wasmBytes": 12616649
+}

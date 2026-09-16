@@ -12,7 +12,7 @@
 //!
 //! Every public function of this module is the **boundary**: it takes the
 //! 72-felt [`Ctx`] and the actor as a `Mobj`, and hands both to the `_in`
-//! twin that does the work, which carries the six-felt [`Env`] and the
+//! twin that does the work, which carries the one-pointer [`Env`] and the
 //! actor as a `Box<Mobj>`. Nothing wide crosses a call inside the crate:
 //!
 //! * a struct pushed at a call costs one word of bytecode and one step per
@@ -34,9 +34,9 @@ use doom_physics::maputl::{add32, dec, inc, low32, opaque_zero, rd, rd32};
 use doom_physics::spawn::{roll, set_state_in};
 use doom_physics::{
     Aim, DamageOutcome, FIREBALL, Hit, MELEERANGE, MF_AMBUSH, MF_JUSTATTACKED, MF_JUSTHIT,
-    MF_SHADOW, MF_SHOOTABLE, MF_SOLID, MISSILERANGE, Mobj, MoveEvent, NO_MOBJ, ThingGrid, Verdict,
-    aim_line_attack, bleeds, check_sight_cached, damage_mobj, has, line_attack, maputl,
-    spawn_missile, try_move, without,
+    MF_SHADOW, MF_SHOOTABLE, MF_SOLID, MISSILERANGE, Mobj, MoveEvent, NO_MOBJ, PlayerDefense,
+    ThingGrid, Verdict, aim_line_attack, bleeds, check_sight_cached, damage_mobj_with_defense, has,
+    line_attack, maputl, spawn_missile, try_move, without,
 };
 use doom_things::tables::{
     MI_MELEESTATE, MI_MISSILESTATE, MI_RADIUS, MI_SEESTATE, MI_SPAWNSTATE, MI_SPEED,
@@ -79,11 +79,16 @@ const OCTANT_ANGLE: [u32; 8] = [
     0, 0x20000000, 0x40000000, 0x60000000, 0x80000000, 0xA0000000, 0xC0000000, 0xE0000000,
 ];
 
-/// `ANG45` as a divisor and `DI_NODIR` as a modulus, as `NonZero` literals:
-/// the `/` and `%` operators keep an unfolded "division by zero" panic path
+/// `ANG45` as a `NonZero` divisor: the `/` operator keeps an unfolded
+/// "division by zero" panic path
 /// even against a constant divisor (S7 §8 rule 1).
 const ANG45_NZ: NonZero<u32> = 0x20000000;
-const EIGHT: NonZero<u32> = 8;
+/// The octant remainder is exact for all u32 values; unlike the angular
+/// quotient above, a low-bit remainder only needs the bitwise builtin.
+#[inline(always)]
+fn octant_mod(value: u32) -> u32 {
+    value & 7
+}
 const SIXTEEN: NonZero<u8> = 16;
 const TWO: NonZero<u8> = 2;
 const UNIT: NonZero<u128> = 65536;
@@ -94,7 +99,7 @@ const TEN: NonZero<u8> = 10;
 
 /// `bam::reduce` without its two `try_into().unwrap()`s: `x mod 2^32`.
 fn reduce_at(x: felt252) -> Angle {
-    let (_, r) = DivRem::div_rem(fixed::to_u128(x), TURN);
+    let (_, r) = DivRem::div_rem(doom_physics::maputl::to_u128(x), TURN);
     low32(r)
 }
 
@@ -105,6 +110,7 @@ fn reduce_at(x: felt252) -> Angle {
 /// `mo.move_dir = dir`, out of line: every `BoxTrait::new` writes the 27
 /// felts of a `Mobj`, and `P_NewChaseDir` has eight such assignments
 /// (S7 §8 rule 6).
+#[inline(never)]
 fn set_dir(ref mo: Box<Mobj>, dir: u32) {
     mo = BoxTrait::new(Mobj { move_dir: dir, ..mo.unbox() });
 }
@@ -177,7 +183,7 @@ fn sound_of(column: Span<u32>, kind: u32) -> u32 {
 /// the tic it bumps into a door, one tic earlier than vanilla.
 pub fn p_move(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref mo: Mobj,
     me: u32,
@@ -191,7 +197,7 @@ pub fn p_move(
 
 pub(crate) fn p_move_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref mo: Box<Mobj>,
     me: u32,
@@ -229,7 +235,7 @@ pub(crate) fn p_move_in(
 /// `P_TryWalk`: move, and on success re-arm `movecount` with `P_Random()&15`.
 fn try_walk(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -247,7 +253,7 @@ fn try_walk(
 /// `P_NewChaseDir`: Doom's direction search, in Doom's order.
 pub fn new_chase_dir(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -266,7 +272,7 @@ pub fn new_chase_dir(
 /// `P_TryWalk` attempts (S7 §8 rule 3).
 pub(crate) fn new_chase_dir_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -460,7 +466,7 @@ pub(crate) fn check_missile_range_in(
     // cannot apply.
     let mut n: u32 = 0;
     if !fixed::is_neg(dist) {
-        let (units, _) = DivRem::div_rem(fixed::to_u128(fixed::to_raw(dist)), UNIT);
+        let (units, _) = DivRem::div_rem(doom_physics::maputl::to_u128(fixed::to_raw(dist)), UNIT);
         n = if units > 200 {
             200
         } else {
@@ -502,7 +508,7 @@ fn hears(e: Env, listener: u32, noise: u32) -> bool {
 /// the answer is identical every time and each repeat is a full
 /// `P_CheckSight`, so the loop runs once per player here. No `P_Random` is
 /// drawn either way, so the RNG stream is unaffected.
-pub fn look_for_players(ctx: Ctx, mobjs: Span<Mobj>, ref mo: Mobj, all_around: bool) -> bool {
+pub fn look_for_players(ctx: Ctx, mobjs: Span<Box<Mobj>>, ref mo: Mobj, all_around: bool) -> bool {
     let mut b = BoxTrait::new(mo);
     let r = look_for_players_in(env_of(ctx), mobjs, ref b, all_around);
     mo = b.unbox();
@@ -510,7 +516,7 @@ pub fn look_for_players(ctx: Ctx, mobjs: Span<Mobj>, ref mo: Mobj, all_around: b
 }
 
 pub(crate) fn look_for_players_in(
-    e: Env, mobjs: Span<Mobj>, ref mo: Box<Mobj>, all_around: bool,
+    e: Env, mobjs: Span<Box<Mobj>>, ref mo: Box<Mobj>, all_around: bool,
 ) -> bool {
     let n = e.players.len();
     let mut k: u32 = opaque_zero(n);
@@ -522,7 +528,7 @@ pub(crate) fn look_for_players_in(
         let pi = rd32(e.players, k);
         k = inc(k);
         let p = match mobjs.get(pi) {
-            Option::Some(b) => b.unbox(),
+            Option::Some(b) => b.unbox().as_snapshot().unbox(),
             Option::None => { continue; },
         };
         if *p.health <= 0 {
@@ -570,7 +576,12 @@ fn pick_sound(
 /// `A_Look`: wake on the sector's `soundtarget` (subject to `MF_AMBUSH`) or
 /// on seeing a player, then enter `seestate`.
 pub fn a_look(
-    ctx: Ctx, mobjs: Span<Mobj>, ref rng: Prng, ref mo: Mobj, me: u32, ref ev: Array<MonsterEvent>,
+    ctx: Ctx,
+    mobjs: Span<Box<Mobj>>,
+    ref rng: Prng,
+    ref mo: Mobj,
+    me: u32,
+    ref ev: Array<MonsterEvent>,
 ) -> u32 {
     let mut b = BoxTrait::new(mo);
     let r = a_look_in(env_of(ctx), mobjs, ref rng, ref b, me, ref ev);
@@ -580,7 +591,7 @@ pub fn a_look(
 
 pub(crate) fn a_look_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref mo: Box<Mobj>,
     me: u32,
@@ -593,7 +604,7 @@ pub(crate) fn a_look_in(
     if src != NO_MOBJ && src < mobjs.len() && hears(e, m.sector, e.noise.sector) {
         match mobjs.get(src) {
             Option::Some(b) => {
-                let targ = b.unbox();
+                let targ = b.unbox().as_snapshot().unbox();
                 if has(*targ.flags, MF_SHOOTABLE) {
                     m.target = src;
                     if has(m.flags, MF_AMBUSH) {
@@ -634,7 +645,7 @@ pub(crate) fn a_look_in(
 /// and missile decisions, the walk, and the active sound.
 pub fn a_chase(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -650,7 +661,7 @@ pub fn a_chase(
 
 pub(crate) fn a_chase_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -684,7 +695,7 @@ pub(crate) fn a_chase_in(
     // moved one eighth of a turn the short way round.
     if m.move_dir < DI_NODIR {
         let (octant, _) = DivRem::div_rem(m.angle, ANG45_NZ);
-        let (_, delta) = DivRem::div_rem(maputl::sub32(add32(octant, DI_NODIR), m.move_dir), EIGHT);
+        let delta = octant_mod(maputl::sub32(add32(octant, DI_NODIR), m.move_dir));
         // The same eighth of a turn as an octant index: `bam::sub(ang,
         // ANG45)` is `octant - 1 mod 8` and `bam::add` is `octant + 1 mod 8`,
         // both exact because `ang` is a multiple of `ANG45`.
@@ -695,7 +706,7 @@ pub(crate) fn a_chase_in(
         } else {
             1
         };
-        let (_, oct) = DivRem::div_rem(add32(octant, turn), EIGHT);
+        let oct = octant_mod(add32(octant, turn));
         m.angle = rd32(OCTANT_ANGLE.span(), oct);
     }
     // The three fields the rest of the function reads, read before the one
@@ -819,7 +830,7 @@ fn sub_roll(rnd: Span<u8>, ref rng: Prng) -> felt252 {
 /// puff/blood event and the damage the crossing costs.
 fn shoot(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     me: u32,
@@ -828,6 +839,7 @@ fn shoot(
     damage: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let hit = line_attack(e.w.unbox(), mobjs, ref g, me, angle, MISSILERANGE, slope);
     match hit {
@@ -839,7 +851,7 @@ fn shoot(
             idx, p, _,
         )) => {
             let bleed = match mobjs.get(idx) {
-                Option::Some(b) => bleeds(b.unbox()),
+                Option::Some(b) => bleeds(b.unbox().as_snapshot().unbox()),
                 Option::None => false,
             };
             let kind = if bleed {
@@ -848,7 +860,7 @@ fn shoot(
                 EV_PUFF
             };
             ev.append(MonsterEvent { kind, who: me, a: idx, b: damage, at: p });
-            hurt_in(e, mobjs, ref rng, idx, me, me, damage, ref patches, ref ev);
+            hurt_in(e, mobjs, ref rng, idx, me, me, damage, ref patches, ref ev, ref defense);
         },
     }
 }
@@ -859,7 +871,7 @@ fn shoot(
 /// `P_SetMobjState` does.
 pub fn hurt(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     target_idx: u32,
     inflictor: u32,
@@ -868,14 +880,24 @@ pub fn hurt(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     hurt_in(
-        env_of(ctx), mobjs, ref rng, target_idx, inflictor, source, damage, ref patches, ref ev,
+        env_of(ctx),
+        mobjs,
+        ref rng,
+        target_idx,
+        inflictor,
+        source,
+        damage,
+        ref patches,
+        ref ev,
+        ref defense,
     );
 }
 
 pub(crate) fn hurt_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     target_idx: u32,
     inflictor: u32,
@@ -883,10 +905,20 @@ pub(crate) fn hurt_in(
     damage: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
-    let mut t = read_mobj(mobjs, patches.span(), target_idx);
-    let out: DamageOutcome = damage_mobj(
-        e.w.unbox(), mobjs, ref rng, ref t, target_idx, inflictor, source, damage, true,
+    let mut t = read_mobj(mobjs, patches.span(), target_idx).unbox();
+    let out: DamageOutcome = damage_mobj_with_defense(
+        e.w.unbox(),
+        mobjs,
+        ref rng,
+        ref t,
+        target_idx,
+        inflictor,
+        source,
+        damage,
+        true,
+        ref defense,
     );
     if run_passive(e.w.unbox().rndtable, ref rng, t.kind, target_idx, out.action, ref ev) {
         t.flags = without(t.flags, MF_SOLID);
@@ -894,7 +926,7 @@ pub(crate) fn hurt_in(
     if out.counts_kill {
         ev.append(event(EV_KILLED, target_idx, source, 0));
     }
-    patches.append(Patch { idx: target_idx, mo: t });
+    patches.append(Patch { idx: target_idx, mo: BoxTrait::new(t) });
     match out.drop {
         Option::Some(item) => { ev.append(event(EV_DROP, target_idx, item.kind, 0)); },
         Option::None => {},
@@ -961,7 +993,7 @@ pub(crate) fn scream(
 /// `A_PosAttack`: the zombieman's single pistol shot.
 pub fn a_pos_attack(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -969,20 +1001,24 @@ pub fn a_pos_attack(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
-    a_pos_attack_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev);
+    a_pos_attack_in(
+        env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev, ref defense,
+    );
     mo = b.unbox();
 }
 
 pub(crate) fn a_pos_attack_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
@@ -994,13 +1030,13 @@ pub(crate) fn a_pos_attack_in(
     ev.append(sound(me, SFX_PISTOL));
     let angle = spread_angle(rnd, ref rng, base);
     let damage = roll_damage(rnd, ref rng, FIVE, 3);
-    shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev);
+    shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev, ref defense);
 }
 
 /// `A_SPosAttack`: the shotgun guy's three pellets, one aim for all three.
 pub fn a_spos_attack(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -1008,20 +1044,24 @@ pub fn a_spos_attack(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
-    a_spos_attack_in(env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev);
+    a_spos_attack_in(
+        env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev, ref defense,
+    );
     mo = b.unbox();
 }
 
 pub(crate) fn a_spos_attack_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
@@ -1036,7 +1076,19 @@ pub(crate) fn a_spos_attack_in(
         i = inc(i);
         let angle = spread_angle(rnd, ref rng, base);
         let damage = roll_damage(rnd, ref rng, FIVE, 3);
-        shoot(e, mobjs, ref g, ref rng, me, angle, aim.slope, damage, ref patches, ref ev);
+        shoot(
+            e,
+            mobjs,
+            ref g,
+            ref rng,
+            me,
+            angle,
+            aim.slope,
+            damage,
+            ref patches,
+            ref ev,
+            ref defense,
+        );
     }
 }
 
@@ -1050,7 +1102,7 @@ fn roll_damage(rnd: Span<u8>, ref rng: Prng, n: NonZero<u8>, mul: u32) -> u32 {
 /// `A_TroopAttack`: the imp's claw, or its fireball.
 pub fn a_troop_attack(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Mobj,
@@ -1059,16 +1111,26 @@ pub fn a_troop_attack(
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
     a_troop_attack_in(
-        env_of(ctx), mobjs, ref g, ref rng, ref b, me, ref patches, ref ev, ref spawn_at,
+        env_of(ctx),
+        mobjs,
+        ref g,
+        ref rng,
+        ref b,
+        me,
+        ref patches,
+        ref ev,
+        ref spawn_at,
+        ref defense,
     );
     mo = b.unbox();
 }
 
 pub(crate) fn a_troop_attack_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref g: ThingGrid,
     ref rng: Prng,
     ref mo: Box<Mobj>,
@@ -1076,6 +1138,7 @@ pub(crate) fn a_troop_attack_in(
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
     ref spawn_at: u32,
+    ref defense: Box<PlayerDefense>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
@@ -1086,7 +1149,7 @@ pub(crate) fn a_troop_attack_in(
     if check_melee_range_in(e, ref mo, target) {
         ev.append(sound(me, SFX_CLAW));
         let damage = roll_damage(rnd, ref rng, EIGHT_U8, 3);
-        hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev);
+        hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev, ref defense);
         return;
     }
     // Launch a missile.
@@ -1099,33 +1162,35 @@ pub(crate) fn a_troop_attack_in(
     );
     super::event::drain(moves.span(), idx, ref ev);
     ev.append(sound(me, SFX_FIRSHT));
-    patches.append(Patch { idx, mo: missile });
+    patches.append(Patch { idx, mo: BoxTrait::new(missile) });
     spawn_at = inc(idx);
 }
 
 /// `A_SargAttack`: the demon's (and the spectre's) bite.
 pub fn a_sarg_attack(
     ctx: Ctx,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref mo: Mobj,
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
 ) {
+    let mut defense = BoxTrait::new(doom_physics::no_player_defense());
     let mut b = BoxTrait::new(mo);
-    a_sarg_attack_in(env_of(ctx), mobjs, ref rng, ref b, me, ref patches, ref ev);
+    a_sarg_attack_in(env_of(ctx), mobjs, ref rng, ref b, me, ref patches, ref ev, ref defense);
     mo = b.unbox();
 }
 
 pub(crate) fn a_sarg_attack_in(
     e: Env,
-    mobjs: Span<Mobj>,
+    mobjs: Span<Box<Mobj>>,
     ref rng: Prng,
     ref mo: Box<Mobj>,
     me: u32,
     ref patches: Array<Patch>,
     ref ev: Array<MonsterEvent>,
+    ref defense: Box<PlayerDefense>,
 ) {
     let rnd = e.w.unbox().rndtable;
     let mut m = mo.unbox();
@@ -1137,5 +1202,23 @@ pub(crate) fn a_sarg_attack_in(
         return;
     }
     let damage = roll_damage(rnd, ref rng, TEN, 4);
-    hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev);
+    hurt_in(e, mobjs, ref rng, target_idx, me, me, damage, ref patches, ref ev, ref defense);
+}
+
+#[cfg(test)]
+mod octant_tests {
+    use super::octant_mod;
+
+    #[test]
+    fn octant_mask_matches_remainder() {
+        // All values reachable from (octant + 8 - direction) and from
+        // (octant + turn), then high-word boundaries of the scalar helper.
+        let mut value: u32 = 0;
+        while value < 32 {
+            assert_eq!(octant_mod(value), value % 8);
+            let high = 0xffffffff_u32 - value;
+            assert_eq!(octant_mod(high), high % 8);
+            value += 1;
+        }
+    }
 }

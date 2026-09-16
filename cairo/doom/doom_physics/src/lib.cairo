@@ -8,8 +8,8 @@
 //!
 //! * A [`World`] is what a call reads: the level's hot spans (D24), the
 //!   **current** sector heights, the state tables and the RNG table.
-//! * A [`Mobj`] is a value; the list is an `Array<Mobj>` read as a
-//!   `Span<Mobj>` and rebuilt by the tic loop (S1 §7). A [`ThingGrid`]
+//! * A [`Mobj`] is a value; the list is an `Array<Box<Mobj>>` read as a
+//!   `Span<Box<Mobj>>` and rebuilt by the tic loop (S1 §7). A [`ThingGrid`]
 //!   holds the blockmap's per-cell thing lists, the one piece of mutable
 //!   spatial state.
 //! * A function that would touch *another* mobj reports it instead:
@@ -39,7 +39,10 @@ pub mod spawn;
 mod tests;
 pub mod world;
 
-pub use damage::{BASETHRESHOLD, DamageOutcome, damage_mobj, kill_mobj};
+pub use damage::{
+    BASETHRESHOLD, DamageOutcome, PlayerDefense, damage_mobj, damage_mobj_with_defense, kill_mobj,
+    no_player_defense,
+};
 pub use grid::{ThingGrid, link, new_grid, rebuild, relink, things_in, unlink};
 pub use hitscan::{
     AIMRANGE, Aim, Hit, Intercept, MELEERANGE, MISSILERANGE, aim_line_attack, bleeds, line_attack,

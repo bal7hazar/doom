@@ -244,6 +244,50 @@ tic_end, status, inputs_commitment, kills, items, secrets`) and the game → lea
 need regenerating for the 10-felt width (P4.1). Recomposition cost is ≈ 1.4 k steps per leaf
 (S4) — negligible next to the 3.8e9 of the fact.
 
+**Open prover (D35): the commitment half of the consumer interface.** Proving is no longer
+the player's browser's job. The player's client calls
+`commit_run(version_id, level_id, packed: Span<felt252>, tics, bounty: u256)` with the
+**whole** packed input log of the game (7 tics per felt, `packed.len() == ceil(tics / 7)`,
+~900 felts for 3 minutes) and an escrowed bounty in the fee token (STRK, `transfer_from` the
+caller, zero allowed). The contract stores
+`{player, version_id, level_id, genesis, inputs_commitment = commit_log(packed), tics, bounty,
+created_block, status}` under `commitment_id = poseidon('HP.COMMIT' ‖ version_id ‖ level_id ‖
+player ‖ inputs_commitment)` — one commitment per (player, level, log); `PENDING`/`PROVED` ids
+are refused, a `RECLAIMED` one may be posted again — and publishes the log by events:
+`RunCommitted {commitment_id, player, version_id, level_id, genesis, inputs_commitment, tics,
+bounty, expires_at, n_chunks}` then `n_chunks` × `RunLog {commitment_id, chunk, offset,
+packed}` of ≤ 256 felts (Starknet's 300-felt event data cap). The log is not stored: a prover
+node rebuilds it from the events (`pending_commitments(cursor, limit)` walks the append-only
+index of ids still pending; `get_commitment` / `commitment_of` read one).
+
+Any address then executes the log, proves and folds it, has the router register the fact
+(the 5-tx flow above) and calls `submit_batch` / `register_member` — unchanged, and never
+caller-restricted. An accepted member settles the pending commitment of its player when its
+run is the committed log: same version, level, player, `tics` and genesis, and a **run-level**
+input commitment equal to `commit_log(packed)` — the leaf's own `inputs_commitment` for a
+one-segment run, or, for several segments, the fold of the concatenated `replay` logs (D13
+commits per segment, so the segment logs — already checked against each leaf — are
+concatenated and folded again, which requires every non-final segment to span a multiple of
+7 tics; a multi-segment submission without replay data settles nothing). Settlement writes
+`status = PROVED, run_id, prover = caller`, emits `CommitmentProved {commitment_id, run_id,
+prover, player, bounty}` and, last, transfers the bounty to the caller
+(checks-effects-interactions). A commitment settles once; a run id registers once (R10-A1);
+a member with no matching commitment is recorded exactly as before. After
+`expires_at = created_block + expiry_blocks` (constructor, `1 ..= 2^40`) an unproved
+commitment is reclaimable by its player only — `reclaim(commitment_id)`: `status = RECLAIMED`,
+`CommitmentReclaimed`, refund — with no cancellation before expiry (a prover's work in flight
+cannot be pulled from under it) and no effect of `freeze` on either `commit_run` or
+`reclaim`. No new privileged role; the constructor becomes
+`(owner, fee_token, expiry_blocks)`. Full ABI in `cairo/doom_contracts/README.md`.
+
+Cost (snforge 0.61 `--detailed-resources`, `cairo-steps`, the same oracle as §7; the
+difference between the two `cost_probe_*` tests of `test_commitments.cairo`): one
+`commit_run` of a 900-felt log with a bounty — 900 two-to-one Poseidon folds, 8 storage
+writes, 5 events (920 data felts), one ERC20 `transfer_from` — is **76 868 steps, 905
+poseidon, 3 872 range_check** builtins, ≈ 16.2 M L2 gas as snforge estimates it (24.51 M for
+setup + commit, 8.34 M for the setup alone), i.e. ~100× less than the fact's verification
+(1.54e9) and of the order of one `submit_batch` with replay data.
+
 **Versioning / freezing** — a router pins its three phase class hashes in the constructor and
 has no upgrade path: one deployment = one verifier version `(verifier commit, registry
 constants)`; `phase_classes()` exposes the pins. `DoomRuns` keeps the governed-then-frozen table

@@ -63,6 +63,11 @@ export interface CostScreenOptions {
   onChoice?: (choice: Choice) => void;
   /** Called once the sequence finishes, with the fact if one was registered. */
   onDone?: (result: { fact?: string; steps: StepProgress[] }) => void;
+  /**
+   * Called when the estimate or the sequence stops on an error. The screen stays up with its
+   * "Resume" button; this only lets the caller log and record the stop.
+   */
+  onFailed?: (error: string) => void;
   /** Chain id, for the explorer links. Read from the node when omitted. */
   chainId?: string;
 }
@@ -109,7 +114,8 @@ const CSS = `
 .cost-screen a { color: var(--fg, #d8d2c4); }
 `;
 
-function injectStyle(doc: Document): void {
+/** Shared with the commit screen (P4.7), which renders the same table and buttons. */
+export function injectCostScreenStyle(doc: Document): void {
   if (doc.getElementById(STYLE_ID)) return;
   const style = doc.createElement("style");
   style.id = STYLE_ID;
@@ -117,10 +123,10 @@ function injectStyle(doc: Document): void {
   doc.head.append(style);
 }
 
-const esc = (s: string): string =>
+export const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-const strk = (n: number): string => n.toFixed(n < 1 ? 4 : 2);
-const gas = (n: bigint): string => n.toLocaleString("en-US");
+export const strk = (n: number): string => n.toFixed(n < 1 ? 4 : 2);
+export const gas = (n: bigint): string => n.toLocaleString("en-US");
 
 /** Human labels for the entrypoints — nobody outside this repo knows what `fri2` is. */
 const LABELS: Record<string, string> = {
@@ -146,7 +152,7 @@ export class CostScreen {
     this.options = options;
     this.median = new GasPriceMedian(new LocalSampleStore());
     this.el.classList.add("cost-screen");
-    injectStyle(el.ownerDocument);
+    injectCostScreenStyle(el.ownerDocument);
   }
 
   /**
@@ -191,6 +197,7 @@ export class CostScreen {
       };
     } catch (e) {
       this.state = { ...this.state, phase: "failed", error: (e as Error).message };
+      this.options.onFailed?.((e as Error).message);
     }
     this.render();
   }
@@ -222,6 +229,7 @@ export class CostScreen {
       // The checkpoint is wherever it stopped: re-opening the screen resumes from there, and
       // nothing that was paid for is paid for twice.
       this.state = { ...this.state, phase: "failed", error: (e as Error).message };
+      this.options.onFailed?.((e as Error).message);
     }
     this.render();
   }
@@ -246,7 +254,7 @@ export class CostScreen {
           ? ` <span class="warn">over the per-transaction limit</span>`
           : "";
         return (
-          `<tr><td>${esc(humanLabel(s.label))}</td>` +
+          `<tr><td>${esc(this.stepName(s.label, s.phase))}</td>` +
           `<td>${gas(s.l2Gas)}</td>` +
           `<td>${strk(s.strk)}</td>` +
           `<td class="fiat">${s.usd === null ? "—" : "$" + s.usd.toFixed(3)}</td>${cap}</tr>`
@@ -283,13 +291,22 @@ export class CostScreen {
     }
   }
 
+  /**
+   * The consumer step keeps the label `submit_batch` whatever it calls (`sequence.ts`); the
+   * per-player fallback is told apart by its entrypoint, and the player must see which one they
+   * are paying for.
+   */
+  private stepName(label: string, phase: "verifier" | "consumer"): string {
+    return humanLabel(phase === "consumer" ? this.options.sequence.consumer.call.entrypoint : label);
+  }
+
   private renderSteps(): string {
-    const all = [
-      ...this.options.sequence.phases.map((p) => p.label),
-      this.options.sequence.consumer.label,
+    const all: [string, "verifier" | "consumer"][] = [
+      ...this.options.sequence.phases.map((p): [string, "verifier"] => [p.label, "verifier"]),
+      [this.options.sequence.consumer.label, "consumer"],
     ];
     const items = all
-      .map((label) => {
+      .map(([label, phase]) => {
         const p = this.state.progress.get(label);
         const right = !p
           ? '<span class="fiat">queued</span>'
@@ -300,7 +317,7 @@ export class CostScreen {
               : p.state === "accepted"
                 ? this.explorer(p.transactionHash ?? "")
                 : `<span class="warn">${esc(p.error ?? "failed")}</span>`;
-        return `<li><span>${esc(humanLabel(label))}</span>${right}</li>`;
+        return `<li><span>${esc(this.stepName(label, phase))}</span>${right}</li>`;
       })
       .join("");
     return `<ul class="steps">${items}</ul>`;

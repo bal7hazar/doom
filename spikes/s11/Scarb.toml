@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "s11_state_hash"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+doom_game = { path = "../../cairo/doom/doom_game" }
+doom_map = { path = "../../cairo/doom/doom_map" }
+segment = { path = "../../cairo/crates/segment" }
+state_hash = { path = "../../cairo/crates/state_hash" }
+cairo_execute = "2.16.0"
+
+[dev-dependencies]
+cairo_test = "2.16.0"
+
+[cairo]
+enable-gas = false
+
+[profile.proving]
+inherits = "release"
+
+[profile.proving.cairo]
+unsafe-panic = true
+unstable-add-statements-functions-debug-info = true
+
+[[target.executable]]
+name = "vector_blake9"
+function = "s11_state_hash::vector_blake9"
+sierra = true
+
+[[target.executable]]
+name = "segment_poseidon"
+function = "s11_state_hash::segment_poseidon"
+sierra = true
+
+[[target.executable]]
+name = "segment_blake9"
+function = "s11_state_hash::segment_blake9"
+sierra = true
+
+[[target.executable]]
+name = "inspect_poseidon"
+function = "s11_state_hash::inspect_poseidon"
+sierra = true
+
+[[target.executable]]
+name = "inspect_blake9"
+function = "s11_state_hash::inspect_blake9"
+sierra = true
+
+[[target.executable]]
+name = "genesis_poseidon"
+function = "s11_state_hash::genesis_poseidon"
+sierra = true
+
+[[target.executable]]
+name = "genesis_blake9"
+function = "s11_state_hash::genesis_blake9"
+sierra = true
+
+[[target.executable]]
+name = "hash_poseidon"
+function = "s11_state_hash::hash_poseidon"
+sierra = true
+
+[[target.executable]]
+name = "hash_blake9"
+function = "s11_state_hash::hash_blake9"
+sierra = true

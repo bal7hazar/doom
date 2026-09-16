@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+--- a/spikes/s11/src/hash9.cairo
++++ b/spikes/s11/src/hash9.cairo
+@@ -5 +4,0 @@
+-use core::traits::DivRem;
+@@ -43,2 +42,2 @@
+-    let mut carry: u128 = 0;
+-    let mut factor: u128 = 1;
++    let mut carry: felt252 = 0;
++    let mut factor: felt252 = 1;
+@@ -51,5 +50,13 @@
+-        let packed = x * factor + carry;
+-        let (upper, lower) = DivRem::div_rem(packed, 0x10000000000000000);
+-        let (w1, w0) = DivRem::div_rem(lower, 0x100000000);
+-        words.append(w0.try_into().unwrap());
+-        words.append(w1.try_into().unwrap());
++        // x < 2^72; factor cycles through 1, 2^8, 2^16, 2^24.
++        // Carry is the preceding high part. Thus packed < 2^96 < p:
++        // field arithmetic is ordinary integer arithmetic here. The checked
++        // conversion retains an explicit u128 bound before division.
++        let packed: u128 = (x.into() * factor + carry).try_into()?;
++        // Masks constrain the low parts; subtraction is nonnegative and
++        // exactly divisible by the constant in ordinary integer arithmetic.
++        let lower = packed & 0xFFFFFFFFFFFFFFFF;
++        let upper = core::felt252_div(packed.into() - lower.into(), 0x10000000000000000);
++        let w0: u32 = (lower & 0xFFFFFFFF).try_into().unwrap();
++        let w1: u32 = core::felt252_div(lower.into() - w0.into(), 0x100000000).try_into().unwrap();
++        words.append(w0);
++        words.append(w1);

@@ -98,6 +98,59 @@ export interface FrozenEvent {
   txHash: string;
 }
 
+/** D35: a game committed to the open prover (`commit_run`); the log follows in `RunLog` events. */
+export interface RunCommittedEvent {
+  kind: "RunCommitted";
+  commitmentId: string;
+  player: string;
+  versionId: number;
+  levelId: number;
+  genesis: string;
+  inputsCommitment: string;
+  tics: number;
+  /** `u256`, kept as a decimal string — larger than a JS number can hold exactly. */
+  bounty: string;
+  expiresAt: number;
+  nChunks: number;
+  blockNumber: number;
+  txHash: string;
+}
+
+/**
+ * One chunk of a committed log. The felts themselves are *not* kept (~900 felts per game, the
+ * events being their only copy is a prover node's concern, not the leaderboard's): the indexer
+ * only counts the chunks so a page can say whether the whole log was published.
+ */
+export interface RunLogEvent {
+  kind: "RunLog";
+  commitmentId: string;
+  chunk: number;
+  offset: number;
+  packedLen: number;
+  blockNumber: number;
+  txHash: string;
+}
+
+export interface CommitmentProvedEvent {
+  kind: "CommitmentProved";
+  commitmentId: string;
+  runId: string;
+  prover: string;
+  player: string;
+  bounty: string;
+  blockNumber: number;
+  txHash: string;
+}
+
+export interface CommitmentReclaimedEvent {
+  kind: "CommitmentReclaimed";
+  commitmentId: string;
+  player: string;
+  bounty: string;
+  blockNumber: number;
+  txHash: string;
+}
+
 export type DoomRunsEvent =
   | RunSubmittedEvent
   | AttemptRecordedEvent
@@ -105,7 +158,11 @@ export type DoomRunsEvent =
   | ReplayEvent
   | VersionAddedEvent
   | GenesisSetEvent
-  | FrozenEvent;
+  | FrozenEvent
+  | RunCommittedEvent
+  | RunLogEvent
+  | CommitmentProvedEvent
+  | CommitmentReclaimedEvent;
 
 /** The slice of `starknet_getEvents` this package needs. Implemented once over starknet.js's
  * `RpcProvider` (`rpcSource.ts`) and once over a fixed page list (tests). */

@@ -20,12 +20,15 @@ body {
   color: var(--fg);
   font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #stage {
   position: relative;
   width: 100vw;
   height: 100vh;
+  /* Phones: the visible viewport, under the browser chrome and the notch. */
+  height: 100dvh;
 }
 
 #view,
@@ -289,6 +292,22 @@ body.prove-page #status {
   padding-top: 6px;
 }
 
+/* The cost screen (P4.3): over the queue, on the game page and on prove.html alike. */
+.onchain-overlay {
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 24px));
+  max-height: 85vh;
+  overflow: auto;
+  padding: 0 0 10px;
+}
+
+.onchain-overlay > button[data-act="close"] {
+  margin: 0 18px;
+}
+
 /* The queue as an overlay on the game page (F4), rather than the whole page. */
 .proof-queue-overlay {
   position: absolute;
@@ -297,4 +316,375 @@ body.prove-page #status {
   width: min(960px, calc(100vw - 24px));
   max-height: 60vh;
   overflow: auto;
+}
+
+.play-session {
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 90px);
+  overflow: auto;
+}
+.play-session h1 { margin: 0 0 8px; font-size: 22px; }
+.play-session p { margin: 6px 0; }
+.play-session.playing { top: 12px; left: 12px; transform: none; width: min(500px, calc(100vw - 24px)); }
+.play-session.playing .play-note, .play-session.playing a { display: none; }
+.play-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.play-actions button { font: inherit; color: var(--fg); background: #28221c; border: 1px solid #8d8578; padding: 6px 12px; border-radius: 3px; cursor: pointer; }
+.play-actions button:focus-visible { outline: 2px solid var(--ok); outline-offset: 2px; }
+.play-actions button:disabled { opacity: 0.45; cursor: default; }
+.play-note, .play-session a { color: var(--dim); font-size: 11px; }
+.play-message { min-height: 1.5em; }
+.diagnostics { z-index: 3; }
+.help { max-width: calc(100vw - 24px); }
+.play-session.playing { width: auto; max-width: min(500px, calc(100vw - 24px)); padding: 8px 10px; pointer-events: none; }
+.play-session.playing h1 { font-size: 14px; margin: 0; }
+.play-session.playing .play-actions { display: none; }
+.play-session.playing .play-message { font-size: 11px; }
+.real-play .help { bottom: 48px; background: rgba(0,0,0,.7); padding: 3px 6px; pointer-events: none; }
+.play-session.playing .play-actions { display: flex; position: absolute; right: 8px; top: 8px; margin: 0; pointer-events: auto; }
+.play-session.playing .play-actions button { display: none; }
+.play-session.playing .play-actions button:nth-child(2) { display: block; padding: 2px 8px; }
+.play-session.playing h1 { padding-right: 70px; }
+
+/* ---------------------------------------------------------------------------
+   Touch screens (PLAN C1 revised, D35). `body.touch` is set by main.ts when
+   `isTouchDevice()` says so; nothing below applies on a desktop.
+   --------------------------------------------------------------------------- */
+
+body.touch {
+  font-size: 14px;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body.touch #stage {
+  touch-action: none;
+}
+
+body.touch .stats,
+body.touch .help {
+  display: none;
+}
+
+body.touch .play-session {
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 12px 14px;
+}
+
+body.touch .play-session h1 {
+  font-size: 20px;
+}
+
+body.touch .play-actions button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+/* The touch overlay has its own Pause; the tiny status card stays informative. */
+body.touch .play-session.playing .play-actions {
+  display: none;
+}
+
+body.touch .play-session.playing {
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  max-width: 45vw;
+}
+
+body.touch .play-session.playing h1 {
+  padding-right: 0;
+}
+
+body.touch .diagnostics {
+  min-width: 0;
+  width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  font-size: 11px;
+}
+
+body.touch .proof-queue-overlay {
+  left: 8px;
+  bottom: 8px;
+  width: calc(100vw - 16px);
+  max-height: 70dvh;
+}
+
+.orientation {
+  z-index: 5;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.94);
+}
+
+.orientation[hidden] {
+  display: none;
+}
+
+.orientation h1 {
+  margin: 0 0 12px;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+.orientation p {
+  max-width: 28em;
+  margin: 0 0 18px;
+}
+
+.orientation button {
+  font: inherit;
+  color: var(--fg);
+  background: #28221c;
+  border: 1px solid #8d8578;
+  padding: 10px 16px;
+  min-height: 44px;
+  border-radius: 3px;
+}
+
+.touch-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Only a running game takes touches; paused, the central panel must be reachable. */
+.touch-controls:not(.playing) {
+  display: none;
+}
+
+.touch-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-stick {
+  left: 0;
+}
+
+.touch-look {
+  right: 0;
+}
+
+.touch-zone::after {
+  position: absolute;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: rgba(216, 210, 196, 0.35);
+  pointer-events: none;
+}
+
+.touch-stick::after {
+  content: "MOVE";
+}
+
+.touch-look::after {
+  content: "LOOK";
+  right: 180px;
+}
+
+.touch-base {
+  position: absolute;
+  --touch-radius: 56px;
+  width: calc(var(--touch-radius) * 2);
+  height: calc(var(--touch-radius) * 2);
+  margin: calc(-1 * var(--touch-radius)) 0 0 calc(-1 * var(--touch-radius));
+  border-radius: 50%;
+  border: 2px solid rgba(216, 210, 196, 0.45);
+  background: rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+.touch-base[hidden] {
+  display: none;
+}
+
+.touch-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  background: rgba(216, 210, 196, 0.65);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.touch-top {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  display: flex;
+  gap: 8px;
+}
+
+.touch-buttons {
+  position: absolute;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-columns: 60px 72px;
+  grid-template-rows: 60px 72px;
+  gap: 10px;
+  align-items: end;
+  justify-items: end;
+}
+
+.touch-button {
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid rgba(216, 210, 196, 0.5);
+  background: rgba(20, 16, 14, 0.55);
+  color: var(--fg);
+  font: bold 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.08em;
+  padding: 0;
+  cursor: pointer;
+}
+
+.touch-button[hidden] {
+  display: none;
+}
+
+.touch-top .touch-button {
+  width: auto;
+  height: 40px;
+  min-width: 64px;
+  padding: 0 14px;
+  border-radius: 20px;
+  font-size: 11px;
+}
+
+.touch-fire {
+  width: 72px;
+  height: 72px;
+  border-color: rgba(192, 57, 43, 0.8);
+}
+
+.touch-button.held {
+  background: rgba(192, 57, 43, 0.75);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------------------
+   Cadence bench (`/?bench=1`): the sponsor reads this on the phone itself.
+   --------------------------------------------------------------------------- */
+
+.bench-panel {
+  z-index: 4;
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  font-size: 12px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.bench-panel h1 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+
+.bench-label {
+  margin: 2px 0 8px;
+  color: var(--dim);
+}
+
+.bench-panel [role="status"] {
+  margin: 0 0 8px;
+}
+
+.bench-panel .ok {
+  color: var(--ok);
+}
+
+.bench-panel .bad {
+  color: var(--bad);
+}
+
+.bench-panel table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.bench-panel td {
+  padding: 2px 10px 2px 0;
+  vertical-align: top;
+  border-bottom: 1px solid #201c19;
+}
+
+.bench-panel td:first-child {
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.bench-panel textarea {
+  width: 100%;
+  font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--fg);
+  background: #0c0a09;
+  border: 1px solid #3a332c;
+  resize: vertical;
+}
+
+.bench-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.bench-actions button {
+  font: inherit;
+  color: var(--fg);
+  background: #28221c;
+  border: 1px solid #8d8578;
+  padding: 8px 14px;
+  min-height: 44px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.bench-actions a {
+  color: var(--dim);
 }

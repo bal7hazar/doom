@@ -36,6 +36,7 @@ Lanes : **PRV** prouveur/Rust, **CAI** Cairo cœur, **WEB** client, **TOOL** out
 | P2.2 | Renderer WebGL (secteurs, murs, sprites, HUD, interpolation) | WEB | 10 | P2.1 | 60 fps sur la map |
 | P2.3 | Worker sim (cairo-vm wasm) + bus d'état partagé | WEB | 5 | S3, P1.9 (prog. réel ; prototype S1 avant) | 35 Hz stables |
 | P2.4 | Contrôles → ticcmd | WEB | 2 | P2.3 | parité Doom |
+| P2.9 | Contrôles tactiles et banc de cadence mobile (D35, C1 révisé) | WEB | 3 | P2.4 | 35 tics/s mesurés sur deux téléphones |
 | P2.5 | Persistance IndexedDB, export/import | WEB | 3 | P2.3 | C6 |
 | P2.6 | Écrans (titre, fin, file de preuve) | WEB | 3 | P2.2 | — |
 | P2.7 | En-têtes COOP/COEP, détection Memory64/RAM | WEB | 1 | — | bascule testée |
@@ -48,11 +49,15 @@ Lanes : **PRV** prouveur/Rust, **CAI** Cairo cœur, **WEB** client, **TOOL** out
 | P3.5 | Prouveur distant (repli) | PRV | 3 | P3.4 | délai annoncé |
 | P3.6 | Benchs continus | PRV | 2 | P3.2 | artefacts CI |
 | P3.7 | **E2E : partie complète prouvée** | PRV | 3 | P1.10, P3.3, P3.4 | **C3** |
+| P3.8 | **Nœud prouveur ouvert** (D35) : découverte des engagements, exécution native, preuve en grands segments, wrapper, enregistrement ; binaire exécutable par quiconque | PRV | 8 | P3.4, P4.6 | C3 révisé sur le nœud de référence |
+| P3.9 | Calibration native 8–13 M steps/segment sur 64 GB (temps, RSS), dimensionnement du nœud de référence | PRV | 2 | P3.1 | tableau steps → temps/RSS |
 | **Phase 4 — on-chain (sem. 12–16)** |||||
 | P4.1 | Déploiement registry Stwo (devnet, Sepolia) | CHN | 3 | S4, S5 | `is_valid` sur notre racine |
 | P4.2 | `DoomRuns` (fait, chaînage, unicité, versions, leaderboard) | CHN | 6 | S4 | snforge + devnet drive |
 | P4.3 | Orchestration client 4 tx + écran de coût | WEB | 6 | P4.2, S5, P3.7 | **C5** |
 | P4.4 | Indexation (Torii/événements) + page leaderboard | WEB | 4 | P4.2 | — |
+| P4.6 | `DoomRuns` engagements (D35) : `commit_run` avec journal packé en calldata, prime en séquestre, soumission par tout tiers, expiration | CHN | 5 | P4.2 | snforge ; prime versée au prouveur |
+| P4.7 | Client : engagement de fin de partie (mobile compris), suivi « en attente » sur le classement | WEB | 3 | P4.6, P2.4 | C6 + C3 révisé |
 | P4.5 | Devnet drive + e2e Sepolia (10 parties) | CHN | 4 | P4.3 | **C4** |
 | **Phase 5 — durcissement (sem. 16–19)** |||||
 | P5.1 | Tests externes, télémétrie, compatibilité | INF | 5 | P4.5 | rapport |

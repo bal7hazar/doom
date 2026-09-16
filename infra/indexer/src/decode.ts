@@ -15,7 +15,7 @@
  */
 import { hash } from "starknet";
 
-import { feltToNumber, feltToShortString, normFelt } from "./felt.js";
+import { feltToNumber, feltToShortString, normFelt, u256ToDecimal } from "./felt.js";
 import type { DoomRunsEvent, RawEvent } from "./types.js";
 
 type EventName =
@@ -25,7 +25,11 @@ type EventName =
   | "Replay"
   | "VersionAdded"
   | "GenesisSet"
-  | "Frozen";
+  | "Frozen"
+  | "RunCommitted"
+  | "RunLog"
+  | "CommitmentProved"
+  | "CommitmentReclaimed";
 
 const EVENT_NAMES: EventName[] = [
   "RunSubmitted",
@@ -35,6 +39,10 @@ const EVENT_NAMES: EventName[] = [
   "VersionAdded",
   "GenesisSet",
   "Frozen",
+  "RunCommitted",
+  "RunLog",
+  "CommitmentProved",
+  "CommitmentReclaimed",
 ];
 
 /** Selector -> event name, computed once. */
@@ -142,6 +150,62 @@ export function decodeEvent(raw: RawEvent): DoomRunsEvent | undefined {
     case "Frozen": {
       const [by] = data;
       return { kind: "Frozen", by: normFelt(by!), ...common };
+    }
+    // -- D35 (open prover) --------------------------------------------------------------
+    case "RunCommitted": {
+      const [commitmentId, player, versionId] = keys;
+      const [levelId, genesis, inputsCommitment, tics, bountyLow, bountyHigh, expiresAt, nChunks] = data;
+      return {
+        kind: "RunCommitted",
+        commitmentId: normFelt(commitmentId!),
+        player: normFelt(player!),
+        versionId: feltToNumber(versionId!),
+        levelId: feltToNumber(levelId!),
+        genesis: normFelt(genesis!),
+        inputsCommitment: normFelt(inputsCommitment!),
+        tics: feltToNumber(tics!),
+        bounty: u256ToDecimal(bountyLow!, bountyHigh!),
+        expiresAt: feltToNumber(expiresAt!),
+        nChunks: feltToNumber(nChunks!),
+        ...common,
+      };
+    }
+    case "RunLog": {
+      // `packed: Span<felt252>` = its length then the felts; only the length is kept.
+      const [commitmentId] = keys;
+      const [chunk, offset, packedLen] = data;
+      return {
+        kind: "RunLog",
+        commitmentId: normFelt(commitmentId!),
+        chunk: feltToNumber(chunk!),
+        offset: feltToNumber(offset!),
+        packedLen: feltToNumber(packedLen!),
+        ...common,
+      };
+    }
+    case "CommitmentProved": {
+      const [commitmentId, runId, prover] = keys;
+      const [player, bountyLow, bountyHigh] = data;
+      return {
+        kind: "CommitmentProved",
+        commitmentId: normFelt(commitmentId!),
+        runId: normFelt(runId!),
+        prover: normFelt(prover!),
+        player: normFelt(player!),
+        bounty: u256ToDecimal(bountyLow!, bountyHigh!),
+        ...common,
+      };
+    }
+    case "CommitmentReclaimed": {
+      const [commitmentId, player] = keys;
+      const [bountyLow, bountyHigh] = data;
+      return {
+        kind: "CommitmentReclaimed",
+        commitmentId: normFelt(commitmentId!),
+        player: normFelt(player!),
+        bounty: u256ToDecimal(bountyLow!, bountyHigh!),
+        ...common,
+      };
     }
   }
 }

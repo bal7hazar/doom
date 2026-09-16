@@ -63,6 +63,10 @@ BOUND_L1_GAS = 200_000
 BOUND_L1_DATA_GAS = 250_000
 
 PLAYER_BASE = 0x1000
+# D35 constructor arguments: the fee token bounties are escrowed in (devnet's predeployed
+# STRK — the drive never posts a bounty) and the reclaim delay in blocks.
+FEE_TOKEN = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+EXPIRY_BLOCKS = 1000
 
 
 def digest_felts(words: list[int]) -> list[int]:
@@ -211,7 +215,7 @@ def main() -> None:
     # `add_version` / `set_genesis` / `freeze`.
     owner = account_address(cfg)
     runs_dep = sncast(["deploy", "--class-hash", classes["DoomRuns"]["class_hash"],
-                       "--constructor-calldata", owner], cfg)
+                       "--constructor-calldata", owner, FEE_TOKEN, hex(EXPIRY_BLOCKS)], cfg)
     runs = runs_dep["contract_address"]
     deploy_rec = wait_receipt(cfg.url, runs_dep["transaction_hash"])
     print("registry", registry, "\nDoomRuns", runs, "\nowner", owner)

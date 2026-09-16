@@ -11,14 +11,15 @@ use blockmap::{cell_index, cell_of, list_item, list_range};
 use bsp::{SUBSECTOR_FLAG, is_subsector, point_in_subsector, subsector_of};
 use fixed::Fixed;
 use geom2d::{Point, SIDE_BACK, SIDE_FRONT, half_plane, hoist, point_side};
-use vectors::{LINE_VERTICES, PINNED_LINES, SAMPLE_POINTS};
+use vectors::{LINE_VERTICES, PINNED_LINES, SAMPLE_POINTS, SECTOR_POINTS};
 use super::levels::e1m1;
 use super::{
-    LevelId, ML_BLOCKING, ML_TWOSIDED, NO_SECTOR, REJECT_BITS, blockmap_lists, descent_start,
-    genesis, grid, linedef, linedef_box, linedef_diagonal, linedef_flags, linedef_half_plane,
-    linedef_sectors, linedef_special, linedef_v1, linedef_v2, load, node_side, nodes, num_linedefs,
-    num_sectors, num_subsectors, num_things, reject, sector, sector_ceiling, sector_floor,
-    subsector_at, subsector_in_cell, subsector_sector, thing, things,
+    LevelId, LevelMap, ML_BLOCKING, ML_TWOSIDED, NO_SECTOR, REJECT_BITS, blockmap_lists,
+    descent_start, genesis, grid, linedef, linedef_box, linedef_diagonal, linedef_flags,
+    linedef_half_plane, linedef_sectors, linedef_special, linedef_v1, linedef_v2, load, node_side,
+    nodes, num_linedefs, num_sectors, num_subsectors, num_things, reject, sector, sector_ceiling,
+    sector_cells, sector_floor, subsector_at, subsector_in_cell, subsector_sector, thing, things,
+    unpack_cells,
 };
 
 /// A map-unit coordinate as a `Fixed`.
@@ -56,6 +57,7 @@ fn test_spans_are_consistently_sized() {
     assert(m.n_cb.len() == m.n_ab.len(), 'n_cb');
     assert(m.s_ceil.len() == num_sectors(@m), 's_ceil');
     assert(m.s_meta.len() == num_sectors(@m), 's_meta');
+    assert(m.s_cells.len() == num_sectors(@m), 's_cells');
     assert(m.pow2.len() == REJECT_BITS, 'pow2');
     assert(m.reject.len() == num_sectors(@m) * m.reject_stride, 'reject rows');
     // `PackedLists::start` has one entry per cell plus the end sentinel.
@@ -384,6 +386,103 @@ fn test_descent_start_ids_are_in_range() {
 }
 
 // ---------------------------------------------------------------------------
+// S_CELLS (O3): the cells a sector's things can be linked in
+// ---------------------------------------------------------------------------
+
+/// `p`'s cell is in the range of `sector` (a `NO_SECTOR` side, or a point
+/// off the grid, is nothing to check).
+fn assert_in_range(m: @LevelMap, g: blockmap::Grid, sector: u32, p: Point, what: felt252) {
+    if sector == NO_SECTOR {
+        return;
+    }
+    match cell_of(g, p) {
+        Option::Some((
+            cx, cy,
+        )) => {
+            let r = sector_cells(m, sector);
+            assert(r.x0 <= cx && cx <= r.x1 && r.y0 <= cy && cy <= r.y1, what);
+        },
+        Option::None => {},
+    }
+}
+
+#[test]
+fn test_sector_cells_cover_every_linedef_endpoint() {
+    // The polygon half of the table: both endpoints of every linedef are in
+    // the range of the sector on each of its sides (`P_GroupLines`' box).
+    let m = load(LevelId::E1M1);
+    let g = grid(@m);
+    let n = num_linedefs(@m);
+    let mut i: u32 = 0;
+    while i != n {
+        let (front, back) = linedef_sectors(@m, i);
+        let v1 = linedef_v1(@m, i);
+        let v2 = linedef_v2(@m, i);
+        assert_in_range(@m, g, front, v1, 'front v1');
+        assert_in_range(@m, g, front, v2, 'front v2');
+        assert_in_range(@m, g, back, v1, 'back v1');
+        assert_in_range(@m, g, back, v2, 'back v2');
+        i += 1;
+    }
+}
+
+#[test]
+fn test_sector_cells_cover_the_lattice_inside_the_map_and_the_things() {
+    // The BSP half: every lattice point inside the map (the void is not a
+    // position a thing can have), and every THINGS position, lies in a
+    // cell of the range of the sector its descent names — the sector the
+    // Python transcription computed for the point, and the one the Cairo
+    // descent reaches (the generator checks the same on a lattice every 8
+    // units).
+    let m = load(LevelId::E1M1);
+    let g = grid(@m);
+    let pts = SECTOR_POINTS.span();
+    let n = pts.len() / 3;
+    let mut i: u32 = 0;
+    while i != n {
+        let p = at(*pts.at(i * 3), *pts.at(i * 3 + 1));
+        let expected: u32 = (*pts.at(i * 3 + 2)).try_into().unwrap();
+        let sector = subsector_sector(@m, subsector_at(@m, p));
+        assert(sector == expected, 'sector matches python');
+        assert_in_range(@m, g, sector, p, 'lattice point');
+        i += 1;
+    }
+    let mut k: u32 = 0;
+    while k != num_things(@m) {
+        let p = thing(@m, k).position;
+        let sector = subsector_sector(@m, subsector_at(@m, p));
+        assert_in_range(@m, g, sector, p, 'thing position');
+        k += 1;
+    }
+}
+
+#[test]
+fn test_sector_cells_are_inside_the_grid_and_decode_exactly() {
+    let m = load(LevelId::E1M1);
+    let mut s: u32 = 0;
+    let mut non_empty: u32 = 0;
+    while s != num_sectors(@m) {
+        let r = sector_cells(@m, s);
+        if r.x0 <= r.x1 {
+            assert(r.y0 <= r.y1, 'range rows');
+            assert(r.x1 < e1m1::BM_COLUMNS && r.y1 < e1m1::BM_ROWS, 'inside the grid');
+            non_empty += 1;
+        }
+        s += 1;
+    }
+    // Every sector of E1M1 has lines, so every range is non-empty.
+    assert(non_empty == num_sectors(@m), 'all sectors ranged');
+    // Past the table: the empty range. Spot decode: x0 | y0 << 16 | x1 << 32 | y1 << 48.
+    let past = sector_cells(@m, num_sectors(@m));
+    assert(past.x0 > past.x1, 'past the table is empty');
+    let r = unpack_cells(11 + 12 * 0x10000 + 13 * 0x100000000 + 14 * 0x1000000000000);
+    assert(r.x0 == 11 && r.y0 == 12 && r.x1 == 13 && r.y1 == 14, 'decode');
+    // The door of the `door` replay (sector 10) spans two cells of row 12.
+    let door = sector_cells(@m, 10);
+    assert(door.x0 == 11 && door.x1 == 12 && door.y0 == 12 && door.y1 == 12, 'door range');
+}
+
+// ---------------------------------------------------------------------------
 // Blockmap
 // ---------------------------------------------------------------------------
 
@@ -581,6 +680,7 @@ fn test_every_constant_stays_below_2_pow_72() {
     check_below(m.s_floor, limit);
     check_below(m.s_ceil, limit);
     check_below(m.s_meta, limit);
+    check_below(m.s_cells, limit);
     check_below(m.reject, limit);
     check_below(m.things, limit);
 }

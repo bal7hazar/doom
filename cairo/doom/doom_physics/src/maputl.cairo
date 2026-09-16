@@ -10,7 +10,7 @@
 //! §2), so the loops of this crate are built out of these.
 
 use core::num::traits::{WrappingAdd, WrappingSub};
-use fixed::{BIAS, Fixed, felt_ge_narrow, to_u128};
+use fixed::{BIAS, Fixed, felt_ge_narrow};
 use geom2d::{Box, COEF_BIAS, DivLine, HalfPlane, Point};
 
 /// `fixed::BIAS - 2^15 * FRACUNIT`: a 16-bit biased map unit times 65536
@@ -20,6 +20,14 @@ pub const COORD_OFFSET: felt252 = 0x80000000;
 // ---------------------------------------------------------------------------
 // Panic-free primitives
 // ---------------------------------------------------------------------------
+
+/// Share Doom's full-domain conversion sites without changing the inlining
+/// cost of the generic fixed arithmetic. The zero fallback remains defined
+/// by `fixed::to_u128`; this wrapper does not assume a narrower input range.
+#[inline(never)]
+pub fn to_u128(value: felt252) -> u128 {
+    fixed::to_u128(value)
+}
 
 /// `*s.at(i)` without the out-of-bounds panic: an index past the end (a
 /// caller bug on compiled-in data) reads as `0`.
@@ -77,7 +85,7 @@ pub fn sub32(a: u32, b: u32) -> u32 {
 /// A zero the compiler cannot see: a loop-carried counter that starts at a
 /// literal gets a second, specialised copy of the loop body (S7 §2), so
 /// counters start from `opaque_zero(n)` instead of `0`.
-#[inline(always)]
+#[inline(never)]
 pub fn opaque_zero(n: u32) -> u32 {
     n.wrapping_sub(n)
 }

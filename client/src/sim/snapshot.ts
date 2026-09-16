@@ -96,7 +96,11 @@ export interface PlayerSnapshot {
   bonusCount: number;
   /** `player->attackdown`-ish: non-zero while the weapon is firing (HUD only). */
   attackTic: number;
+  psprites?: [PspriteSnapshot, PspriteSnapshot];
 }
+
+/** Cairo-owned weapon / flash slot. State zero hides it; offsets are fixed_t. */
+export interface PspriteSnapshot { state: number; sprite: number; frame: number; x: number; y: number }
 
 export interface MobjSnapshot {
   /** Stable identity across tics; required for interpolation. */
@@ -179,7 +183,7 @@ export const INPUT_WORDS_PER_TIC = 2;
 export const MAX_MOBJS = 512;
 export const MAX_DYNAMIC_SECTORS = 128;
 
-const PLAYER_WORDS = 20;
+const PLAYER_WORDS = 31;
 const STATS_WORDS = 8;
 const MOBJ_WORDS = 9;
 const SECTOR_WORDS = 4;
@@ -261,6 +265,14 @@ export class SnapshotRing {
 
   get state(): number {
     return Atomics.load(this.header, Header.STATE);
+  }
+
+  /** A new local session must not interpolate against the previous game's slots. */
+  resetLocal(): void {
+    if (this.shared) throw new Error("cannot reset a concurrently shared ring");
+    new Uint8Array(this.buffer).fill(0);
+    this.header[Header.PUBLISHED] = -1;
+    this.header[Header.INPUT_HEAD] = -1;
   }
 
   set state(v: number) {
@@ -357,6 +369,11 @@ export function encodeSnapshot(out: Int32Array, snap: RenderSnapshot): void {
   out[o++] = (p.weapon & 0xff) | ((p.pendingWeapon & 0xff) << 8) | ((p.keys & 0xff) << 16);
   out[o++] = (p.damageCount & 0xff) | ((p.bonusCount & 0xff) << 8) | ((p.attackTic & 0xff) << 16);
 
+  out[o++] = p.psprites ? 1 : 0;
+  for (const slot of p.psprites ?? [{ state: 0, sprite: 0, frame: 0, x: 0, y: 0 }, { state: 0, sprite: 0, frame: 0, x: 0, y: 0 }]) {
+    out[o++] = slot.state; out[o++] = slot.sprite; out[o++] = slot.frame; out[o++] = slot.x; out[o++] = slot.y;
+  }
+
   o = S.STATS;
   out[o++] = snap.stats.kills;
   out[o++] = snap.stats.items;
@@ -409,6 +426,8 @@ export function decodeSnapshot(src: Int32Array): RenderSnapshot {
   const maxAmmo: [number, number, number, number] = [src[o++]!, src[o++]!, src[o++]!, src[o++]!];
   const packedWeapon = src[o++]!;
   const packedFlash = src[o++]!;
+  const hasPsprites = src[o++]! !== 0;
+  const slots = [0, 1].map(() => ({ state: src[o++]!, sprite: src[o++]!, frame: src[o++]!, x: src[o++]!, y: src[o++]! })) as [PspriteSnapshot, PspriteSnapshot];
 
   o = S.STATS;
   const stats = {
@@ -471,6 +490,7 @@ export function decodeSnapshot(src: Int32Array): RenderSnapshot {
       damageCount: packedFlash & 0xff,
       bonusCount: (packedFlash >> 8) & 0xff,
       attackTic: (packedFlash >> 16) & 0xff,
+      ...(hasPsprites ? { psprites: slots } : {}),
     },
     mobjs,
     sectors,

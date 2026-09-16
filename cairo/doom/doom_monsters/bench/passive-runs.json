@@ -1,0 +1,245 @@
+{
+  "base_commit": "3e210317c28f5d756897a1ca7059481ad8f3eab3",
+  "method": "Copy passive runs with a small live set; actor index is the existing output length.",
+  "public_interfaces_unchanged": true,
+  "wire_unchanged": true,
+  "profile_unchanged": true,
+  "budgets_unchanged": true,
+  "candidate_executables": {
+    "dev/step_tic.executable.json": {
+      "sha256": "dedfaef0fbdecacbbd946b6bdb31c9058d5f26985e8b722c70f302bb79147835",
+      "words": 125963
+    },
+    "dev/run_segment.executable.json": {
+      "sha256": "86434d48741e7a06aec07801615970b5610a5ea53728954465b406a4d1a0ba28",
+      "words": 125836
+    },
+    "dev/genesis.executable.json": {
+      "sha256": "6daa2def92878c5c7a2f0137718fc9fee172823ef28f8dd93a38e6a7153da6ef",
+      "words": 50746
+    },
+    "proving/step_tic.executable.json": {
+      "sha256": "82d5f2ddafc27562824068e71305091d61dd2ce26324c92231f1a61b6589593c",
+      "words": 108342
+    },
+    "proving/run_segment.executable.json": {
+      "sha256": "5a3817dc5f8d60e2e3bd4b99ec146665a10eac8969fa16a8b709fbd3fb057b28",
+      "words": 106855
+    },
+    "proving/genesis.executable.json": {
+      "sha256": "12130f43a4493bb775e497521cb38bfdda7d83864a005ca180ac84b78227700e",
+      "words": 46434
+    }
+  },
+  "attribution": {
+    "core": 41612,
+    "doom_physics": 11588,
+    "doom_game": 9420,
+    "doom_player": 6549,
+    "doom_monsters": 6013,
+    "doom_specials": 5302,
+    "fixed": 1118,
+    "segment": 664,
+    "bam": 476,
+    "unattributed": 200,
+    "geom2d": 173,
+    "bsp": 172,
+    "blockmap": 134,
+    "fsm": 103,
+    "doom_map": 93,
+    "doom_run": 86,
+    "doom_things": 75,
+    "state_hash": 33,
+    "ticcmd": 27,
+    "prng": 24
+  },
+  "cairo_tests": 567,
+  "cairo_targets": 23,
+  "abi_cases_per_profile": 35,
+  "replay_comparisons_per_profile": 70,
+  "malformed_abi_rejected": [
+    "state_length",
+    "u32_length",
+    "word_length",
+    "tic_domain"
+  ],
+  "full_replays": {
+    "dev": [
+      {
+        "case": "idle:whole",
+        "executable": "step_tic",
+        "before_steps": 22915960,
+        "after_steps": 19790460,
+        "output_felts": 8827,
+        "output_sha256": "3918ce85b9e49aecadfed9e344d6467f96cf03d9f9f3d629c91202dbc3c3b986"
+      },
+      {
+        "case": "walk:whole",
+        "executable": "step_tic",
+        "before_steps": 20787662,
+        "after_steps": 19224912,
+        "output_felts": 8813,
+        "output_sha256": "d38dcc4cde2050cc2a96a55ecf57908bf808824492c786c5d2e7d0c39c2b3372"
+      },
+      {
+        "case": "fight:whole",
+        "executable": "step_tic",
+        "before_steps": 50342058,
+        "after_steps": 47206460,
+        "output_felts": 8844,
+        "output_sha256": "19a433313a1475685f11d3b1e2783d84674892ce2dd306af3fb3bceb3553bea4"
+      },
+      {
+        "case": "door:whole",
+        "executable": "step_tic",
+        "before_steps": 26392673,
+        "after_steps": 24828526,
+        "output_felts": 8842,
+        "output_sha256": "d5b190c3fdc4f31f95064d7dc6356e0579dd2d3aac0204ff3e5f54986a3461b1"
+      },
+      {
+        "case": "death:whole",
+        "executable": "step_tic",
+        "before_steps": 46075542,
+        "after_steps": 42285354,
+        "output_felts": 8836,
+        "output_sha256": "dc4021b83750fd2797f4324374effad57a545acdf7dab0fe479ac7f4f14329d3"
+      }
+    ],
+    "proving": [
+      {
+        "case": "idle:whole",
+        "executable": "step_tic",
+        "before_steps": 21421100,
+        "after_steps": 18821300,
+        "output_felts": 8827,
+        "output_sha256": "3918ce85b9e49aecadfed9e344d6467f96cf03d9f9f3d629c91202dbc3c3b986"
+      },
+      {
+        "case": "walk:whole",
+        "executable": "step_tic",
+        "before_steps": 19832726,
+        "after_steps": 18532826,
+        "output_felts": 8813,
+        "output_sha256": "d38dcc4cde2050cc2a96a55ecf57908bf808824492c786c5d2e7d0c39c2b3372"
+      },
+      {
+        "case": "fight:whole",
+        "executable": "step_tic",
+        "before_steps": 47899224,
+        "after_steps": 45290822,
+        "output_felts": 8844,
+        "output_sha256": "19a433313a1475685f11d3b1e2783d84674892ce2dd306af3fb3bceb3553bea4"
+      },
+      {
+        "case": "door:whole",
+        "executable": "step_tic",
+        "before_steps": 25249316,
+        "after_steps": 23948269,
+        "output_felts": 8842,
+        "output_sha256": "d5b190c3fdc4f31f95064d7dc6356e0579dd2d3aac0204ff3e5f54986a3461b1"
+      },
+      {
+        "case": "death:whole",
+        "executable": "step_tic",
+        "before_steps": 43966857,
+        "after_steps": 40813911,
+        "output_felts": 8836,
+        "output_sha256": "dc4021b83750fd2797f4324374effad57a545acdf7dab0fe479ac7f4f14329d3"
+      }
+    ]
+  },
+  "frames": {
+    "idle300": {
+      "before": {
+        "executable_sha256": "d31339fa2c73c32b0d337b0c42cc2328330b495a27545df728239a041a48f3c1",
+        "arguments_sha256": "8e28b8b9a5a3502db2684d070b13096b12dea9548e36ba834885ad41709a5e39",
+        "tic_steps": 30012,
+        "boundary_steps": 266508
+      },
+      "after": {
+        "executable_sha256": "82d5f2ddafc27562824068e71305091d61dd2ce26324c92231f1a61b6589593c",
+        "arguments_sha256": "8e28b8b9a5a3502db2684d070b13096b12dea9548e36ba834885ad41709a5e39",
+        "tic_steps": 26298,
+        "boundary_steps": 266508
+      }
+    },
+    "fight493": {
+      "before": {
+        "executable_sha256": "d31339fa2c73c32b0d337b0c42cc2328330b495a27545df728239a041a48f3c1",
+        "arguments_sha256": "66f4fa43d5172df6cdb739b2b49c63d1bccd8c863fa134e35671fce86a1c7b69",
+        "tic_steps": 170333,
+        "boundary_steps": 267743
+      },
+      "after": {
+        "executable_sha256": "82d5f2ddafc27562824068e71305091d61dd2ce26324c92231f1a61b6589593c",
+        "arguments_sha256": "66f4fa43d5172df6cdb739b2b49c63d1bccd8c863fa134e35671fce86a1c7b69",
+        "tic_steps": 166596,
+        "boundary_steps": 267743
+      }
+    }
+  },
+  "total_d29_budget": 100000,
+  "total_d29_words": 106855,
+  "total_d29_guard_exit": 1,
+  "quantiles_measured": false,
+  "proof_generated": false,
+  "monster_bench_tradeoffs": [
+    {
+      "name": "monsters_ticker, player only (overhead)",
+      "raw_before": 454.0,
+      "raw_after": 443.0,
+      "net_before": 446.0,
+      "net_after": 435.0,
+      "existing_budget": 530
+    },
+    {
+      "name": "monsters_ticker, 1 dormant monster",
+      "raw_before": 865.85,
+      "raw_after": 868.85,
+      "net_before": 411.85,
+      "net_after": 425.85,
+      "existing_budget": 439
+    },
+    {
+      "name": "monsters_ticker, 29 dormant monsters",
+      "raw_before": 12854.95,
+      "raw_after": 13249.95,
+      "net_before": 12400.95,
+      "net_after": 12806.95,
+      "existing_budget": 13185
+    },
+    {
+      "name": "monsters_ticker, 5 awake monsters",
+      "raw_before": 12723.45,
+      "raw_after": 12782.45,
+      "net_before": 12715.45,
+      "net_after": 12774.45,
+      "existing_budget": 13359
+    },
+    {
+      "name": "monsters_ticker, 8 awake monsters (D3's cap)",
+      "raw_before": 29976.1,
+      "raw_after": 30077.1,
+      "net_before": 29968.1,
+      "net_after": 30069.1,
+      "existing_budget": 30711
+    },
+    {
+      "name": "monsters_ticker, 20 awake monsters",
+      "raw_before": 59319.05,
+      "raw_after": 59588.05,
+      "net_before": 59311.05,
+      "net_after": 59580.05,
+      "existing_budget": 61425
+    },
+    {
+      "name": "29 dormant monsters, nobody to look for",
+      "raw_before": 9845.7,
+      "raw_after": 10240.7,
+      "net_before": 9391.7,
+      "net_after": 9797.7,
+      "existing_budget": 10183
+    }
+  ]
+}

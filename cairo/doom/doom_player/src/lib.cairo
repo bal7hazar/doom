@@ -41,7 +41,6 @@
 //! `bench/measure.py` asserts the per-function budgets and both bytecode
 //! figures; `bench/attribute.py` says where every word goes.
 
-pub mod compat;
 pub mod env;
 pub mod inter;
 /// Panic-free scalar arithmetic (S7 §8 rule 1). Crate-private: it is a cost
@@ -55,7 +54,6 @@ pub mod think;
 pub mod tic;
 pub mod weapon;
 
-pub use compat::{PlayerState, apply_damage, spawn as spawn_skeleton, think as think_skeleton};
 pub use env::{Env, PlayerEvent, env_of};
 pub use inter::{
     absorb, count_kill, damage_player, give_ammo, give_armor, give_body, give_card, give_strength,

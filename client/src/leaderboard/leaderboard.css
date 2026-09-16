@@ -144,6 +144,19 @@ td.dead {
   color: var(--bad);
 }
 
+/* D35 / P4.7: a player's games committed to the open prover and not proved yet. */
+td.pending {
+  color: var(--dim);
+}
+
+.pending-commitments {
+  margin-top: 20px;
+}
+
+.pending-commitments h3 {
+  margin-bottom: 4px;
+}
+
 table.run-summary th,
 table.run-proof th {
   text-align: left;

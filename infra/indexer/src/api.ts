@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The read API (P4.4): `GET /leaderboard`, `GET /players/{address}`, `GET /runs/{run_id}`,
- * `GET /stats`. Plain `node:http` — the response shapes are small and the query surface is four
+ * `GET /stats` — and, for the open prover (D35, P4.7), `GET /players/{address}/commitments`,
+ * `GET /commitments/{id}`, `GET /commitments/pending`. Plain `node:http` — the response shapes are small and the query surface is four
  * routes, so a framework buys nothing here that the rest of this repo's dependency-free style
  * would not rather do without (`client/src/chain/rpc.ts`'s docstring makes the same call).
  *
@@ -88,7 +89,50 @@ export function createApiServer(db: IndexerDb) {
         const limit = Math.min(200, Math.max(1, intParam(url, "limit", 50)));
         const stats = db.playerStats(player);
         const runs = db.playerRuns(player, offset, limit);
-        send(res, 200, { player, ...stats, runs });
+        // The player's games still waiting for a prover (D35) ride along with the runs — the
+        // leaderboard page shows them under the recorded ones.
+        const counts = db.commitmentCounts(player);
+        const pending = db.playerCommitments(player, 0, limit, true);
+        send(res, 200, {
+          player,
+          ...stats,
+          commitment_count: counts.total,
+          pending_commitment_count: counts.pending,
+          runs,
+          pending_commitments: pending,
+        });
+        return;
+      }
+
+      if (parts.length === 3 && parts[0] === "players" && parts[2] === "commitments") {
+        const player = parts[1]!;
+        const offset = Math.max(0, intParam(url, "offset", 0));
+        const limit = Math.min(200, Math.max(1, intParam(url, "limit", 50)));
+        const pendingOnly = url.searchParams.get("status") === "pending";
+        send(res, 200, {
+          player,
+          ...db.commitmentCounts(player),
+          offset,
+          limit,
+          commitments: db.playerCommitments(player, offset, limit, pendingOnly),
+        });
+        return;
+      }
+
+      if (parts.length === 2 && parts[0] === "commitments" && parts[1] === "pending") {
+        const offset = Math.max(0, intParam(url, "offset", 0));
+        const limit = Math.min(200, Math.max(1, intParam(url, "limit", 50)));
+        send(res, 200, { offset, limit, ...db.commitmentCounts(), commitments: db.pendingCommitments(offset, limit) });
+        return;
+      }
+
+      if (parts.length === 2 && parts[0] === "commitments") {
+        const row = db.commitment(parts[1]!);
+        if (!row) {
+          send(res, 404, { error: `no such commitment: ${parts[1]}` });
+          return;
+        }
+        send(res, 200, row);
         return;
       }
 

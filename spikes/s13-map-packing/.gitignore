@@ -1,0 +1,4 @@
+# SPDX-FileCopyrightText: 2026 Hellproof contributors
+# SPDX-License-Identifier: GPL-2.0-only
+/target/
+/__pycache__/

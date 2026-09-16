@@ -1,25 +1,124 @@
 # doom_game
 
-**Does**: assembles every other `doom/*` crate into one `GameState`
-(currently `tic` + the player; monsters/specials are aggregated at the
-call-site until the full roster from the WAD extraction lands) and the two
-functions everything else is built from: `genesis` (initial state) and
-`step_tic` (one tic of `doom_player::think`, the seed `run_segment` will
-loop). `serialize`/`hash_of` turn a `GameState` into the canonical felts
-`state_hash` hashes, and `run_segment_header` chains a batch of commands
-via `segment::chain_commands` — the shape `doom_run::run_segment` wraps.
+D33 keeps the internal actor roster as `Span<Box<Mobj>>` from parsing through
+all tic passes and rendering. Unchanged actors and patches retain their boxes;
+the serializer still writes the same 27 fields per actor, schema 2 and hashes.
+The [boxed-roster report](bench_boxed/README.md) compares immutable executables,
+complete outputs, actual tic frames, allocations and both bytecode profiles.
 
-**Does not**: implement `run_segment`'s full public-output contract
-(`status`, `kills`, `items`, `secrets` — PLAN.md §3.1, task 7) — that is
-`doom_run`'s executable entry point, one layer above this crate; it does
-not yet fold monster thinking or door thinking into `step_tic` (both exist
-and are exercised here only to prove the aggregation wires together —
-PLAN.md §3.1, task 3 folds them in for real once the monster/special
-roster is fixed by the WAD extraction).
+Assembles the real Freedoom E1M1 simulation at 35 Hz: player, physics,
+monsters, pickups, moving planes and lights. Skill 2 spawns 210 mobjs,
+including 29 kill-counting monsters, 49 counted items and four secrets.
+`doom_run` supplies the executable and client ABI.
 
-**Invariants**: `step_tic` never calls into any crate outside this
-workspace's `doom/*` + generic dependency graph (this crate is the single
-point where the whole graph meets, per A10's "`doom_game` aggregates"
-rule); `hash_of` is a pure function of `serialize`'s output (delegates
-entirely to `state_hash::hash_state`, so this crate owns *what* gets
-hashed, never *how*).
+`genesis(LevelId::E1M1)` creates tic 0. `step_tic(GameState, ticcmd_word)`
+returns `(next_state, Status)`; the exact order of the ten assembly stages
+is documented in `src/tic.cairo`. The monster policy remains eight awake
+thinkers per tic in round-robin order, with dormant A_Look cadenced 1/4.
+Invalid words, a missing player or a finished/exhausted clock return
+`Abort` without advancing the state. An aborting command still counts in
+the generic segment envelope; an ABORT segment cannot be submitted as a run.
+
+`run_segment` implements the generic `SegmentEngine`: it hashes the state
+before and after a bounded batch, folds precisely the consumed command
+words, and returns the ten D14 felts. The commitment is seeded per segment
+(D13), so splitting a log preserves final state and hash, while each
+segment has its own input commitment. `stats_of` reads cumulative counts.
+
+## State and process boundaries
+
+`serialize`/`from_felts` use schema **2**, described field by field in
+`src/state.cairo`: `[TAG, version, n_fields, level, clock, status, noise,
+RNGs, player(36), n_mobjs, mobjs(27 each), n_special_felts, specials,
+grid_order]`. Fixed-point values use `enc = raw + 2^32`; health uses a bias
+of `2^31`. The state domain tag and Poseidon hashes are intentionally large
+felts; scalar payloads are below `2^72`.
+
+The blockmap's **visitation order is committed state**. Rebuilding membership
+in mobj-index order silently changed a simultaneous stimpack/bonus pickup
+from health 101 to 100 across a process boundary. The grid now journals
+modified cell lists; serialization emits only their final order, and
+`from_felts` restores it exactly. The journal is not serialized and does
+not accumulate across process boundaries. Its cost is proportional to
+mutations within the current segment. Current sector-height arrays are
+still derived from specials.
+
+The grid encoding is `[n_cells, cell, n_members, member_indices..., ...]`.
+Cells are ordered by the first linked mobj index encountered in the roster;
+member order is historical. The reader rejects duplicate cells/indices,
+missing members, wrong cells, out-of-range indices and malformed lengths,
+alongside invalid table indices, weapons, counters and fixed encodings.
+Only valid Cairo argument envelopes enter this reader; transport-level
+truncation is an ABI error, not an ABORT value.
+
+`snapshot` returns the renderer/HUD view, never used for consensus. Its
+flat schema is in `src/render.cairo`: five header felts, 24 player felts,
+seven counters, 11 per live mobj and four per dynamic sector. It encodes
+fixed values and BAM angles explicitly; a Worker adapter must convert this
+to `client/src/sim/snapshot.ts`'s buffer format.
+
+## Validation and measured limits
+
+The five initial replays cover idle (700 tics), walking and a moving lift
+(350), a door and pickups (350), fighting (700), and death (tic 846).
+Their schema-1 hashes remain assertions of the gameplay fields;
+separate schema-2 pins explicitly include the restored grid order. Tests
+also cross actual serialized boundaries, including the 101-health pickup
+regression, a fight split every 25 tics and all five replays with alternating
+29/113/47-tic segments. The per-impact defense correction changes only the
+DOOR attacker field and its two pins, with an independent field-level
+derivation recorded in S8. Pins are never regenerated by
+the test command.
+
+Run `ASDF_SCARB_VERSION=2.16.0 scarb --manifest-path cairo/Scarb.toml test
+-p doom_game` from the repository root. `bench/measure.py` measures actual
+assembled subsystems; `bench/trace_profile.py` measures every real tic from
+VM call frames, keeping the boundary cost separate and the p99 unsmoothed.
+`bench/profile.py` also provides the replay inputs and a differential
+executable timeline (chunked quantiles are explicitly unavailable).
+See `docs/spikes/S8-tic-profile.md` for methodology, exact-version results
+and open D2/D29 limits. Recorded regression budgets are not success targets:
+D2 remains **12,000 mean / 25,000 p99 steps per tic**.
+
+### O3: `P_ChangeSector` through the blockmap
+
+`docs/design/d2-profile.md` §5.3 measured the two roster scans of a tic
+where a plane moves — `clip_patches` reading the sector of every slot to
+height-clip the things standing in the moving sectors, `Occupancy::nofit`
+scanning them again per mover — at 11 250 + 1 600 steps/tic on `door`.
+Both now walk the blockmap: `doom_map::S_CELLS` gives each sector its cell
+range, `things_of_sector` reads those cells' thing lists, and the derived
+index (`Actors::off_grid`) supplies the live slots the grid cannot hold
+(the missiles in flight). The set visited is the roster's, and the tests
+say so: `test_clip_by_cells_matches_the_scan_*` compare the walk with the
+scans kept as `#[cfg(test)]` oracles, patch for patch and verdict for
+verdict, on synthetic rosters (things off the grid, a removed slot with a
+stale sector, patched and picked-up things, a sector moved twice), on every
+tic of `door` and `walk`, and on a scripted run where the door closes onto
+the player (`door_block_log`). The five replay pins are unchanged.
+
+Measured with `bench/attribute_tics.py --all --chunk 35` (steps per tic,
+boundary excluded; the O1 build `d56e68b6…` against this one
+`84c9bae1…`):
+
+| Replay | Mean before | Mean after | p99 before | p99 after |
+|---|---:|---:|---:|---:|
+| idle | 20 870 | 21 168 | 24 053 | 24 405 |
+| walk | 43 021 | 36 138 | 83 227 | 66 824 |
+| door | 57 624 | 46 013 | 119 121 | 105 557 |
+| fight | 55 525 | 52 494 | 145 470 | 135 559 |
+| death | 39 266 | 36 640 | 83 861 | 71 996 |
+| **aggregate (2 946 tics)** | **41 385** | **37 785** | **115 056** | **110 220** |
+
+`clip_patches` + `contains` fall from 11 266 to ~300 steps/tic on `door`
+(`things_of_sector` and the clips themselves); idle pays ~300 steps more
+for the membership check of the index (`keeps_class`, three field reads
+per ticked actor) and the per-tic table read. `run_segment` under the
+proving profile: 107 632 → 108 976 words (+182 for `S_CELLS`, the rest the
+walk and the gathered occupancy), under the D29 ceiling of 120 000.
+
+The follow-up consumer-size pass is documented in
+[`bench_sizing/README.md`](bench_sizing/README.md): 111,321 proving words,
+275,020 native steps for an empty Worker call, unchanged schema-2 felts in
+both compiler profiles. Its fixtures separately measure the journal's
+linear boundary cost; neither D2 nor D29 is declared satisfied.
