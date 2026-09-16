@@ -23,6 +23,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export const ADAPTER = "doom_run/state2/d14v1";
 export const PIN_KEYS = ["revision", "genesis", "step", "segment", "wasm", "programHash", "snippet", "glue"];
 export const EXECUTABLES = { genesis: "genesis.executable.json", step: "step_tic.executable.json", segment: "run_segment.executable.json" };
+export const SIM_KEYS = ["wasm", "glue", "snippet"];
 export const SIM_FILES = { wasm: "hellproof_sim_bg.wasm", glue: "hellproof_sim.js", snippet: "snippets/hellproof-sim-c1c84871eb3c9493/inline0.js" };
 export const FILES = {
   pins: "client/src/prove/doomArtifacts.ts",
@@ -56,6 +57,8 @@ export const USAGE = `usage: node client/scripts/migrate-identity.mjs [options]
                           R5 session executable of the identity being retired (default:
                           client/public/sim/manifest.json when it matches the current pins)
   --sim <pkg>             prover/sim/pkg directory, to verify the wasm/glue/snippet pins
+  --pin-sim               with --sim: re-pin the R5 simulator (wasm/glue/snippet) to that package
+                          when it differs; the retired identity keeps the former VM
   --check                 verify the pins against the target; exit 1 on mismatch; write nothing
   --dry-run               print the summary and write nothing
   --root <dir>            repository root (default: derived from this script)
@@ -74,6 +77,7 @@ export function parseArgs(argv) {
     else if (arg === "--build") options.build = true;
     else if (arg === "--check") options.check = true;
     else if (arg === "--dry-run") options.dryRun = true;
+    else if (arg === "--pin-sim") options.pinSim = true;
     else if (arg in takes) {
       const value = argv[++i];
       if (value === undefined || value.startsWith("--")) throw new MigrationError(`${arg} needs a value\n${USAGE}`);
@@ -119,9 +123,10 @@ export function parsePins(source) {
   return pins;
 }
 
-export function renderPins(pins, previous) {
+export function renderPins(pins, previous, simChanged = false) {
   const lines = PIN_KEYS.map(key => `  ${key}: "${pins[key]}",`).join("\n");
-  return `/** Cairo proving executables at ${shortRev(pins.revision)} (explicit migration from ${shortRev(previous)}) and unchanged R5 simulator; measured, never inferred. */
+  const sim = simChanged ? "re-pinned R5 simulator" : "unchanged R5 simulator";
+  return `/** Cairo proving executables at ${shortRev(pins.revision)} (explicit migration from ${shortRev(previous)}) and ${sim}; measured, never inferred. */
 export const D29_PROOF_ARTIFACTS = Object.freeze({
 ${lines}
 });
@@ -256,9 +261,9 @@ function gitRevision(root) {
 
 function scanStale(root, previous, current) {
   const stale = new Map();
-  for (const key of ["genesis", "step", "segment", "programHash"]) if (previous[key] !== current[key]) stale.set(previous[key], key);
+  for (const key of ["genesis", "step", "segment", "programHash", "wasm", "glue", "snippet"]) if (previous[key] !== current[key]) stale.set(previous[key], key);
   if (stale.size === 0) return [];
-  const files = ["client/README.md", "client/src/prove/README.md", "client/src/prove/doomPrepare.worker.ts", "client/src/prove/doomProgram.ts",
+  const files = ["client/README.md", "client/src/prove/README.md", "client/src/sim/README.md", "client/src/prove/doomPrepare.worker.ts", "client/src/prove/doomProgram.ts",
     "client/scripts/prepare-game-proof.py", "client/scripts/prepare-sim.py", "client/e2e/gameProof.spec.ts", "client/test/doomProgram.test.ts"];
   const hits = [];
   for (const file of files) {
@@ -282,6 +287,7 @@ export function main(argv, io = {}) {
   const legacySource = readFileSync(paths.legacy, "utf8"), legacy = parseLegacy(legacySource);
   const readmeSource = readFileSync(paths.readme, "utf8");
 
+  if (options.pinSim && !options.sim) throw new MigrationError("--pin-sim needs --sim <prover/sim/pkg>: the simulator is re-pinned from measured files only");
   if (options.build) {
     if (options.check) throw new MigrationError("--build and --check are exclusive: a check never builds");
     log("building doom_run (scarb --profile proving build -p doom_run)");
@@ -320,14 +326,15 @@ export function main(argv, io = {}) {
     return 0;
   }
 
-  const unchanged = ["genesis", "step", "segment"].every(key => previous[key] === measured[key]) && (!measured.programHash || previous.programHash === measured.programHash);
+  const simChanged = Boolean(options.sim) && SIM_KEYS.some(key => previous[key] !== measured[key]);
+  if (simChanged && !options.pinSim) throw new MigrationError("the R5 simulator pins differ from --sim; re-pinning the VM is a separate decision: pass --pin-sim to migrate it too (prepare-sim.py stages the pinned VM)");
+  const segmentChanged = previous.segment !== measured.segment;
+  const unchanged = ["genesis", "step", "segment"].every(key => previous[key] === measured[key]) && (!measured.programHash || previous.programHash === measured.programHash) && !simChanged;
   if (unchanged) {
-    if (options.sim && ["wasm", "glue", "snippet"].some(key => previous[key] !== measured[key])) throw new MigrationError("the R5 simulator pins differ from --sim; that migration is a separate decision (prepare-sim.py pins the VM)");
     log("nothing to migrate: the pins already describe these executables");
     return 0;
   }
-  if (options.sim && ["wasm", "glue", "snippet"].some(key => previous[key] !== measured[key])) throw new MigrationError("the R5 simulator pins differ from --sim; that migration is a separate decision (prepare-sim.py pins the VM)");
-  if (!measured.programHash) {
+  if (segmentChanged && !measured.programHash) {
     log(`\nno Blake task hash for run_segment ${measured.segment}: pass --core <core.js> (measured here) or --program-hash 0x… (measured with ${FILES.measure}); nothing written`);
     throw new MigrationError("missing task hash", 2);
   }
@@ -338,7 +345,8 @@ export function main(argv, io = {}) {
     revision = git.revision;
     if (git.dirty) log("warning: cairo/ has uncommitted changes; the pinned revision may not rebuild these executables");
   }
-  const next = { ...previous, revision, genesis: measured.genesis, step: measured.step, segment: measured.segment, programHash: measured.programHash };
+  const next = { ...previous, revision, genesis: measured.genesis, step: measured.step, segment: measured.segment, programHash: measured.programHash ?? previous.programHash };
+  if (simChanged) for (const key of SIM_KEYS) next[key] = measured[key];
   const retiring = readLegacySession(root, options, previous, log);
   const retired = identityOf(previous, retiring);
   const alreadyFrozen = legacy.some(entry => JSON.stringify(entry) === JSON.stringify(retired));
@@ -347,10 +355,11 @@ export function main(argv, io = {}) {
   log(`\nmigration ${shortRev(previous.revision)} → ${shortRev(revision)}`);
   for (const key of PIN_KEYS) log(`  ${key.padEnd(11)} ${previous[key] === next[key] ? "=" : "≠"} ${previous[key]}${previous[key] === next[key] ? "" : ` → ${next[key]}`}`);
   log(`  retired identity frozen with session ${retiring.session} (${retiring.source})${alreadyFrozen ? " (already listed)" : ""}`);
+  if (simChanged) log(`  R5 simulator re-pinned from ${options.sim} (--pin-sim); stored runs of the former VM are refused`);
   const stale = scanStale(root, previous, next);
   if (options.dryRun) { log("dry run: nothing written"); return 0; }
 
-  writeFileSync(paths.pins, renderPins(next, previous.revision));
+  writeFileSync(paths.pins, renderPins(next, previous.revision, simChanged));
   writeFileSync(paths.legacy, renderLegacy(nextLegacy));
   writeFileSync(paths.readme, replaceReadmeBlock(readmeSource, renderReadmeBlock(next, nextLegacy)));
   log(`\nwritten: ${FILES.pins}, ${FILES.legacy}, ${FILES.readme}`);

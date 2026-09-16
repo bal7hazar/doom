@@ -8,6 +8,7 @@ export interface LegacyIdentity { adapter: string; artifacts: IdentityPins; simu
 export const ADAPTER: string;
 export const PIN_KEYS: readonly (keyof IdentityPins)[];
 export const EXECUTABLES: Readonly<Record<"genesis" | "step" | "segment", string>>;
+export const SIM_KEYS: readonly ("wasm" | "glue" | "snippet")[];
 export const SIM_FILES: Readonly<Record<"wasm" | "glue" | "snippet", string>>;
 export const FILES: Readonly<Record<"pins" | "legacy" | "readme" | "manifest" | "measure", string>>;
 export const USAGE: string;
@@ -19,7 +20,7 @@ export function shortRev(revision: string): string;
 export function normalizeProgramHash(value: string): string;
 export function emptySegmentArgs(output: string): string[];
 export function parsePins(source: string): IdentityPins;
-export function renderPins(pins: IdentityPins, previousRevision: string): string;
+export function renderPins(pins: IdentityPins, previousRevision: string, simChanged?: boolean): string;
 export function parseLegacy(source: string): LegacyIdentity[];
 export function renderLegacy(list: readonly LegacyIdentity[]): string;
 export function identityOf(pins: IdentityPins, simulation: { snapshotSchema: number; revision: string; session: string }): LegacyIdentity;
