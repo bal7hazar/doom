@@ -30,7 +30,7 @@ and no network.
 
 ```bash
 cd infra/prover-node && npm install       # node >= 22, starknet.js 10.8.0
-npm test                                   # 43 tests, all mocked
+npm test                                   # 49 tests: 44 mocked, 5 on the real executor (skipped without scarb)
 npm run typecheck
 
 # what a poll would do, without a wrapper or a key: reconstruct, execute and cut only
@@ -118,13 +118,107 @@ bounty }`, `CommitmentReclaimed { commitment_id*, player*, bounty }`;
 `Commitment` struct of `get_commitment`. The two selectors the wave announced are pinned in
 `test/commitments.test.ts`.
 
+## Real executor
+
+`ScarbExecutor` (`src/scarbExecutor.ts`, the default `--executor scarb`) runs the three
+`doom_run` executables of `cairo/doom/doom_run/README.md` as subprocesses, one `scarb execute`
+per call, the way `bench/prove_segment.sh` steps 2 and 4 do. It has been validated against the
+real engine, without a proof (`test/realExecutor.test.ts`, below).
+
+**Prerequisites.** Scarb **2.16.0** (the release the executables are built and run with;
+`ASDF_SCARB_VERSION=2.16.0` is set for asdf users) and the proving profile built once from the
+repository root — `--no-build` never rebuilds:
+
+```bash
+scarb --manifest-path cairo/Scarb.toml --profile proving build -p doom_run
+# -> cairo/target/proving/{genesis,step_tic,run_segment}.executable.json
+```
+
+**Where things are.**
+
+| what | default | override |
+|---|---|---|
+| the `scarb` binary | `scarb` on the PATH | `HELLPROOF_SCARB=/path/to/scarb` in the environment, or `--scarb <bin>` |
+| the workspace manifest | `cairo/Scarb.toml` of this checkout | `--manifest <Scarb.toml>` |
+| the executables | `<manifest dir>/target/proving/<name>.executable.json` | build with another `--profile` and pass it to `ScarbExecutor` (`profile`) |
+| argument files | `<work>/execute/<name>_<n>.args.json` (the JSON array of `0x…` felts `prove_segment.sh` writes) | `--work` |
+
+The CLI probes `scarb --version` and the three executables before its first poll and fails
+with the build command when one is missing. Each call is exactly:
+
+```bash
+scarb --manifest-path cairo/Scarb.toml --profile proving execute -p doom_run \
+  --executable-name run_segment --no-build --output none \
+  --arguments-file <work>/execute/run_segment_<n>.args.json \
+  --print-program-output --print-resource-usage
+```
+
+**What Scarb prints, and what the executor decodes.** Program output is one felt per line,
+**decimal and signed** (a felt above p/2 comes out negative, e.g. a commitment as
+`-1490066978…`): every token is reduced into the field before it becomes a `0x…` felt.
+`--print-resource-usage` writes the step count **with thousands separators** (`steps:
+2,383,556`); a first version of the parser read that as 2, so the D26 ceiling never bound —
+the parser is now pinned on a verbatim transcript. `--output none` keeps the trace and memory
+off the disk; Scarb still creates an empty `cairo/target/execute/doom_run/execution<N>/` per
+call, which the executor removes. The envelopes are checked as the browser Worker checks them:
+`genesis` returns `[state_len, state…, genesis_hash]` with a schema-2 state at tic zero
+(6 362 felts on E1M1, not the fake's 47; an unknown level's `([], 0)` is refused), `step_tic`
+returns `[status, state_len, state…, snapshot_len, snapshot…]` with the snapshot length
+consistent, `run_segment` exactly the ten D14 felts.
+
+**Steps-only.** `scarb execute` reports steps and builtin counters, not the AIR component
+sizing; the segment record says `rowsChecked: false` and the cut is bound by the D26 step
+ceiling alone (2.3 M steps for `--threads 1`, 1.5 M threaded, or `--max-steps`).
+
+**Measured here** (4 cores, `RAYON_NUM_THREADS=1`, E1M1 walk from genesis, one call each,
+wall time of the whole `scarb execute` subprocess):
+
+| `run_segment` | steps | ≈ steps / tic | wall |
+|---|---|---|---|
+| 35 tics | 1 338 951 | 38 300 (≈ 290 k fixed + 30 k / idle tic) | ≈ 1.0 s |
+| 70 tics | 2 383 556 | 34 100 | ≈ 1.3 s |
+| 140 tics | 5 164 402 | 36 900 (movement, lift: ≈ 40 k / tic) | ≈ 2.2 s |
+| `step_tic`, 32 words | 1 131 197 | — | ≈ 0.9 s |
+
+The fixed cost of a segment (parsing the 6 362-felt state, two Poseidon hashes, the output) is
+≈ 290 k steps; a tic costs ≈ 30–40 k while the level is quiet and **≈ 90–110 k once the
+monsters are awake**. On the real exit route, under the browser's 2.3 M ceiling, the planner
+therefore shrinks its segments from 56 tics (2 106 183 steps) through 49, 35 and 28 down to
+21 tics (≈ 1.8–2.2 M steps) for the second half of the game: 27 segments for 677 tics, cut in
+89 s — 62 `scarb execute` calls (27 accepted probes, 13 rejected, 22 `step_tic` advances) of
+≈ 1.0–1.4 s each, the subprocess start dominating. The node's 64 GB calibration (D35, 8–13 M
+steps) is what makes the segments several times longer; `--max-steps` sets it.
+
+**Running the integration test.** `test/realExecutor.test.ts` is part of `npm test`: it skips
+itself, with the reason on stderr, when `scarb` cannot be run or the executables are not built,
+and otherwise executes (one subprocess at a time, a few minutes) the two real E1M1 journals of
+`cairo/doom/doom_game/regression/` rebuilt from the corpus definitions and pinned by the corpus's
+own `input_sha256`:
+
+```bash
+scarb --manifest-path cairo/Scarb.toml --profile proving build -p doom_run
+cd infra/prover-node && HELLPROOF_SCARB=$(command -v scarb) RAYON_NUM_THREADS=1 npx vitest run test/realExecutor.test.ts
+```
+
+- `walk_lift` (350 tics, RUNNING): one `run_segment` over the whole log reproduces the golden's
+  ten D14 felts exactly (its `h_out` is `WALK_HASH` of `doom_game/src/tests/e1m1.cairo`); the same
+  run as two 7-aligned segments joined by `step_tic` chains (`h_out` = next `h_in`), each
+  `inputs_commitment` folds from its own slice, and the two logs concatenate to the journal whose
+  `commit_log` is the golden's.
+- `exit_route` (677 tics, a real spawn-to-EXIT game — what a player commits): `cutJournal` cuts
+  it under the 2.3 M ceiling, every non-final segment a multiple of 7 tics, the chain is
+  continuous from the golden genesis to the golden `h_out` with `EXIT`, 0 kills, 4 items, and the
+  concatenated replay logs are the committed journal. Then the whole node — fake events, `FakeProver`,
+  in-memory wrapper, mocked signer — takes the same commitment to `registered` on this executor,
+  with the same boundaries.
+
 ## Configuration
 
 | what | where |
 |---|---|
 | RPC, `DoomRuns`, router, wrapper | `--rpc`, `--doom-runs`, `--router`, `--wrapper` (`--wrapper-key`) |
 | policy | `--min-bounty <STRK>`, `--versions`, `--max-tics`, `--allow-player`/`--deny-player`, `--max-queue` |
-| the runtime | `--executor scarb` (default; `--manifest`, `--scarb`) or `fake` |
+| the runtime | `--executor scarb` (default; `--manifest`, `--scarb` or `HELLPROOF_SCARB`; see "Real executor") or `fake` |
 | the prover | `--prover stwo` (default) with `--stwo-bin`, `--bootloader`, `--params`, `--executable`, `--lock-dir`, `--proof-timeout`, `--proof-format`, `--threads`; defaults follow `prove_segment.sh` (`$SCRATCH`, `$PROVING`) |
 | the cut | `--max-steps` (D26 ceiling), `--log-size` (registry rows, log2), `--program-hash`, `--genesis v:l=0x…` |
 | dry runs | `--stop-after cut` (no wrapper, no key), `--stop-after proved`, `--stop-after folded` (no key) |
@@ -138,7 +232,7 @@ settled, with count / mean / max wall-clock per stage (`reconstructed`, `cut`, `
 `folded`, `registered`). `logbook.txt` is one timestamped line per event, prefixed by the
 commitment id. `prover-node status` renders both (`--json` for the raw data).
 
-## Tests (`npm test`, vitest, no network, no proof)
+## Tests (`npm test`, vitest, no network, no proof — and no `scarb` unless it is there)
 
 - `commitment.test.ts` — the Poseidon fold against the contract's own vectors (`inputs_seed`,
   the nine-tic log) and against every `inputs_commitment` the Cairo program emitted for the
@@ -162,6 +256,9 @@ commitment id. `prover-node status` renders both (`--json` for the raw data).
   published, forced on), the settlement read from the receipt, resume from a checkpoint after a
   lost connection, the already-registered short cut, the pre-flight refusals, and the signer's
   secrecy and mainnet refusal.
+- `realExecutor.test.ts` — the real executor (above): genesis, the walk's golden D14 in one call
+  and as two 7-aligned segments, the cost at 35 / 70 / 140 tics, the exit route cut and the
+  node end to end on `ScarbExecutor`; skipped with a reason when `scarb` or the build is absent.
 - `node.test.ts` — the node end to end on fakes: events to settled bounty in one poll, resume
   after an interruption, `--stop-after` handovers across processes, refusals, a hopeless job
   given up after `maxAttempts`, a race lost to another prover, and `watch`.
