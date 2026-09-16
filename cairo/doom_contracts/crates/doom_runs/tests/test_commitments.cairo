@@ -23,7 +23,7 @@ use snforge_std::{
 };
 use starknet::ContractAddress;
 use crate::fixtures;
-use crate::mock_erc20::MockERC20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
+use doom_runs::mock_erc20::MockERC20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
 
 const VERSION_ID: u32 = 1;
 const LEVEL_ID: u32 = 1;
