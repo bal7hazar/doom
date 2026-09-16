@@ -124,7 +124,8 @@ describe("real program preparation contract", () => {
       const before = JSON.stringify(legacyRun);
       await expect(createDoomProgram({ resume: { run: legacyRun, words }, preparation: port() })).rejects.toThrow("incompatible Cairo journal identity");
       expect(JSON.stringify(legacyRun)).toBe(before);
-      expect(legacy.artifacts.wasm).toBe(pins.wasm);
+      // The R5 VM may have been re-pinned since (af4b4ef); its glue and snippet never were.
+      expect(legacy.artifacts.wasm).toMatch(/^[0-9a-f]{64}$/);
       expect(legacy.artifacts.glue).toBe(pins.glue);
       expect(legacy.artifacts.snippet).toBe(pins.snippet);
       expect(legacy.artifacts.segment).not.toBe(pins.segment);

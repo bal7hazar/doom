@@ -31,24 +31,33 @@ pins and the executables of a Cairo target disagree.
 <!-- identity:begin -->
 | Pin (`doomArtifacts.ts`) | Value |
 |---|---|
-| Engine revision | `ee5f819ded4cfac61921426a03d82f9932147ad7` |
-| `genesis` SHA-256 | `c1b442b6c48780a2f58eb5806d6a03b52d9c9fe0b5fcd201830be566c326365e` |
-| `step_tic` SHA-256 | `eb156f65712f5b50f816ac9553b3e6f47a5ffb7bb1c1ad1c8ed223bdf9b582e5` |
-| `run_segment` SHA-256 | `18100435ee3882f0ae98d2b3fd89ee89c8dc365333a8cb3c0f74bed23f94b3bb` |
-| `run_segment` Blake task hash | `0x55fb48519602ba0310b362e11cfd040f3afad418cca2e37e2b3c069b251fc22` |
-| R5 simulator WASM SHA-256 | `dd73ce152f44a9e00368e195c6de36d40b2948b0740794f056b2e557c94b67c5` |
-| Retired identities (refused, `legacyDoomIdentity.ts`) | `0c8a3a8` |
+| Engine revision | `af4b4ef8ca5ff33a445f16cb4244d4ff2e798ba9` |
+| `genesis` SHA-256 | `4cf443184849040e72bc1fbf578f9a090eab96cf6dd022864c0f760d53c47cad` |
+| `step_tic` SHA-256 | `80b3e6392533e9ba0984eec7306ce2a326b3034c5e0b4721f424da1efdf8c54b` |
+| `run_segment` SHA-256 | `84c9bae19f94c17d8889f48104830ba178b4e98593885c2b03f25d4a435d74f0` |
+| `run_segment` Blake task hash | `0x5c3f9de0cfb3b334a49070f4a47b4f875d7ef511959cf0efc9bd67ea879bf93` |
+| R5 simulator WASM SHA-256 | `70b305fe9e6e5a8d8f057cd5fdf4170c5a853b7e1b3b5b983e615f498bf86965` |
+| Retired identities (refused, `legacyDoomIdentity.ts`) | `0c8a3a8`, `ee5f819` |
 <!-- identity:end -->
 
-The adapter previously measured `8ae7f1c` and `0c8a3a8`. The explicit migration
-to `ee5f819` changed all three executable SHA values and the Blake task hash;
-state-2 / D14-v1, R5 and proof parameters are unchanged. Existing old identities
-remain refused; no stored run or pin is rewritten to appear compatible.
+The adapter previously measured `8ae7f1c`, `0c8a3a8` and `ee5f819`. The explicit
+migration to `af4b4ef` changed all three executable SHA values, the Blake task
+hash and, for the first time, the R5 simulator WASM (`--sim --pin-sim`: the
+package was rebuilt on Linux from the same `prover/sim` sources, rustc 1.97.1,
+wasm-pack 0.12.1, wasm-opt 111 `-O2`; the bytes differ from the macOS build
+`dd73ce15…` only by the host paths of the crates.io registry embedded in panic
+locations, the glue and snippet are byte-identical). State-2 / D14-v1 and the
+proof parameters are unchanged. Existing old identities remain refused; no
+stored run or pin is rewritten to appear compatible.
 
-At `ee5f819` the proving artifacts contained 46 496 genesis words, 108 505 step
-words and 107 018 segment words; its segment task hash was measured by real
-corrected WASM execution, and its compiled R5 session SHA was
-`dcb7193cbb8d77cdb08c66517e1c5e68453b15687808e40ea2abb5acbc4a0cac`.
+At `af4b4ef` the proving artifacts contain 46 953 genesis words, 110 467 step
+words and 108 976 segment words; the segment task hash was measured by real
+execution of the Memory64 WASM runtime built here (`hellproof_prover_wasm.wasm`
+`ddfca26f…`, 2 109 120 steps for an empty segment over the genesis state), and
+its compiled R5 session SHA is
+`e57302b56510b29a492e202def6f0ed0d3f9061fa3038dd3dffdeb3c232f0fd1`. At
+`ee5f819` (retired) they contained 46 496 / 108 505 / 107 018 words and the
+session was `2f2be024…` (schema 2, formerly `dcb7193c…` at schema 1).
 Executable SHA values remain centralized in `doomArtifacts.ts`.
 
 These are distinct artifacts from the corrected Memory64 proof WASM, staged by

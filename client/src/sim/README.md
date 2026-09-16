@@ -22,9 +22,11 @@ npm run build
 npm run preview
 ```
 
-Le préparateur vérifie le SHA256 WASM R5
-`dd73ce152f44a9e00368e195c6de36d40b2948b0740794f056b2e557c94b67c5`,
-reconstruit `doom_run` et le harnais existant de continuation avec le profil
+Le préparateur vérifie le SHA256 WASM R5 épinglé dans
+`src/prove/doomArtifacts.ts` (aujourd'hui
+`70b305fe9e6e5a8d8f057cd5fdf4170c5a853b7e1b3b5b983e615f498bf86965`, build
+Linux rustc 1.97.1 / wasm-pack 0.12.1 ; l'ancien build macOS `dd73ce15…` est
+retiré avec l'identité `ee5f819`), reconstruit `doom_run` et le harnais existant de continuation avec le profil
 `proving` (Cairo 2.16, `unsafe-panic=true`), puis copie les artefacts dans
 `public/sim/`, ignoré par git. Deux jobs Cargo au maximum ; chaque compilation
 est bornée à 600 secondes. Il ne télécharge rien et ne reconstruit pas Rust.
