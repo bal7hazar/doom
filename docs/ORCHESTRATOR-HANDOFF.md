@@ -483,11 +483,39 @@ Point de calibration utile : avec les monstres éveillés le moteur coûte 90–
 steps/tic, donc sous 2,3 M le planner descend à ~21 tics par segment ; c'est le
 p99, pas la moyenne, qui dimensionne les segments du nœud.
 
+### Identité migrée — `d0c744d` (2026-09-16)
+
+Le prouveur WASM64 a été construit nativement ici (52 min, hors conteneur :
+SHA différents de `SHA256SUMS.linux` qui couvre le conteneur arm64, attendu) et
+le **task hash Blake** du `run_segment` courant (`84c9bae1…`) mesuré avec le
+runtime : **`0x5c3f9de0cfb3b334a49070f4a47b4f875d7ef511959cf0efc9bd67ea879bf93`**
+(2 109 120 steps sur un segment vide à la genèse). Pins `doomArtifacts.ts` :
+révision `af4b4ef`, genesis `4cf44318…`, step `80b3e639…`, segment `84c9bae1…`,
+task hash ci-dessus ; l'identité `ee5f819` est gelée dans `legacyDoomIdentity.ts`
+avec la session `2f2be024…`.
+
+**Le WASM du simulateur R5 n'est pas reproductible entre hôtes** (424 chemins de
+build dans les `Location` de panic) : la pin `wasm` désigne désormais le **build
+Linux** `70b305fe9e6e5a8d8f057cd5fdf4170c5a853b7e1b3b5b983e615f498bf86965`
+(12 636 318 octets), plus le build macOS `dd73ce…`. Conséquence : un `public/sim`
+stagé depuis un build macOS est refusé par le client migré. Le paquet Linux a été
+remis au sponsor (`hellproof-sim-pkg-af4b4ef-linux.tgz`) ; la CI doit devenir la
+source canonique de cet artefact (vague en cours). `migrate-identity.mjs --sim
+--pin-sim` re-épingle explicitement le VM ; `prepare-sim.py` lit la pin.
+
+Staging complet exécuté ici (`prepare-sim.py`, `prepare-game-proof.py`,
+`prepare-prover.sh`) : session live **`e57302b56510b29a492e202def6f0ed0d3f9061fa3038dd3dffdeb3c232f0fd1`**.
+E2E Cairo réels enfin exécutés : `cairo` 2/2, `weaponAnimation` 3/3 (test de
+migration de sauvegarde corrigé : sur un moteur postérieur, la migration v1
+auditée n'existe plus, le refus est attendu), `gameProof` 4/4, `bench` 2/2 ;
+banc Cairo ici sous charge : 32,3 tics/s cadencés, 56,9 en rafale. Client 333
+tests.
+
 ### Reste à faire côté sponsor
 
 1. Ouvrir une PR de suivi `codex/game-integration` (ou cette branche) → `main`
    sans la fusionner, pour obtenir CI et `game-regression` à chaque push.
-2. `node client/scripts/migrate-identity.mjs --build --core prover/wasm/pkg/dist/core.js` sous Node 24, puis `prepare-sim.py` et `prepare-game-proof.py` (procédure client/README.md) ; vérifier que le job `cairo` tient en 16 Go (la suite
+2. Migration d'identité **faite** (`d0c744d`) ; côté Mac, stager `public/sim` depuis le paquet Linux remis (ou l'artefact CI à venir), puis `prepare-game-proof.py` ; vérifier que le job `cairo` tient en 16 Go (la suite
    `doom_game` seule approche 14 Go ; prévoir `RAYON_NUM_THREADS` réduit ou un
    découpage par filtre).
 3. Trancher l'arbitrage C3 ci-dessus.
