@@ -299,9 +299,9 @@ jobs:
       - name: Install the submit oracle dependency
         run: python3 -m pip install poseidon-py==0.1.5
 
-      - name: infra submit and indexer (typecheck, test)
+      - name: infra submit, indexer and prover-node (typecheck, test)
         run: |
-          for package in infra/submit infra/indexer; do
+          for package in infra/submit infra/indexer infra/prover-node; do
             npm ci --prefix "$package"
             npm run typecheck --prefix "$package"
             npm test --prefix "$package"
