@@ -477,7 +477,12 @@ describe("committing a run", () => {
     expect(two.logs.at(-1)).toMatch(/journal is empty/);
 
     const run = await localRun();
-    const three = committer(state, signer);
+    // Three runs now share a millisecond: target this one explicitly, not "the first listed".
+    const three = committer(state, signer, {
+      onKeepOffline: async () => {
+        await store.updateRun(run.id, { keepOffline: true });
+      },
+    });
     const outcome = three.commit.open(run);
     await reviewShown();
     button("offline")!.click();
